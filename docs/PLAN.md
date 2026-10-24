@@ -4,9 +4,10 @@
 | Phase | State | Notes |
 |---|---|---|
 | 0 Bootstrap + oracle smoke | **done** | See the Phase 0 deviations below. Smoke test: `oracle/digests/smoke-0001.md`. |
-| 1 RE pipeline | in progress | S1, S2 and S3 **done**: `isre rebuild` (loader-equivalent, runs under Wine), `isre asm` (verified), Ghidra pipeline with C export (`docs/re/ghidra.md`). S4 verifiers next. |
-| 2 Knowledge base | in progress | 2a `isre hlp` and S1 `isre res` (`docs/re/resources.md`) **done**; S2 `docs/spec/checklist.md` installed (610 rows) with the doc linter. S3 formats and S4 re-verification next. |
-| 3 Oracle | in progress | Scripted run reaches wave 1 under old-WoW64 Wine (`oracle/digests/newgame-0002.md`); fault root-caused with a Wine patch (`fault-0001`). Remaining: scenarios inside a wave, memory probe, `docs/re/oracle.md`. |
+| 1 RE pipeline | **done** | `isre rebuild` (loader-equivalent, runs under Wine), `isre asm` (verified), `isre pack`, Ghidra pipeline with C export (`docs/re/ghidra.md`; S4 verifier's findings fixed). Tool guide: `re/README.md`. |
+| 2 Knowledge base | in progress | **Done:** `isre hlp`, `isre res` (`docs/re/resources.md`), checklist (636 rows, 243 with RE addresses) with the doc linter, S3 `docs/re/formats.md`, S4 `docs/re/structs.md` and `globals.md` (Appendix B items settled), each with two independent verification rounds; `re/tests/test_re_facts.py` pins their mechanical facts. **Remaining:** `docs/re/win16-translation.md`. |
+| 3 Oracle | **done** | Scripted runs play wave 1 (`wave-0001`); read-only memory probe (`probe-0001`); `docs/re/oracle.md` answers the phase's questions, with the rest listed as open questions. Two Wine bugs found and patched locally (`docs/upstream/`, not filed). |
+| Early spikes | **done** | `docs/re/ispace.md` (ISPACE.DLL owns palette, bitmaps, sound, dialogs), `docs/re/rng.md` (Microsoft C `rand()`), `docs/re/timing.md` and ADR 0001 (Proposed, awaiting the user's decision). |
 
 **Phase 0 deviations:**
 - **Wine 11.0 stable** (Kron4ek `amd64-wow64`) instead of 11.20. On this host 11.20 segfaults in `wineboot` with a bad address-space limit.

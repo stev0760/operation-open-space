@@ -97,7 +97,7 @@ This page covers the DGROUP globals that drive the game, the code that reads the
   | 0xc9, 0xca, 0xcb | About Inner Space, User Manual, Playing Inner Space | seg2:0x190a with first argument 0x1c, 0 and 5 | [BYTES seg2:0x1633 seg2:0x1638 seg2:0x163d seg2:0x156b] |
   | 0x191 | Alt+=, Alt with keypad + | private 0x99b, VK_ADD | [BYTES seg2:0x1656 seg2:0x13da seg2:0x13e1] |
   | 0x19b | Alt+-, Alt with keypad − | private 0x99b, VK_SUBTRACT | [BYTES seg2:0x165d seg2:0x13e5 seg2:0x13ec] |
-  | 0x19c | Alt+B | restores caption style bits when DGROUP:0x20 ≠ 0, then WM_SYSCOMMAND SC_MINIMIZE | [BYTES seg2:0x1665 seg2:0x1486 seg2:0x14b1] |
+  | 0x19c | Alt+B | when DGROUP:0x20 ≠ 0, sets the `WS_OVERLAPPEDWINDOW` bits (0x00CF0000) in the main window's style; then WM_SYSCOMMAND SC_MINIMIZE | [BYTES seg2:0x1665 seg2:0x1486 seg2:0x14a4 seg2:0x14b1] |
   | 0x1b9, 0x1c3, 0x1cd | Defenders: Attack, Help Me, Exit Wave; Alt+A, Alt+H, Alt+E | private 0x99b with `A`, `H`, `E` | [BYTES seg2:0x1673 seg2:0x167a seg2:0x1681] |
   | 0xe0 | none in ENG_LANG.DLL; the sender is [OPEN] | private 0x8e2 | [BYTES seg2:0x1644 seg2:0x14be seg2:0x14c2] |
 

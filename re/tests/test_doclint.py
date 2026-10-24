@@ -71,7 +71,7 @@ AREAS = ("KEY", "WIN", "NAV", "FLT", "WPN", "HAZ", "SHIP", "TEAM", "LAW", "ECO",
 ID_RE = re.compile(r"^(?P<area>[A-Z]+)-\d{2,}$")
 COLUMNS = ("ID", "Feature", "Evidence", "Spec", "RE", "Port", "Edition")
 VOCAB = {
-    "Spec": ("manual", "strings", "oracle", "specified"),
+    "Spec": ("manual", "code", "strings", "oracle", "specified"),
     "RE": ("none", "located", "understood", "verified"),
     "Port": ("todo", "wip", "done", "verified"),
     "Edition": ("demo", "registered", "unknown"),
@@ -237,9 +237,9 @@ def _cells(line: str) -> list[str]:
     s = line.strip()
     if s.startswith("|"):
         s = s[1:]
-    if s.endswith("|"):
+    if s.endswith("|") and not s.endswith("\\|"):
         s = s[:-1]
-    return [c.strip() for c in s.split("|")]
+    return [c.strip() for c in re.split(r"(?<!\\)\|", s)]  # `\|` is a literal pipe
 
 
 def parse_checklist(text: str) -> tuple[list[tuple[int, list[str]]], list[Violation]]:
@@ -291,7 +291,7 @@ def lint_checklist(text: str, titles=manual_titles, tables=segment_table,
         if not good:
             out.append(Violation(line, "checklist", f"{ident}: no well-formed evidence tag"))
         kinds = {kw for kw, _ in good}
-        need = {"manual": "MANUAL", "strings": "BYTES", "oracle": "ORACLE"}.get(row["Spec"])
+        need = {"manual": "MANUAL", "code": "BYTES", "strings": "BYTES", "oracle": "ORACLE"}.get(row["Spec"])
         if need and need not in kinds:
             out.append(Violation(line, "checklist", f"{ident}: Spec {row['Spec']} without a [{need}] tag"))
         if row["RE"] != "none" and not any(
