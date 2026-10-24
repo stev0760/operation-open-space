@@ -10,7 +10,7 @@
 - **There is more than one version.** The shipdisk v1.29.08, the THEWORKS add-on and, later, the user's registered copy differ ([PLAN](../PLAN.md)). [DESIGN]
 
 ## Decision
-1. **Where:** the port looks in two places. First, the directory that holds its executable. Second, a directory named on the command line or in the port's own INI, which M2 defines. The first directory that holds the game's modules wins. [DESIGN]
+1. **Where:** the port looks in two places. First, the directory that holds its executable. Second, a directory named on the command line or in the port's own INI, which M2 defines. The first directory that holds the game's modules wins: INSPACE.EXE, ISPACE.DLL and IGRAPHIC.DLL, the files the installer puts in the game directory. The language DLL is not required, because the INI names it. [DESIGN]
 2. **Which forms:** an installed directory (expanded files under their installed names), or a distribution directory (the files as shipped). For a distribution directory the asset store expands SZDD in memory and restores the names as `isre extract` does. Archives (`.zip`) are not read. [DESIGN]
 3. **Names:** lookup ignores case, because the files mix cases (`ISPACE.dll`, `eng_fx.dll`). [DESIGN]
 4. **Versions:** a table of known SHA-256 values per file and version identifies the copy. The table is generated from `original.sha256` and gains the registered copy's files later.

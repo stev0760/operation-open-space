@@ -239,6 +239,8 @@ Cheaper models handle refactors, tests and lint. I merge, update the checklist a
 
 **Out of scope:** the game window, INI and timing (M2); the filesystem walk (M3); audio playback (M7); MSVC.
 
+**Carried into M2:** the original loads SND_FX.DLL and `<Language>_FX.DLL` from the INI's `SndPath`, which a regenerated INI sets to `Path` + `SOUNDS\`. A flat distribution keeps them in the game directory. M2's INI ADR decides how the port maps `SndPath` (the asset store takes it through `set_sound_dir`).
+
 ## Verification (Phases 0–3)
 - **Phase 0:** the original reaches its title screen under Wine 11.20, with a screenshot and a relay trace showing 16-bit calls. `original.sha256` and the goldens are committed.
 - **`pytest re/tests`:**
