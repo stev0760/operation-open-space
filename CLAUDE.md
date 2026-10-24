@@ -17,7 +17,7 @@ The Hermes-era docs in `../innerspace-rea/` (read-only archive) are **not** a so
   - Mechanical facts (counts, hashes, offsets) are proven by tests in `re/tests/`.
 - **Docs state current truth.** Git holds the history. Never write "superseded", "withdrawn", "previously" or "now known", and never keep "historical" sections. Dead ends become present-tense rules in `docs/re/pitfalls.md`.
 - **One source of truth per topic.** Link to it; don't restate it.
-- **Canonical address form is `segN:0xOFF`,** with N the 1-based NE segment number. DGROUP offsets are written `DGROUP:0xOFF`; for `INSPACE.EXE`, DGROUP is seg19. Addresses in any other module carry the module name: `ISPACE.DLL seg6:0x643f`, `ISPACE.DLL DGROUP:0x1cd6`. Ghidra `10xx:` addresses, rea dos-com addresses and file offsets are converted with `isre addr`, never mixed into docs.
+- **Canonical address form is `segN:0xOFF`,** with N the 1-based NE segment number. DGROUP offsets are written `DGROUP:0xOFF`; for `INSPACE.EXE`, DGROUP is seg19. Addresses in any other module carry the module name: `ISPACE.DLL seg6:0x643f`, `ISPACE.DLL DGROUP:0x1cd6`. Module names are the installed file names in upper case (`ENG_FX.DLL`, `INSTALL.EXE`); THEWORKS copies take a `theworks/` prefix (`theworks/FACTORY.EXE`). Resources are cited by type and id: `[BYTES ENG_LANG.DLL DIALOG 321]`; a `STRING` tag names the string-table block ((id >> 4) + 1), followed by `id n` outside the tag. Ghidra `10xx:` addresses, rea dos-com addresses and file offsets are converted with `isre addr`, never mixed into docs.
 - **Only the orchestrator edits `docs/spec/checklist.md`.** Within one workflow run, each doc file has one writer.
 - **No invented completion percentages.** Progress is checklist status.
 

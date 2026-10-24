@@ -5,8 +5,8 @@ The source is `../innerspace-rea/` (read-only archive). This file records what w
 ## Files
 | Class | Items | Where now |
 |---|---|---|
-| Ported tools | szdd, ne_parse, ne_tables, slr_relocs | `re/isre` (`szdd`, `ne`, `optloader`) |
-| Kept tools | rebuild_ne, name_imports, annotate, annotated_asm, callgraph, prologue_scan, struct_fields, dump_asm, redirect_entry, attr_fields, field_by_func, globals_by_func, find_callers, resolve_call; checks validate_relocs, validate_entries, test_decomp | `re/legacy/` (to be refactored into `re/isre`) |
+| Ported tools | szdd, ne_parse, ne_tables, slr_relocs; rebuild_ne, redirect_entry; annotated_asm, dump_asm, prologue_scan, name_imports, annotate, callgraph, find_callers, resolve_call | `re/isre` (`szdd`, `ne`, `optloader`; `rebuild`, `neload`; `asm`, `x86dis`, `x86names`) |
+| Kept tools | struct_fields, attr_fields, field_by_func, globals_by_func; checks validate_relocs, validate_entries, test_decomp | `re/legacy/` (to be refactored into `re/isre`) |
 | Kept inputs | `Shipdisk.rar`, `THEWORKS.rar` (both ZIP archives) | `original/archives/*.zip` (gitignored) |
 | Kept references | `wine-specs/*.spec`, `optlink-src/nappload.asm` | `re/wine-specs/`, `re/optlink-src/` |
 | Kept outputs | `relocs.json`, `api-imports.json`, `function-entries.json`, `callgraph.json` | `re/artifacts/` |
@@ -16,10 +16,7 @@ The source is `../innerspace-rea/` (read-only archive). This file records what w
 | Junk, not copied | *.class, __pycache__, slr_decompress*.py, slr_unpack.py (broken), struct_map / field_semantics and their outputs, array_base, probe_bytes, probe_calls, r2-functions*, functions-unpacked.tsv, prologue-funcs.json, ghidra-out/ (57 MB; `decompiled.c` was made from packed bytes) | stays in `../innerspace-rea/` |
 
 ## Known defects in the kept tools
-- **`rebuild_ne`:** writes no relocation records, and its resource table still points into segment code.
-- **`annotated_asm`:** prints the sector number as the file offset in headers, and its linear sweep loses sync (`seg5:0x351`).
-- **`prologue_scan`:** hardcodes seg1 as the data segment.
-- **Hardcoded paths:** 10 scripts hardcode `PROJ=/home/cabal/Git/repos/innerspace-rea`. Others read the current directory or default to `/tmp`.
+- **Hardcoded paths:** 3 scripts hardcode `PROJ=/home/cabal/Git/repos/innerspace-rea`. Others read the current directory or default to `/tmp`.
 
 ## Byte-level facts carried forward
 - **Packing:** segment format per `docs/re/pitfalls.md`; all 18 packed segments reproduce the goldens (`re/tests/test_unpack.py`).

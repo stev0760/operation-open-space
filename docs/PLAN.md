@@ -4,8 +4,8 @@
 | Phase | State | Notes |
 |---|---|---|
 | 0 Bootstrap + oracle smoke | **done** | See the Phase 0 deviations below. Smoke test: `oracle/digests/smoke-0001.md`. |
-| 1 RE pipeline | in progress | S1 gate **done**: `re/isre` reproduces all 19 golden segments and `relocs.json`; all 6 OptLoader modules pass the S2(c) invariants. S2 next. |
-| 2 Knowledge base | in progress | 2a `isre hlp` **done**: 40 topics (1998) and 37 (2000), 0 errors, agrees with helpdeco. |
+| 1 RE pipeline | in progress | S1, S2 and S3 **done**: `isre rebuild` (loader-equivalent, runs under Wine), `isre asm` (verified), Ghidra pipeline with C export (`docs/re/ghidra.md`). S4 verifiers next. |
+| 2 Knowledge base | in progress | 2a `isre hlp` and S1 `isre res` (`docs/re/resources.md`) **done**; S2 `docs/spec/checklist.md` installed (610 rows) with the doc linter. S3 formats and S4 re-verification next. |
 | 3 Oracle | in progress | Scripted run reaches the Navigation window (`oracle/digests/newgame-0001.md`). Blocker: the intro and Enter on a directory fault inside ISPACE.DLL under Wine 11.0. |
 
 **Phase 0 deviations:**
@@ -62,7 +62,7 @@ CLAUDE.md README.md .gitignore CMakeLists.txt CMakePresets.json
 docs/spec/       checklist.md (master feature ledger, stable IDs) + per-subsystem stubs filled per milestone
 docs/re/         binary-map, structs, globals, functions, resources, formats, oracle, pitfalls, win16-translation
 docs/decisions/  ADRs (timing, window/scaling, filesystem rules, asset loading, save format, help)
-re/isre/         Python package + CLI (ne, szdd, unpack, relocs, rebuild, imports, asm, addr, hlp, res, pack)
+re/isre/         Python package + CLI (ne, szdd, unpack, relocs, rebuild, asm, addr, hlp, res, pack)
 re/ghidra/       headless import/analysis/export scripts (Ghidra 12.1.2 @ /home/cabal/Git/repos/ghidra_12.1.2_DEV, Corretto 21)
 re/artifacts/    small committed outputs + golden SHA256 manifests (segments, relocs.json)
 re/wine-specs/   Win16 ordinal specs (record source commit);  re/tests/  pytest (goldens, parsers, doc linter)
