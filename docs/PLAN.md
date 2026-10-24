@@ -38,6 +38,7 @@ This session's research ran 4 explorer agents and a plan review. The full findin
 - Subagent orchestration.
 - Passwordless sudo, so install directly.
 - **No registration code.** The oracle observes only the unregistered build. Registered-only features are specified purely from static RE of their code paths, and the checklist marks them as such: Factory, save/restore, Inner Demon and Noble Weapons, 100+ ships, powerups. The registration check is not patched.
+  - Later, the user buys a registered copy of the game (it is still sold). From then on the oracle also observes registered-only features, using the user's own registration and never a patch. The registration code stays local like `original/` and is never committed. If the copy sold is not v1.29.08, the pipeline processes it as a separate build, and the port's addresses stay those of v1.29.08 unless a decision record changes the target.
 
 **Scope of this approval:** Phases 0–3, which deliver the repo, the RE pipeline, the knowledge base and the oracle. Each port milestone M1–M9 gets its own plan later.
 
