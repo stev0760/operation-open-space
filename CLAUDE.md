@@ -17,7 +17,7 @@ The Hermes-era docs in `../innerspace-rea/` (read-only archive) are **not** a so
   - Mechanical facts (counts, hashes, offsets) are proven by tests in `re/tests/`.
 - **Docs state current truth.** Git holds the history. Never write "superseded", "withdrawn", "previously" or "now known", and never keep "historical" sections. Dead ends become present-tense rules in `docs/re/pitfalls.md`.
 - **One source of truth per topic.** Link to it; don't restate it.
-- **Canonical address form is `segN:0xOFF`,** with N the 1-based NE segment number. DGROUP offsets are written `DGROUP:0xOFF`; for `INSPACE.EXE`, DGROUP is seg19. Ghidra `10xx:` addresses, rea dos-com addresses and file offsets are converted with `isre addr`, never mixed into docs.
+- **Canonical address form is `segN:0xOFF`,** with N the 1-based NE segment number. DGROUP offsets are written `DGROUP:0xOFF`; for `INSPACE.EXE`, DGROUP is seg19. Addresses in any other module carry the module name: `ISPACE.DLL seg6:0x643f`, `ISPACE.DLL DGROUP:0x1cd6`. Ghidra `10xx:` addresses, rea dos-com addresses and file offsets are converted with `isre addr`, never mixed into docs.
 - **Only the orchestrator edits `docs/spec/checklist.md`.** Within one workflow run, each doc file has one writer.
 - **No invented completion percentages.** Progress is checklist status.
 
@@ -37,5 +37,5 @@ The Hermes-era docs in `../innerspace-rea/` (read-only archive) are **not** a so
 
 ## Orchestration
 Phases run as Workflow scripts with at most 10 agents each.
-- **Roles:** analyst (read-only, works from `isre pack` context packs, never the bulk dumps), verifier (independent, gets only the claim and its addresses), implementer (git worktree when running in parallel), oracle runner, doc writer.
+- **Roles:** analyst (read-only, works from `isre pack` context packs, never the bulk dumps), verifier (independent, gets only the claim and its addresses), implementer (parallel implementers own disjoint files; a git worktree only when their files overlap), oracle runner, doc writer.
 - **Commits:** the orchestrator merges, updates the checklist and commits at the end of each stage.

@@ -62,7 +62,8 @@ ini.write_bytes(set_ini_keys(ini.read_bytes().decode("latin-1"), "Inner Space", 
 PYEOF
 fi
 rm -rf "$WINEPREFIX/drive_c/INSPACE/GAMES/"* "$WINEPREFIX/drive_c/INSPACE/RETIRED"
-"$PY" "$ORACLE_DIR/fixtures/make_fixtures.py" "$REPO/work" --tree "$FIXTURE" --map-prefix "$WINEPREFIX" >/dev/null || exit 1
+# Each ORACLE_ID gets its own fixture copy, because the generator rebuilds the tree.
+"$PY" "$ORACLE_DIR/fixtures/make_fixtures.py" "$REPO/work/oracle-$ORACLE_ID" --tree "$FIXTURE" --map-prefix "$WINEPREFIX" >/dev/null || exit 1
 wine reg add 'HKLM\Software\Wine\Drives' /v d: /t REG_SZ /d hd /f >/dev/null 2>&1
 rm -f "$WINEPREFIX/dosdevices/z:"   # keep the host root out of the drive list
 # A crash prints winedbg's register dump and backtrace into trace.log instead of a dialog.

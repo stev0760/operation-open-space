@@ -2,7 +2,8 @@
 # Usage: ORACLE_ID=1 source oracle/env.sh   (each parallel runner uses its own ORACLE_ID)
 
 ORACLE_ID="${ORACLE_ID:-0}"
-export PATH="/opt/wine/bin:$PATH"
+ORACLE_WINE="${ORACLE_WINE:-/opt/wine}"   # another runtime: ORACLE_WINE=/opt/wine-<name>
+export PATH="$ORACLE_WINE/bin:$PATH"
 export WINEPREFIX="${WINEPREFIX:-$HOME/.local/share/wineprefixes/innerspace${ORACLE_ID/#0/}}"
 export WINEDEBUG="${WINEDEBUG:--all}"
 # Use the game's own CTL3D; skip Mono/Gecko install prompts.
