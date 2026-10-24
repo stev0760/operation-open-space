@@ -60,23 +60,23 @@ Between `probe-move0`, `-move1` and `-move2` the rocks and fuel cans shift aroun
 - Navigation → wave: 884 of the 2613 bytes lie in `DGROUP:0x2f04`–`0x3b92`, which holds 133 non-zero bytes in the Navigation window and 987 in the wave. [ORACLE probe-0001]
 - ISPACE.DLL: 377 bytes differ from title to navigation and 22 from navigation to wave. **No byte differs** between the wave dump and move2 (2.6 s, two Up presses). [ORACLE probe-0001]
 
-## Entity array at DGROUP:0x70a0 (stride 0x15a)
-Raw contents per record k (base `0x70a0 + k·0x15a`). [ORACLE probe-0001]
-- Record 0 (`0x70a0`) is all zero at the title and in the Navigation window. It holds 57 non-zero bytes in the wave and move0 dumps and 61 in move1 and move2.
-- Words of record 0 that change across the four wave dumps (wave, move0, move1, move2):
+## Bytes from DGROUP:0x70a0 on a 0x15a grid
+The probe read this region in 0x15a-byte blocks from `0x70a0`. The ship records lie 0x10 lower, at `DGROUP:0x7090 + k·0x15a` for k = 0…7 ([structs.md](../../docs/re/structs.md)); the offsets below are relative to `0x7090`. [ORACLE probe-0001]
+- `0x70a0`–`0x71f9` is all zero at the title and in the Navigation window. It holds 57 non-zero bytes in the wave and move0 dumps and 61 in move1 and move2.
+- Words in it that change across the four wave dumps (wave, move0, move1, move2):
 
-  | Offset | Address | Values |
+  | Offset from 0x7090 | Address | Values |
   |---|---|---|
-  | +0x006 | `DGROUP:0x70a6` | 001b 0012 000c 001b |
-  | +0x00e | `DGROUP:0x70ae` | 0528 0528 0523 051e |
-  | +0x024 | `DGROUP:0x70c4` | 001e 001e 001e 000c |
-  | +0x080 | `DGROUP:0x7120` | 00000000 00000000 4799da2f 4799dea9 (dword) |
-  | +0x146 | `DGROUP:0x71e6` | 4799da89 4799da89 4799da89 4799e06e (dword) |
+  | +0x016 | `DGROUP:0x70a6` | 001b 0012 000c 001b |
+  | +0x01e | `DGROUP:0x70ae` | 0528 0528 0523 051e |
+  | +0x034 | `DGROUP:0x70c4` | 001e 001e 001e 000c |
+  | +0x090 | `DGROUP:0x7120` | 00000000 00000000 4799da2f 4799dea9 (dword) |
+  | +0x156 | `DGROUP:0x71e6` | 4799da89 4799da89 4799da89 4799e06e (dword) |
 
 - `DGROUP:0x70ae` drops by 5 for each second of Up. Whether it is fuel or another quantity is [OPEN].
-- Records 1–6 (`0x71fa`–`0x7a15`) are zero in all six dumps.
-- Records 7, 8, 15 and 16 (`0x7a16`, `0x7b70`, `0x84e6`, `0x8640`) are zero before the wave and fill at wave entry (10, 120, 16 and 44 non-zero bytes). They do not change across the four wave dumps.
-- From record 21 (`0x8d02`) on, the stride grid overlaps bytes that are already non-zero at the title. Record 36 (`0xa148`) crosses minalloc. The array's length is [OPEN].
+- `0x71fa`–`0x7a15` is zero in all six dumps.
+- The 0x15a-byte blocks at `0x7a16`, `0x7b70`, `0x84e6` and `0x8640` are zero before the wave and fill at wave entry (10, 120, 16 and 44 non-zero bytes). They do not change across the four wave dumps.
+- From `0x8d02` on, the grid overlaps bytes that are already non-zero at the title.
 
 ## Table at DGROUP:0x1df8
 Raw contents of `DGROUP:0x1df8`–`0x23ef`. The range holds 60 non-zero bytes at the title and in the Navigation window, and 283–295 in the four wave dumps. [ORACLE probe-0001]
@@ -87,10 +87,36 @@ Raw contents of `DGROUP:0x1df8`–`0x23ef`. The range holds 60 non-zero bytes at
   - In the wave the 36 words up to `0x23de` hold values from 0x0047 to 0x03bc, and most change between consecutive wave dumps.
   - The 8 words `0x23e0`–`0x23ee` hold larger values (0x0894, 0x2d44, 0x6658, 0xfda8 among them).
 
+## rand() state and timing words
+Values read from the dumps at the addresses that [rng.md](../../docs/re/rng.md) and [timing.md](../../docs/re/timing.md) name. `oracle/rngcheck.py work/probe/dumps` prints the first table. [ORACLE probe-0001]
+
+| Dump | DGROUP:0x144c | Seed | Draws since the seed | DGROUP:0x1e50 | Last tick with the seed as low word | ms before the dump's sample | DGROUP:0x1e68 |
+|---|---|---|---|---|---|---|---|
+| title | 0x25da5ef6 | 0x3375 | 891 | 0x47989c25 | 0x47983375 | 26 800 | 0 |
+| navigation | 0x25da5ef6 | 0x3375 | 891 | 0x47992c9f | 0x47983375 | 63 786 | 0 |
+| wave | 0xe43e04a1 | 0xb411 | 2512 | 0x4799d4d2 | 0x4799b411 | 8 385 | 298 |
+| move0 | 0x1dae3fcb | 0xb411 | 2522 | 0x4799d552 | 0x4799b411 | 8 513 | 302 |
+| move1 | 0x732657ca | 0xb411 | 2627 | 0x4799da0c | 0x4799b411 | 9 723 | 346 |
+| move2 | 0x507159d6 | 0xb411 | 2799 | 0x4799dee8 | 0x4799b411 | 10 967 | 391 |
+
+- "Seed" is the first state below 0x10000 that stepping the generator backwards from DGROUP:0x144c reaches. Stepping forwards, the wave state reaches the move0 state after 10 draws, the move1 state after 105 more and the move2 state after 172 more. The Navigation state does not reach the wave state within 10⁶ draws.
+- DGROUP:0x2214 equals DGROUP:0x1e50 in every dump, except move2 (0x4799dee9).
+- ISPACE.DLL DGROUP:0xb8c holds 0x00000001 in all six dumps.
+- DGROUP:0x90f4 holds 0, 0, 1, 1, 1, 1 (title to move2).
+
+| Dump | DGROUP:0x8ffc | DGROUP:0x9002 | DGROUP:0x9004 | DGROUP:0x8f76 | DGROUP:0x59a |
+|---|---|---|---|---|---|
+| title | 14 940 | 298 | −490 | 533 | 76 |
+| navigation | 14 940 | 298 | 140 | 533 | 78 |
+| wave | 14 940 | 298 | 410 | 559 | 35 |
+| move0 | 14 940 | 298 | 410 | 559 | 35 |
+| move1 | 14 940 | 298 | 410 | 574 | 37 |
+| move2 | 14 940 | 298 | 410 | 589 | 37 |
+
 ## Clock values
 - Several dwords have a high word of 0x4798 or 0x4799. That is the range of the trace's `+timestamp` clock, Wine's millisecond tick count. The last trace line is at 1201266.567 s = 0x4799df87 ms. [ORACLE probe-0001]
 - For `DGROUP:0x1e50`, `0x2214` and `0x2218`, the tick value minus the dump's wall-clock time of day is the same offset, within 40 ms, in all six dumps from the title on. These three follow the current tick in every phase. [ORACLE probe-0001]
-- Record 0's `+0x080` (`DGROUP:0x7120`) is 0 until the first Up press. Its two values (move1, move2) are 1146 ms apart, and `probe-steps.txt` logs the two Up releases 1215 ms apart. [ORACLE probe-0001]
+- `DGROUP:0x7120` is 0 until the first Up press. Its two values (move1, move2) are 1146 ms apart, and `probe-steps.txt` logs the two Up releases 1215 ms apart. [ORACLE probe-0001]
 - What each of these clock values records is [OPEN].
 
 ## Not covered

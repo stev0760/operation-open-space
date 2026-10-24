@@ -507,3 +507,62 @@ def test_judge_known_counts(monkeypatch):
         _judge("x.md", [v, v, v])
     with pytest.warns(UserWarning):
         _judge("x.md", [])
+
+
+# ---------------------------------------------------------------- relative links
+
+LINK_RE = re.compile(r"(?<!!)\[[^\]\n]*\]\((?P<target>[^)\s]+)\)")
+
+
+def slug(heading: str) -> str:
+    """GitHub's heading anchor: lower case, punctuation dropped, spaces to hyphens."""
+    s = heading.strip().lower()
+    s = re.sub(r"[^\w\- ]", "", s)
+    return s.replace(" ", "-")
+
+
+def anchors(path: Path) -> set[str]:
+    out: set[str] = set()
+    seen: dict[str, int] = {}
+    for line in _blank_fences(path.read_text(encoding="utf-8")).splitlines():
+        m = re.match(r"^#{1,6}\s+(.*?)\s*#*\s*$", line)
+        if m:
+            base = slug(m.group(1))
+            n = seen.get(base, 0)
+            seen[base] = n + 1
+            out.add(base if n == 0 else f"{base}-{n}")
+    return out
+
+
+def check_links(path: Path) -> list[str]:
+    bad = []
+    text = _blank_fences(path.read_text(encoding="utf-8"))
+    for m in LINK_RE.finditer(text):
+        target = m.group("target")
+        if re.match(r"^[a-z]+:", target):
+            continue
+        file_part, _, frag = target.partition("#")
+        dest = (path.parent / file_part).resolve() if file_part else path
+        if not dest.exists():
+            bad.append(f"line {_line_of(text, m.start())}: missing file {target}")
+        elif frag and dest.suffix == ".md" and frag not in anchors(dest):
+            bad.append(f"line {_line_of(text, m.start())}: no heading for #{frag} in {file_part or path.name}")
+    return bad
+
+
+@pytest.mark.parametrize("path", lint_files(), ids=_rel)
+def test_links(path: Path):
+    assert check_links(path) == []
+
+
+def test_slug():
+    assert slug("Ship records (8 × 0x15a bytes at DGROUP:0x7090)") == "ship-records-8--0x15a-bytes-at-dgroup0x7090"
+    assert slug("ISPACE.DLL #5500 100") == "ispacedll-5500-100"
+    assert slug("WndProc seg2:0x224 (export ordinal 1)") == "wndproc-seg20x224-export-ordinal-1"
+
+
+def test_check_links_finds_bad_targets(tmp_path):
+    (tmp_path / "a.md").write_text("# Top\n## Sub (x)\n[ok](#sub-x) [bad](#nope) [f](b.md#top) [g](c.md)\n")
+    (tmp_path / "b.md").write_text("# Top\n")
+    assert check_links(tmp_path / "a.md") == ["line 3: no heading for #nope in a.md",
+                                              "line 3: missing file c.md"]

@@ -201,7 +201,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--json", action="store_true")
     s.set_defaults(func=cmd_addr)
 
-    s = sub.add_parser("all", help="regenerate extracted/, ne/ and unpacked/ under the work directory")
+    s = sub.add_parser("all", help="regenerate the work directory: extracted, ne, unpacked, rebuilt, assets, asm")
     s.add_argument("--original", required=True, help="directory holding shipdisk/ and theworks/")
     s.add_argument("--work", required=True, help="output work directory")
     s.set_defaults(func=cmd_all)

@@ -122,7 +122,7 @@ ENG_LANG.DLL holds 1,446 strings, ids 110–12,546. [BYTES ENG_LANG.DLL STRING] 
 
 ### Other data types
 - **#5500 110** (32 zero bytes) appears in IGRAPHIC.DLL, INSPACE.EXE and INSTALL.EXE. INSTALL.EXE also has **#5500 120** (128 zero bytes). Their use is [OPEN]. [BYTES INSPACE.EXE 5500 110] [BYTES INSTALL.EXE 5500 120]
-- **ISPACE.DLL #5500 100**: 288 bytes, 96 three-byte colour entries. They form about five ramps (cyan to blue, yellow to brown, grey-brown, white to grey, yellow-green to green) followed by 4 zero entries. The byte order (RGB or BGR) and the use are [OPEN]. [BYTES ISPACE.DLL 5500 100]
+- **ISPACE.DLL #5500 100**: 288 bytes, 96 three-byte colour entries. They form about five ramps (cyan to blue, yellow to brown, grey-brown, white to grey, yellow-green to green). The last 12 bytes are zero; the code uses the first 0x114 ([formats.md](formats.md#ispacedll-5500-100)). Each entry is red, green, blue ([formats.md](formats.md#ispacedll-5500-100)). [BYTES ISPACE.DLL 5500 100]
 - **ISPACE.DLL #5600 135**: 128 bytes, 64 signed words within ±250. Its use is [OPEN]. [BYTES ISPACE.DLL 5600 135]
 - **IGRAPHIC.DLL #6600** 100, 105, 110, 115, 120: binary records of 2,496, 3,520, 2,432, 1,056 and 1,088 bytes. Each starts `ff 00 ff 00 ff 00`. Their use is [OPEN]. [BYTES IGRAPHIC.DLL 6600]
 - **INRUN.AD #1000** 1–4: option records holding labels (`Allow Game Play`, `Condition:`, `Configure..`, `Sound:`) and binary fields. **#2000** 10, 20, 30: credit, title and help texts. [BYTES INRUN.AD 1000] [BYTES INRUN.AD 2000]

@@ -70,7 +70,7 @@ Depth 8 (PseudoColor) against depth 24: [ORACLE depth8-0001] [ORACLE depth8-0002
 - No `SetTimer`, `KillTimer` or `timeSetEvent` runs from Enter to the exit. [ORACLE newgame-0002] [ORACLE wave-0001] Before its first MessageBox the game calls `timeGetDevCaps` once. [ORACLE smoke-0001]
 - Idle loop: `PeekMessage(PM_REMOVE)` (INSPACE.EXE seg2:0x00ff), `GetDC`, `SelectPalette`, `GetCurrentTime` (INSPACE.EXE seg7:0x0024), `timeGetTime` (INSPACE.EXE seg7:0x00bc), `SelectPalette` and `ReleaseDC`, some 65 000 times per second on the title. [ORACLE newgame-0001]
 - Wave frame loop: `SelectClipRgn` (INSPACE.EXE seg7:0x084f) and `GetAsyncKeyState` for VK_SHIFT and VK_SPACE, some 11 500 times per second. The game polls the arrow keys less often. [ORACLE newgame-0002]
-- The game measures and rewrites `Calibrate` 1.5 s after each launch [ORACLE newgame-0001]. The value depends on host speed and load: 13965–18832 under Wine on this host, 7116 under otvdm and 1294–1324 under traced otvdm. [ORACLE runtime-0001] [ORACLE wave-0001]
+- The game measures and rewrites `Calibrate` 1.5 s after each launch [ORACLE newgame-0001]. The value depends on host speed and load: the digests record 13 340–14 940 under Wine on this host, 7116 under otvdm and 1294–1324 under traced otvdm. [ORACLE runtime-0001] [ORACLE probe-0001]. What the game derives from it is in [timing.md](timing.md#calibrate).
 - The HUD clock keeps real time under Wine [ORACLE newgame-0002] and under untraced otvdm. Under traced otvdm it runs at half speed. [ORACLE runtime-0001]
 - INSPACE.EXE DGROUP:0x1e50, DGROUP:0x2214 and DGROUP:0x2218 follow Wine's millisecond tick in every phase. [ORACLE probe-0001]
 
@@ -86,13 +86,12 @@ Depth 8 (PseudoColor) against depth 24: [ORACLE depth8-0001] [ORACLE depth8-0002
 ## Open questions
 - [OPEN] Which runtime's dialog geometry matches Windows, and whether Windows shows the "ANALYSING DRIVE" screen that only otvdm caught [ORACLE runtime-0001].
 - [OPEN] Whether Windows at 256 colours shows the depth-8 colour losses [ORACLE depth8-0002], and an independent check of the depth8-0002 reading of ISPACE.DLL seg5:0x3649.
-- [OPEN] Whether the play area, the HUD, INI defaults such as `IconLeft` 976 [ORACLE newgame-0001] or the world size follow the screen size. This needs runs at other Xvfb sizes and with `Full=0`.
+- [OPEN] Whether the play area, the HUD or the world size follow the screen size. Some INI defaults do: `IconLeft` defaults to the screen width − 48, 976 at 1024 pixels ([formats.md](formats.md#inspaceini-inner-space)) [ORACLE newgame-0001]. This needs runs at other Xvfb sizes and with `Full=0`.
 - [OPEN] Depth and count caps of the walk, which need a larger fixture tree, and whether walk order matters outside the sorted listboxes [ORACLE newgame-0001].
 - [OPEN] Why the full status display is missing at wave start and comes and goes around dialogs, and what Windows shows there [ORACLE wave-0001].
 - [OPEN] What removed the icon that dissolved without a capture in `wave-0001-run2`, and which input issues the Command-mode capture, since Q calls the ambulance [ORACLE wave-0001].
 - [OPEN] The end of a wave, the exit gate, other ships, LASTGAME and runs with sound [ORACLE wave-0001].
-- [OPEN] What paces frames and the HUD clock: why traced otvdm halves the clock [ORACLE runtime-0001], how `Calibrate`, `GameSpeed` and `FrameRateSet` enter, and what the tick-valued DGROUP words record [ORACLE probe-0001].
-- [OPEN] The meaning of INSPACE.EXE DGROUP:0x9684, DGROUP:0x9320, the record array at DGROUP:0x70a0 and the table at DGROUP:0x1df8 [ORACLE probe-0001].
+- [OPEN] Why traced otvdm halves the HUD clock [ORACLE runtime-0001]. [timing.md](timing.md) explains the frame pacing and the clock samples.
 - [OPEN] What selects the intro's closing line, "GOOD LUCK" or "ENJOY YOUR FOOD" [ORACLE newgame-0002].
 - [OPEN] Whether the Windows KERNEL `GlobalFree` zeroes a stale ES in the caller's frame [ORACLE fault-0001].
 - [OPEN] `+int21` tracing under otvdm [ORACLE runtime-0001].

@@ -34,7 +34,7 @@ The source is `../innerspace-rea/` (read-only archive). This file records what w
   - `\CTL3D.DLL` at `seg2:0x19e0`.
 - **Data files:**
   - `MASTER.BOD`: 52×44-byte records plus 16 zero bytes. `01 00 01 00` sits at offset 21. The word at offset 33 is the IGRAPHIC `#4000` resource ID of the ship body.
-  - `MASTER.SHP`: 118×65-byte records plus 10 pad bytes. Name at offset 10, class at 31, body (BOD index) at 33, author at 35, sound base name at 56.
+  - `MASTER.SHP`: 118×65-byte records plus 10 pad bytes. Name at offset 10, hit sound id at 31, body (BOD index) at 33, author at 35, sound base name at 56.
 
 ## Interpretations that need verification before use
 - Ship struct (stride `0x70`): `+0x04`/`+0x06` = X/Y, `+0x18` = active flag, `+0x51` = owner (values 1/2), `+0x5e`/`+0x62`/`+0x66` = behaviour function pointers.
