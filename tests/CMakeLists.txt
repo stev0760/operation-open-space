@@ -1,10 +1,6 @@
-add_executable(is_tests
-  test_main.cpp
-  test_bytes.cpp
-  test_ne.cpp
-  test_res16.cpp
-  test_dib.cpp
-  test_golden.cpp)
+# Every test_*.cpp joins the one test executable, so parallel work never edits this file.
+file(GLOB IS_TEST_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/test_*.cpp)
+add_executable(is_tests ${IS_TEST_SOURCES})
 target_link_libraries(is_tests PRIVATE isformats)
 target_include_directories(is_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party/doctest ${CMAKE_CURRENT_SOURCE_DIR})
 

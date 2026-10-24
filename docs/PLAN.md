@@ -177,7 +177,7 @@ Cheaper models handle refactors, tests and lint. I merge, update the checklist a
 ## Later milestones (each planned separately)
 | # | Milestone | Content |
 |---|---|---|
-| M1 | Foundations | CMake presets for mingw i686/x86_64 under Wine (MSVC later). C++ readers: NE resources, SZDD, BOD/SHP, DIB with palette and transparency. 16→32-bit DLGTEMPLATE/MENU converter, so the original dialogs come from ENG_LANG. doctest. `isview` asset viewer. |
+| M1 | Foundations (detailed plan below) | CMake presets for mingw i686/x86_64 under Wine (MSVC later). C++ readers: NE resources, SZDD, BOD/SHP, DIB with palette and transparency. 16→32-bit DLGTEMPLATE/MENU converter, so the original dialogs come from ENG_LANG. doctest. `isview` asset viewer. |
 | M2 | Shell | Game window and intro, Restore/New Game, accelerators, port-local INI, timestep per ADR, integer/DPI scaling, help (HLP→HTML). |
 | M3 | World | Filesystem walk per the original's rules, with a modern-safety ADR. Navigation, wave generation, ExtractIconEx at 32×32, rocks and gates, flight model, status panel, radar. |
 | M4 | Core loop | Capture, fuel, damage and auto-repair, weapons, ambulance economy, scoring, waves, save/load (format ADR). |
@@ -186,6 +186,60 @@ Cheaper models handle refactors, tests and lint. I merge, update the checklist a
 | M7 | Audio | WAV mixer replacing WAVEMIX; MIDI through MCI or midiOut. |
 | M8 | Extras | Icon and Ship Watch, dynamic help, Ship Factory, screensaver. |
 | M9 | Release | Wine + Win10/11 matrix, performance, packaging, bring-your-own-copy setup. |
+
+## M1 — Foundations (detailed plan)
+**Goal:** every original asset the port needs is readable through tested C++ readers, the original dialogs, menus and accelerators run as Win32 templates, and `isview` shows all of it. No gameplay. M1 is done when M2 can start the game shell without writing a new reader.
+
+**Already delivered by the proof of concept** (`8d939e2`, `4f9c3b0`):
+- CMake presets `mingw-x64`, `mingw-i686` (static; CTest runs the tests under Wine) and `host` (native).
+- doctest.
+- `src/formats/`:
+  - NE resource tables;
+  - Win16 STRING, DIALOG, MENU and ACCELERATOR decoders with conversion to Win32 templates;
+  - DIBs.
+- Golden tests: all 1,446 strings equal `isre`'s output.
+- `isview` v0.
+- The `poc_wave` sandbox.
+
+**Decisions first** (ADRs the user approves before the work that depends on them):
+- **ADR 0001 Timestep:** accept or amend. M2 needs it; `poc_wave` already follows it.
+- **ADR 0002 Asset source:**
+  - The port reads the user's installed game directory: the port's own directory first, then a path from its INI or command line. A distribution directory with SZDD files also works.
+  - A table of known file hashes (v1.29.08 shipdisk, THEWORKS, later the registered copy) identifies the version. It reports an unknown version instead of refusing it.
+  - Nothing is copied or redistributed.
+- **ADR 0003 Text and paths:** the Win32 W APIs throughout. cp1252 resource text converts at the boundary. Files the original also reads (INI, saves) keep cp1252.
+
+**Stages** (one Workflow run per stage; parallel implementers own disjoint files):
+1. **Readers** (2 implementers in parallel):
+   - (a) SZDD expansion; MASTER.BOD and MASTER.SHP with every field in `docs/re/formats.md`; the VERSION resource. With unit and golden tests, plus an `isre ships --json` reference dump if the goldens need one.
+   - (b) ICON and GROUP_ICON; WAV resources from SND_FX.DLL and ENG_FX.DLL; the records that code loads as data (IGRAPHIC #6600, ISPACE #5500, #5600 and #5000 150). With tests.
+2. **Asset store** (1 implementer), `src/assets/`:
+   - opens a game or distribution directory, with case-insensitive lookup and transparent SZDD;
+   - checks the version table and picks the language DLL from the `Language` key (default ENG);
+   - gives lazy typed access to strings, dialog templates, menus, accelerators, sprites, bitmaps, icons, WAVs and ships.
+   - The dialog font mapping (Helv 8 pt) stays a parameter until M2's window and scaling ADR.
+3. **isview v1** (1 implementer):
+   - a resource tree for all 14 modules, with string search;
+   - dialogs, menus and accelerators;
+   - bitmaps and sprites with zoom, palette and frame-grid views; icons;
+   - WAV playback from memory;
+   - a ship browser (SHP list, BOD sprite, every field);
+   - `--dump <module>` JSON for golden comparison with `isre res`.
+4. **Verify:**
+   - independent code review of `src/` and `tools/` (bounds, undefined behaviour, error paths);
+   - golden cross-check of every reader against `work/assets` and `formats.md`;
+   - screenshots of the converted dialogs against the oracle's, recorded in a digest.
+
+   Then fixes, and the orchestrator merges and commits.
+
+**Verification:**
+- `ctest` passes on `mingw-x64`, `mingw-i686` and `host`, with the golden tests running, not skipped.
+- Every resource of the game's modules decodes, and the counts equal `docs/re/resources.md`.
+- MASTER.BOD and MASTER.SHP give 52 and 118 records, with field values equal to the reference dump.
+- Converted dialogs have the original's pixel size under Wine.
+- Optional: `isview` on the user's Windows 10/11 machine.
+
+**Out of scope:** the game window, INI and timing (M2); the filesystem walk (M3); audio playback (M7); MSVC.
 
 ## Verification (Phases 0–3)
 - **Phase 0:** the original reaches its title screen under Wine 11.20, with a screenshot and a relay trace showing 16-bit calls. `original.sha256` and the goldens are committed.
