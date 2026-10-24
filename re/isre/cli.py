@@ -22,6 +22,7 @@ PLUGINS = {
     "rebuild": "write an unpacked NE with standard relocation records (isre.rebuild)",
     "asm": "recursive-descent disassembler (isre.asm)",
     "pack": "analyst context pack for one address (isre.pack)",
+    "ships": "MASTER.BOD / MASTER.SHP record dumper (isre.ships)",
 }
 
 

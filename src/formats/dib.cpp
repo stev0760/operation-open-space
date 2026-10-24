@@ -1,10 +1,15 @@
 #include "formats/dib.h"
 
+#include <limits>
+
 #include "formats/bytes.h"
 
 namespace is::fmt {
 
-Dib parse_dib(const std::uint8_t* p, std::size_t n) {
+namespace {
+// `icon`: the header height covers the XOR image and the AND mask, so the image is half
+// as tall; `bits_end` receives the offset just past the image's bits.
+Dib parse_impl(const std::uint8_t* p, std::size_t n, bool icon, std::size_t* bits_end) {
     Reader r(p, n);
     std::size_t base = 0;
     std::size_t bits_off = 0;
@@ -33,10 +38,16 @@ Dib parse_dib(const std::uint8_t* p, std::size_t n) {
         r.skip(12);  // size image, resolution
         colours = r.u32();
         r.u32();     // important colours
+        // -INT32_MIN overflows int; no such height passes the size check below anyway
+        if (h == std::numeric_limits<std::int32_t>::min()) throw FormatError("bad DIB size");
         d.bottom_up = h > 0;
         d.height = h > 0 ? h : -h;
     } else {
         throw FormatError("unknown DIB header");
+    }
+    if (icon) {
+        if (d.height % 2 != 0) throw FormatError("odd icon DIB height");
+        d.height /= 2;
     }
     if (d.width <= 0 || d.height <= 0 || d.width > 8192 || d.height > 8192)
         throw FormatError("bad DIB size");
@@ -45,6 +56,8 @@ Dib parse_dib(const std::uint8_t* p, std::size_t n) {
     if (d.bpp <= 8 && (colours == 0 || colours > (1u << d.bpp))) colours = std::size_t{1} << d.bpp;
     if (d.bpp > 8) colours = 0;
 
+    // biSize is a full dword: compare before adding, so a 32-bit size_t cannot wrap
+    if (hsize > n - base) throw FormatError("DIB header past end");
     r.seek(base + hsize);
     for (std::size_t i = 0; i < colours; ++i) {
         const std::uint32_t b = r.u8(), g = r.u8(), rd = r.u8();
@@ -55,7 +68,16 @@ Dib parse_dib(const std::uint8_t* p, std::size_t n) {
     const std::size_t need = d.stride() * static_cast<std::size_t>(d.height);
     if (r.remaining() < need) throw FormatError("DIB bits truncated");
     d.bits.assign(r.ptr(), r.ptr() + need);
+    if (bits_end) *bits_end = r.pos() + need;
     return d;
+}
+}  // namespace
+
+Dib parse_dib(const std::uint8_t* p, std::size_t n) { return parse_impl(p, n, false, nullptr); }
+
+Dib parse_icon_xor(const std::uint8_t* p, std::size_t n, std::size_t& mask_offset) {
+    if (n >= 2 && p[0] == 'B' && p[1] == 'M') throw FormatError("icon image with a file header");
+    return parse_impl(p, n, true, &mask_offset);
 }
 
 std::uint8_t Dib::index_at(int x, int y) const {

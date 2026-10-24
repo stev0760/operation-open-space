@@ -26,6 +26,13 @@ struct Dib {
 // Accepts both forms: with a "BM" file header or a bare BITMAPINFOHEADER/BITMAPCOREHEADER.
 Dib parse_dib(const std::uint8_t* p, std::size_t n);
 
+// Icon images: a packed DIB whose header height covers the XOR image and the 1 bpp AND
+// mask stored after it (docs/re/resources.md#win16-layouts). Returns the XOR image, its
+// height halved, and sets `mask_offset` to the offset of the AND mask in `p`. A CURSOR
+// resource stores a 4-byte hotspot (two words) before the same layout, so a caller passes
+// the bytes after it (re/isre/res_formats.py single_cursor); the distribution has no cursors.
+Dib parse_icon_xor(const std::uint8_t* p, std::size_t n, std::size_t& mask_offset);
+
 // Top-down 32-bit pixels, 0xAARRGGBB as a little-endian DWORD (B, G, R, A bytes, the
 // Win32 32 bpp DIB order). Pixels of `transparent_index` get `background` instead
 // (alpha 0); every other pixel has alpha 0xFF.

@@ -427,6 +427,7 @@ This section covers what the loading code shows. [resources.md](resources.md) ho
 - It copies the first 0x6c bytes into a 0x6c-byte block (the header, far pointer ISPACE.DLL DGROUP:0xd10). [BYTES ISPACE.DLL seg8:0x5bec seg8:0x5c12 seg8:0x5c24]
 - It then copies the rest, starting at offset `GlobalSize` of that block, into a second block (the body, far pointer ISPACE.DLL DGROUP:0xd50). [BYTES ISPACE.DLL seg8:0x5c07 seg8:0x5c3e seg8:0x5c6f]
   - With 32-byte rounding the body starts at 0x80. Bytes 0x6c–0x7f are zero in all five resources. [BYTES IGRAPHIC.DLL 6600]
+  - The body block is `GlobalAlloc(0x42, n − GlobalSize(header))`, where n is the low word of `SizeofResource` (ISPACE.DLL DGROUP:0x1cd2). It is zero-filled, so records that reach into its own `GlobalSize` rounding count too. [BYTES ISPACE.DLL seg8:0x5bad seg8:0x5bb2 seg8:0x5c2c seg8:0x5c31 seg8:0x5c33 seg8:0x5c3e]
 - ISPACE ordinal 32 ([ispace.md](ispace.md)) loads the record when its id argument is not −1 and treats the body as 0x26-byte records, count = `GlobalSize(body)` / 0x26. [BYTES ISPACE.DLL seg8:0x3a seg8:0x44 seg8:0x72 seg8:0x78]
 - Header fields that ordinal 32 reads and writes:
   - Bytes +0x50 and +0x51 select one of three modes each (6, 7 or 8) for the dwords +0x5c and +0x60. [BYTES ISPACE.DLL seg8:0xd0 seg8:0xe1 seg8:0x109 seg8:0x11b seg8:0x154]
