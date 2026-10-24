@@ -1,0 +1,230 @@
+# Inner Space Port — Project Overhaul & Porting Plan
+
+## Context
+
+The goal is a **faithful Win32 port of Operation: Inner Space v1.29.08** (SDi, Win16 NE). It should run natively on Windows 10/11 and under Wine. The port reads assets from the user's own original install. Earlier work by Hermes with open-weights models left two problems:
+
+- **`innerspace-port/`** has only `README.md` and `PLAN.md`. The design in them is wrong: a desktop overlay, "no filesystem walker", and an invented feature set.
+- **`innerspace-rea/`** (78 MB, no git) has real byte-level groundwork, buried in about 50 one-off scripts, `.class` files, 57 MB of void or demoted Ghidra output, and docs full of retractions.
+
+This session's research ran 4 explorer agents and a plan review. The full findings are in **Appendix A** (workspace triage) and **Appendix B** (facts and refutations). The headlines:
+
+- **Wrong claims in the old docs:** the game does walk the filesystem (seg5 findfirst/findnext); DGROUP is seg19, not seg1; and the capture state machine and icon fallback ladder are misread.
+- **The manual is the behaviour spec.** `ENG_HELP.HLP` is WinHelp 3.1, uncompressed. It says directories on disk are "waves" entered from a Navigation window, and the game runs in its own window, full-screen by default, with a status panel. It documents a large feature set: teams, laws, about 20 weapons, 12 hazards, races, Inner Demon and more. The full key map is known.
+- **Assets:** ship and UI art are in `IGRAPHIC.DLL`, strings, dialogs and menus in `ENG_LANG.dll`, sounds in `SND_FX.DLL` / `eng_fx.dll`. `MASTER.SHP` is decoded as 118×65-byte named ships pointing at the 52 BOD bodies.
+- **ISPACE.dll** is a packed second engine: 162 KB of code, loaded with LoadLibrary, 23 ordinals used. It probably holds rendering (DIBs, palettes), sound, options and save/load. Nobody has analysed it.
+- **Pipeline gap:** no script regenerates the unpacked segments. `rebuild_ne.py` writes no relocations and a broken resource table, which is the root of the Ghidra failure.
+
+**User decisions:**
+- One monorepo.
+- Original files kept local only, with a committed SHA-256 manifest.
+- The original window model, scaled.
+- A rewrite guided by decompilation, checked against the original running under Wine.
+- Subagent orchestration.
+- Passwordless sudo, so install directly.
+- **No registration code.** The oracle observes only the unregistered build. Registered-only features are specified purely from static RE of their code paths, and the checklist marks them as such: Factory, save/restore, Inner Demon and Noble Weapons, 100+ ships, powerups. The registration check is not patched.
+
+**Scope of this approval:** Phases 0–3, which deliver the repo, the RE pipeline, the knowledge base and the oracle. Each port milestone M1–M9 gets its own plan later.
+
+## Guiding principles (go into `CLAUDE.md`)
+1. **Evidence tags on every claim:** `[MANUAL topic]`, `[BYTES segN:0xOFF]`, `[ORACLE id]`, `[DESIGN]` or `[OPEN]`.
+   - Verification is tiered. Mechanical facts (counts, hashes, offsets) are proven by tests. Interpretive claims need a verifier agent that sees only the claim and its addresses, not the analyst's reasoning.
+2. **Docs state current truth; git holds history.** No narrative of what was superseded.
+   - Dead ends are kept as **present-tense rules** in `docs/re/pitfalls.md`, e.g. "relocation chains reach 159 sites; never cap", "Win16 APIs push args left-to-right".
+3. **One canonical address form: `segN:0xOFF`.** `isre addr` converts to and from Ghidra `10xx:`, file offsets and DGROUP. Each topic has one source of truth and one writer per doc per workflow run. Only the orchestrator edits `checklist.md`.
+4. **A doc linter (pytest) enforces the rules:**
+   - Every claim is tagged.
+   - `[BYTES]` addresses resolve to a real segment and offset.
+   - `[ORACLE id]` resolves to a committed text digest in `oracle/digests/`.
+   - Checklist rows have stable IDs (`WPN-07`) and fixed status values.
+   - Banned words: superseded, withdrawn, previously, now known.
+5. **Every artifact regenerates with one command** from `original/`. No absolute paths in tools; every tool has tests.
+6. **Progress is measured by `docs/spec/checklist.md`,** not by percentages.
+7. **Fidelity first.** Modernisations become ADRs in `docs/decisions/`.
+
+## Target repo layout (`/home/cabal/Git/repos/innerspace-port`, git init)
+```
+CLAUDE.md README.md .gitignore CMakeLists.txt CMakePresets.json
+docs/spec/       checklist.md (master feature ledger, stable IDs) + per-subsystem stubs filled per milestone
+docs/re/         binary-map, structs, globals, functions, resources, formats, oracle, pitfalls, win16-translation
+docs/decisions/  ADRs (timing, window/scaling, filesystem rules, asset loading, save format, help)
+re/isre/         Python package + CLI (ne, szdd, unpack, relocs, rebuild, imports, asm, addr, hlp, res, pack)
+re/ghidra/       headless import/analysis/export scripts (Ghidra 12.1.2 @ /home/cabal/Git/repos/ghidra_12.1.2_DEV, Corretto 21)
+re/artifacts/    small committed outputs + golden SHA256 manifests (segments, relocs.json)
+re/wine-specs/   Win16 ordinal specs (record source commit);  re/tests/  pytest (goldens, parsers, doc linter)
+oracle/          Wine launch/scenario scripts, fixture directory trees (8.3 ASCII, old icons), mem-probe helper, digests/
+src/ tools/ tests/ cmake/    C++17 port (empty until M1, apart from the toolchain file and probe helper)
+original/  GITIGNORED (+ committed original.sha256)      work/  GITIGNORED (unpacked, asm, Ghidra projects, decomp C, manual, assets, traces)
+```
+`innerspace-rea/` stays where it is and is made read-only with `chmod -R a-w`. Renaming it would break its hardcoded paths and the `~/ghidra-projects` project. Nothing is deleted until you say so. Only the KEEP items from Appendix A are copied into the new repo.
+
+## Orchestration model
+I orchestrate. Each phase stage runs as a **Workflow** script (≤10 agents) with these roles:
+- **Analyst** (read-only): works from generated **context packs** (`isre pack segN:0xOFF`: annotated disassembly, Ghidra C, xrefs, struct and global notes, ≤30 KB), never the bulk dumps.
+- **Verifier** (adversarial and independent).
+- **Implementer:** uses git worktrees when tasks run in parallel; its work must build and pass tests.
+- **Oracle runner:** uses its own `WINEPREFIX` and `DISPLAY`, because of the game's single-instance check.
+- **Doc writer:** passes the linter and `prose-lint`.
+
+Cheaper models handle refactors, tests and lint. I merge, update the checklist and commit at the end of each stage.
+
+## Phase 0 — Bootstrap + oracle smoke test (me, sequential)
+1. **Install:**
+   - **Wine:** Kron4ek **11.20 `amd64-wow64`**, checksum-verified, into `/opt/wine-11.20`, symlinked as `/opt/wine`.
+     - Wine 11's new WoW64 mode runs 16-bit apps. The kernel has `MODIFY_LDT`, `X86_16BIT` and `IA32_EMULATION`.
+     - SELinux: `semanage fcontext -a -t textrel_shlib_t '/opt/wine[^/]*/lib/wine(/.*)?'`, then `restorecon -R`.
+     - Fallbacks, in order: the Kron4ek `amd64` multilib build plus `glibc.i686`; otvdm 0.9 inside Wine; DOSBox-X with Win3.1.
+   - **Cross-compiler:** `dnf install mingw32-gcc-c++ mingw64-gcc-c++ mingw{32,64}-winpthreads-static` (GCC 14.2.1 from CRB), linked with `-static`. Alternative: llvm-mingw 20250402; newer releases need a GLIBCXX the host doesn't have.
+   - **Python:** `unar`, and a venv at `re/.venv` with `pytest` and `capstone`. Build `helpdeco` from source to cross-check the HLP extractor. Vendor the `doctest` header.
+   - **Display:** Xvfb, `xdotool` and ImageMagick are already present. FluidSynth is **deferred**: a null MIDI device comes first, and FluidSynth is added only if missing MIDI changes code paths.
+2. **Create the repo:** `git init` with `.gitignore`, `CLAUDE.md`, a stub `README.md`, and Appendices A and B committed as `re/TRIAGE.md` and `docs/re/pitfalls.md` seeds.
+3. **Populate `original/`:** unar and SZDD from the two archives, after checking the archive SHA-256 values (`3e560aa7…`, `4e4af35d…`). Commit `original.sha256`.
+   - **Record the golden hashes now,** from the archive: `unpacked/segNN.bin` (seg19 zero-padded to 41,456 bytes, seg1 raw at 2,164) and `relocs.json`.
+4. **Copy and lock the old workspace:** copy the KEEP tools and artifacts into `re/`, then `chmod -R a-w innerspace-rea`.
+5. **Oracle smoke test (the biggest risk, so it comes first):**
+   - Create a fresh prefix and run the real **`INSTALL.exe`** (Win16) under Xvfb. Snapshot the prefix diff.
+   - Run the packed `INSPACE.exe` to the title screen and take a screenshot.
+   - Confirm that `+relay` logs 16-bit KERNEL/USER calls.
+   - On failure, work through the fallback ladder before going further.
+6. **Save memories:** passwordless sudo / "just do it", the repo layout, and the evidence-tag rule.
+
+## Phase 1 — RE pipeline (Workflow "re-pipeline", ≤9 agents)
+| Stage | Shape | Work |
+|---|---|---|
+| S1 gate | 1 implementer, sequential | See S1 below. |
+| S2 | 4 implementers in parallel worktrees | (a) the relocation emitter in `rebuild`; (b) recursive-descent disassembly; (c) the other modules; (d) the Ghidra headless scripts. See S2 below. |
+| S3 | 1, sequential | Ghidra run and per-function C export to `work/decomp/<module>/`. |
+| S4 | 3 verifiers in parallel | See S4 below. |
+
+**S1 (gate):**
+- Build `isre ne` with resource offsets and names fixed and seg19 marked as data.
+- Build `isre unpack`: the missing writer around `slr_relocs.dpmi_unquik_trace`, starting at fo+2, zero-padded to minalloc, seg1 raw.
+- Build `isre relocs`, `isre addr` and `isre szdd`.
+- Goldens must match.
+
+**S2:**
+- **(a) Relocation emitter in `rebuild`:**
+  - Emit the 930 chain heads as standard NE records. Special-base chains link through the segment word, for example seg4@0x24 → 0x6b → 0xFFFF.
+  - Keep import segment placeholders at `0000`, and rebuild the resource table.
+  - **Loader-equivalence test:** a small NE loader applying our records must reproduce the OptLoader-relocated images.
+- **(b) Recursive-descent disassembly:** replaces the linear sweep, seeded from exports, prologues and chain heads, and fixes the header offsets.
+- **(c) Other modules:** run `isre` on **ISPACE.dll** (flags 0x8b09; expect INTERNAL/NAME/additive relocation kinds), **FACTORY ×2** and INSPACE.sc. Use the same invariants as INSPACE: zero slack, counts match, every record lands on an opcode.
+- **(d) Ghidra headless scripts:**
+  - Set the DS/SS context to the DGROUP selector.
+  - Seed functions from exports, prologues and chain heads, with the aggressive instruction finder off.
+  - Apply Win16 names and the Pascal convention from `wine-specs`.
+  - Label seg5 as Borland RTL.
+  - Join INSPACE `GetProcAddress` ordinals to the ISPACE exports.
+
+**S4 (verifiers):**
+- A byte check of 20 functions spread across segments and modules: call targets, function bounds, no functions in DGROUP.
+- A runnable-NE smoke test: the rebuilt unpacked exe reaches the title screen under Wine. That proves unpack plus relocations end to end and gives a patchable binary for oracle hooks.
+- A rea MCP check on the Ghidra project.
+
+## Phase 2 — Knowledge base (Workflow "kb"; S1 starts after Phase 1 S1)
+- **S1 (2 agents in parallel):**
+  - **`isre hlp`:** walk `|TOPIC` by next-pointer, handle signed picture sizes, and cross-check against `helpdeco`. Extract both help files to `work/manual/`. The 2000 file governs v1.29.08; the 1998 file covers the Factory topics removed in 2000.
+  - **`isre res`:** dump ENG_LANG strings, dialogs, menus and accelerators; IGRAPHIC bitmaps; WAV DLLs; ISPACE resources to `work/assets/`. Write `docs/re/resources.md`.
+- **S2 (1 doc agent):** build `docs/spec/checklist.md` from the manual and ENG_LANG strings. Stable IDs cover the key map, weapons, hazards, laws, settings, windows and modes. Columns: spec, RE and port status. Subsystem spec files start as stubs.
+- **S3 (analyst + verifier, after Phase 1 S3):** write `docs/re/formats.md`.
+  - BOD: corrected layout.
+  - SHP: 118×65, checked against FACTORY's BOD/SHP I/O routines only.
+  - Also: `#6600` and the ISPACE tables, save files (`.sav`/`.don`/`.ded`), race records, and all INI keys.
+- **S4 (2–3 verifiers, split by topic):** re-check the Appendix B "needs re-verification" items. Write `docs/re/` structs and globals with only the confirmed facts. Seed `pitfalls.md` and `win16-translation.md`:
+  - 16-bit wrap, idiv/sar.
+  - Fixed point (no FPU fixups).
+  - `__AHINCR` huge pointers.
+  - Message differences, dialog units, CTL3D.
+
+## Phase 3 — Oracle (Workflow "oracle", ≤4 agents; runs **alongside Phase 1** once Phase 0 step 5 passes)
+- **Fixtures:** committed 8.3-ASCII directory trees with old 16-colour icons, because Wine returns host readdir order. Run Xvfb at **8-bit PseudoColor and 24-bit**, since the palette, XOR/ROP and `BadVideo` paths differ.
+- **Scenarios** in `oracle/`: intro → New Game → Navigation → enter a fixture directory → fly and capture → save (if the unregistered build allows it, LASTGAME becomes a free state comparator).
+- **Each run produces:** screenshots, a filtered `+relay` trace (dir/file I/O, timers, GDI, MMSYSTEM) and a committed text digest per run.
+- **Memory probe:** a small Win32 helper (ReadProcessMemory, finds DGROUP by a signature string) instead of `winedbg`. Address-level probes wait for Phase 1 S3.
+- **Deliverable:** `docs/re/oracle.md`, answering each question with digests:
+  - How the filesystem walk behaves: roots, filters, order, caps.
+  - Window and client geometry, and whether the world size depends on the client rect.
+  - Palette and depth.
+  - Unregistered limits.
+  - Which timer and clock APIs the game calls.
+
+## Early spikes (folded into the phases above)
+- **RNG:** the Borland rand constant 0x015A4E35 is in no INSPACE segment, so the RNG is custom or in ISPACE. Find it and its seed; deterministic comparison needs both. Phase 1 S4 / Phase 2 S4.
+- **Timing ADR, from static RE:**
+  - Win3.x/9x SetTimer was quantised to 55 ms, so `FrameRateSet=36` probably ran at about 18 Hz on period hardware.
+  - Wine times accurately, so measuring the oracle misleads.
+  - Find how timeGetTime/GetCurrentTime, GameSpeed, Calibrate and WM_TIMER coalescing are used.
+  - M2's timestep is decided only after this.
+- **Rendering ownership:** INSPACE imports no CreatePalette, CreateDIBitmap or StretchDIBits, so confirm that ISPACE owns DIB, palette and sound. Check the 23-ordinal contract between the 2000 EXE and the 2002 DLL.
+
+## Later milestones (each planned separately)
+| # | Milestone | Content |
+|---|---|---|
+| M1 | Foundations | CMake presets for mingw i686/x86_64 under Wine (MSVC later). C++ readers: NE resources, SZDD, BOD/SHP, DIB with palette and transparency. 16→32-bit DLGTEMPLATE/MENU converter, so the original dialogs come from ENG_LANG. doctest. `isview` asset viewer. |
+| M2 | Shell | Game window and intro, Restore/New Game, accelerators, port-local INI, timestep per ADR, integer/DPI scaling, help (HLP→HTML). |
+| M3 | World | Filesystem walk per the original's rules, with a modern-safety ADR. Navigation, wave generation, ExtractIconEx at 32×32, rocks and gates, flight model, status panel, radar. |
+| M4 | Core loop | Capture, fuel, damage and auto-repair, weapons, ambulance economy, scoring, waves, save/load (format ADR). |
+| M5 | Ships & AI | Teams and attitudes, commands, defenders, viruses, hazards, enforcers, laws and Hall of Justice, Strategy mode, perspective shift. |
+| M6 | Specials | Races and duels, Inner Demon and Noble Weapons, demo, Special Times of Day. |
+| M7 | Audio | WAV mixer replacing WAVEMIX; MIDI through MCI or midiOut. |
+| M8 | Extras | Icon and Ship Watch, dynamic help, Ship Factory, screensaver. |
+| M9 | Release | Wine + Win10/11 matrix, performance, packaging, bring-your-own-copy setup. |
+
+## Verification (Phases 0–3)
+- **Phase 0:** the original reaches its title screen under Wine 11.20, with a screenshot and a relay trace showing 16-bit calls. `original.sha256` and the goldens are committed.
+- **`pytest re/tests`:**
+  - Segment and relocation goldens match.
+  - The loader-equivalence test passes.
+  - ISPACE and FACTORY invariants hold.
+  - The doc linter passes.
+  - `grep -r /home/ re/ docs/` is empty.
+- **Ghidra:** no functions in DGROUP, 183 API names resolve, and the 20-function verifier sample is CONFIRMED. The rebuilt unpacked NE reaches the title screen.
+- **Knowledge base:** `isre hlp` extracts 41 topics (1998) and 38 (2000) with 0 errors and agrees with helpdeco. `isre res` counts match: 1,446 strings, 22 dialogs, 113+15 bitmaps, 46+32 WAVs. Every checklist row has an ID and a `[MANUAL]` tag.
+- **Oracle:** `docs/re/oracle.md` answers each question with digest references.
+- **Hygiene:** `git status` is clean after `isre all`.
+
+---
+## Appendix A — Workspace triage (`innerspace-rea/`)
+- **KEEP-TOOL:**
+  - szdd, ne_parse, slr_relocs, rebuild_ne, name_imports, annotate, annotated_asm, callgraph, prologue_scan, struct_fields, dump_asm, redirect_entry, attr_fields, field_by_func, globals_by_func, find_callers, resolve_call, ne_tables.
+  - Checks: validate_relocs, validate_entries, test_decomp.
+  - **Known bugs to fix:** rebuild_ne (no relocs, bad resource table); ne_parse (`file_off` 0, garbage names, seg19 marked code); annotated_asm (header shows the sector number, linear sweep loses sync at seg5:0x351); prologue_scan (hardcodes seg1).
+  - 16 scripts hardcode `PROJ=/home/cabal/Git/repos/innerspace-rea`.
+- **KEEP-ARTIFACT:**
+  - Inputs: Shipdisk.rar (actually a ZIP) and THEWORKS.rar; wine-specs/ (record the commit); optlink-src/nappload.asm (record source and licence).
+  - Small outputs: relocs.json, api-imports.json, function-entries.json, callgraph.json.
+- **REGENERABLE:** extracted/, unpacked/, INSPACE-unpacked.exe, api-sites.*, annotated-asm/, api-calls*.txt, struct-fields.*, ne-*.json, import-set.json, probes/*.bin.
+- **ARCHIVE** (stays in the locked old directory): all 6 .md docs, one-off probes (coverage, diagnose, probe_links, inspect_relocs, data_slots, icon_source, entries_for, rank_targets, find_collision, check_docs, dump_dgroup, ne_summary), and the Ghidra .java glue.
+- **NOT COPIED (junk):** *.class, __pycache__, slr_decompress*.py and slr_unpack.py (broken), struct_map/field_semantics + outputs, array_base, probe_bytes/probe_calls, r2-functions*, functions-unpacked.tsv, prologue-funcs.json, ghidra-out/ (57 MB; decompiled.c is VOID).
+
+## Appendix B — Facts and refutations to carry forward
+- **Byte-verified (keep):**
+  - Packed segment = `[count][bitstream][relocs]`, stream at fo+2, bit 1 = literal; all 18 reproduce.
+  - 930 relocs (725 ordinal + 205 special-base), chains end at 0xFFFF; 186 ordinals.
+  - DOS3Call ×39, all in seg5 (the Borland RTL). ExtractIcon ×5 at seg6:0x442c/0x4469 and seg9:0x0178/0x01a5/0x0251. GetDlgItem ×141.
+  - 880 far procedures.
+  - DGROUP = seg19, initialised data to 0x17b5; INI key table at 0x401.
+  - Entity array at 0x70a0, stride 0x15a. Animation bytes at seg4:0x216a–0x21a7.
+  - Entry point seg5:0x1a is the normal Borland startup (InitTask).
+  - Findfirst/findnext at seg5:0x352/0x364; `C:\*.*` at DGROUP:0x1260.
+  - INSPACE loads `<Lang>_LANG.DLL` (seg10:0x6714), ISPACE.DLL with 23 ordinals (seg10:0x67c0) and CTL3D (seg2:0x19e0).
+  - BOD: `01 00 01 00` at offset 21; word at offset 33 = IGRAPHIC #4000 ID.
+  - SHP: 118×65 records + 10 pad bytes; the BOD index is at offset 33.
+- **Needs re-verification:**
+  - Ship +0x04/+0x06 = X/Y, +0x18 = active, +0x51 = owner.
+  - 0x1df8 table = per-player ship arrays.
+  - 0x1e34 = camera.
+  - WndProc, tick and command-handler roles; the "196-case input switch".
+  - The scoring formulas.
+  - 0x9684 vs 0x9320 as the "game mode" global.
+- **Refuted (record as pitfalls, not history):**
+  - "No directory enumeration": the code scan looked for `mov $0x4e00,%ax`, not `mov $0x4e,%al`.
+  - "seg1 = DGROUP".
+  - "seg5 head overwritten by the stub".
+  - §10a "entity +0x22 = owner": those are stack-local loop indices; +0x22 is the frame delay.
+  - 0x1df8 "15 entries".
+  - Ship field +0x74 (outside a 0x70 struct).
+  - `ExtractIcon(...,-1)` "= own icon": it returns the count.
+  - The nag string "@0x4b860" is a packed-file offset inside resource #5000/143.
+  - The pointer tables "in seg01".
+  - "All segments preload": segments 9–18 are not.

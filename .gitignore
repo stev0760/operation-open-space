@@ -1,0 +1,21 @@
+# Original game files: local only, never committed (see original.sha256)
+/original/*
+!/original/.gitkeep
+
+# Regenerated outputs
+/work/
+/build*/
+/re/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Ghidra project files
+*.gpr
+*.rep/
+*.lock
+*.lock~
+
+# Oracle bulk output (digests under oracle/digests/ are committed)
+/oracle/runs/
+*.log

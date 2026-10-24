@@ -1,0 +1,4397 @@
+{
+ "imports": [
+  {
+   "module": "KERNEL",
+   "ordinal": 89,
+   "name": "lstrcat",
+   "call_sites": 14,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 6498
+    },
+    {
+     "seg": 3,
+     "offset": 12902
+    },
+    {
+     "seg": 4,
+     "offset": 26953
+    },
+    {
+     "seg": 6,
+     "offset": 37598
+    },
+    {
+     "seg": 7,
+     "offset": 8199
+    },
+    {
+     "seg": 9,
+     "offset": 38318
+    },
+    {
+     "seg": 10,
+     "offset": 43479
+    },
+    {
+     "seg": 11,
+     "offset": 25998
+    },
+    {
+     "seg": 13,
+     "offset": 22534
+    },
+    {
+     "seg": 14,
+     "offset": 16182
+    },
+    {
+     "seg": 15,
+     "offset": 28243
+    },
+    {
+     "seg": 16,
+     "offset": 30112
+    },
+    {
+     "seg": 17,
+     "offset": 36892
+    },
+    {
+     "seg": 18,
+     "offset": 24746
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 29,
+   "name": "PatBlt",
+   "call_sites": 13,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 3124
+    },
+    {
+     "seg": 6,
+     "offset": 33476
+    },
+    {
+     "seg": 7,
+     "offset": 25446
+    },
+    {
+     "seg": 8,
+     "offset": 37624
+    },
+    {
+     "seg": 9,
+     "offset": 36320
+    },
+    {
+     "seg": 10,
+     "offset": 41220
+    },
+    {
+     "seg": 11,
+     "offset": 40307
+    },
+    {
+     "seg": 12,
+     "offset": 27329
+    },
+    {
+     "seg": 13,
+     "offset": 24652
+    },
+    {
+     "seg": 15,
+     "offset": 36088
+    },
+    {
+     "seg": 16,
+     "offset": 29474
+    },
+    {
+     "seg": 17,
+     "offset": 24154
+    },
+    {
+     "seg": 18,
+     "offset": 25659
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 45,
+   "name": "SelectObject",
+   "call_sites": 13,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 33637
+    },
+    {
+     "seg": 7,
+     "offset": 18543
+    },
+    {
+     "seg": 8,
+     "offset": 35041
+    },
+    {
+     "seg": 9,
+     "offset": 36095
+    },
+    {
+     "seg": 10,
+     "offset": 43216
+    },
+    {
+     "seg": 11,
+     "offset": 43933
+    },
+    {
+     "seg": 12,
+     "offset": 23737
+    },
+    {
+     "seg": 13,
+     "offset": 24586
+    },
+    {
+     "seg": 14,
+     "offset": 3402
+    },
+    {
+     "seg": 15,
+     "offset": 35870
+    },
+    {
+     "seg": 16,
+     "offset": 24703
+    },
+    {
+     "seg": 17,
+     "offset": 37217
+    },
+    {
+     "seg": 18,
+     "offset": 25619
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 69,
+   "name": "DeleteObject",
+   "call_sites": 13,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 6983
+    },
+    {
+     "seg": 6,
+     "offset": 18833
+    },
+    {
+     "seg": 7,
+     "offset": 18849
+    },
+    {
+     "seg": 8,
+     "offset": 13246
+    },
+    {
+     "seg": 9,
+     "offset": 36109
+    },
+    {
+     "seg": 10,
+     "offset": 39337
+    },
+    {
+     "seg": 11,
+     "offset": 43939
+    },
+    {
+     "seg": 12,
+     "offset": 13001
+    },
+    {
+     "seg": 13,
+     "offset": 24203
+    },
+    {
+     "seg": 15,
+     "offset": 36004
+    },
+    {
+     "seg": 16,
+     "offset": 25101
+    },
+    {
+     "seg": 17,
+     "offset": 37528
+    },
+    {
+     "seg": 18,
+     "offset": 12848
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 88,
+   "name": "lstrcpy",
+   "call_sites": 13,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 6456
+    },
+    {
+     "seg": 3,
+     "offset": 12921
+    },
+    {
+     "seg": 4,
+     "offset": 28993
+    },
+    {
+     "seg": 6,
+     "offset": 38757
+    },
+    {
+     "seg": 9,
+     "offset": 37321
+    },
+    {
+     "seg": 10,
+     "offset": 41412
+    },
+    {
+     "seg": 11,
+     "offset": 28065
+    },
+    {
+     "seg": 13,
+     "offset": 22510
+    },
+    {
+     "seg": 14,
+     "offset": 12901
+    },
+    {
+     "seg": 15,
+     "offset": 33200
+    },
+    {
+     "seg": 16,
+     "offset": 30164
+    },
+    {
+     "seg": 17,
+     "offset": 36943
+    },
+    {
+     "seg": 18,
+     "offset": 957
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 282,
+   "name": "SelectPalette",
+   "call_sites": 13,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 7102
+    },
+    {
+     "seg": 6,
+     "offset": 23454
+    },
+    {
+     "seg": 7,
+     "offset": 25843
+    },
+    {
+     "seg": 8,
+     "offset": 13230
+    },
+    {
+     "seg": 9,
+     "offset": 24481
+    },
+    {
+     "seg": 10,
+     "offset": 43238
+    },
+    {
+     "seg": 11,
+     "offset": 37240
+    },
+    {
+     "seg": 12,
+     "offset": 9751
+    },
+    {
+     "seg": 13,
+     "offset": 25747
+    },
+    {
+     "seg": 15,
+     "offset": 35856
+    },
+    {
+     "seg": 16,
+     "offset": 10360
+    },
+    {
+     "seg": 17,
+     "offset": 25644
+    },
+    {
+     "seg": 18,
+     "offset": 25603
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 34,
+   "name": "BitBlt",
+   "call_sites": 12,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 19748
+    },
+    {
+     "seg": 7,
+     "offset": 24505
+    },
+    {
+     "seg": 8,
+     "offset": 31203
+    },
+    {
+     "seg": 9,
+     "offset": 24706
+    },
+    {
+     "seg": 10,
+     "offset": 40868
+    },
+    {
+     "seg": 11,
+     "offset": 45740
+    },
+    {
+     "seg": 12,
+     "offset": 9877
+    },
+    {
+     "seg": 13,
+     "offset": 18545
+    },
+    {
+     "seg": 15,
+     "offset": 35958
+    },
+    {
+     "seg": 16,
+     "offset": 11422
+    },
+    {
+     "seg": 17,
+     "offset": 5515
+    },
+    {
+     "seg": 18,
+     "offset": 21759
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 52,
+   "name": "CreateCompatibleDC",
+   "call_sites": 12,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 23608
+    },
+    {
+     "seg": 7,
+     "offset": 18496
+    },
+    {
+     "seg": 8,
+     "offset": 12516
+    },
+    {
+     "seg": 9,
+     "offset": 24560
+    },
+    {
+     "seg": 10,
+     "offset": 43314
+    },
+    {
+     "seg": 11,
+     "offset": 37328
+    },
+    {
+     "seg": 12,
+     "offset": 9624
+    },
+    {
+     "seg": 13,
+     "offset": 24084
+    },
+    {
+     "seg": 15,
+     "offset": 35834
+    },
+    {
+     "seg": 16,
+     "offset": 11364
+    },
+    {
+     "seg": 17,
+     "offset": 6034
+    },
+    {
+     "seg": 18,
+     "offset": 25546
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 68,
+   "name": "DeleteDC",
+   "call_sites": 12,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 23684
+    },
+    {
+     "seg": 7,
+     "offset": 18833
+    },
+    {
+     "seg": 8,
+     "offset": 17860
+    },
+    {
+     "seg": 9,
+     "offset": 24490
+    },
+    {
+     "seg": 10,
+     "offset": 43254
+    },
+    {
+     "seg": 11,
+     "offset": 37255
+    },
+    {
+     "seg": 12,
+     "offset": 9993
+    },
+    {
+     "seg": 13,
+     "offset": 24594
+    },
+    {
+     "seg": 15,
+     "offset": 35996
+    },
+    {
+     "seg": 16,
+     "offset": 11481
+    },
+    {
+     "seg": 17,
+     "offset": 6176
+    },
+    {
+     "seg": 18,
+     "offset": 12839
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 16,
+   "name": "GlobalReAlloc",
+   "call_sites": 12,
+   "sites": [
+    {
+     "seg": 5,
+     "offset": 7783
+    },
+    {
+     "seg": 6,
+     "offset": 38125
+    },
+    {
+     "seg": 7,
+     "offset": 22413
+    },
+    {
+     "seg": 9,
+     "offset": 21228
+    },
+    {
+     "seg": 11,
+     "offset": 31850
+    },
+    {
+     "seg": 12,
+     "offset": 11865
+    },
+    {
+     "seg": 13,
+     "offset": 5100
+    },
+    {
+     "seg": 14,
+     "offset": 3820
+    },
+    {
+     "seg": 15,
+     "offset": 24009
+    },
+    {
+     "seg": 16,
+     "offset": 29790
+    },
+    {
+     "seg": 17,
+     "offset": 33664
+    },
+    {
+     "seg": 18,
+     "offset": 26499
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 19,
+   "name": "GlobalUnlock",
+   "call_sites": 12,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 39246
+    },
+    {
+     "seg": 7,
+     "offset": 22375
+    },
+    {
+     "seg": 9,
+     "offset": 27909
+    },
+    {
+     "seg": 10,
+     "offset": 14467
+    },
+    {
+     "seg": 11,
+     "offset": 31821
+    },
+    {
+     "seg": 12,
+     "offset": 11827
+    },
+    {
+     "seg": 13,
+     "offset": 5071
+    },
+    {
+     "seg": 14,
+     "offset": 16343
+    },
+    {
+     "seg": 15,
+     "offset": 27375
+    },
+    {
+     "seg": 16,
+     "offset": 29776
+    },
+    {
+     "seg": 17,
+     "offset": 33309
+    },
+    {
+     "seg": 18,
+     "offset": 26461
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 176,
+   "name": "LoadString",
+   "call_sites": 12,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 3810
+    },
+    {
+     "seg": 3,
+     "offset": 13156
+    },
+    {
+     "seg": 4,
+     "offset": 29151
+    },
+    {
+     "seg": 6,
+     "offset": 27775
+    },
+    {
+     "seg": 9,
+     "offset": 38261
+    },
+    {
+     "seg": 10,
+     "offset": 43441
+    },
+    {
+     "seg": 11,
+     "offset": 25951
+    },
+    {
+     "seg": 13,
+     "offset": 21170
+    },
+    {
+     "seg": 15,
+     "offset": 33078
+    },
+    {
+     "seg": 16,
+     "offset": 30095
+    },
+    {
+     "seg": 17,
+     "offset": 36064
+    },
+    {
+     "seg": 18,
+     "offset": 24830
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 18,
+   "name": "GlobalLock",
+   "call_sites": 11,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 38134
+    },
+    {
+     "seg": 7,
+     "offset": 22432
+    },
+    {
+     "seg": 9,
+     "offset": 24428
+    },
+    {
+     "seg": 11,
+     "offset": 31859
+    },
+    {
+     "seg": 12,
+     "offset": 11884
+    },
+    {
+     "seg": 13,
+     "offset": 5109
+    },
+    {
+     "seg": 14,
+     "offset": 16294
+    },
+    {
+     "seg": 15,
+     "offset": 23914
+    },
+    {
+     "seg": 16,
+     "offset": 29799
+    },
+    {
+     "seg": 17,
+     "offset": 33622
+    },
+    {
+     "seg": 18,
+     "offset": 26518
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 90,
+   "name": "lstrlen",
+   "call_sites": 11,
+   "sites": [
+    {
+     "seg": 3,
+     "offset": 12818
+    },
+    {
+     "seg": 6,
+     "offset": 35165
+    },
+    {
+     "seg": 7,
+     "offset": 8233
+    },
+    {
+     "seg": 9,
+     "offset": 36054
+    },
+    {
+     "seg": 10,
+     "offset": 42225
+    },
+    {
+     "seg": 11,
+     "offset": 17296
+    },
+    {
+     "seg": 13,
+     "offset": 21424
+    },
+    {
+     "seg": 14,
+     "offset": 16158
+    },
+    {
+     "seg": 15,
+     "offset": 33245
+    },
+    {
+     "seg": 16,
+     "offset": 24395
+    },
+    {
+     "seg": 17,
+     "offset": 36868
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 15,
+   "name": "GetCurrentTime",
+   "call_sites": 11,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 7014
+    },
+    {
+     "seg": 6,
+     "offset": 11988
+    },
+    {
+     "seg": 7,
+     "offset": 32
+    },
+    {
+     "seg": 9,
+     "offset": 26714
+    },
+    {
+     "seg": 10,
+     "offset": 33771
+    },
+    {
+     "seg": 11,
+     "offset": 42166
+    },
+    {
+     "seg": 14,
+     "offset": 8644
+    },
+    {
+     "seg": 15,
+     "offset": 32807
+    },
+    {
+     "seg": 16,
+     "offset": 29266
+    },
+    {
+     "seg": 17,
+     "offset": 25606
+    },
+    {
+     "seg": 18,
+     "offset": 21045
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 72,
+   "name": "SetRect",
+   "call_sites": 11,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 4229
+    },
+    {
+     "seg": 4,
+     "offset": 21697
+    },
+    {
+     "seg": 7,
+     "offset": 24168
+    },
+    {
+     "seg": 8,
+     "offset": 31693
+    },
+    {
+     "seg": 9,
+     "offset": 28240
+    },
+    {
+     "seg": 10,
+     "offset": 2906
+    },
+    {
+     "seg": 11,
+     "offset": 13747
+    },
+    {
+     "seg": 12,
+     "offset": 8735
+    },
+    {
+     "seg": 15,
+     "offset": 34724
+    },
+    {
+     "seg": 16,
+     "offset": 25585
+    },
+    {
+     "seg": 18,
+     "offset": 19744
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 51,
+   "name": "CreateCompatibleBitmap",
+   "call_sites": 10,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 17645
+    },
+    {
+     "seg": 7,
+     "offset": 18529
+    },
+    {
+     "seg": 8,
+     "offset": 12591
+    },
+    {
+     "seg": 10,
+     "offset": 39292
+    },
+    {
+     "seg": 11,
+     "offset": 37500
+    },
+    {
+     "seg": 12,
+     "offset": 9678
+    },
+    {
+     "seg": 13,
+     "offset": 16550
+    },
+    {
+     "seg": 15,
+     "offset": 29901
+    },
+    {
+     "seg": 16,
+     "offset": 10322
+    },
+    {
+     "seg": 18,
+     "offset": 25578
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 110,
+   "name": "PostMessage",
+   "call_sites": 10,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 5075
+    },
+    {
+     "seg": 3,
+     "offset": 1089
+    },
+    {
+     "seg": 6,
+     "offset": 9155
+    },
+    {
+     "seg": 7,
+     "offset": 4544
+    },
+    {
+     "seg": 8,
+     "offset": 364
+    },
+    {
+     "seg": 10,
+     "offset": 41195
+    },
+    {
+     "seg": 11,
+     "offset": 32423
+    },
+    {
+     "seg": 13,
+     "offset": 26754
+    },
+    {
+     "seg": 16,
+     "offset": 25747
+    },
+    {
+     "seg": 17,
+     "offset": 34141
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 19,
+   "name": "LineTo",
+   "call_sites": 9,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 19645
+    },
+    {
+     "seg": 9,
+     "offset": 1164
+    },
+    {
+     "seg": 10,
+     "offset": 37888
+    },
+    {
+     "seg": 11,
+     "offset": 15263
+    },
+    {
+     "seg": 12,
+     "offset": 30142
+    },
+    {
+     "seg": 15,
+     "offset": 34958
+    },
+    {
+     "seg": 16,
+     "offset": 11219
+    },
+    {
+     "seg": 17,
+     "offset": 24084
+    },
+    {
+     "seg": 18,
+     "offset": 20116
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 20,
+   "name": "MoveTo",
+   "call_sites": 9,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 19589
+    },
+    {
+     "seg": 9,
+     "offset": 1150
+    },
+    {
+     "seg": 10,
+     "offset": 37746
+    },
+    {
+     "seg": 11,
+     "offset": 15247
+    },
+    {
+     "seg": 12,
+     "offset": 30128
+    },
+    {
+     "seg": 15,
+     "offset": 34933
+    },
+    {
+     "seg": 16,
+     "offset": 11195
+    },
+    {
+     "seg": 17,
+     "offset": 24061
+    },
+    {
+     "seg": 18,
+     "offset": 19981
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 87,
+   "name": "GetStockObject",
+   "call_sites": 9,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 30026
+    },
+    {
+     "seg": 8,
+     "offset": 9474
+    },
+    {
+     "seg": 9,
+     "offset": 981
+    },
+    {
+     "seg": 10,
+     "offset": 35751
+    },
+    {
+     "seg": 11,
+     "offset": 43968
+    },
+    {
+     "seg": 12,
+     "offset": 16111
+    },
+    {
+     "seg": 15,
+     "offset": 34739
+    },
+    {
+     "seg": 16,
+     "offset": 11162
+    },
+    {
+     "seg": 17,
+     "offset": 24113
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 76,
+   "name": "PtInRect",
+   "call_sites": 9,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 4250
+    },
+    {
+     "seg": 7,
+     "offset": 24605
+    },
+    {
+     "seg": 8,
+     "offset": 31709
+    },
+    {
+     "seg": 9,
+     "offset": 4052
+    },
+    {
+     "seg": 10,
+     "offset": 31020
+    },
+    {
+     "seg": 11,
+     "offset": 15432
+    },
+    {
+     "seg": 12,
+     "offset": 8471
+    },
+    {
+     "seg": 16,
+     "offset": 25599
+    },
+    {
+     "seg": 18,
+     "offset": 19758
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 35,
+   "name": "StretchBlt",
+   "call_sites": 8,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 23667
+    },
+    {
+     "seg": 7,
+     "offset": 22271
+    },
+    {
+     "seg": 10,
+     "offset": 39454
+    },
+    {
+     "seg": 11,
+     "offset": 13057
+    },
+    {
+     "seg": 12,
+     "offset": 5175
+    },
+    {
+     "seg": 13,
+     "offset": 24575
+    },
+    {
+     "seg": 15,
+     "offset": 32164
+    },
+    {
+     "seg": 18,
+     "offset": 15428
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 61,
+   "name": "CreatePen",
+   "call_sites": 8,
+   "sites": [
+    {
+     "seg": 9,
+     "offset": 1200
+    },
+    {
+     "seg": 10,
+     "offset": 19900
+    },
+    {
+     "seg": 11,
+     "offset": 43202
+    },
+    {
+     "seg": 12,
+     "offset": 12938
+    },
+    {
+     "seg": 15,
+     "offset": 35143
+    },
+    {
+     "seg": 16,
+     "offset": 11265
+    },
+    {
+     "seg": 17,
+     "offset": 24034
+    },
+    {
+     "seg": 18,
+     "offset": 20295
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 66,
+   "name": "CreateSolidBrush",
+   "call_sites": 8,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 19230
+    },
+    {
+     "seg": 9,
+     "offset": 36363
+    },
+    {
+     "seg": 10,
+     "offset": 20435
+    },
+    {
+     "seg": 11,
+     "offset": 8586
+    },
+    {
+     "seg": 15,
+     "offset": 36019
+    },
+    {
+     "seg": 16,
+     "offset": 22849
+    },
+    {
+     "seg": 17,
+     "offset": 37153
+    },
+    {
+     "seg": 18,
+     "offset": 2869
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 7,
+   "name": "SetStretchBltMode",
+   "call_sites": 8,
+   "sites": [
+    {
+     "seg": 7,
+     "offset": 15015
+    },
+    {
+     "seg": 10,
+     "offset": 36127
+    },
+    {
+     "seg": 11,
+     "offset": 12975
+    },
+    {
+     "seg": 12,
+     "offset": 4914
+    },
+    {
+     "seg": 13,
+     "offset": 23705
+    },
+    {
+     "seg": 15,
+     "offset": 32073
+    },
+    {
+     "seg": 17,
+     "offset": 10543
+    },
+    {
+     "seg": 18,
+     "offset": 25670
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 9,
+   "name": "SetTextColor",
+   "call_sites": 8,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 19827
+    },
+    {
+     "seg": 7,
+     "offset": 8122
+    },
+    {
+     "seg": 9,
+     "offset": 36084
+    },
+    {
+     "seg": 11,
+     "offset": 17315
+    },
+    {
+     "seg": 13,
+     "offset": 21310
+    },
+    {
+     "seg": 15,
+     "offset": 33770
+    },
+    {
+     "seg": 16,
+     "offset": 22901
+    },
+    {
+     "seg": 17,
+     "offset": 37256
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 17,
+   "name": "GlobalFree",
+   "call_sites": 8,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 39254
+    },
+    {
+     "seg": 9,
+     "offset": 27927
+    },
+    {
+     "seg": 10,
+     "offset": 14484
+    },
+    {
+     "seg": 14,
+     "offset": 16352
+    },
+    {
+     "seg": 15,
+     "offset": 23932
+    },
+    {
+     "seg": 16,
+     "offset": 30651
+    },
+    {
+     "seg": 17,
+     "offset": 33318
+    },
+    {
+     "seg": 18,
+     "offset": 7696
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 32,
+   "name": "GetWindowRect",
+   "call_sites": 8,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 4582
+    },
+    {
+     "seg": 6,
+     "offset": 8322
+    },
+    {
+     "seg": 7,
+     "offset": 25168
+    },
+    {
+     "seg": 9,
+     "offset": 37146
+    },
+    {
+     "seg": 11,
+     "offset": 3182
+    },
+    {
+     "seg": 13,
+     "offset": 25867
+    },
+    {
+     "seg": 16,
+     "offset": 21561
+    },
+    {
+     "seg": 17,
+     "offset": 34202
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 430,
+   "name": "lstrcmp",
+   "call_sites": 8,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 36096
+    },
+    {
+     "seg": 10,
+     "offset": 41423
+    },
+    {
+     "seg": 11,
+     "offset": 17231
+    },
+    {
+     "seg": 13,
+     "offset": 20968
+    },
+    {
+     "seg": 14,
+     "offset": 9470
+    },
+    {
+     "seg": 15,
+     "offset": 23379
+    },
+    {
+     "seg": 16,
+     "offset": 13758
+    },
+    {
+     "seg": 17,
+     "offset": 30075
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 53,
+   "name": "DestroyWindow",
+   "call_sites": 8,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 3653
+    },
+    {
+     "seg": 6,
+     "offset": 12269
+    },
+    {
+     "seg": 7,
+     "offset": 25504
+    },
+    {
+     "seg": 9,
+     "offset": 27005
+    },
+    {
+     "seg": 10,
+     "offset": 41169
+    },
+    {
+     "seg": 11,
+     "offset": 3224
+    },
+    {
+     "seg": 13,
+     "offset": 25419
+    },
+    {
+     "seg": 17,
+     "offset": 27416
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 66,
+   "name": "GetDC",
+   "call_sites": 8,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 6874
+    },
+    {
+     "seg": 6,
+     "offset": 23420
+    },
+    {
+     "seg": 7,
+     "offset": 25819
+    },
+    {
+     "seg": 10,
+     "offset": 32708
+    },
+    {
+     "seg": 11,
+     "offset": 16140
+    },
+    {
+     "seg": 13,
+     "offset": 25723
+    },
+    {
+     "seg": 16,
+     "offset": 17165
+    },
+    {
+     "seg": 17,
+     "offset": 28483
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 68,
+   "name": "ReleaseDC",
+   "call_sites": 8,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 7042
+    },
+    {
+     "seg": 6,
+     "offset": 23723
+    },
+    {
+     "seg": 7,
+     "offset": 25989
+    },
+    {
+     "seg": 10,
+     "offset": 32816
+    },
+    {
+     "seg": 11,
+     "offset": 16162
+    },
+    {
+     "seg": 13,
+     "offset": 26082
+    },
+    {
+     "seg": 16,
+     "offset": 17215
+    },
+    {
+     "seg": 17,
+     "offset": 28547
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 1,
+   "name": "SetBkColor",
+   "call_sites": 7,
+   "sites": [
+    {
+     "seg": 7,
+     "offset": 8079
+    },
+    {
+     "seg": 9,
+     "offset": 36072
+    },
+    {
+     "seg": 11,
+     "offset": 16740
+    },
+    {
+     "seg": 13,
+     "offset": 21107
+    },
+    {
+     "seg": 15,
+     "offset": 33896
+    },
+    {
+     "seg": 16,
+     "offset": 12102
+    },
+    {
+     "seg": 17,
+     "offset": 33336
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 2,
+   "name": "SetBkMode",
+   "call_sites": 7,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 19841
+    },
+    {
+     "seg": 7,
+     "offset": 8096
+    },
+    {
+     "seg": 9,
+     "offset": 36550
+    },
+    {
+     "seg": 11,
+     "offset": 43518
+    },
+    {
+     "seg": 15,
+     "offset": 33693
+    },
+    {
+     "seg": 16,
+     "offset": 22915
+    },
+    {
+     "seg": 17,
+     "offset": 37270
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 33,
+   "name": "TextOut",
+   "call_sites": 7,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 19907
+    },
+    {
+     "seg": 9,
+     "offset": 36060
+    },
+    {
+     "seg": 11,
+     "offset": 17964
+    },
+    {
+     "seg": 13,
+     "offset": 21430
+    },
+    {
+     "seg": 15,
+     "offset": 33441
+    },
+    {
+     "seg": 16,
+     "offset": 23141
+    },
+    {
+     "seg": 17,
+     "offset": 37351
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 346,
+   "name": "SetTextAlign",
+   "call_sites": 7,
+   "sites": [
+    {
+     "seg": 7,
+     "offset": 8107
+    },
+    {
+     "seg": 9,
+     "offset": 36561
+    },
+    {
+     "seg": 11,
+     "offset": 16692
+    },
+    {
+     "seg": 13,
+     "offset": 21095
+    },
+    {
+     "seg": 15,
+     "offset": 33392
+    },
+    {
+     "seg": 16,
+     "offset": 12130
+    },
+    {
+     "seg": 17,
+     "offset": 31889
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 82,
+   "name": "GetObject",
+   "call_sites": 7,
+   "sites": [
+    {
+     "seg": 10,
+     "offset": 39308
+    },
+    {
+     "seg": 11,
+     "offset": 37416
+    },
+    {
+     "seg": 14,
+     "offset": 3418
+    },
+    {
+     "seg": 15,
+     "offset": 19704
+    },
+    {
+     "seg": 16,
+     "offset": 24719
+    },
+    {
+     "seg": 17,
+     "offset": 6013
+    },
+    {
+     "seg": 18,
+     "offset": 12481
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 128,
+   "name": "GetPrivateProfileString",
+   "call_sites": 7,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 6483
+    },
+    {
+     "seg": 6,
+     "offset": 37783
+    },
+    {
+     "seg": 10,
+     "offset": 33943
+    },
+    {
+     "seg": 13,
+     "offset": 8699
+    },
+    {
+     "seg": 14,
+     "offset": 16147
+    },
+    {
+     "seg": 15,
+     "offset": 23281
+    },
+    {
+     "seg": 16,
+     "offset": 13685
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 15,
+   "name": "GlobalAlloc",
+   "call_sites": 7,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 38206
+    },
+    {
+     "seg": 9,
+     "offset": 24419
+    },
+    {
+     "seg": 14,
+     "offset": 16285
+    },
+    {
+     "seg": 15,
+     "offset": 23895
+    },
+    {
+     "seg": 16,
+     "offset": 29614
+    },
+    {
+     "seg": 17,
+     "offset": 33612
+    },
+    {
+     "seg": 18,
+     "offset": 7718
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 125,
+   "name": "InvalidateRect",
+   "call_sites": 7,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 1536
+    },
+    {
+     "seg": 6,
+     "offset": 8894
+    },
+    {
+     "seg": 7,
+     "offset": 25397
+    },
+    {
+     "seg": 11,
+     "offset": 9008
+    },
+    {
+     "seg": 13,
+     "offset": 25325
+    },
+    {
+     "seg": 16,
+     "offset": 24289
+    },
+    {
+     "seg": 17,
+     "offset": 23254
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 179,
+   "name": "GetSystemMetrics",
+   "call_sites": 7,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 6898
+    },
+    {
+     "seg": 6,
+     "offset": 6219
+    },
+    {
+     "seg": 7,
+     "offset": 25337
+    },
+    {
+     "seg": 9,
+     "offset": 37217
+    },
+    {
+     "seg": 13,
+     "offset": 25265
+    },
+    {
+     "seg": 16,
+     "offset": 21591
+    },
+    {
+     "seg": 17,
+     "offset": 34233
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 56,
+   "name": "MoveWindow",
+   "call_sites": 7,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 4115
+    },
+    {
+     "seg": 6,
+     "offset": 8368
+    },
+    {
+     "seg": 7,
+     "offset": 25199
+    },
+    {
+     "seg": 9,
+     "offset": 37271
+    },
+    {
+     "seg": 13,
+     "offset": 25898
+    },
+    {
+     "seg": 16,
+     "offset": 21672
+    },
+    {
+     "seg": 17,
+     "offset": 34319
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 79,
+   "name": "IntersectRect",
+   "call_sites": 7,
+   "sites": [
+    {
+     "seg": 4,
+     "offset": 21729
+    },
+    {
+     "seg": 7,
+     "offset": 24188
+    },
+    {
+     "seg": 8,
+     "offset": 27576
+    },
+    {
+     "seg": 9,
+     "offset": 25227
+    },
+    {
+     "seg": 12,
+     "offset": 8759
+    },
+    {
+     "seg": 15,
+     "offset": 20572
+    },
+    {
+     "seg": 18,
+     "offset": 12070
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 44,
+   "name": "SelectClipRgn",
+   "call_sites": 6,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 7543
+    },
+    {
+     "seg": 7,
+     "offset": 2123
+    },
+    {
+     "seg": 9,
+     "offset": 28532
+    },
+    {
+     "seg": 16,
+     "offset": 26826
+    },
+    {
+     "seg": 17,
+     "offset": 454
+    },
+    {
+     "seg": 18,
+     "offset": 870
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 56,
+   "name": "CreateFont",
+   "call_sites": 6,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 6539
+    },
+    {
+     "seg": 7,
+     "offset": 8050
+    },
+    {
+     "seg": 9,
+     "offset": 36504
+    },
+    {
+     "seg": 15,
+     "offset": 33300
+    },
+    {
+     "seg": 16,
+     "offset": 12073
+    },
+    {
+     "seg": 17,
+     "offset": 31832
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 129,
+   "name": "WritePrivateProfileString",
+   "call_sites": 6,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 38377
+    },
+    {
+     "seg": 9,
+     "offset": 9184
+    },
+    {
+     "seg": 10,
+     "offset": 43632
+    },
+    {
+     "seg": 14,
+     "offset": 9249
+    },
+    {
+     "seg": 15,
+     "offset": 23416
+    },
+    {
+     "seg": 16,
+     "offset": 18893
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 74,
+   "name": "OpenFile",
+   "call_sites": 6,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 6612
+    },
+    {
+     "seg": 6,
+     "offset": 37631
+    },
+    {
+     "seg": 10,
+     "offset": 26304
+    },
+    {
+     "seg": 14,
+     "offset": 16216
+    },
+    {
+     "seg": 15,
+     "offset": 23953
+    },
+    {
+     "seg": 17,
+     "offset": 33569
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 107,
+   "name": "DefWindowProc",
+   "call_sites": 6,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 1105
+    },
+    {
+     "seg": 6,
+     "offset": 8056
+    },
+    {
+     "seg": 7,
+     "offset": 25233
+    },
+    {
+     "seg": 11,
+     "offset": 8992
+    },
+    {
+     "seg": 13,
+     "offset": 25161
+    },
+    {
+     "seg": 17,
+     "offset": 22477
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 33,
+   "name": "GetClientRect",
+   "call_sites": 6,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 6891
+    },
+    {
+     "seg": 6,
+     "offset": 23395
+    },
+    {
+     "seg": 7,
+     "offset": 25410
+    },
+    {
+     "seg": 11,
+     "offset": 16024
+    },
+    {
+     "seg": 13,
+     "offset": 25338
+    },
+    {
+     "seg": 17,
+     "offset": 28474
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 41,
+   "name": "CreateWindow",
+   "call_sites": 6,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 2347
+    },
+    {
+     "seg": 6,
+     "offset": 11391
+    },
+    {
+     "seg": 7,
+     "offset": 25751
+    },
+    {
+     "seg": 11,
+     "offset": 3290
+    },
+    {
+     "seg": 13,
+     "offset": 25659
+    },
+    {
+     "seg": 17,
+     "offset": 28615
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 42,
+   "name": "ShowWindow",
+   "call_sites": 6,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 2022
+    },
+    {
+     "seg": 6,
+     "offset": 12293
+    },
+    {
+     "seg": 9,
+     "offset": 24802
+    },
+    {
+     "seg": 13,
+     "offset": 26136
+    },
+    {
+     "seg": 15,
+     "offset": 22593
+    },
+    {
+     "seg": 17,
+     "offset": 1401
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 59,
+   "name": "SetActiveWindow",
+   "call_sites": 6,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 2031
+    },
+    {
+     "seg": 6,
+     "offset": 12302
+    },
+    {
+     "seg": 7,
+     "offset": 25208
+    },
+    {
+     "seg": 13,
+     "offset": 25668
+    },
+    {
+     "seg": 16,
+     "offset": 18460
+    },
+    {
+     "seg": 17,
+     "offset": 24613
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 31,
+   "name": "SetPixel",
+   "call_sites": 5,
+   "sites": [
+    {
+     "seg": 9,
+     "offset": 1459
+    },
+    {
+     "seg": 11,
+     "offset": 15539
+    },
+    {
+     "seg": 13,
+     "offset": 22046
+    },
+    {
+     "seg": 15,
+     "offset": 34184
+    },
+    {
+     "seg": 18,
+     "offset": 3820
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 64,
+   "name": "CreateRectRgn",
+   "call_sites": 5,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 7006
+    },
+    {
+     "seg": 9,
+     "offset": 35780
+    },
+    {
+     "seg": 16,
+     "offset": 25260
+    },
+    {
+     "seg": 17,
+     "offset": 24969
+    },
+    {
+     "seg": 18,
+     "offset": 6120
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 91,
+   "name": "GetTextExtent",
+   "call_sites": 5,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 9817
+    },
+    {
+     "seg": 9,
+     "offset": 37084
+    },
+    {
+     "seg": 15,
+     "offset": 31506
+    },
+    {
+     "seg": 16,
+     "offset": 12591
+    },
+    {
+     "seg": 17,
+     "offset": 28517
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 127,
+   "name": "GetPrivateProfileInt",
+   "call_sites": 5,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 14320
+    },
+    {
+     "seg": 9,
+     "offset": 9068
+    },
+    {
+     "seg": 10,
+     "offset": 43401
+    },
+    {
+     "seg": 11,
+     "offset": 31273
+    },
+    {
+     "seg": 15,
+     "offset": 24473
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 20,
+   "name": "GlobalSize",
+   "call_sites": 5,
+   "sites": [
+    {
+     "seg": 5,
+     "offset": 7797
+    },
+    {
+     "seg": 6,
+     "offset": 38093
+    },
+    {
+     "seg": 15,
+     "offset": 23977
+    },
+    {
+     "seg": 16,
+     "offset": 29762
+    },
+    {
+     "seg": 17,
+     "offset": 33631
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 37,
+   "name": "SetWindowText",
+   "call_sites": 5,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 3910
+    },
+    {
+     "seg": 9,
+     "offset": 37207
+    },
+    {
+     "seg": 13,
+     "offset": 22597
+    },
+    {
+     "seg": 16,
+     "offset": 22676
+    },
+    {
+     "seg": 17,
+     "offset": 34121
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 39,
+   "name": "BeginPaint",
+   "call_sites": 5,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 8922
+    },
+    {
+     "seg": 7,
+     "offset": 25423
+    },
+    {
+     "seg": 11,
+     "offset": 9021
+    },
+    {
+     "seg": 13,
+     "offset": 25351
+    },
+    {
+     "seg": 17,
+     "offset": 23280
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 40,
+   "name": "EndPaint",
+   "call_sites": 5,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 8946
+    },
+    {
+     "seg": 7,
+     "offset": 25476
+    },
+    {
+     "seg": 11,
+     "offset": 9048
+    },
+    {
+     "seg": 13,
+     "offset": 25401
+    },
+    {
+     "seg": 17,
+     "offset": 24533
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 74,
+   "name": "CopyRect",
+   "call_sites": 5,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 20001
+    },
+    {
+     "seg": 7,
+     "offset": 25289
+    },
+    {
+     "seg": 13,
+     "offset": 25217
+    },
+    {
+     "seg": 16,
+     "offset": 25561
+    },
+    {
+     "seg": 17,
+     "offset": 37125
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 60,
+   "name": "FindResource",
+   "call_sites": 4,
+   "sites": [
+    {
+     "seg": 9,
+     "offset": 24320
+    },
+    {
+     "seg": 10,
+     "offset": 14595
+    },
+    {
+     "seg": 15,
+     "offset": 27085
+    },
+    {
+     "seg": 17,
+     "offset": 12873
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 61,
+   "name": "LoadResource",
+   "call_sites": 4,
+   "sites": [
+    {
+     "seg": 9,
+     "offset": 24326
+    },
+    {
+     "seg": 10,
+     "offset": 14624
+    },
+    {
+     "seg": 15,
+     "offset": 27091
+    },
+    {
+     "seg": 17,
+     "offset": 12901
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 62,
+   "name": "LockResource",
+   "call_sites": 4,
+   "sites": [
+    {
+     "seg": 9,
+     "offset": 24335
+    },
+    {
+     "seg": 10,
+     "offset": 14637
+    },
+    {
+     "seg": 15,
+     "offset": 27100
+    },
+    {
+     "seg": 17,
+     "offset": 12910
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 63,
+   "name": "FreeResource",
+   "call_sites": 4,
+   "sites": [
+    {
+     "seg": 9,
+     "offset": 27086
+    },
+    {
+     "seg": 10,
+     "offset": 14747
+    },
+    {
+     "seg": 15,
+     "offset": 27389
+    },
+    {
+     "seg": 17,
+     "offset": 12988
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 81,
+   "name": "_lclose",
+   "call_sites": 4,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 39232
+    },
+    {
+     "seg": 14,
+     "offset": 16073
+    },
+    {
+     "seg": 15,
+     "offset": 24067
+    },
+    {
+     "seg": 17,
+     "offset": 33724
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 1,
+   "name": "MessageBox",
+   "call_sites": 4,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 4879
+    },
+    {
+     "seg": 7,
+     "offset": 144
+    },
+    {
+     "seg": 10,
+     "offset": 43576
+    },
+    {
+     "seg": 16,
+     "offset": 26908
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 104,
+   "name": "MessageBeep",
+   "call_sites": 4,
+   "sites": [
+    {
+     "seg": 7,
+     "offset": 5065
+    },
+    {
+     "seg": 10,
+     "offset": 39535
+    },
+    {
+     "seg": 14,
+     "offset": 3698
+    },
+    {
+     "seg": 15,
+     "offset": 24047
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 160,
+   "name": "DrawMenuBar",
+   "call_sites": 4,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 3857
+    },
+    {
+     "seg": 6,
+     "offset": 3452
+    },
+    {
+     "seg": 7,
+     "offset": 25100
+    },
+    {
+     "seg": 13,
+     "offset": 25027
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 81,
+   "name": "FillRect",
+   "call_sites": 4,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 19253
+    },
+    {
+     "seg": 15,
+     "offset": 34697
+    },
+    {
+     "seg": 16,
+     "offset": 22959
+    },
+    {
+     "seg": 17,
+     "offset": 37201
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 91,
+   "name": "GetDlgItem",
+   "call_sites": 4,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 23761
+    },
+    {
+     "seg": 9,
+     "offset": 37196
+    },
+    {
+     "seg": 16,
+     "offset": 23458
+    },
+    {
+     "seg": 17,
+     "offset": 34994
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 60,
+   "name": "CreatePatternBrush",
+   "call_sites": 3,
+   "sites": [
+    {
+     "seg": 10,
+     "offset": 238
+    },
+    {
+     "seg": 11,
+     "offset": 234
+    },
+    {
+     "seg": 15,
+     "offset": 22623
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 93,
+   "name": "GetTextMetrics",
+   "call_sites": 3,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 8187
+    },
+    {
+     "seg": 16,
+     "offset": 17194
+    },
+    {
+     "seg": 17,
+     "offset": 22717
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 134,
+   "name": "GetWindowsDirectory",
+   "call_sites": 3,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 6579
+    },
+    {
+     "seg": 6,
+     "offset": 1883
+    },
+    {
+     "seg": 10,
+     "offset": 35296
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 96,
+   "name": "FreeLibrary",
+   "call_sites": 3,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 6839
+    },
+    {
+     "seg": 10,
+     "offset": 27554
+    },
+    {
+     "seg": 16,
+     "offset": 25418
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 111,
+   "name": "SendMessage",
+   "call_sites": 3,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 27885
+    },
+    {
+     "seg": 16,
+     "offset": 23473
+    },
+    {
+     "seg": 17,
+     "offset": 37062
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 156,
+   "name": "GetSystemMenu",
+   "call_sites": 3,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 3924
+    },
+    {
+     "seg": 7,
+     "offset": 25033
+    },
+    {
+     "seg": 13,
+     "offset": 24959
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 180,
+   "name": "GetSysColor",
+   "call_sites": 3,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 19820
+    },
+    {
+     "seg": 16,
+     "offset": 22842
+    },
+    {
+     "seg": 17,
+     "offset": 37146
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 22,
+   "name": "SetFocus",
+   "call_sites": 3,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 21783
+    },
+    {
+     "seg": 16,
+     "offset": 22358
+    },
+    {
+     "seg": 17,
+     "offset": 34918
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 283,
+   "name": "RealizePalette",
+   "call_sites": 3,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 7114
+    },
+    {
+     "seg": 11,
+     "offset": 2921
+    },
+    {
+     "seg": 15,
+     "offset": 22689
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 34,
+   "name": "EnableWindow",
+   "call_sites": 3,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 23150
+    },
+    {
+     "seg": 16,
+     "offset": 17581
+    },
+    {
+     "seg": 17,
+     "offset": 26682
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 411,
+   "name": "AppendMenu",
+   "call_sites": 3,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 3791
+    },
+    {
+     "seg": 7,
+     "offset": 25051
+    },
+    {
+     "seg": 13,
+     "offset": 24977
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 466,
+   "name": "DrawFocusRect",
+   "call_sites": 3,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 20114
+    },
+    {
+     "seg": 16,
+     "offset": 23237
+    },
+    {
+     "seg": 17,
+     "offset": 37619
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 70,
+   "name": "SetCursorPos",
+   "call_sites": 3,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 4786
+    },
+    {
+     "seg": 9,
+     "offset": 23824
+    },
+    {
+     "seg": 16,
+     "offset": 7692
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 48,
+   "name": "CreateBitmap",
+   "call_sites": 2,
+   "sites": [
+    {
+     "seg": 10,
+     "offset": 16125
+    },
+    {
+     "seg": 15,
+     "offset": 22614
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 83,
+   "name": "GetPixel",
+   "call_sites": 2,
+   "sites": [
+    {
+     "seg": 9,
+     "offset": 2288
+    },
+    {
+     "seg": 13,
+     "offset": 22023
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 90,
+   "name": "GetTextColor",
+   "call_sites": 2,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 18904
+    },
+    {
+     "seg": 17,
+     "offset": 37098
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 3,
+   "name": "GetVersion",
+   "call_sites": 2,
+   "sites": [
+    {
+     "seg": 5,
+     "offset": 73
+    },
+    {
+     "seg": 10,
+     "offset": 212
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 49,
+   "name": "GetModuleFileName",
+   "call_sites": 2,
+   "sites": [
+    {
+     "seg": 5,
+     "offset": 3161
+    },
+    {
+     "seg": 6,
+     "offset": 4900
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 50,
+   "name": "GetProcAddress",
+   "call_sites": 2,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 6643
+    },
+    {
+     "seg": 10,
+     "offset": 27042
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 58,
+   "name": "GetProfileString",
+   "call_sites": 2,
+   "sites": [
+    {
+     "seg": 10,
+     "offset": 35036
+    },
+    {
+     "seg": 15,
+     "offset": 28635
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 65,
+   "name": "SizeofResource",
+   "call_sites": 2,
+   "sites": [
+    {
+     "seg": 10,
+     "offset": 14612
+    },
+    {
+     "seg": 17,
+     "offset": 12886
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 95,
+   "name": "LoadLibrary",
+   "call_sites": 2,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 6625
+    },
+    {
+     "seg": 10,
+     "offset": 26389
+    }
+   ]
+  },
+  {
+   "module": "MMSYSTEM",
+   "ordinal": 607,
+   "name": "timeGetTime",
+   "call_sites": 2,
+   "sites": [
+    {
+     "seg": 7,
+     "offset": 184
+    },
+    {
+     "seg": 15,
+     "offset": 3451
+    }
+   ]
+  },
+  {
+   "module": "SHELL",
+   "ordinal": 34,
+   "name": "ExtractIcon",
+   "call_sites": 2,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 17453
+    },
+    {
+     "seg": 9,
+     "offset": 377
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 106,
+   "name": "GetKeyState",
+   "call_sites": 2,
+   "sites": [
+    {
+     "seg": 11,
+     "offset": 27871
+    },
+    {
+     "seg": 16,
+     "offset": 26936
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 124,
+   "name": "UpdateWindow",
+   "call_sites": 2,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 1544
+    },
+    {
+     "seg": 16,
+     "offset": 24306
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 134,
+   "name": "SetWindowWord",
+   "call_sites": 2,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 5820
+    },
+    {
+     "seg": 6,
+     "offset": 3443
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 150,
+   "name": "LoadMenu",
+   "call_sites": 2,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 5870
+    },
+    {
+     "seg": 6,
+     "offset": 6134
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 152,
+   "name": "DestroyMenu",
+   "call_sites": 2,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 5840
+    },
+    {
+     "seg": 6,
+     "offset": 6686
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 158,
+   "name": "SetMenu",
+   "call_sites": 2,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 5890
+    },
+    {
+     "seg": 6,
+     "offset": 6670
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 221,
+   "name": "ScrollDC",
+   "call_sites": 2,
+   "sites": [
+    {
+     "seg": 15,
+     "offset": 5927
+    },
+    {
+     "seg": 16,
+     "offset": 12339
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 224,
+   "name": "GetWindowTask",
+   "call_sites": 2,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 4812
+    },
+    {
+     "seg": 10,
+     "offset": 29734
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 232,
+   "name": "SetWindowPos",
+   "call_sites": 2,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 4154
+    },
+    {
+     "seg": 6,
+     "offset": 6356
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 249,
+   "name": "GetAsyncKeyState",
+   "call_sites": 2,
+   "sites": [
+    {
+     "seg": 11,
+     "offset": 25687
+    },
+    {
+     "seg": 13,
+     "offset": 3285
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 284,
+   "name": "GetFreeSystemResources",
+   "call_sites": 2,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 5132
+    },
+    {
+     "seg": 7,
+     "offset": 67
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 420,
+   "name": "_wsprintf",
+   "call_sites": 2,
+   "sites": [
+    {
+     "seg": 10,
+     "offset": 35124
+    },
+    {
+     "seg": 15,
+     "offset": 28759
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 457,
+   "name": "DestroyIcon",
+   "call_sites": 2,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 17797
+    },
+    {
+     "seg": 9,
+     "offset": 489
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 6,
+   "name": "PostQuitMessage",
+   "call_sites": 2,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 2107
+    },
+    {
+     "seg": 6,
+     "offset": 6577
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 60,
+   "name": "GetActiveWindow",
+   "call_sites": 2,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 4800
+    },
+    {
+     "seg": 10,
+     "offset": 29722
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 84,
+   "name": "DrawIcon",
+   "call_sites": 2,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 17717
+    },
+    {
+     "seg": 9,
+     "offset": 481
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 87,
+   "name": "DialogBox",
+   "call_sites": 2,
+   "sites": [
+    {
+     "seg": 16,
+     "offset": 16914
+    },
+    {
+     "seg": 17,
+     "offset": 22859
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 88,
+   "name": "EndDialog",
+   "call_sites": 2,
+   "sites": [
+    {
+     "seg": 16,
+     "offset": 23972
+    },
+    {
+     "seg": 17,
+     "offset": 35076
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 89,
+   "name": "CreateDialog",
+   "call_sites": 2,
+   "sites": [
+    {
+     "seg": 9,
+     "offset": 26239
+    },
+    {
+     "seg": 10,
+     "offset": 39574
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 11,
+   "name": "SetWindowOrg",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 16,
+     "offset": 26813
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 24,
+   "name": "Ellipse",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 15,
+     "offset": 10717
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 27,
+   "name": "Rectangle",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 11,
+     "offset": 6695
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 351,
+   "name": "ExtTextOut",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 7,
+     "offset": 8243
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 36,
+   "name": "Polygon",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 15,
+     "offset": 19095
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 366,
+   "name": "UpdateColors",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 1443
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 53,
+   "name": "CreateDC",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 5900
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 78,
+   "name": "GetCurrentPosition",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 15,
+     "offset": 33525
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 80,
+   "name": "GetDeviceCaps",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 5911
+    }
+   ]
+  },
+  {
+   "module": "GDI",
+   "ordinal": 97,
+   "name": "GetWindowOrg",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 18,
+     "offset": 6067
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 1,
+   "name": "FatalExit",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 5,
+     "offset": 2975
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 10,
+   "name": "LocalSize",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 5,
+     "offset": 8295
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 102,
+   "name": "DOS3Call",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 5,
+     "offset": 7032
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 113,
+   "name": "__AHSHIFT",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 14,
+     "offset": 16481
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 114,
+   "name": "__AHINCR",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 40644
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 115,
+   "name": "OutputDebugString",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 13,
+     "offset": 20192
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 131,
+   "name": "GetDOSEnvironment",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 5,
+     "offset": 2992
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 137,
+   "name": "FatalAppExit",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 5,
+     "offset": 2966
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 166,
+   "name": "WinExec",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 2002
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 178,
+   "name": "__WINFLAGS",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 5,
+     "offset": 16
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 23,
+   "name": "LockSegment",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 5,
+     "offset": 8082
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 24,
+   "name": "UnlockSegment",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 5,
+     "offset": 8106
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 25,
+   "name": "GlobalCompact",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 6833
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 30,
+   "name": "WaitEvent",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 5,
+     "offset": 128
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 5,
+   "name": "LocalAlloc",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 5,
+     "offset": 8094
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 54,
+   "name": "GetInstanceData",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 4819
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 57,
+   "name": "GetProfileInt",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 10,
+     "offset": 35411
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 6,
+   "name": "LocalReAlloc",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 5,
+     "offset": 8259
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 7,
+   "name": "LocalFree",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 5,
+     "offset": 8165
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 82,
+   "name": "_lread",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 14,
+     "offset": 16448
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 86,
+   "name": "_lwrite",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 40613
+    }
+   ]
+  },
+  {
+   "module": "KERNEL",
+   "ordinal": 91,
+   "name": "InitTask",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 5,
+     "offset": 30
+    }
+   ]
+  },
+  {
+   "module": "MMSYSTEM",
+   "ordinal": 604,
+   "name": "timeGetDevCaps",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 4937
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 10,
+   "name": "SetTimer",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 5016
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 108,
+   "name": "GetMessage",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 389
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 109,
+   "name": "PeekMessage",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 251
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 113,
+   "name": "TranslateMessage",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 491
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 114,
+   "name": "DispatchMessage",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 501
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 12,
+   "name": "KillTimer",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 6713
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 130,
+   "name": "SetClassWord",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 2654
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 135,
+   "name": "GetWindowLong",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 5268
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 136,
+   "name": "SetWindowLong",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 5293
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 154,
+   "name": "CheckMenuItem",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 3848
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 155,
+   "name": "EnableMenuItem",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 5998
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 159,
+   "name": "GetSubMenu",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 5965
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 17,
+   "name": "GetCursorPos",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 86
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 171,
+   "name": "WinHelp",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 6536
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 173,
+   "name": "LoadCursor",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 5746
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 174,
+   "name": "LoadIcon",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 17561
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 177,
+   "name": "LoadAccelerators",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 186
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 178,
+   "name": "TranslateAccelerator",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 422
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 222,
+   "name": "GetKeyboardState",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 2587
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 223,
+   "name": "SetKeyboardState",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 2623
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 23,
+   "name": "GetFocus",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 17,
+     "offset": 26635
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 263,
+   "name": "GetMenuItemCount",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 5974
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 266,
+   "name": "SetMessageQueue",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 4977
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 277,
+   "name": "GetDlgCtrlID",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 11,
+     "offset": 9058
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 28,
+   "name": "ClientToScreen",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 4994
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 31,
+   "name": "IsIconic",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 4858
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 35,
+   "name": "IsWindowEnabled",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 17,
+     "offset": 26626
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 36,
+   "name": "GetWindowText",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 17,
+     "offset": 33905
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 414,
+   "name": "ModifyMenu",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 7,
+     "offset": 25574
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 416,
+   "name": "TrackPopupMenu",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 5020
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 47,
+   "name": "IsWindow",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 7306
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 5,
+   "name": "InitApp",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 5,
+     "offset": 137
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 57,
+   "name": "RegisterClass",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 5785
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 62,
+   "name": "SetScrollPos",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 11,
+     "offset": 30803
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 64,
+   "name": "SetScrollRange",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 11,
+     "offset": 3308
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 69,
+   "name": "SetCursor",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 6,
+     "offset": 1717
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 83,
+   "name": "FrameRect",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 11,
+     "offset": 13677
+    }
+   ]
+  },
+  {
+   "module": "USER",
+   "ordinal": 90,
+   "name": "IsDialogMessage",
+   "call_sites": 1,
+   "sites": [
+    {
+     "seg": 2,
+     "offset": 452
+    }
+   ]
+  }
+ ],
+ "unmapped": {},
+ "validation": {
+  "on_placeholder": 226,
+  "chained": 499
+ }
+}
