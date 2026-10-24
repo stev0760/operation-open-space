@@ -103,7 +103,7 @@ DOS_AL_INPUT = frozenset({0x0C, 0x25, 0x33, 0x35, 0x3D, 0x42, 0x43, 0x44, 0x4B, 
                           0x58, 0x5C, 0x5E, 0x5F})
 
 # Imports that do not return to their caller.
-IMPORT_NORETURN = frozenset({("KERNEL", 1), ("KERNEL", 137)})  # FatalExit, FatalAppExit
+IMPORT_NORETURN = frozenset({("KERNEL", 1)})  # FatalExit; FatalAppExit (KERNEL.137) can return
 
 
 def dos_name(ah: int) -> str:

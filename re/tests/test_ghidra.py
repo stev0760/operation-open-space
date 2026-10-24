@@ -390,10 +390,8 @@ def test_import_call_sites_in_functions(module):
 
 # isre asm functions that Ghidra does not have, and the reason:
 #   seg1:0x30, seg1:0x1e7  one-byte OPTLOADER self-load entries
-#   seg5:0xb9a / ISPACE seg3:0xa91  isre treats FatalAppExit as non-returning; Ghidra decodes
-#                                   the FatalExit fallback as part of the caller
-ISRE_ONLY = {"inspace": {"seg1:0x30", "seg1:0x1e7", "seg5:0xb9a"},
-             "ispace": {"seg1:0x30", "seg1:0x1e7", "seg3:0xa91"}}
+ISRE_ONLY = {"inspace": {"seg1:0x30", "seg1:0x1e7"},
+             "ispace": {"seg1:0x30", "seg1:0x1e7"}}
 # Ghidra functions that isre asm folds into others: seg1 stub routines, and RTL
 # fragments that several functions reach (isre lists them as shared tails).
 GHIDRA_ONLY = {"inspace": {"seg1:0x4c1", "seg1:0x74f", "seg1:0x93d", "seg5:0xb61", "seg5:0xdd5",
