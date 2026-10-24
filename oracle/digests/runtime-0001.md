@@ -42,7 +42,7 @@
   - It passes both fault points.
   - It keeps the baseline's relay format, timestamps and selectors, and its dialog screenshots are pixel-identical to the baseline, so existing digests and `relay_digest.py` stay valid.
   - It runs at full speed while tracing.
-  - `oracle/env.sh` makes it the `ORACLE_WINE` default.
+  - `oracle/env.sh` defaults to its copy with the ExtractIcon count patch, `/opt/wine-11.0-oldwow-patched` ([wave-0001](wave-0001.md)).
 - **otvdm: cross-check runtime only.** Use it where Wine's 16-bit layer departs from Win16 (ExtractIcon count). Its 16-bit layer derives from Wine's 16-bit code, so agreement between the two does not prove Windows behaviour. It needs the launch, DLL-override and WINDIR steps above. Its selectors differ, and its tracing slows the game. [DESIGN]
 - **Wine 11.0 new WoW64:** keep it only for reproducing the DS fault. [DESIGN]
 - Both candidates pass, so this run did not plan a DOSBox-X + Windows 3.1 setup. [DESIGN]

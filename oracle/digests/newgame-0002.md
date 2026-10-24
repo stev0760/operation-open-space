@@ -1,6 +1,6 @@
 # newgame-0002: Enter on D:\GAMES, the wave 1 briefing and the first seconds of wave 1
 
-- **Date:** 2026-10-24. **Host:** Wine 11.0 old WoW64 (`/opt/wine-11.0-oldwow`, the oracle default, see [runtime-0001](runtime-0001.md)), Xvfb 1024×768×24, prefix `innerspace1` (created fresh by this run), display `:111`.
+- **Date:** 2026-10-24. **Host:** Wine 11.0 old WoW64 (`/opt/wine-11.0-oldwow`, stock, see [runtime-0001](runtime-0001.md); the oracle default is its ExtractIcon-patched copy, see [wave-0001](wave-0001.md)), Xvfb 1024×768×24, prefix `innerspace1` (created fresh by this run), display `:111`.
 - **Setup:** `install_layout.py --with-ini`, fixture `basic` as `D:`, no `Z:`, no registry DLL overrides (only `WINEDLLOVERRIDES` from `oracle/env.sh`).
 - **Reproduce:** `ORACLE_ID=1 oracle/scenarios/newgame.sh work/oracle/newgame-0002`, then `re/.venv/bin/python -I oracle/relay_digest.py work/oracle/newgame-0002/trace.log --from 'WRITEPRIVATEPROFILESTRING\(.*"NavLeft"'`.
 - **Bulk output (gitignored):** `work/oracle/newgame-0002/`: 31 screenshots, `trace.log` (78 MB), `digest.md` (whole run), `digest-enter.md` (from Enter on), `steps.txt`, `INSPACE.INI`. Further runs of the same scenario: `work/oracle/newgame-0002-intro/` (`SKIP_INTRO=0 TRACE=0`), `work/oracle/depth8-oldwow/` (`ORACLE_ID=2 DEPTH=8`), and `work/oracle/patched-rebuild/` (`ORACLE_ID=2 SKIP_INTRO=0` on new WoW64 with the krnl386 module built by `oracle/wine/build_patched.sh`).

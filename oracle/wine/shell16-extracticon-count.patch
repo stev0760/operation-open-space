@@ -1,0 +1,14 @@
+diff --git a/dlls/shell.dll16/shell.c b/dlls/shell.dll16/shell.c
+--- a/dlls/shell.dll16/shell.c
++++ b/dlls/shell.dll16/shell.c
+@@ -295,6 +295,10 @@
+ HICON16 WINAPI ExtractIcon16( HINSTANCE16 hInstance, LPCSTR lpszExeFileName,
+ 	UINT16 nIconIndex )
+ {   TRACE("\n");
++    /* Win16 counts the icons for index -1, which arrives here as 0xffff.
++     * ExtractIconA counts for (UINT)-1 and returns the count, not an icon. */
++    if (nIconIndex == (UINT16)-1)
++        return (HICON16)(UINT_PTR)ExtractIconA( NULL, lpszExeFileName, ~0u );
+     return convert_icon_to_16( hInstance, ExtractIconA(NULL, lpszExeFileName, nIconIndex) );
+ }
+ 
