@@ -11,8 +11,18 @@ written by ``isre all``) and writes ``<out>/<name>/segNN.asm``,
 ``functions.json`` and ``xrefs.json``; ``<out>`` defaults to ``WORK/asm``.
 ``--ne`` unpacks one OPTLOADER module in memory instead. ``--index-dir``
 also writes the compact ``functions-<name>.json`` index there. ``--show``
-prints the listing of the function holding an address (with its callers)
-from an earlier run.
+prints the listing of the function holding an address from an earlier run:
+its header (seeds, callers), then every piece of it in address order (body
+ranges, shared tails, unreachable blocks, jump tables), with one ``; ....``
+line for each stretch in between that belongs elsewhere.
+
+Listing lines are ``address  bytes  text ; comments``: the bytes start in
+column 14 and the text in column 41 (an instruction of more than 9 bytes
+pushes it right but keeps a space); ``parse_line`` reads them back. A
+relocation site is named in a comment; an additive one also shows the
+addend the loader adds the target to. ``functions.json`` gives each
+function's and each unreachable block's ``ranges``: runs of adjacent
+instructions, end exclusive.
 
 Seeds, in decoding priority (``seeds`` in functions.json):
 
@@ -47,12 +57,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import struct
 import sys
+from bisect import bisect_left, bisect_right
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 from isre import x86names as N
 from isre.x86dis import (BODY, DATA, F_CALL, F_CALLF, F_COND, F_INT, F_JMP, F_JMPF, F_JMPI,
@@ -75,6 +87,13 @@ PROLOGUE_NEAR = bytes.fromhex("558bec")
 PADDING = frozenset({0x00, 0x90, 0xCC})
 
 PRINTABLE = frozenset(range(0x20, 0x7F)) | {0x09, 0x0A, 0x0D}
+
+# Listing columns: address, instruction bytes, text, comments. The bytes column
+# holds 9 bytes (the longest instruction in the three modules); a longer one
+# still keeps one space before the text, and a long text one before the ';'.
+ADDR_W = 14
+HEX_W = 27
+COMMENT_COL = 73
 
 
 def addr(seg: int, off: int) -> str:
@@ -258,7 +277,8 @@ def build_sites(img: ModuleImage, specs: dict[str, dict[int, str]]) -> dict[int,
             else:
                 kind, label = "osfloat", "osfixup"
             tt = {"FAR_ADDR": "PTR16", "SEGMENT": "SEG16", "OFFSET": "OFF16",
-                  "LOBYTE": "BYTE"}.get(r["src_type"], r["src_type"])
+                  "LOBYTE": "BYTE"}.get(r["src_type"], r["src_type"]) + \
+                ("_A" if r["additive"] else "")
             for so in _walk_chain(data, r["offset"], width, single):
                 out[n][so] = Site(n, so, width, kind, tt, r["offset"], label, module, ordinal,
                                   ref_seg, target)
@@ -445,6 +465,35 @@ def _seed_selfload(dis: Disassembler, cs: CodeSeg) -> None:
 
 # ------------------------------------------------------------------ annotation
 
+def _signed(v: int, bits: int) -> str:
+    return f" ({v - (1 << bits)})" if v >= 1 << (bits - 1) else ""
+
+
+def additive(cs: CodeSeg, site: Site) -> tuple[str, str]:
+    """(label suffix, comment) for an additive relocation, ("", "") otherwise.
+
+    The loader adds the target to the bytes stored at the site (nappload.asm
+    RELOC_INT_BYTE_A, RELOC_INT_OFF16_A, RELOC_INT_SEG16_A, RELOC_INT_PTR16_A):
+    the target offset to the offset word, and for PTR16_A also the selector
+    to the selector word.
+    """
+    tt = site.target_type
+    if not tt.endswith("_A") or site.off + site.width > len(cs.data):
+        return "", ""
+    if site.width == 1:
+        v = cs.data[site.off]
+        return f"+{v:#x}", f"additive {tt}: +{v:#x}{_signed(v, 8)}"
+    (v,) = struct.unpack_from("<H", cs.data, site.off)
+    if tt.startswith("SEG16"):
+        return "", f"additive {tt}: selector +{v:#x}"
+    note = f"additive {tt}: target offset +{v:#x}{_signed(v, 16)}"
+    if site.width == 4:
+        (sv,) = struct.unpack_from("<H", cs.data, site.off + 2)
+        if sv:
+            note += f", selector +{sv:#x}"
+    return (f"+{v:#x}" if v else ""), note
+
+
 class Annotator:
     def __init__(self, res: AsmResult):
         self.res = res
@@ -491,6 +540,11 @@ class Annotator:
                 text = f"{verb} {addr(*site.target)}"
             else:
                 text = f"{verb} {site.label}"
+            if site is not None:
+                suffix, note = additive(cs, site)
+                text += suffix
+                if note:
+                    comments.append(note)
         elif insn.flow in (F_CALL, F_JMP, F_COND):
             text = f"{insn.mnem} {addr(seg, insn.target)}"
         sa = dis.site_at[seg]
@@ -499,7 +553,10 @@ class Annotator:
             for so in inside:
                 site = cs.sites[so]
                 what = "selector of" if site.kind == "selector" else "reloc"
-                comments.append(f"{what} {site.label}")
+                suffix, note = additive(cs, site)
+                comments.append(f"{what} {site.label}{suffix}")
+                if note:
+                    comments.append(note)
         if insn.noreturn:
             comments.append("does not return")
         if dis.dos_call_site(insn):
@@ -567,10 +624,35 @@ def _hexbytes(data: bytes, off: int, n: int) -> str:
 
 
 def _line(a: str, hexs: str, text: str, comments: list[str]) -> str:
-    s = f"{a:<14s}{hexs:<24s}{text}"
+    s = f"{a:<{ADDR_W}s}{hexs:<{HEX_W - 1}s} {text}"
     if comments:
-        s = f"{s:<70s}; " + "; ".join(comments)
+        s = f"{s:<{COMMENT_COL - 1}s} ; " + "; ".join(comments)
     return s.rstrip()
+
+
+def parse_line(line: str) -> tuple[int, int, bytes, str, str] | None:
+    """(seg, off, instruction bytes, text, comment) of one listing line, or None.
+
+    The bytes start in column ADDR_W; data rows have none there. Data and
+    padding lines parse too (their ``db`` is the text). The comment is
+    everything after the first ``" ; "`` separator.
+    """
+    m = _ADDR_RE.match(line)
+    if m is None or len(line) <= ADDR_W or line[m.end():ADDR_W].strip():
+        return None
+    pos = ADDR_W
+    raw = []
+    while _HEX2_RE.match(line, pos):
+        raw.append(int(line[pos:pos + 2], 16))
+        pos += 3
+    text, sep, comment = line[pos:].strip().partition(" ; ")
+    if not sep and text.startswith("; "):
+        text, comment = "", text[2:]
+    return int(m.group(1)), int(m.group(2), 16), bytes(raw), text.rstrip(), comment
+
+
+_ADDR_RE = re.compile(r"seg(\d+):0x([0-9a-f]+)(?= )")
+_HEX2_RE = re.compile(r"[0-9a-f]{2}(?: |$)")
 
 
 def seg_stats(res: AsmResult, seg: int) -> dict[str, Any]:
@@ -675,6 +757,7 @@ def build_outputs(res: AsmResult) -> tuple[dict[str, str], dict[str, Any], dict[
             "imports": sorted(imports),
             "callers": [[f, k] for f, k in sorted(set(callers.get((seg, e), [])), key=_ref_key)],
             "tail_jumps": [addr(seg, t) for t in tails],
+            "ranges": _ranges(seg, insns, body),
         })
     seed_counts = Counter(s for f in funcs for s in f["seeds"][:1])
     seg_list = [seg_stats(res, seg) for seg in sorted(dis.segs)]
@@ -689,7 +772,8 @@ def build_outputs(res: AsmResult) -> tuple[dict[str, str], dict[str, Any], dict[
         "module": img.name, "file": img.file, "module_name": img.module_name,
         "tool": "isre asm", "dgroup": img.autodata,
         "format": {"functions.calls": "[[target, kind]]", "functions.callers": "[[from, kind]]",
-                   "kind": "near | far | jmp_far | far_ptr | import"},
+                   "kind": "near | far | jmp_far | far_ptr | import",
+                   "ranges": "[[first, end]]: runs of adjacent body instructions, end exclusive"},
         "dgroup_init_len": img.dgroup.length if img.dgroup else 0,
         "first_seed_counts": {k: seed_counts[k] for k in SEED_ORDER if seed_counts[k]},
         "segments": seg_list,
@@ -705,7 +789,8 @@ def build_outputs(res: AsmResult) -> tuple[dict[str, str], dict[str, Any], dict[
                                 for k, v in sorted(dis.unresolved.items())],
         "unreachable_blocks": [{"addr": addr(seg, e), "in_function": addr(seg, parent),
                                 "insns": len(block),
-                                "bytes": sum(dis.insns[seg][o].size for o in block)}
+                                "bytes": sum(dis.insns[seg][o].size for o in block),
+                                "ranges": _ranges(seg, dis.insns[seg], block)}
                                for (seg, e), (parent, block) in sorted(res.unreachable.items())],
         "undecoded": undecoded,
         "rejected_seeds": [{"addr": addr(r.seg, r.off), "seed": r.seed, "reason": r.reason}
@@ -734,6 +819,17 @@ def build_outputs(res: AsmResult) -> tuple[dict[str, str], dict[str, Any], dict[
         "dos": sorted(ann.dos, key=lambda d: _addr_key(d["at"])),
     }
     return listings, functions_json, xrefs_json
+
+
+def _ranges(seg: int, insns: dict[int, Insn], offs) -> list[list[str]]:
+    """Runs of adjacent instructions as [[first, end]], end exclusive."""
+    runs: list[list[int]] = []
+    for o in sorted(offs):
+        if runs and runs[-1][1] == o:
+            runs[-1][1] = insns[o].end
+        else:
+            runs.append([o, insns[o].end])
+    return [[addr(seg, a), addr(seg, b)] for a, b in runs]
 
 
 def _ref_key(t: tuple[str, str]) -> tuple[int, int, str]:
@@ -974,34 +1070,213 @@ def summary(fj: dict[str, Any]) -> str:
 
 # ------------------------------------------------------------------ show
 
+class ShowError(ValueError):
+    """An address that has no listing to show."""
+
+
+def _off(a: str) -> int:
+    return _addr_key(a)[1]
+
+
+class FunctionIndex:
+    """Address lookups over one module's functions.json (from an earlier run).
+
+    A function's pieces are its body ranges, the ranges of the unreachable
+    blocks inside it and the jump tables of its switches. Shared code (a tail
+    that two entries reach) belongs to every function that reaches it.
+    """
+
+    def __init__(self, fj: dict[str, Any]):
+        self.fj = fj
+        self.by_addr = {f["addr"]: f for f in fj["functions"]}
+        self._pieces: dict[str, list[tuple[int, int, str]]] = defaultdict(list)
+        for f in fj["functions"]:
+            self._pieces[f["addr"]] += [(_off(a), _off(b), "body") for a, b in f["ranges"]]
+        for u in fj["unreachable_blocks"]:
+            self._pieces[u["in_function"]] += [(_off(a), _off(b), "unreachable")
+                                               for a, b in u["ranges"]]
+        self._build()
+        for d in fj["data"]:
+            if d["kind"] == "jumptable" and d["ref"]:
+                seg, off = _addr_key(d["ref"])
+                for fa, _kind in self.at(seg, off):
+                    a = _off(d["addr"])
+                    self._pieces[fa].append((a, a + d["size"], "table"))
+        self._build()
+
+    def _build(self) -> None:
+        spans: dict[int, list[tuple[int, int, str, str]]] = defaultdict(list)
+        for fa, pieces in self._pieces.items():
+            seg = self.by_addr[fa]["seg"]
+            for a, b, kind in pieces:
+                spans[seg].append((a, b, fa, kind))
+        self._spans = {seg: sorted(v, key=lambda t: (t[0], t[1], _addr_key(t[2]), t[3]))
+                       for seg, v in spans.items()}
+        self._starts = {seg: [t[0] for t in v] for seg, v in self._spans.items()}
+        self._maxlen = {seg: max(t[1] - t[0] for t in v) for seg, v in self._spans.items()}
+
+    def pieces(self, func_addr: str) -> list[tuple[int, int, str]]:
+        """(start, end, kind) of every piece of the function, in address order."""
+        return sorted(set(self._pieces.get(func_addr, [])))
+
+    def at(self, seg: int, off: int) -> list[tuple[str, str]]:
+        """(function address, piece kind) of every piece holding seg:off."""
+        spans = self._spans.get(seg)
+        if not spans:
+            return []
+        hi = bisect_right(self._starts[seg], off)
+        lo = bisect_left(self._starts[seg], off - self._maxlen[seg])
+        found = {(fa, kind) for a, b, fa, kind in spans[lo:hi] if a <= off < b}
+        return sorted(found, key=lambda t: (_addr_key(t[0]), t[1]))
+
+    def overlapping(self, seg: int, a: int, b: int) -> list[str]:
+        """Functions with a piece that overlaps [a, b)."""
+        spans = self._spans.get(seg, [])
+        hi = bisect_left(self._starts.get(seg, []), b)
+        lo = bisect_left(self._starts.get(seg, []), a - self._maxlen.get(seg, 0))
+        return sorted({fa for x, y, fa, _k in spans[lo:hi] if x < b and a < y}, key=_addr_key)
+
+    def containing(self, seg: int, off: int) -> tuple[dict[str, Any] | None, list[str]]:
+        """The function to show for seg:off and the other functions that share it.
+
+        Among functions sharing the address, the one with the nearest entry
+        at or below it wins. (None, []) when no piece holds the address
+        (alignment padding, code-segment data, undecoded bytes).
+        """
+        hits = sorted({fa for fa, _k in self.at(seg, off)}, key=_addr_key)
+        if not hits:
+            return None, []
+        below = [fa for fa in hits if _off(fa) <= off]
+        best = below[-1] if below else hits[0]
+        return self.by_addr[best], [fa for fa in hits if fa != best]
+
+
+class Listing:
+    """One segNN.asm listing with its address lines indexed."""
+
+    def __init__(self, text: str):
+        self.lines = text.splitlines()
+        self.offs: list[int] = []
+        self.idx: list[int] = []
+        for i, ln in enumerate(self.lines):
+            m = _ADDR_RE.match(ln)
+            if m:
+                self.offs.append(int(m.group(2), 16))
+                self.idx.append(i)
+
+    def span(self, a: int, b: int) -> tuple[int, int] | None:
+        """First and last line index of the address lines in [a, b)."""
+        i, j = bisect_left(self.offs, a), bisect_left(self.offs, b)
+        return (self.idx[i], self.idx[j - 1]) if i < j else None
+
+    def line_of(self, off: int) -> int | None:
+        """Index of the last address line at or before ``off``."""
+        i = bisect_right(self.offs, off)
+        return self.idx[i - 1] if i else None
+
+    def header(self, func_addr: str) -> int | None:
+        head = f"; ---- function {func_addr} "
+        return next((i for i, ln in enumerate(self.lines) if ln.startswith(head)), None)
+
+
+_HEADER_TAIL = ("; called from ", "; continues into ")
+_BLOCK_HEAD = ("; ---- unreachable code ", "; jump table ")
+
+
+def function_lines(listing: Listing, index: FunctionIndex, func: dict[str, Any],
+                   others: Sequence[str] = ()) -> list[tuple[str, int | None]]:
+    """The listing of one function: header, then every piece in address order.
+
+    Returns (line, offset of the address it shows or None). Lines between two
+    pieces that belong elsewhere are replaced by one ``; ....`` line naming
+    what was skipped.
+    """
+    lines = listing.lines
+    seg = func["seg"]
+    out: list[tuple[str, int | None]] = []
+    h = listing.header(func["addr"])
+    if h is not None:
+        out.append((lines[h], None))
+        k = h + 1
+        while k < len(lines) and lines[k].startswith(_HEADER_TAIL):
+            out.append((lines[k], None))
+            k += 1
+    if others:
+        out.append((f"; shares code with function {', '.join(others)}", None))
+    prev_line, prev_end = -1, None
+    for a, b, _kind in index.pieces(func["addr"]):
+        sp = listing.span(a, b)
+        if sp is None:
+            continue
+        first, last = sp
+        while first > 0 and lines[first - 1].startswith(_BLOCK_HEAD):
+            first -= 1
+        if prev_end == a:                  # adjacent: keep the blank and header lines between
+            first = prev_line + 1
+        first = max(first, prev_line + 1)
+        if prev_end is not None and a > prev_end:
+            who = [fa for fa in index.overlapping(seg, prev_end, a) if fa != func["addr"]]
+            what = (f"function {', '.join(who[:3])}{' ...' if len(who) > 3 else ''}" if who
+                    else "padding, data or undecoded bytes")
+            out.append((f"; .... {addr(seg, prev_end)}..{addr(seg, a - 1)} skipped: {what}",
+                        None))
+        for i in range(first, last + 1):
+            m = _ADDR_RE.match(lines[i])
+            out.append((lines[i], int(m.group(2), 16) if m else None))
+        prev_line = last
+        prev_end = b if prev_end is None else max(prev_end, b)
+    return out
+
+
+def load_functions(listing_dir: Path) -> dict[str, Any]:
+    path = Path(listing_dir) / "functions.json"
+    if not path.is_file():
+        raise ShowError(f"{path} is missing; run isre asm (or isre all) first")
+    fj = json.loads(path.read_text())
+    if fj["functions"] and "ranges" not in fj["functions"][0]:
+        raise ShowError(f"{path} has no body ranges (an older isre asm wrote it); "
+                        "run isre asm (or isre all) again")
+    return fj
+
+
+def load_listing(listing_dir: Path, fj: dict[str, Any], seg: int) -> Listing:
+    path = Path(listing_dir) / f"seg{seg:02d}.asm"
+    if not path.is_file():
+        runs: list[list[int]] = []
+        for n in sorted(s["seg"] for s in fj["segments"]):
+            if runs and runs[-1][1] == n - 1:
+                runs[-1][1] = n
+            else:
+                runs.append([n, n])
+        codes = ", ".join(f"seg{a}" if a == b else f"seg{a}-seg{b}" for a, b in runs)
+        what = "DGROUP, a data segment" if seg == fj.get("dgroup") else "not a code segment"
+        raise ShowError(f"seg{seg} of {fj['module']} has no listing in {listing_dir} ({what}; "
+                        f"code segments: {codes})")
+    return Listing(path.read_text())
+
+
 def show(listing_dir: Path, where: str, context: int = 24) -> str:
     """The listing of the function holding ``where`` (segN:0xOFF), or a window around it.
 
-    Reads the outputs of an earlier run in ``listing_dir`` (one module).
+    Reads the outputs of an earlier run in ``listing_dir`` (one module). The
+    function's shared tails, unreachable blocks and jump tables are included
+    wherever they sit in the segment.
     """
-    from isre.addr import parse
+    from isre.addr import AddrError, parse
 
-    a = parse(where)
-    fj = json.loads((Path(listing_dir) / "functions.json").read_text())
-    lines = (Path(listing_dir) / f"seg{a.seg:02d}.asm").read_text().splitlines()
-    best = None
-    for f in fj["functions"]:
-        end = _addr_key(f["end"])[1]
-        if f["seg"] == a.seg and f["off"] <= a.off < end \
-                and (best is None or f["off"] > best["off"]):
-            best = f
-    if best is not None:
-        head = f"; ---- function {best['addr']} "
-        start = next(i for i, ln in enumerate(lines) if ln.startswith(head))
-        stop = next((i for i in range(start + 1, len(lines))
-                     if lines[i].startswith("; ---- ")), len(lines))
-        return "\n".join(lines[start:stop]).rstrip() + "\n"
-    pos = 0
-    for i, ln in enumerate(lines):
-        if ln.startswith("seg"):
-            if _addr_key(ln.split()[0])[1] > a.off:
-                break
-            pos = i
+    fj = load_functions(listing_dir)
+    try:
+        a = parse(where, dgroup_seg=fj.get("dgroup") or 1)
+    except AddrError as e:
+        raise ShowError(str(e)) from None
+    listing = load_listing(listing_dir, fj, a.seg)
+    index = FunctionIndex(fj)
+    func, others = index.containing(a.seg, a.off)
+    if func is not None:
+        lines = [ln for ln, _o in function_lines(listing, index, func, others)]
+        return "\n".join(lines).rstrip() + "\n"
+    pos = listing.line_of(a.off) or 0
+    lines = listing.lines
     return "\n".join(lines[max(0, pos - context):pos + context]) + "\n"
 
 
@@ -1026,7 +1301,11 @@ def main(argv) -> int:
         base = Path(a.out) if a.out else Path(a.work) / "asm"
         name = (a.module or ["inspace"])[0]
         d = base / name if (base / name / "functions.json").is_file() else base
-        sys.stdout.write(show(d, a.show))
+        try:
+            sys.stdout.write(show(d, a.show))
+        except ShowError as e:
+            print(f"isre asm: {e}", file=sys.stderr)
+            return 2
         return 0
     specs = N.load_specs(Path(a.specs) if a.specs else N.default_spec_dir())
     images: list[tuple[ModuleImage, Path]] = []

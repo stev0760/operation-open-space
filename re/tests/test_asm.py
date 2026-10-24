@@ -107,6 +107,40 @@ def test_dos_function_merged_from_two_paths():
     assert dis.reg_values(2, 8, "ah") == ({0x4E, 0x4F}, False)
 
 
+def _far_ptrs(code: bytes, site_off: int, seeds=(0,)) -> list:
+    site = Site(2, site_off, 2, "selector", "SEG16", site_off, "seg3", ref_seg=3)
+    dis = Disassembler(_seg(code, [site]))
+    for o in seeds:
+        dis.add_seed(2, o, "export", 0)
+    dis.run()
+    return [c.target for c in dis.calls if c.kind == "far_ptr"]
+
+
+def test_far_pointer_pairs():
+    # selector store, then the offset store: the following fall-through chain
+    assert _far_ptrs(bytes.fromhex("c70602010000" "c70600013412" "cb"), 4) == [(3, 0x1234)]
+    # offset store first: the preceding fall-through chain
+    assert _far_ptrs(bytes.fromhex("c70600013412" "c70602010000" "cb"), 10) == [(3, 0x1234)]
+    # a jmp ends the search: the matching store behind it is reached another way
+    code = bytes.fromhex("c70602010000" "eb06" "c70600013412" "cb")
+    assert _far_ptrs(code, 4, seeds=(0, 8)) == []
+
+
+def test_listing_line_columns():
+    nine = asm._line("seg3:0x9ca", "66 c7 06 0c 87 00 00 00 00", "mov dword ptr [0x870c], 0",
+                     ["DGROUP:0x870c"])
+    assert "00 mov dword" in nine
+    assert asm.parse_line(nine) == (3, 0x9CA, bytes.fromhex("66c7060c8700000000"),
+                                    "mov dword ptr [0x870c], 0", "DGROUP:0x870c")
+    ten = asm._line("seg2:0x0", " ".join(["90"] * 10), "nop", [])
+    assert asm.parse_line(ten) == (2, 0, bytes(10 * [0x90]), "nop", "")
+    row = asm._line("seg3:0x10", "", "db ffh,ffh", ["|..|", "seg3:0x10 reloc X"])
+    assert asm.parse_line(row) == (3, 0x10, b"", "db ffh,ffh", "|..|; seg3:0x10 reloc X")
+    long = asm._line("seg2:0x0", "90", "x" * 60, ["c"])
+    assert long.endswith("x ; c")
+    assert asm.parse_line("; ---- function seg2:0x0") is None
+
+
 def test_int21_exit_does_not_return():
     code = bytes.fromhex("b44c" "cd21" "ffff")      # mov ah,4ch; int 21h; garbage
     dis = Disassembler(_seg(code))
@@ -144,6 +178,16 @@ def factory_asm(original_dir, specs):
     return _module_asm(original_dir, "shipdisk/FACTORY.ex_", "factory-1998a", specs)
 
 
+@pytest.fixture(scope="module")
+def inspace_outputs(inspace_asm):
+    return asm.build_outputs(inspace_asm)
+
+
+@pytest.fixture(scope="module")
+def ispace_outputs(ispace_asm):
+    return asm.build_outputs(ispace_asm)
+
+
 def _insn(res, seg, off):
     insn = res.dis.insns[seg].get(off)
     assert insn is not None, f"seg{seg}:{off:#x} is not an instruction start"
@@ -159,7 +203,7 @@ def _containing(res, seg, off):
     return res.dis.insns[seg][o]
 
 
-def test_findfirst_findnext(inspace_asm):
+def test_findfirst_findnext(inspace_asm, inspace_outputs):
     res = inspace_asm
     # the linear sweep loses sync at seg5:0x351; both helpers start with the far prologue
     for entry, al in ((0x352, 0x4F), (0x364, 0x4E)):
@@ -173,7 +217,7 @@ def test_findfirst_findnext(inspace_asm):
     call = _insn(res, 5, 0x3B1)
     assert res.dis.dos_call_site(call)
     assert res.dis.reg_values(5, 0x3B1, "ah") == ({0x4E, 0x4F}, False)
-    _listings, _fj, xj = asm.build_outputs(res)
+    _listings, _fj, xj = inspace_outputs
     dos = {d["at"]: d for d in xj["dos"]}
     assert dos["seg5:0x3b1"]["names"] == ["findfirst", "findnext"]
 
@@ -258,8 +302,8 @@ def test_legacy_inventories_are_covered(inspace_asm):
             assert ((caller[0], caller[1]), (e["tseg"], e["toff"])) in far
 
 
-def test_listing_uses_canonical_addresses(inspace_asm):
-    listings, fj, _xj = asm.build_outputs(inspace_asm)
+def test_listing_uses_canonical_addresses(inspace_outputs):
+    listings, fj, _xj = inspace_outputs
     text = listings["seg05.asm"]
     head = text.splitlines()[:3]
     assert head[0].startswith("; INSPACE.ex_ (INSPACE) seg5  CODE  flags 0x0c58")
@@ -268,6 +312,60 @@ def test_listing_uses_canonical_addresses(inspace_asm):
     assert re.search(r"^seg5:0x1d +9a ff ff 00 00 +call far KERNEL\.91 InitTask$", text, re.M)
     assert "; ---- function seg5:0x352  [far_call]" in text
     assert fj["functions"][0]["addr"].startswith("seg")
+
+
+def test_listing_bytes_column(factory_asm):
+    """Every instruction line reads back with its bytes; 9-byte ones keep a space."""
+    res = factory_asm
+    listings, _fj, _xj = asm.build_outputs(res)
+    nine = 0
+    for name, text in listings.items():
+        for line in text.splitlines():
+            p = asm.parse_line(line)
+            if p is None or not p[2] or p[3].startswith(("db ", "dw ")):
+                continue
+            seg, off, raw, txt, _c = p
+            insn = res.dis.insns[seg][off]
+            assert raw == res.dis.segs[seg].data[off:insn.end], line
+            assert txt.startswith((insn.mnem, "call far", "jmp far")), line
+            nine += insn.size == 9
+    assert nine == 14
+
+
+def test_additive_relocation_shows_addend(ispace_outputs):
+    listings, _fj, _xj = ispace_outputs
+    assert re.search(r"^seg3:0x23 +9a fb ff 00 00 +call far KERNEL\.91 InitTask\+0xfffb +; "
+                     r"additive PTR16_A: target offset \+0xfffb \(-5\)$", listings["seg03.asm"],
+                     re.M)
+
+
+def _shown(outputs, seg, off):
+    listings, fj, _xj = outputs
+    index = asm.FunctionIndex(fj)
+    func, others = index.containing(seg, off)
+    lines = asm.function_lines(asm.Listing(listings[f"seg{seg:02d}.asm"]), index, func, others)
+    return func["addr"], "\n".join(ln for ln, _o in lines)
+
+
+def test_function_listing_has_tails_and_unreachable_code(inspace_outputs):
+    # a jump to seg8:0x1316 passes the dead loop at seg8:0x12c6
+    fa, text = _shown(inspace_outputs, 8, 0x1316)
+    assert fa == "seg8:0x1290" and text.startswith("; ---- function seg8:0x1290 ")
+    assert "; ---- unreachable code seg8:0x12c6 inside function seg8:0x1290" in text
+    assert re.search(r"^seg8:0x131c +ca 08 00 +retf 8$", text, re.M)
+    assert _shown(inspace_outputs, 8, 0x12D0)[0] == "seg8:0x1290"
+    # findnext jumps into findfirst's body and shares its tail
+    fa, text = _shown(inspace_outputs, 5, 0x352)
+    assert "; .... seg5:0x364..seg5:0x373 skipped: function seg5:0x364" in text
+    assert re.search(r"^seg5:0x3b1 .*DOS3Call +; AH=4Eh/4Fh findfirst/findnext$", text, re.M)
+    fa, text = _shown(inspace_outputs, 5, 0x3B1)
+    assert fa == "seg5:0x364" and "; shares code with function seg5:0x352" in text
+    # a switch's jump table belongs to the function of its jmp
+    listings, fj, _xj = inspace_outputs
+    sw = fj["switches"][0]
+    seg, at = asm._addr_key(sw["at"])
+    _fa, text = _shown(inspace_outputs, seg, at)
+    assert f"; jump table for {sw['at']}" in text
 
 
 def test_cli_output_is_deterministic(original_dir, tmp_path):
@@ -293,6 +391,18 @@ def test_show_prints_function(original_dir, tmp_path):
     text = show(tmp_path, "seg2:0x30")
     assert text.startswith("; ---- function seg2:0x26  [export]  export 43 WEP")
     assert "seg2:0x30" in text and "retf" in text
+    # seg3:0x2e lies past the function at seg3:0x2b, in a tail of seg3:0x12
+    text = show(tmp_path, "seg3:0x2e")
+    assert text.startswith("; ---- function seg3:0x12 ")
+    assert "; .... seg3:0x2a..seg3:0x2d skipped: function seg3:0x2b" in text
+    assert re.search(r"^seg3:0x2e ", text, re.M) and re.search(r"^seg3:0x47 ", text, re.M)
+    # padding between functions: a window around it
+    assert "seg3:0x2a" in show(tmp_path, "seg3:0x2a")
+    with pytest.raises(asm.ShowError, match="seg30 of .* has no listing"):
+        show(tmp_path, "seg30:0x0")
+    with pytest.raises(asm.ShowError, match="unrecognised address"):
+        show(tmp_path, "nowhere")
+    assert main(["--out", str(tmp_path), "--show", "seg30:0x0"]) == 2
 
 
 def test_work_loader_matches_ne_loader(repo_root, inspace, inspace_unpacked):

@@ -822,7 +822,14 @@ class Disassembler:
         return added
 
     def _pair_offset(self, seg: int, insn: Insn, site_off: int) -> int | None:
-        """Offset half of a far pointer whose selector half ``insn`` stores."""
+        """Offset half of a far pointer whose selector half ``insn`` stores.
+
+        ``push seg; push off`` pairs with the next instruction. A ``mov`` of the
+        selector into [x+2] pairs with a ``mov`` of a constant into [x] among the
+        four instructions that fall through into it, else among the four it
+        falls through to; that search ends at a jmp, ret or other transfer that
+        does not fall through.
+        """
         insns = self.insns[seg]
         if insn.mnem == "push" and insn.mem is None:
             nxt = insns.get(insn.end)
@@ -833,19 +840,20 @@ class Disassembler:
             want = (insn.mem.disp - 2) & 0xFFFF
             near = []
             o = insn.off
-            for _ in range(4):                       # following instructions
-                o2 = insns.get(o)
-                if o2 is None:
-                    break
-                near.append(o2)
-                o = o2.end
-            o = insn.off
-            for _ in range(4):                       # preceding fall-through chain
-                ps = [p for p, k in self.preds[seg].get(o, []) if k == "fall"]
+            for _ in range(4):                       # preceding fall-through chain first
+                ps = sorted(p for p, k in self.preds[seg].get(o, []) if k == "fall")
                 if not ps:
                     break
                 o = ps[0]
                 near.append(insns[o])
+            cur = insn
+            for _ in range(4):                       # then the following fall-through chain,
+                if cur.flow not in FALLS_THROUGH or cur.noreturn:    # which ends at jmp/ret
+                    break
+                cur = insns.get(cur.end)
+                if cur is None:
+                    break
+                near.append(cur)
             for c in near:
                 if (c.mnem == "mov" and c.mem is not None and c.imm
                         and c.mem.base == insn.mem.base and c.mem.index == insn.mem.index
