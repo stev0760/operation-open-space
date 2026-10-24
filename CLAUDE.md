@@ -29,8 +29,8 @@ The Hermes-era docs in `../innerspace-rea/` (read-only archive) are **not** a so
 - **Modernisations get an ADR** in `docs/decisions/` before they are implemented.
 
 ## Environment
-- **Wine 11.20 (new WoW64, runs Win16):** `/opt/wine/bin/wine`. Prefix: `~/.local/share/wineprefixes/innerspace`. Don't set `WINEARCH`. Use `WINEDLLOVERRIDES=ctl3d=n` so the game's own CTL3D loads.
-- **Headless runs:** `Xvfb :99`, then `DISPLAY=:99 WAYLAND_DISPLAY=`. Screenshots: `import -display :99 -window root`. Input: `xdotool`.
+- **Wine 11.0 stable (new WoW64, runs Win16):** `/opt/wine/bin/wine`. Prefix: `~/.local/share/wineprefixes/innerspace`. Don't set `WINEARCH`. Use `WINEDLLOVERRIDES=ctl3d=n` so the game's own CTL3D loads.
+- **Headless runs:** `source oracle/env.sh; oracle_xvfb` (displays start at `:110`; `:99` belongs to an unrelated Xvfb). Screenshots: `oracle_shot out.png`. Input: `xdotool`.
 - **Parallel oracle runs** each need their own `WINEPREFIX` and `DISPLAY`, because the game allows only one instance.
 - **Ghidra 12.1.2:** `/home/cabal/Git/repos/ghidra_12.1.2_DEV`, with JDK `/usr/lib/jvm/corretto21`. The rea MCP is configured with both.
 - **Sudo** is passwordless on this host.
