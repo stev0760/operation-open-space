@@ -5,7 +5,7 @@ A faithful port of **Operation: Inner Space v1.29.08** (Software Dynamics, Inc.,
 In Inner Space your hard disk is the game world. Each directory is a wave you fly into from a Navigation window. Its programs' icons are there to capture or destroy, alongside rival teams, enforcers, viruses and an Inner Demon.
 
 ## Status
-**Bootstrap.** No port code exists yet. Current work rebuilds the reverse-engineering pipeline, extracts the manual and assets, and gets the original running under Wine as a reference. See `docs/PLAN.md` and `docs/spec/checklist.md`.
+**Reverse-engineering foundation in place; no port code yet.** One command regenerates the unpacked code, disassembly, decompiled C, manual and assets from the original files (`re/README.md`). The original runs under Wine as a scripted reference, the oracle (`docs/re/oracle.md`). `docs/re/` holds the verified knowledge base. Port code starts with milestone M1. See `docs/PLAN.md` and `docs/spec/checklist.md`.
 
 ## Layout
 | Path | Contents |
@@ -13,7 +13,8 @@ In Inner Space your hard disk is the game world. Each directory is a wave you fl
 | `docs/` | Plan, behaviour spec and checklist, RE reference, design decisions |
 | `re/` | Reverse-engineering tools (`isre`), Ghidra scripts, small committed artifacts and tests |
 | `oracle/` | Scripts that run the original under Wine for traces and screenshots |
-| `src/`, `tools/`, `tests/`, `cmake/` | The C++17 port (from milestone M1) |
+| `src/`, `tools/`, `tests/`, `cmake/` | The C++17 port: format readers in `src/formats/`, the `isview` asset viewer in `tools/` |
+| `third_party/` | Vendored dependencies (doctest) |
 | `original/` | Your original game files. **Not committed**; `original.sha256` lists the expected set |
 | `work/` | Regenerated outputs. Not committed |
 

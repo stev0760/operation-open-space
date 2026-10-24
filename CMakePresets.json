@@ -1,0 +1,35 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    { "name": "mingw-x64", "inherits": "base", "displayName": "MinGW-w64 x86_64 (tests under Wine)",
+      "toolchainFile": "${sourceDir}/cmake/mingw-x86_64.cmake" },
+    { "name": "mingw-i686", "inherits": "base", "displayName": "MinGW-w64 i686 (tests under Wine)",
+      "toolchainFile": "${sourceDir}/cmake/mingw-i686.cmake" },
+    { "name": "mingw-x64-release", "inherits": "mingw-x64",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" } },
+    { "name": "host", "inherits": "base", "displayName": "Native build of the portable libraries and tests" }
+  ],
+  "buildPresets": [
+    { "name": "mingw-x64", "configurePreset": "mingw-x64" },
+    { "name": "mingw-i686", "configurePreset": "mingw-i686" },
+    { "name": "mingw-x64-release", "configurePreset": "mingw-x64-release" },
+    { "name": "host", "configurePreset": "host" }
+  ],
+  "testPresets": [
+    {
+      "name": "base", "hidden": true,
+      "output": { "outputOnFailure": true },
+      "environment": { "WINEPREFIX": "${sourceDir}/work/wine/ctest", "WINEDEBUG": "-all" }
+    },
+    { "name": "mingw-x64", "inherits": "base", "configurePreset": "mingw-x64" },
+    { "name": "mingw-i686", "inherits": "base", "configurePreset": "mingw-i686" },
+    { "name": "host", "inherits": "base", "configurePreset": "host" }
+  ]
+}
