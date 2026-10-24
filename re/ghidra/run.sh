@@ -3,9 +3,12 @@
 #
 #   GHIDRA_HOME=<ghidra install> JAVA_HOME=<jdk 21> re/ghidra/run.sh [inspace] [ispace]
 #
-# Inputs:  work/rebuilt/{inspace.exe,ispace.dll} (from `isre all`), re/wine-specs/*.spec
+# Inputs:  work/rebuilt/{inspace.exe,ispace.dll} and work/asm/<module>/functions.json
+#          (from `isre all`), re/wine-specs/*.spec
 # Outputs: work/ghidra/ (project InnerSpace, logs, <module>-{setup,finish,export}.json,
-#          <module>-imports.tsv, inspace-join.tsv), work/decomp/<module>/ (C + index.tsv)
+#          <module>-imports.tsv, inspace-join.tsv), work/decomp/<module>/ (C + index.tsv).
+#          The export is written to work/decomp/.<module>.new and replaces
+#          work/decomp/<module>/ only when every script succeeded.
 # Environment: MAXMEM (JVM heap, default 3G), THREADS (decompiler threads, default 2),
 #          MAXCPU (analysis cores, default 2), WORK (default <repo>/work)
 set -euo pipefail
@@ -46,6 +49,10 @@ run_module() {
 		*) die "unknown module '$m' (inspace, ispace)" ;;
 	esac
 	[ -f "$file" ] || die "$file is missing; run: re/.venv/bin/isre all --original original --work work"
+	local gaps="$WORK/asm/$m/functions.json"
+	[ -f "$gaps" ] || die "$gaps is missing; run: re/.venv/bin/isre all --original original --work work"
+	local out="$WORK/decomp/$m" new="$WORK/decomp/.$m.new" old="$WORK/decomp/.$m.old"
+	rm -rf "$new" "$old"
 	rm -f "$PROJ/$m"-{setup,finish,export}.json "$PROJ/$m.log" "$PROJ/$m-script.log"
 	local t0=$SECONDS
 	"$GHIDRA_HOME/support/analyzeHeadless" "$PROJ" InnerSpace \
@@ -54,8 +61,8 @@ run_module() {
 		-max-cpu "$MAXCPU" \
 		-scriptPath "$HERE" \
 		-preScript IsSetup.java module="$m" ne="$file" specs="$SPECS" out="$PROJ" \
-		-postScript IsFinish.java module="$m" out="$PROJ" "${finish[@]}" \
-		-postScript IsExport.java module="$m" dir="$WORK/decomp/$m" report="$PROJ" \
+		-postScript IsFinish.java module="$m" out="$PROJ" gaps="$gaps" "${finish[@]}" \
+		-postScript IsExport.java module="$m" dir="$new" report="$PROJ" \
 			threads="$THREADS" \
 		-log "$PROJ/$m.log" -scriptlog "$PROJ/$m-script.log" >/dev/null
 	local dt=$((SECONDS - t0))
@@ -66,6 +73,10 @@ run_module() {
 	for r in setup finish export; do
 		[ -f "$PROJ/$m-$r.json" ] || die "$m: $PROJ/$m-$r.json was not written (see $PROJ/$m.log)"
 	done
+	[ -f "$new/index.tsv" ] || die "$m: $new/index.tsv was not written (see $PROJ/$m.log)"
+	if [ -d "$out" ]; then mv "$out" "$old"; fi
+	mv "$new" "$out"
+	rm -rf "$old"
 	grep -E "Is(Setup|Finish|Export) " "$PROJ/$m-script.log" | sed 's/^.*> //; s/ (GhidraScript).*$//' || true
 	echo "$m: ${dt}s"
 }

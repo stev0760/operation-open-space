@@ -5,7 +5,8 @@
 // Arguments (key=value): module=<name> dir=<output dir> report=<dir>
 //                        [threads=N] [timeout=seconds]
 // Writes <dir>/segNN_0xOFF.c for every function in a code segment, <dir>/index.tsv
-// and <report>/<module>-export.json.
+// and <report>/<module>-export.json. The index's ranges column lists the body as
+// end-exclusive offset ranges in the function's segment (another segment is prefixed).
 //@category InnerSpace
 
 import java.io.File;
@@ -21,6 +22,7 @@ import ghidra.app.decompiler.parallel.DecompileConfigurer;
 import ghidra.app.decompiler.parallel.DecompilerCallback;
 import ghidra.app.decompiler.parallel.ParallelDecompiler;
 import ghidra.app.script.GhidraScript;
+import ghidra.program.model.address.AddressRange;
 import ghidra.program.model.address.SegmentedAddress;
 import ghidra.program.model.listing.Function;
 import ghidra.program.model.mem.MemoryBlock;
@@ -34,6 +36,23 @@ public class IsExport extends GhidraScript {
 
 	static int segOf(SegmentedAddress a) {
 		return (a.getSegment() - SEL_BASE) / 8 + 1;
+	}
+
+	/** Body ranges 0xA-0xB (end exclusive), with segN: for a range in another segment. */
+	static String ranges(Function f, int seg) {
+		StringBuilder sb = new StringBuilder();
+		for (AddressRange r : f.getBody()) {
+			SegmentedAddress lo = (SegmentedAddress) r.getMinAddress();
+			SegmentedAddress hi = (SegmentedAddress) r.getMaxAddress();
+			if (sb.length() > 0) {
+				sb.append(' ');
+			}
+			if (segOf(lo) != seg) {
+				sb.append("seg").append(segOf(lo)).append(':');
+			}
+			sb.append(String.format("0x%x-0x%x", lo.getSegmentOffset(), hi.getSegmentOffset() + 1));
+		}
+		return sb.toString();
 	}
 
 	static class Row {
@@ -121,7 +140,7 @@ public class IsExport extends GhidraScript {
 		List<Row> sorted = new ArrayList<>(rows.values());
 		sorted.sort(Comparator.comparingInt((Row r) -> r.seg).thenComparingInt(r -> r.off));
 		List<String> index = new ArrayList<>();
-		index.add("address\tghidra\tname\tsize\tcallers\tcall_sites\tstatus\tfile");
+		index.add("address\tghidra\tname\tsize\tcallers\tcall_sites\tstatus\tfile\tranges");
 		int failed = 0;
 		for (Row r : sorted) {
 			Function f = r.f;
@@ -150,7 +169,7 @@ public class IsExport extends GhidraScript {
 			Files.write(new File(dir, r.file).toPath(),
 				(header + r.c).getBytes(StandardCharsets.UTF_8));
 			index.add(canon + "\t" + ghidra + "\t" + name + "\t" + size + "\t" + callers.size() +
-				"\t" + sites + "\t" + r.status + "\t" + r.file);
+				"\t" + sites + "\t" + r.status + "\t" + r.file + "\t" + ranges(f, r.seg));
 		}
 		Files.write(new File(dir, "index.tsv").toPath(), index, StandardCharsets.UTF_8);
 

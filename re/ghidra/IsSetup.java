@@ -1,8 +1,9 @@
 // Inner Space NE pre-analysis setup: runs as a -preScript after Ghidra's NE loader.
 // Checks the import (every segment loaded, every relocation applied, imports are
 // external ordinals), sets DS/SS to DGROUP, names imports from Wine .spec files,
-// patches equate imports, and seeds functions from exports, the program entry,
-// internal far-call targets and the Win16 far prologue.
+// gives KERNEL.1 FatalExit the signature Wine's spec lacks, patches equate imports,
+// and seeds functions from exports, the program entry, internal far-call targets and
+// the Win16 far prologue.
 //
 // Arguments (key=value): module=<name> ne=<NE file> specs=<dir of *.spec> out=<dir>
 // Writes <out>/<module>-setup.json and <out>/<module>-imports.tsv.
@@ -46,8 +47,10 @@ public class IsSetup extends GhidraScript {
 		String name;
 		List<String> args = new ArrayList<>();
 		boolean ret16;
+		boolean retVoid;
 		boolean register;
 		long value;       // equate value
+		String note;      // plate comment of an override
 	}
 
 	static final Pattern SPEC_LINE = Pattern.compile(
@@ -101,6 +104,29 @@ public class IsSetup extends GhidraScript {
 	 * FatalExit(0xff) at 0xb9e is followed by one pad byte and a far prologue at 0xba4.
 	 */
 	static final Set<String> NO_RETURN = Set.of("KERNEL.1");
+
+	/**
+	 * Imports that must stay returning. The Borland RTL follows FatalAppExit (INSPACE
+	 * seg5:0xb95, ISPACE.DLL seg3:0xa8c) with a FatalExit(0xff) fallback that only the
+	 * fall-through reaches. IsFinish checks that analysis left these returning.
+	 */
+	static final Set<String> RETURNS = Set.of("KERNEL.137");
+
+	/**
+	 * Signatures that Wine's specs do not give: krnl386.exe16.spec lists KERNEL.1 as
+	 * 'stub FatalExit'. The Win16 SDK declares void FAR PASCAL FatalExit(int).
+	 */
+	static final Map<String, SpecEntry> SIGNATURE_OVERRIDES = new TreeMap<>();
+	static {
+		SpecEntry fe = new SpecEntry();
+		fe.ordinal = 1;
+		fe.kind = "pascal";
+		fe.name = "FatalExit";
+		fe.args.add("word");
+		fe.retVoid = true;
+		fe.note = "Win16 SDK: void FAR PASCAL FatalExit(int); Wine's spec lists it as a stub";
+		SIGNATURE_OVERRIDES.put("KERNEL.1", fe);
+	}
 
 	/** Register inputs of -register imports: DOS3Call takes the INT 21h registers. */
 	static final Map<String, String[]> REGISTER_ARGS =
@@ -330,6 +356,8 @@ public class IsSetup extends GhidraScript {
 		int total = 0, named = 0, typed = 0;
 		List<String> unresolved = new ArrayList<>();
 		List<String> noReturn = new ArrayList<>();
+		List<String> returning = new ArrayList<>();
+		List<String> overridden = new ArrayList<>();
 		Map<String, Integer> kinds = new TreeMap<>();
 		List<String> tsv = new ArrayList<>();
 		tsv.add("module\tordinal\tname\tkind\tsites\tseg1_only");
@@ -349,6 +377,13 @@ public class IsSetup extends GhidraScript {
 				total++;
 				boolean seg1Only = !beyondSeg1.getOrDefault(lib, Set.of()).contains(ord);
 				SpecEntry e = spec == null ? null : spec.get(ord);
+				SpecEntry over = SIGNATURE_OVERRIDES.get(lib.toUpperCase() + "." + ord);
+				if (e != null && over != null && over.name.equals(e.name)) {
+					overridden.add(lib + "." + ord + " " + e.kind + " -> " + over.kind + " " +
+						(over.retVoid ? "void " : "") + over.name + "(" +
+						String.join(" ", over.args) + ")");
+					e = over;
+				}
 				String kind = e == null ? "missing" : e.kind;
 				kinds.merge(kind, 1, Integer::sum);
 				int nsites = siteCount.getOrDefault(lib + "." + ord, 0);
@@ -372,6 +407,11 @@ public class IsSetup extends GhidraScript {
 					Function f = loc.getFunction() != null ? loc.getFunction() : loc.createFunction();
 					f.setNoReturn(true);
 					noReturn.add(lib + "." + ord + " " + e.name);
+				}
+				if (RETURNS.contains(lib.toUpperCase() + "." + ord)) {
+					Function f = loc.getFunction() != null ? loc.getFunction() : loc.createFunction();
+					f.setNoReturn(false);
+					returning.add(lib + "." + ord + " " + e.name);
 				}
 			}
 		}
@@ -402,6 +442,8 @@ public class IsSetup extends GhidraScript {
 		imp.put("by_spec_kind", kinds);
 		imp.put("unresolved", unresolved);
 		imp.put("no_return", noReturn);
+		imp.put("returning", returning);
+		imp.put("signature_overrides", overridden);
 		report.put("imports", imp);
 		Files.write(new File(outDir, moduleName + "-imports.tsv").toPath(), tsv,
 			StandardCharsets.UTF_8);
@@ -444,10 +486,12 @@ public class IsSetup extends GhidraScript {
 		}
 		Program p = currentProgram;
 		Register ax = p.getRegister("AX"), dx = p.getRegister("DX");
-		ReturnParameterImpl ret = e.ret16
-				? new ReturnParameterImpl(WordDataType.dataType, new VariableStorage(p, ax), p)
-				: new ReturnParameterImpl(DWordDataType.dataType, new VariableStorage(p, dx, ax),
-					p);
+		ReturnParameterImpl ret = e.retVoid
+				? new ReturnParameterImpl(VoidDataType.dataType, VariableStorage.VOID_STORAGE, p)
+				: e.ret16
+						? new ReturnParameterImpl(WordDataType.dataType, new VariableStorage(p, ax), p)
+						: new ReturnParameterImpl(DWordDataType.dataType,
+							new VariableStorage(p, dx, ax), p);
 		List<Variable> params = new ArrayList<>();
 		int total = 0;
 		for (String a : e.args) {
@@ -487,7 +531,10 @@ public class IsSetup extends GhidraScript {
 		f.updateFunction(pascal ? "__stdcall16far" : "__cdecl16far", ret, params,
 			FunctionUpdateType.CUSTOM_STORAGE, true, SourceType.IMPORTED);
 		f.setStackPurgeSize(pascal ? total : 0);
-		if (pascal) {
+		if (e.note != null) {
+			f.setComment(e.note + " (arguments pushed left to right, callee pops " + total + ")");
+		}
+		else if (pascal) {
 			f.setComment("Wine spec: pascal (arguments pushed left to right, callee pops " +
 				total + ")");
 		}
