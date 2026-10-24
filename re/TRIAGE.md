@@ -5,7 +5,8 @@ The source is `../innerspace-rea/` (read-only archive). This file records what w
 ## Files
 | Class | Items | Where now |
 |---|---|---|
-| Kept tools | szdd, ne_parse, slr_relocs, rebuild_ne, name_imports, annotate, annotated_asm, callgraph, prologue_scan, struct_fields, dump_asm, redirect_entry, attr_fields, field_by_func, globals_by_func, find_callers, resolve_call, ne_tables; checks validate_relocs, validate_entries, test_decomp | `re/legacy/` (to be refactored into `re/isre`) |
+| Ported tools | szdd, ne_parse, ne_tables, slr_relocs | `re/isre` (`szdd`, `ne`, `optloader`) |
+| Kept tools | rebuild_ne, name_imports, annotate, annotated_asm, callgraph, prologue_scan, struct_fields, dump_asm, redirect_entry, attr_fields, field_by_func, globals_by_func, find_callers, resolve_call; checks validate_relocs, validate_entries, test_decomp | `re/legacy/` (to be refactored into `re/isre`) |
 | Kept inputs | `Shipdisk.rar`, `THEWORKS.rar` (both ZIP archives) | `original/archives/*.zip` (gitignored) |
 | Kept references | `wine-specs/*.spec`, `optlink-src/nappload.asm` | `re/wine-specs/`, `re/optlink-src/` |
 | Kept outputs | `relocs.json`, `api-imports.json`, `function-entries.json`, `callgraph.json` | `re/artifacts/` |
@@ -15,15 +16,13 @@ The source is `../innerspace-rea/` (read-only archive). This file records what w
 | Junk, not copied | *.class, __pycache__, slr_decompress*.py, slr_unpack.py (broken), struct_map / field_semantics and their outputs, array_base, probe_bytes, probe_calls, r2-functions*, functions-unpacked.tsv, prologue-funcs.json, ghidra-out/ (57 MB; `decompiled.c` was made from packed bytes) | stays in `../innerspace-rea/` |
 
 ## Known defects in the kept tools
-- **No unpack writer.** No script writes `unpacked/segNN.bin` correctly (`slr_unpack.py` writes 0 bytes). The decompressor `slr_relocs.dpmi_unquik_trace` reproduces all 19 segments byte for byte once wrapped: start at `fo+2`, zero-pad to minalloc, copy seg1 raw.
 - **`rebuild_ne`:** writes no relocation records, and its resource table still points into segment code.
-- **`ne_parse`:** returns resources with `file_off` 0 and garbage names, and marks seg19 (flags `0xc59`) as code.
 - **`annotated_asm`:** prints the sector number as the file offset in headers, and its linear sweep loses sync (`seg5:0x351`).
 - **`prologue_scan`:** hardcodes seg1 as the data segment.
-- **Hardcoded paths:** 16 scripts hardcode `PROJ=/home/cabal/Git/repos/innerspace-rea`. Others read the current directory or default to `/tmp`.
+- **Hardcoded paths:** 10 scripts hardcode `PROJ=/home/cabal/Git/repos/innerspace-rea`. Others read the current directory or default to `/tmp`.
 
 ## Byte-level facts carried forward
-- **Packing:** segment format per `docs/re/pitfalls.md`; all 18 packed segments reproduce the goldens.
+- **Packing:** segment format per `docs/re/pitfalls.md`; all 18 packed segments reproduce the goldens (`re/tests/test_unpack.py`).
 - **Relocations:** 930 records (725 import-ordinal + 205 special-base), chains end at `0xFFFF`, 186 distinct import ordinals, 5,900 API call sites.
 - **API call sites:**
   - `DOS3Call` ×39, all in seg5.

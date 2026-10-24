@@ -1,0 +1,18 @@
+LIBRARY version.dll
+EXPORTS
+    GetFileVersionInfoA=kernelbase.GetFileVersionInfoA
+    GetFileVersionInfoExA=kernelbase.GetFileVersionInfoExA
+    GetFileVersionInfoExW=kernelbase.GetFileVersionInfoExW
+    GetFileVersionInfoSizeA=kernelbase.GetFileVersionInfoSizeA
+    GetFileVersionInfoSizeExA=kernelbase.GetFileVersionInfoSizeExA
+    GetFileVersionInfoSizeExW=kernelbase.GetFileVersionInfoSizeExW
+    GetFileVersionInfoSizeW=kernelbase.GetFileVersionInfoSizeW
+    GetFileVersionInfoW=kernelbase.GetFileVersionInfoW
+    VerFindFileA=kernelbase.VerFindFileA
+    VerFindFileW=kernelbase.VerFindFileW
+    VerInstallFileA=VerInstallFileA@32
+    VerInstallFileW=VerInstallFileW@32
+    VerLanguageNameA=kernelbase.VerLanguageNameA
+    VerLanguageNameW=kernelbase.VerLanguageNameW
+    VerQueryValueA=kernelbase.VerQueryValueA
+    VerQueryValueW=kernelbase.VerQueryValueW

@@ -1,5 +1,19 @@
 # Inner Space Port — Project Overhaul & Porting Plan
 
+## Status
+| Phase | State | Notes |
+|---|---|---|
+| 0 Bootstrap + oracle smoke | **done** | See the Phase 0 deviations below. Smoke test: `oracle/digests/smoke-0001.md`. |
+| 1 RE pipeline | in progress | S1 gate **done**: `re/isre` reproduces all 19 golden segments and `relocs.json`; all 6 OptLoader modules pass the S2(c) invariants. S2 next. |
+| 2 Knowledge base | in progress | 2a `isre hlp` **done**: 40 topics (1998) and 37 (2000), 0 errors, agrees with helpdeco. |
+| 3 Oracle | in progress | Scripted run reaches the Navigation window (`oracle/digests/newgame-0001.md`). Blocker: the intro and Enter on a directory fault inside ISPACE.DLL under Wine 11.0. |
+
+**Phase 0 deviations:**
+- **Wine 11.0 stable** (Kron4ek `amd64-wow64`) instead of 11.20. On this host 11.20 segfaults in `wineboot` with a bad address-space limit.
+- **No original installer:** `INSTALL.EXE` crashes under Wine 11.0, so `oracle/install_layout.py` replaces it.
+- **Displays:** oracle displays start at `:110`, because an unrelated Xvfb owns `:99`.
+- **Deferred:** helpdeco is built in Phase 2a; doctest is vendored at M1; FluidSynth only if needed.
+
 ## Context
 
 The goal is a **faithful Win32 port of Operation: Inner Space v1.29.08** (SDi, Win16 NE). It should run natively on Windows 10/11 and under Wine. The port reads assets from the user's own original install. Earlier work by Hermes with open-weights models left two problems:
@@ -108,7 +122,7 @@ Cheaper models handle refactors, tests and lint. I merge, update the checklist a
   - Keep import segment placeholders at `0000`, and rebuild the resource table.
   - **Loader-equivalence test:** a small NE loader applying our records must reproduce the OptLoader-relocated images.
 - **(b) Recursive-descent disassembly:** replaces the linear sweep, seeded from exports, prologues and chain heads, and fixes the header offsets.
-- **(c) Other modules:** run `isre` on **ISPACE.dll** (flags 0x8b09; expect INTERNAL/NAME/additive relocation kinds), **FACTORY ×2** and INSPACE.sc. Use the same invariants as INSPACE: zero slack, counts match, every record lands on an opcode.
+- **(c) Other modules:** run `isre` on **ISPACE.dll** (343 records: 310 import-ordinal, 33 special-base, one of them additive), **FACTORY ×2**, INSTALL and SETUP. Use the same invariants as INSPACE: zero slack, counts match, every record lands on an opcode. INSPACE.SCR is not OptLoader-packed.
 - **(d) Ghidra headless scripts:**
   - Set the DS/SS context to the DGROUP selector.
   - Seed functions from exports, prologues and chain heads, with the aggressive instruction finder off.
@@ -179,7 +193,7 @@ Cheaper models handle refactors, tests and lint. I merge, update the checklist a
   - The doc linter passes.
   - `grep -r /home/ re/ docs/` is empty.
 - **Ghidra:** no functions in DGROUP, 183 API names resolve, and the 20-function verifier sample is CONFIRMED. The rebuilt unpacked NE reaches the title screen.
-- **Knowledge base:** `isre hlp` extracts 41 topics (1998) and 38 (2000) with 0 errors and agrees with helpdeco. `isre res` counts match: 1,446 strings, 22 dialogs, 113+15 bitmaps, 46+32 WAVs. Every checklist row has an ID and a `[MANUAL]` tag.
+- **Knowledge base:** `isre hlp` extracts 40 topics (1998) and 37 (2000), plus one empty terminator header each, with 0 errors and agrees with helpdeco. `isre res` counts match: 1,446 strings, 22 dialogs, 113+15 bitmaps, 46+32 WAVs. Every checklist row has an ID and a `[MANUAL]` tag.
 - **Oracle:** `docs/re/oracle.md` answers each question with digest references.
 - **Hygiene:** `git status` is clean after `isre all`.
 

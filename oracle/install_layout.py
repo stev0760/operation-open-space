@@ -2,11 +2,18 @@
 """Lay out the original Shipdisk files in a Wine prefix without INSTALL.EXE.
 
 Usage: install_layout.py <shipdisk-dir> <wineprefix> [--game-dir INSPACE]
+                         [--with-ini] [--calibrate N]
 
 Directory codes follow the [0]..[7] sections of INSTALL.INI. Their meaning is
 inferred [OPEN]: 0 = game dir, 1 = SHIPS, 2 = SOUNDS, 8 = Windows system dir,
 9 = After Dark modules (skipped). INSPACE.INI goes to both the game dir and
 C:\\WINDOWS, because the manual places it in the Windows directory.
+
+--with-ini pre-writes into C:\\WINDOWS\\INSPACE.INI the [Inner Space] keys the
+game regenerates on first launch [ORACLE smoke-0001], so runs start without
+the "Some game settings are missing" MessageBox. Without it the shipped INI is
+copied unchanged. The game measures Calibrate again and rewrites it on every
+launch [ORACLE newgame-0001]; the pre-written 713 only fills the key.
 """
 from __future__ import annotations
 
@@ -16,8 +23,9 @@ import pathlib
 import shutil
 import sys
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "re" / "legacy"))
-from szdd import expand_szdd  # noqa: E402
+_RE = pathlib.Path(__file__).resolve().parents[1] / "re"
+sys.path.insert(0, str(_RE))
+from isre.szdd import expand as expand_szdd  # noqa: E402
 
 # Last character of a SZDD-compressed name -> expanded extension.
 EXPANDED = {".MI1": ".MID", ".DL1": ".DLL", ".HL1": ".HLP", ".BO1": ".BOD",
@@ -43,11 +51,65 @@ def read_file(f: pathlib.Path) -> bytes:
     return expand_szdd(data) if data[:4] == b"SZDD" else data
 
 
+def regenerated_keys(game_dir: str, calibrate: int) -> dict[str, str]:
+    """[Inner Space] keys as the game writes them for a C:\\<game_dir> install."""
+    root = f"C:\\{game_dir}\\"
+    return {"Path": root, "LocalPath": root,
+            "ShipPath": root + "SHIPS\\", "SndPath": root + "SOUNDS\\",
+            "RacePath": root + "GAMES\\", "Dead": "RETIRED", "Games": "GAMES",
+            "SoundSystem": "0", "Calibrate": str(calibrate)}
+
+
+def set_ini_keys(text: str, section: str, keys: dict[str, str]) -> str:
+    """Set keys in one INI section, keeping every other line and CRLF endings."""
+    lines = text.splitlines()
+    out: list[str] = []
+    todo = dict(keys)
+    in_sec = False
+    found = False
+
+    def flush() -> None:
+        # Insert remaining keys before any trailing blank lines of the section.
+        tail: list[str] = []
+        while out and not out[-1].strip():
+            tail.insert(0, out.pop())
+        out.extend(f"{k}={v}" for k, v in todo.items())
+        out.extend(tail)
+        todo.clear()
+
+    for line in lines:
+        st = line.strip()
+        if st.startswith("[") and st.endswith("]"):
+            if in_sec:
+                flush()
+            in_sec = st[1:-1].strip().lower() == section.lower()
+            found = found or in_sec
+            out.append(line)
+            continue
+        if in_sec and "=" in line:
+            k = line.split("=", 1)[0].strip()
+            match = next((x for x in todo if x.lower() == k.lower()), None)
+            if match is not None:
+                out.append(f"{k}={todo.pop(match)}")
+                continue
+        out.append(line)
+    if in_sec:
+        flush()
+    if not found:
+        out.append(f"[{section}]")
+        out.extend(f"{k}={v}" for k, v in todo.items())
+    return "\r\n".join(out) + "\r\n"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("shipdisk", type=pathlib.Path)
     ap.add_argument("prefix", type=pathlib.Path)
     ap.add_argument("--game-dir", default="INSPACE")
+    ap.add_argument("--with-ini", action="store_true",
+                    help="pre-write the [Inner Space] keys the game regenerates")
+    ap.add_argument("--calibrate", type=int, default=713,
+                    help="Calibrate value written by --with-ini (default 713)")
     a = ap.parse_args()
 
     c = a.prefix / "drive_c"
@@ -74,6 +136,12 @@ def main() -> int:
     (game / "GAMES").mkdir(exist_ok=True)
     shutil.copy(game / "INSPACE.INI", c / "windows" / "INSPACE.INI")
     print("copy  INSPACE.INI -> windows/INSPACE.INI")
+    if a.with_ini:
+        win_ini = c / "windows" / "INSPACE.INI"
+        text = win_ini.read_bytes().decode("latin-1")
+        keys = regenerated_keys(a.game_dir, a.calibrate)
+        win_ini.write_bytes(set_ini_keys(text, "Inner Space", keys).encode("latin-1"))
+        print(f"ini   windows/INSPACE.INI [Inner Space] += {', '.join(keys)}")
     return 0
 
 
