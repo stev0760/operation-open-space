@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # Scenario newgame: title -> ESC -> Restore Game (NEW GAME, OK) -> New Game dialog
-# (records every combo list, picks a drive) -> OK -> intro (ESC) -> Navigation window
-# (visits every tree entry) -> Enter on D:\GAMES -> as far as the game goes.
+# (records every combo list, picks a drive) -> OK -> desk intro (ESC, or left to run)
+# -> Navigation window (visits every tree entry) -> Enter on D:\GAMES -> WAVE 1 MISSION
+# BRIEFING -> ESC -> the first seconds of wave 1.
+# Digests: newgame-0001 (stock Wine 11.0, which faults; see fault-0001), newgame-0002.
 #
 # Usage: ORACLE_ID=1 oracle/scenarios/newgame.sh [OUTDIR]
 #   OUTDIR defaults to work/oracle/newgame. Screenshots NN-step.png, trace.log,
 #   INSPACE.INI after the run, steps.txt (timestamped step log).
-# Environment (all optional):
+# Environment (all optional; ORACLE_WINE and ORACLE_ID as in oracle/env.sh):
 #   DRIVE=D            drive letter to pick in the New Game DRIVE combo (C or D)
 #   FIXTURE=basic      fixture tree mapped as D: (oracle/fixtures/make_fixtures.py)
 #   TRACE=1            0 runs untraced
@@ -14,14 +16,17 @@
 #   WAIT_STEP=2        seconds after each dialog action
 #   WAIT_SKIP=3        seconds from New Game OK to the intro screenshot (and ESC)
 #   SKIP_INTRO=1       press ESC to end the intro; 0 lets it run (INTRO_SHOTS shots)
-#   WAIT_INTRO=4       seconds between intro / post-Enter screenshots
-#   INTRO_SHOTS=8      screenshots of an unskipped intro
-#   ENTER_SHOTS=6      screenshots after Enter on D:\GAMES
+#   WAIT_INTRO=4       seconds between intro and briefing screenshots
+#   INTRO_SHOTS=8      screenshots of an unskipped intro; the game opens the
+#                      Navigation window by itself 20-24 s after New Game OK
+#   ENTER_SHOTS=2      briefing screenshots after Enter on D:\GAMES
+#   WAVE_SHOTS=4       screenshots after ESC on the briefing (0: no ESC, the run ends on the briefing)
+#   WAIT_WAVE=2        seconds between wave screenshots
 #   KEEP=0             1 leaves the game running at the end
 #   DEPTH=24           Xvfb depth when this script starts the display (8 = PseudoColor)
 #   INI_SET=""         extra [Inner Space] keys for INSPACE.INI, e.g. "QuickIntro=1"
-#   SHIM=1             install oracle/shim (CreateCompatibleBitmap(NULL) fix); 0 removes it.
-#                      Without it the game faults in the intro under Wine 11.0.
+# A crash report from winedbg is appended to trace.log after the game stops
+# (oracle/trace.sh, oracle_crash_collect); untraced runs write it to winedbg.txt.
 # Assumes a 1024x768 display (oracle_xvfb default); the dialogs centre themselves,
 # so the coordinates below are fixed for that size.
 set -u
@@ -37,10 +42,11 @@ OUT="$(realpath -m "${1:-$REPO/work/oracle/newgame}")"
 DRIVE="${DRIVE:-D}"; FIXTURE="${FIXTURE:-basic}"; TRACE="${TRACE:-1}"
 WAIT_BOOT="${WAIT_BOOT:-20}"; WAIT_STEP="${WAIT_STEP:-2}"
 WAIT_INTRO="${WAIT_INTRO:-4}"; INTRO_SHOTS="${INTRO_SHOTS:-8}"; KEEP="${KEEP:-0}"
-WAIT_SKIP="${WAIT_SKIP:-3}"; SKIP_INTRO="${SKIP_INTRO:-1}"; ENTER_SHOTS="${ENTER_SHOTS:-6}"
-DEPTH="${DEPTH:-24}"; SHIM="${SHIM:-1}"; INI_SET="${INI_SET:-}"
+WAIT_SKIP="${WAIT_SKIP:-3}"; SKIP_INTRO="${SKIP_INTRO:-1}"; ENTER_SHOTS="${ENTER_SHOTS:-2}"
+WAVE_SHOTS="${WAVE_SHOTS:-4}"; WAIT_WAVE="${WAIT_WAVE:-2}"
+DEPTH="${DEPTH:-24}"; INI_SET="${INI_SET:-}"
 
-mkdir -p "$OUT"; rm -f "$OUT"/*.png "$OUT"/trace.log "$OUT"/steps.txt
+mkdir -p "$OUT"; rm -f "$OUT"/*.png "$OUT"/trace.log "$OUT"/steps.txt "$OUT"/winedbg.txt
 log() { printf '%s %s\n' "$(date +%T.%3N)" "$*" | tee -a "$OUT/steps.txt"; }
 shot() { oracle_shot "$OUT/$1.png"; log "shot $1"; }
 click() { xdotool mousemove "$1" "$2" click 1; }
@@ -66,12 +72,11 @@ rm -rf "$WINEPREFIX/drive_c/INSPACE/GAMES/"* "$WINEPREFIX/drive_c/INSPACE/RETIRE
 "$PY" "$ORACLE_DIR/fixtures/make_fixtures.py" "$REPO/work/oracle-$ORACLE_ID" --tree "$FIXTURE" --map-prefix "$WINEPREFIX" >/dev/null || exit 1
 wine reg add 'HKLM\Software\Wine\Drives' /v d: /t REG_SZ /d hd /f >/dev/null 2>&1
 rm -f "$WINEPREFIX/dosdevices/z:"   # keep the host root out of the drive list
-# A crash prints winedbg's register dump and backtrace into trace.log instead of a dialog.
-wine reg add 'HKCU\Software\Wine\WineDbg' /v ShowCrashDialog /t REG_DWORD /d 0 /f >/dev/null 2>&1
+# The prefix carries no registry DLL overrides: WINEDLLOVERRIDES (oracle/env.sh) sets them all.
+wine reg delete 'HKCU\Software\Wine\DllOverrides' /f >/dev/null 2>&1
+oracle_crash_config
 if [ "$TRACE" = 1 ]; then oracle_trace_config; else oracle_trace_clear; fi
-if [ "$SHIM" = 1 ]; then "$ORACLE_DIR/shim/install_shim.sh" install >/dev/null || exit 1
-else "$ORACLE_DIR/shim/install_shim.sh" remove >/dev/null; fi
-log "prefix $WINEPREFIX display $DISPLAY depth $(xdpyinfo -display "$DISPLAY" | awk '/depth of root/{print $5}') drive $DRIVE fixture $FIXTURE trace $TRACE shim $SHIM ini_set '$INI_SET'"
+log "prefix $WINEPREFIX display $DISPLAY depth $(xdpyinfo -display "$DISPLAY" | awk '/depth of root/{print $5}') wine $ORACLE_WINE ($(wine --version)) drive $DRIVE fixture $FIXTURE trace $TRACE ini_set '$INI_SET'"
 
 # --- run --------------------------------------------------------------------
 if [ "$TRACE" = 1 ]; then oracle_game_start "$OUT/trace.log"; else oracle_game_start -; fi
@@ -101,8 +106,7 @@ log "pick drive $DRIVE"; sleep 0.5; shot 10-newgame-final
 click 617 323; log "click OK (New Game)"
 sleep "$WAIT_SKIP"; shot 11-intro
 if [ "$SKIP_INTRO" = 1 ]; then
-    # ESC ends the desk intro; letting it run faults in ISPACE seg6 (see digest newgame-0001).
-    xdotool key Escape; log "key ESC (skip intro)"
+    xdotool key Escape; log "key ESC (skip intro)"   # ESC ends the desk intro
 else
     for i in $(seq 1 "$INTRO_SHOTS"); do sleep "$WAIT_INTRO"; shot "$(printf 'intro-%02d' "$i")"; done
 fi
@@ -121,5 +125,12 @@ nav 21-nav-grandprix 203; nav 22-nav-lazyloop 220; nav 23-nav-sdispeedway 237
 nav 24-nav-games 186
 click 525 78; log "click Enter (games)"
 for i in $(seq 1 "$ENTER_SHOTS"); do sleep "$WAIT_INTRO"; shot "$(printf 'enter-%02d' "$i")"; done
+if [ "$WAVE_SHOTS" -gt 0 ]; then
+    xdotool key Escape; log "key ESC (start wave)"   # the briefing reads "PRESS 'ESC' TO START"
+    for i in $(seq 1 "$WAVE_SHOTS"); do sleep "$WAIT_WAVE"; shot "$(printf 'wave-%02d' "$i")"; done
+fi
 cp "$WINEPREFIX/drive_c/windows/INSPACE.INI" "$OUT/INSPACE.INI"
-if [ "$KEEP" != 1 ]; then oracle_game_stop; log "stopped"; fi
+if [ "$KEEP" != 1 ]; then
+    oracle_game_stop; log "stopped"
+    if [ "$TRACE" = 1 ]; then oracle_crash_collect "$OUT/trace.log"; else oracle_crash_collect "$OUT/winedbg.txt"; fi
+fi

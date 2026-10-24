@@ -1,8 +1,23 @@
 # Source this file: sets up Wine + a headless X display for oracle runs.
 # Usage: ORACLE_ID=1 source oracle/env.sh   (each parallel runner uses its own ORACLE_ID)
+#
+# Runtime (ORACLE_WINE, the Wine install whose bin/wine runs the game):
+#   /opt/wine-11.0-oldwow   default. Wine 11.0 in old-WoW64 mode (Kron4ek "amd64" build,
+#                           with 32-bit Unix libraries). The original plays the desk intro,
+#                           the Navigation window, the wave briefing and wave 1 without a
+#                           fault [ORACLE runtime-0001] [ORACLE newgame-0002].
+#                           Install: oracle/wine/install_kron4ek.sh amd64 /opt/wine-11.0-oldwow.
+#   /opt/wine-11.0-patched  Wine 11.0 new WoW64 with oracle/wine/krnl386-clear-saved-selectors.patch.
+#                           Same game result [ORACLE fault-0001]. Build: oracle/wine/build_patched.sh.
+#   /opt/wine-11.0          stock Wine 11.0 new WoW64 (/opt/wine links to it). ISPACE.DLL loses
+#                           its DS after GlobalFree and the game faults in the intro and on
+#                           Enter in the Navigation window [ORACLE fault-0001]. Use it only to
+#                           reproduce that fault.
+# A prefix works with each of them: Wine updates it when the runtime changes.
 
 ORACLE_ID="${ORACLE_ID:-0}"
-ORACLE_WINE="${ORACLE_WINE:-/opt/wine}"   # another runtime: ORACLE_WINE=/opt/wine-<name>
+ORACLE_WINE="${ORACLE_WINE:-/opt/wine-11.0-oldwow}"
+[ -x "$ORACLE_WINE/bin/wine" ] || echo "oracle/env.sh: no Wine at $ORACLE_WINE (see oracle/wine/)" >&2
 export PATH="$ORACLE_WINE/bin:$PATH"
 export WINEPREFIX="${WINEPREFIX:-$HOME/.local/share/wineprefixes/innerspace${ORACLE_ID/#0/}}"
 export WINEDEBUG="${WINEDEBUG:--all}"

@@ -80,11 +80,7 @@ STRING_ID_RE = re.compile(r"\[BYTES ENG_LANG\.DLL STRING (?P<block>\d+)\]\s*ids?
                           r"(?P<a>\d+)(?:\s*[-–]\s*(?P<b>\d+))?")
 
 # Violations present when the linter landed: path -> {(rule, detail): count}.
-KNOWN: dict[str, dict[tuple[str, str], int]] = {
-    "oracle/digests/newgame-0001.md": {
-        ("tag", "[OPEN meaning]: takes no text"): 1,
-    },
-}
+KNOWN: dict[str, dict[tuple[str, str], int]] = {}
 
 # Paths under docs/ and oracle/ that hold regenerated or bulk output (gitignored).
 SKIP_PARTS = {"__pycache__", "runs", ".pytest_cache"}

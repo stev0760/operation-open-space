@@ -24,12 +24,12 @@ The Hermes-era docs in `../innerspace-rea/` (read-only archive) are **not** a so
 ## Rules for code and tools
 - **RE tools live in `re/isre/`** (Python package + CLI). They take paths as arguments; no absolute paths anywhere in `re/`, `docs/` or `oracle/`. Every tool has tests. `re/legacy/` holds the Hermes-era scripts awaiting refactor; don't extend them.
 - **Generated outputs go to `work/`** (gitignored) and must regenerate from `original/` with one command. Only small manifests and indexes are committed, under `re/artifacts/`.
-- **Python** runs from the venv at `re/.venv` (python3.9). Run it with `-I` when it reads untrusted files.
+- **Python** runs from the venv at `re/.venv` (python3.9). Run it with `-I` when it reads untrusted files. Tests: `re/.venv/bin/python -m pytest re/tests` and, as a separate run (the two `conftest.py` files clash in one process), `re/.venv/bin/python -m pytest oracle/tests`.
 - **The port is C++17, Win32 GDI + winmm,** no engine. It builds with MinGW-w64 GCC (`i686-w64-mingw32-g++`, `x86_64-w64-mingw32-g++`), linked `-static`, and later with MSVC.
 - **Modernisations get an ADR** in `docs/decisions/` before they are implemented.
 
 ## Environment
-- **Wine 11.0 stable (new WoW64, runs Win16):** `/opt/wine/bin/wine`. Prefix: `~/.local/share/wineprefixes/innerspace`. Don't set `WINEARCH`. Use `WINEDLLOVERRIDES=ctl3d=n` so the game's own CTL3D loads.
+- **Wine 11.0, old WoW64 (Kron4ek `amd64`), runs Win16:** `/opt/wine-11.0-oldwow`, the `ORACLE_WINE` default in `oracle/env.sh`. Stock new-WoW64 Wine (`/opt/wine` → `/opt/wine-11.0`) faults in ISPACE.DLL (`oracle/digests/fault-0001.md`); `/opt/wine-11.0-patched` carries the fix. Installers: `oracle/wine/`. Prefix: `~/.local/share/wineprefixes/innerspace`. Don't set `WINEARCH`. Use `WINEDLLOVERRIDES=ctl3d=n` so the game's own CTL3D loads.
 - **Headless runs:** `source oracle/env.sh; oracle_xvfb` (displays start at `:110`; `:99` belongs to an unrelated Xvfb). Screenshots: `oracle_shot out.png`. Input: `xdotool`.
 - **Parallel oracle runs** each need their own `WINEPREFIX` and `DISPLAY`, because the game allows only one instance.
 - **Ghidra 12.1.2:** `/home/cabal/Git/repos/ghidra_12.1.2_DEV`, with JDK `/usr/lib/jvm/corretto21`. The rea MCP is configured with both.

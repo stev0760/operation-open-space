@@ -1,9 +1,9 @@
 # newgame-0001: New Game dialogs, Navigation window and filesystem walk on a fixture drive
 
-- **Date:** 2026-10-24. **Host:** Wine 11.0 (new WoW64), Xvfb 1024×768×24, prefix `innerspace1`, display `:111`.
-- **Setup:** `install_layout.py --with-ini`, fixture tree `basic` (`oracle/fixtures/make_fixtures.py`) as `D:`, no `Z:`, oracle shim installed (`oracle/shim/`).
-- **Reproduce:** `ORACLE_ID=1 oracle/scenarios/newgame.sh`, then `re/.venv/bin/python -I oracle/relay_digest.py work/oracle/newgame/trace.log`.
-- **Bulk output (gitignored):** `work/oracle/newgame/`: 31 screenshots, `trace.log` (20 MB), `digest.md`, `steps.txt`, `INSPACE.INI`.
+- **Date:** 2026-10-24. **Host:** stock Wine 11.0 new WoW64 (`/opt/wine-11.0`), Xvfb 1024×768×24, prefix `innerspace1`, display `:111`. Under this runtime the game faults (see Faults). The oracle default runtime reaches wave 1: [newgame-0002](newgame-0002.md).
+- **Setup:** `install_layout.py --with-ini`, fixture tree `basic` (`oracle/fixtures/make_fixtures.py`) as `D:`, no `Z:`. This run also had a native `version.dll` in `syswow64` that answered `CreateCompatibleBitmap(NULL, …)` with a 1-bpp bitmap. The rerun without it, `work/oracle/newgame-wine110/`, opens the same dialogs and windows, walks the same directories and ends in the same wave-entry fault.
+- **Reproduce:** `ORACLE_ID=1 ORACLE_WINE=/opt/wine-11.0 oracle/scenarios/newgame.sh work/oracle/newgame-wine110`, then `re/.venv/bin/python -I oracle/relay_digest.py work/oracle/newgame-wine110/trace.log`.
+- **Bulk output (gitignored):** `work/oracle/newgame/`: 31 screenshots, `trace.log` (20 MB), `digest.md`, `steps.txt`, `INSPACE.INI`. The rerun's `trace.log` ends with winedbg's report of the fault.
 - **Trace filter:** `oracle/trace.sh` (`WINEDEBUG=+relay,+int21,+file,+timestamp`, RelayInclude = 16-bit modules only).
 
 Fixture `basic` as `D:\`: `GAMES\ALPHA.EXE BRAVO.EXE CHARLIE.EXE`, `TOOLS\DELTA.EXE ECHO.EXE` (ECHO has 3 icons), `EMPTY\`, `DEEP\A\B\FOXTROT.EXE`. Each exe is a 16 KB PE with distinct 16-colour 32×32 icons.
@@ -18,7 +18,7 @@ Both `INSPACE.EXE` and `ISPACE.DLL` load through their own OPTLOADER segment 1. 
 - It is a `DIALOGBOX` from ISPACE.DLL seg10:0x438b. Its template is `#010b`, in instance `02bf` (ENG_LANG.DLL). [ORACLE newgame-0001]
 - `MOVEWINDOW` places the window at 352,252, size 321×264. The visible client area is 315×232. Without a window manager the caption and frame are not drawn. [ORACLE newgame-0001]
 - The dialog lists saved games with `FINDFIRST "C:\INSPACE\GAMES\*.SAV"` (attr 0x01, RacePath). With none found, the GAME combo holds the single entry `NEW GAME`. PILOT/SHIP/SCORE show `?`, and the description box says "NEW GAME, STARTING AT WAVE 1." [ORACLE newgame-0001]
-- OK writes `[Inner Space] Restore= NEW GAME`, with a leading space. [ORACLE newgame-0001]
+- OK calls `WritePrivateProfileString("Inner Space", "Restore", " NEW GAME", …)`, with a leading space in the value. Wine's INSPACE.INI then holds `Restore=NEW GAME`. [ORACLE newgame-0001]
 
 ## New Game dialog
 - It is a `DIALOGBOX` from ISPACE.DLL seg10:0x442b, template `#0141` in ENG_LANG.DLL. The window is at 361,273, size 303×222; the visible client is 297×190 at 364,302. [ORACLE newgame-0001]
@@ -38,7 +38,7 @@ Both `INSPACE.EXE` and `ISPACE.DLL` load through their own OPTLOADER segment 1. 
 ## Intro
 - After OK the game shows a desk scene. Its monitor types: "IT'S SATURDAY MORNING, YOUR NAME! / I HOPE YOU'RE READY TO PLAY.. / YOUR COMPUTER HAS BEEN INVADED! / YOUR MISSION: ENTER INNER SPACE, RESTORE ORDER AS YOU SEE FIT.... / WHEN ALL ICONS HAVE BEEN CAPTURED OR DESTROYED, …". The weekday matches the host date (Saturday 2026-10-24); the name is the pilot's. [ORACLE newgame-0001]
 - ESC ends the intro and opens the Navigation window. `QuickIntro=1` does not shorten the desk scene. [ORACLE newgame-0001]
-- Left to run, the intro faults in ISPACE.DLL (see Faults). [ORACLE newgame-0001]
+- Left to run under this runtime, the intro faults in ISPACE.DLL (see Faults). [ORACLE newgame-0001]
 
 ## Navigation window
 - `CREATEWINDOW` class `IS_NAV`, title "Inner Space Navigation", style 0x10cc0000 (visible, caption, sysmenu, thick frame), at 30,30, size 560×350, parent = main window. The X client area is 552×316 at screen 34,60. Leaving it through Enter writes `NavLeft=30 NavRight=560 NavTop=30 NavBottom=350`. [ORACLE newgame-0001]
@@ -61,8 +61,9 @@ Both `INSPACE.EXE` and `ISPACE.DLL` load through their own OPTLOADER segment 1. 
 - The file pane lists exe names in lower case. The preview shows the first exe's icon at 2× (ALPHA.EXE's red square). [ORACLE newgame-0001]
 
 ## Filesystem walk (int21 FINDFIRST/FINDNEXT via DOS3CALL, entries named by Wine's FindNextFileW)
+Three search patterns below are malformed under this runtime: `D:\` when opening the window, `D:\<NAME>*.*` in the root enumeration and `<child>\` when expanding. With the krnl386 patch of fault-0001 alone, both these patterns and the "+" folder overlay change to the old-WoW64 result, so both are part of the stock Wine 11.0 fault. The walk with ISPACE.DLL on its own DS is in [newgame-0002](newgame-0002.md), Navigation window walk. [ORACLE newgame-0002]
 - **Opening the window** probes the root: label (`D:\*.*` attr 0x08), `D:\*.exe` attr 0, and `D:\*.*` attr 0x15 for one call only (first entry `DEEP`). `D:\` attr 0x15 fails. Then `D:\DEEP\*.exe` runs once. [ORACLE newgame-0001]
-- **Root enumeration:** `D:\*.*` attr 0x15 runs on DTA 03A7:69F8 and delivers `DEEP, EMPTY, GAMES, TOOLS`, then no more files. For each name the game issues one `FINDFIRST "D:\<NAME>*.*"` attr 0x15 on a second DTA (03A7:B3F6). That pattern has no backslash, so it matches the directory entry itself. It then builds the list text `<NAME>` plus three flag digits (`DEEP111`) [OPEN meaning]. Subdirectories are not walked yet. [ORACLE newgame-0001]
+- **Root enumeration:** `D:\*.*` attr 0x15 runs on DTA 03A7:69F8 and delivers `DEEP, EMPTY, GAMES, TOOLS`, then no more files. For each name the game issues one `FINDFIRST "D:\<NAME>*.*"` attr 0x15 on a second DTA (03A7:B3F6). That pattern has no backslash, so it matches the directory entry itself. It then builds the list text `<NAME>` plus three flag digits (`DEEP111`), whose meaning is [OPEN]. Subdirectories are not walked yet. [ORACLE newgame-0001]
 - **Selecting a directory** enumerates `<dir>\*.exe`, calls `SHELL.EXTRACTICON(hInst, path, 0xffff)` (count query) for every exe, and calls `EXTRACTICON(path, 0)` for the first exe only (the preview). Then it runs `<dir>\*.dll` and `EXTRACTICON("\", 0xffff)`. Built-in levels call `EXTRACTICON("S\" | "D\" | "R\", 0xffff)`. [ORACLE newgame-0001]
 - **Expanding a directory** enumerates `<dir>\*.*` attr 0x15, which yields `.`, `..` and the subdirectories (files too where present). For each child it probes `<child>\*.exe`, `<child>\*.*` attr 0x15 and `<child>\` attr 0x15, one level ahead. [ORACLE newgame-0001]
 - The root search returns no `.`/`..`; subdirectory searches return them first. [ORACLE newgame-0001]
@@ -77,15 +78,18 @@ Both `INSPACE.EXE` and `ISPACE.DLL` load through their own OPTLOADER segment 1. 
 - `Calibrate` is measured again and rewritten 1.5 s after every launch (13340, 14117, 14572 on three runs). [ORACLE newgame-0001]
 - The game reads 93 distinct `[Inner Space]` keys of INSPACE.INI; the defaults are listed in `work/oracle/newgame/digest.md`. Examples: `GameSpeed` 20000, `FrameRateSet` 36, `Detail` 3, `ShowLaunch` 2, `WatchRight` 280, `IconLeft` 976. [ORACLE newgame-0001]
 
-## Faults (block play under Wine)
-- **Intro fault** (desk scene, about 14 s after OK; with `SKIP_INTRO=0`, with and without the shim, at depth 24 and depth 8): `Unhandled page fault … at address 00006480`. Traces: `work/oracle/explore/ng-shim1/` and `ng-d2/`. [ORACLE newgame-0001]
-  - ISPACE.DLL seg6:0x6432 calls seg5:0x23a4, which returns handle 0. `GLOBALLOCK(0)` returns 0:0, and `rep movsw` at seg6:0x6480 copies a 40-byte header through that pointer. [ORACLE newgame-0001] [BYTES ISPACE.DLL seg6:0x6432]
-  - seg5:0x23a4 returns 0 when its 4th argument is none of the three words at ISPACE DGROUP:0x1cd6. Those words are zero in the file, filled at run time [OPEN], and pushed as `SelectPalette` handles elsewhere in seg5. [BYTES ISPACE.DLL seg5:0x23a4]
-  - The root cause is [OPEN]; needs RE.
-- **Wave-entry fault:** Enter on `games` reaches the same allocator from seg6:0x6f64 and faults at seg6:0x6fbc. [ORACLE newgame-0001]
-- **Early exit:** in 1 of 5 full scenario runs the game ended without a fault message during New Game dialog set-up. The 16-bit thread stops inside the `D:` volume-label probe (`FINDFIRST "D:\*.*"` attr 0x08), and the process tears down 1.3 s later. Trace: `work/oracle/explore/newgame-died-at-label/`. Cause [OPEN].
+## Faults (stock Wine 11.0 new WoW64)
+The cause is in [fault-0001](fault-0001.md). After a GlobalFree that leaves the freed selector in the caller's ES, ISPACE.DLL code continues with DS = 03a7, INSPACE.EXE's DGROUP (seg19), instead of its own DGROUP 0427. [ORACLE fault-0001] The relay shows it at the faulting calls: `GLOBALLOCK(0000) ret=03ff:6444 ds=03a7`. [ORACLE newgame-0001]
+- **Intro fault** (desk scene, about 14 s after OK, `SKIP_INTRO=0`): `Unhandled page fault on read access to FFFFFFFF at address 00006480`. [ORACLE newgame-0001]
+  - It occurs with the `version.dll` above at depth 24 (`work/oracle/explore/ng-shim1/`), and without it at depth 24 (`ng-d2/`) and at depth 8 (`d8-ng1/`).
+  - ISPACE.DLL seg6:0x6432 far-calls ISPACE.DLL seg5:0x23a4 with `ds=03a7`. [ORACLE newgame-0001]
+  - seg5:0x23a4 is not exported and starts with `mov ax,ds; nop`, so it runs on its caller's DS. It compares the word at `[bp+0xc]` with three words at `DS:0x1cd6` and returns 0 when none matches. [BYTES ISPACE.DLL seg5:0x23a4] Through `ds=03a7` it reads INSPACE.EXE `DGROUP:0x1cd6`, not ISPACE.DLL's, and returns 0. [ORACLE newgame-0001]
+  - seg6:0x643f then calls `GlobalLock(0)` (KERNEL.18), which returns 0:0, and `rep movsw` (CX = 0x14) at seg6:0x6480 copies 40 bytes through that pointer. [BYTES ISPACE.DLL seg6:0x643f] [ORACLE newgame-0001]
+- **Wave-entry fault:** Enter on `games` takes the same path through seg6:0x6f64 (far call to seg5:0x23a4) and seg6:0x6f71 (`GlobalLock`), and faults at seg6:0x6fbc. [ORACLE newgame-0001]
+  - winedbg's report in `newgame-wine110/trace.log` shows `rep movsw` at 03ff:6fbc with CX 0x14 and SS 03a7. It gives DS and ES as 002b, the flat selector that the new-WoW64 context reports in place of the 16-bit DS and ES (fault-0001, cause step 5), so it does not show the 16-bit DS. Its first caller frame is 035f:7055 (INSPACE.EXE seg10:0x7055). [ORACLE newgame-0001]
+- **Early exit:** in 1 of 5 full scenario runs the game ended without a fault message during New Game dialog set-up. The 16-bit thread stops inside the `D:` volume-label probe (`FINDFIRST "D:\*.*"` attr 0x08), and the process tears down 1.3 s later. Trace: `work/oracle/explore/newgame-died-at-label/`. The core dump analysis is in fault-0001 (Silent exit). [ORACLE newgame-0001]
 
 ## Wine divergences seen
-- `CreateCompatibleBitmap(NULL, cx, cy)` returns NULL in Wine 11.0: win32u passes the NULL DC's PLANES=0 to `NtGdiCreateBitmap`. Windows returns a 1-bpp bitmap [REF ReactOS win32ss/gdi/ntgdi/bitmaps.c NtGdiCreateCompatibleBitmap]. The game makes these calls for 276×276 and 66×66 bitmaps (returning to ISPACE seg7:0x4db8). `oracle/shim` restores the Windows result. The faults above happen either way. [ORACLE newgame-0001]
-- `SHELL.ExtractIcon(…, 0xffff)` returns 0 under Wine: `ExtractIcon16` takes a `UINT16` index and passes 65535 to `ExtractIconA` [REF Wine 11.0 dlls/shell.dll16/shell.c]. Win16 defines −1 as "count icons". The icon counts in the status line may therefore differ from Windows; ECHO.EXE's count would be 3 [OPEN].
+- The game calls `CreateCompatibleBitmap(NULL, 276, 276)` and `(NULL, 66, 66)` from ISPACE.DLL seg7:0x4db8 only while its DS is wrong: the call pushes the word at `DGROUP:0x1a32` of INSPACE.EXE's DGROUP, which is 0. With ISPACE.DLL's own DS the same call passes a real DC (fault-0001, runtime-0001). [ORACLE fault-0001] Wine 11.0 returns NULL for these calls (`work/oracle/explore/ng-d2/`) [ORACLE newgame-0001], where Windows returns a 1-bpp bitmap [REF ReactOS win32ss/gdi/ntgdi/bitmaps.c NtGdiCreateCompatibleBitmap].
+- `SHELL.ExtractIcon(…, 0xffff)` returns 0 under Wine: `ExtractIcon16` takes a `UINT16` index and passes 65535 to `ExtractIconA` [REF Wine 11.0 dlls/shell.dll16/shell.c]. Win16 defines −1 as "count icons". The icon counts in the status line may therefore differ from Windows. otvdm returns the counts (ECHO.EXE: 3; see runtime-0001); the Windows result is [OPEN].
 - Wine delivers directory entries in name order: the fixture's directories were created as GAMES, TOOLS, EMPTY, DEEP and come back as DEEP, EMPTY, GAMES, TOOLS. [ORACLE newgame-0001] Both listboxes sort, so the tree order does not depend on it. [OPEN] whether walk order matters elsewhere, since a FAT volume returns directory-slot order.

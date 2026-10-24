@@ -1,0 +1,42 @@
+diff --git a/dlls/krnl386.exe16/selector.c b/dlls/krnl386.exe16/selector.c
+index 65eacee..d1e0fcf 100644
+--- a/dlls/krnl386.exe16/selector.c
++++ b/dlls/krnl386.exe16/selector.c
+@@ -178,8 +178,37 @@ static ULONG alloc_entries( ULONG count )
+     return (idx << 3) | 7;
+ }
+ 
++/* Windows zeroes a segment register that holds a selector being freed.
++ * The 16-bit relay saves the caller's segment registers in each STACK16FRAME
++ * and reloads them on return, where a freed selector faults; fix_selector()
++ * then resumes through NtContinue, which under the new WoW64 reloads %ds
++ * with %ss and so loses the caller's %ds.  Clear the saved copies instead:
++ * all four in the current frame, the volatile %es, %fs and %gs in outer ones. */
++static void clear_saved_selectors( ULONG sel, ULONG count )
++{
++    SEGPTR stack = kernel_get_thread_data()->stack;
++    ULONG first = sel >> 3;
++    BOOL current = TRUE;
++
++#define FREED(s) ((ULONG)(((s) >> 3) - first) < count)
++    while (stack && ldt_is_valid( SELECTOROF(stack) ) && !FREED( SELECTOROF(stack) ))
++    {
++        STACK16FRAME *frame = MapSL( stack );
++
++        if (current && FREED( frame->ds )) frame->ds = 0;
++        if (FREED( frame->es )) frame->es = 0;
++        if (FREED( frame->fs )) frame->fs = 0;
++        if (FREED( frame->gs )) frame->gs = 0;
++        current = FALSE;
++        if (!frame->frame32) break;
++        stack = frame->frame32->frame16;
++    }
++#undef FREED
++}
++
+ static void free_entries( ULONG sel, ULONG count )
+ {
++    clear_saved_selectors( sel, count );
+     RtlClearBits( &ldt_bitmap, sel >> 3, count );
+     while (count--)
+     {
