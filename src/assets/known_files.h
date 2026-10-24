@@ -46,10 +46,11 @@ struct KnownFiles {
 // The generated table, sorted by package and then by installed name.
 KnownFiles known_files();
 
-// The row with this installed name (ASCII case ignored), size and hash, or nullptr.
+// The row with this installed name (compared by name_key, the case fold of GameFiles), size
+// and hash, or nullptr.
 const KnownFile* find_known(const std::filesystem::path& name, std::uint64_t size,
                             const std::string& sha256);
-// True when some row has this installed name, whatever its content.
+// True when some row has this installed name (by name_key), whatever its content.
 bool known_name(const std::filesystem::path& name);
 
 struct FileReport {

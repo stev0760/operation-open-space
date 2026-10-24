@@ -53,7 +53,9 @@ inline constexpr const char* kDefaultLanguage = "ENG";
 
 // The font a converted dialog asks for. The original's dialogs name Helv 8 through
 // DS_SETFONT; the port's mapping waits for M2's window and scaling ADR, so it is a
-// parameter [DESIGN]. An empty face or a zero size keeps the stored value.
+// parameter [DESIGN]. An empty face or a zero size keeps the stored value. A non-empty face
+// also sets DS_SETFONT, so a dialog stored without a font takes this one instead of losing it;
+// a size alone changes only a dialog that has DS_SETFONT [DESIGN].
 struct DialogFont {
     std::string face;  // cp1252
     std::uint16_t point_size = 0;
@@ -116,16 +118,18 @@ public:
     const fmt::NeModule& sound_module(const std::string& name) const;
 
     // ---- the language module's resources
-    // Resource names (menus, accelerators, bitmaps, icon groups) compare without regard to
-    // ASCII case; the modules store them in upper case. An empty name throws NotFound.
+    // Resource names (menus, accelerators, bitmaps, icon groups) compare by fmt::fold_name,
+    // the case fold of file names; RC stores them in upper case. An empty name throws
+    // NotFound.
 
     // STRING id. A missing or empty string throws NotFound (LoadString returns 0 for both).
     std::string string(std::uint16_t id) const;
     std::optional<std::string> find_string(std::uint16_t id) const;
 
     fmt::Dialog16 dialog(std::uint16_t id) const;
-    // The Win32 DLGTEMPLATE of DIALOG id, with `font` applied and `or_style` ORed into the
-    // dialog style (fmt::dialog_to_win32).
+    // The Win32 DLGTEMPLATE of DIALOG id, with `font` applied (DialogFont) and `or_style` ORed
+    // into the dialog style (fmt::dialog_to_win32, which writes the font fields whenever the
+    // resulting style has DS_SETFONT).
     std::vector<std::uint8_t> dialog_template(std::uint16_t id, const DialogFont& font = {},
                                               std::uint32_t or_style = 0) const;
 

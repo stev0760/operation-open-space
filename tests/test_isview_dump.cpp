@@ -484,6 +484,41 @@ TEST_CASE("isview dump: module helpers") {
     CHECK(find_module(mods, "eng_lang.dll") == &mods[0]);
     CHECK(find_module(mods, "ENG_FX.DLL") == &mods[1]);
     CHECK(find_module(mods, "SND_FX.DLL") == nullptr);
+
+    // names fold as GameFiles and the asset store fold them (is::fmt::fold_name)
+    mods.push_back(ModuleInfo{});
+    mods[2].name = "\xC9" "CRAN.DLL";  // cp1252 E acute
+    CHECK(find_module(mods, "\xE9" "cran.dll") == &mods[2]);
+    CHECK(find_module(mods, "ECRAN.DLL") == nullptr);
+    CHECK(same_name("\x9A\x9C\x9E\xFF.wav", "\x8A\x8C\x8E\x9F.WAV"));
+    CHECK_FALSE(same_name("\xDF.DLL", "SS.DLL"));
+    CHECK_FALSE(same_name("\xF7", "\xD7"));
+    CHECK_FALSE(same_name("A.DLL", "A.DLL "));
+    // ascii_ieq, for ASCII constants, agrees with same_name whenever one side is ASCII
+    for (int b = 0; b < 0x100; ++b) {
+        CAPTURE(b);
+        for (const char* ascii : {"A", "a", "Z", "_"}) {
+            const std::string one(1, static_cast<char>(b));
+            CHECK(ascii_ieq(one, ascii) == same_name(one, ascii));
+        }
+    }
+}
+
+TEST_CASE("isview dump: path_utf16 keeps a Windows name's code units and never throws") {
+    CHECK(path_utf16(fs::path(u"ENG_LANG.DLL")) == u"ENG_LANG.DLL");
+    CHECK(path_utf16(fs::path(u"tw-\u00e9")) == u"tw-\u00e9");
+#ifdef _WIN32
+    // NTFS allows an unpaired surrogate; path::u16string converts through UTF-8 and throws
+    const std::u16string odd = std::u16string(u"A") + char16_t(0xD800) + u".DLL";
+    const fs::path p(std::wstring(odd.begin(), odd.end()));
+    std::u16string got;
+    CHECK_NOTHROW(got = path_utf16(p));
+    CHECK(got == odd);
+    CHECK(json_string(got) == "\"A\xEF\xBF\xBD.DLL\"");
+#else
+    // native bytes that are not UTF-8 decode as message_to_utf16 does
+    CHECK(path_utf16(fs::path(std::string("D\xC9MON.DIB"))) == u"D\u00c9MON.DIB");
+#endif
 }
 
 TEST_CASE("isview wave: columns read only whole samples inside the data chunk") {

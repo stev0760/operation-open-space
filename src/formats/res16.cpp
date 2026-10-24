@@ -61,13 +61,15 @@ std::vector<std::string> string_block(const NeModule& m, const NeResource& r) {
     return out;
 }
 
-void parse_menu_level(Reader& r, std::vector<MenuItem16>& out) {
+void parse_menu_level(Reader& r, std::vector<MenuItem16>& out, int depth) {
+    if (depth > kMaxMenuDepth)
+        throw FormatError("MENU nesting deeper than " + std::to_string(kMaxMenuDepth) + " levels");
     for (;;) {
         MenuItem16 it;
         it.flags = r.u16();
         if (!(it.flags & kMfPopup)) it.id = r.u16();
         it.text = r.cstr();
-        if (it.flags & kMfPopup) parse_menu_level(r, it.children);
+        if (it.flags & kMfPopup) parse_menu_level(r, it.children, depth + 1);
         const bool end = it.flags & kMfEnd;
         out.push_back(std::move(it));
         if (end) return;
@@ -84,6 +86,34 @@ void write_menu_level(Writer& w, const std::vector<MenuItem16>& items) {
 }
 
 }  // namespace
+
+const char* resource_type_name(std::uint16_t type) {
+    switch (type) {
+    case 1: return "CURSOR";
+    case 2: return "BITMAP";
+    case 3: return "ICON";
+    case 4: return "MENU";
+    case 5: return "DIALOG";
+    case 6: return "STRING";
+    case 7: return "FONTDIR";
+    case 8: return "FONT";
+    case 9: return "ACCELERATOR";
+    case 10: return "RCDATA";
+    case 11: return "MESSAGETABLE";
+    case 12: return "GROUP_CURSOR";
+    case 14: return "GROUP_ICON";
+    case 15: return "NAMETABLE";
+    case 16: return "VERSION";
+    case 17: return "DLGINCLUDE";
+    case 19: return "PLUGPLAY";
+    case 20: return "VXD";
+    case 21: return "ANICURSOR";
+    case 22: return "ANIICON";
+    case 23: return "HTML";
+    case 24: return "MANIFEST";
+    default: return nullptr;
+    }
+}
 
 std::optional<std::string> load_string(const NeModule& m, std::uint16_t id) {
     const NeResource* r = m.find(RT16_STRING, static_cast<std::uint16_t>((id >> 4) + 1));
@@ -131,9 +161,9 @@ Dialog16 parse_dialog16(const std::uint8_t* p, std::size_t n) {
         const std::uint8_t c = r.u8();
         if (c & 0x80) {
             it.class_atom = c;
-        } else {
+        } else if (c != 0) {  // 0: an empty name, which the Win32 template writes as one 0x0000
             it.class_name.push_back(static_cast<char>(c));
-            if (c != 0) it.class_name += r.cstr();
+            it.class_name += r.cstr();
         }
         it.text = read_name_or_ord(r);
         const unsigned extra = r.u8();
@@ -146,7 +176,8 @@ Dialog16 parse_dialog16(const std::uint8_t* p, std::size_t n) {
 
 std::vector<std::uint8_t> dialog_to_win32(const Dialog16& d, std::uint32_t or_style) {
     Writer w;
-    w.u32(d.style | or_style);
+    const std::uint32_t style = d.style | or_style;
+    w.u32(style);
     w.u32(0);  // dwExtendedStyle
     w.u16(static_cast<std::uint16_t>(d.items.size()));
     w.i16(d.x);
@@ -156,7 +187,7 @@ std::vector<std::uint8_t> dialog_to_win32(const Dialog16& d, std::uint32_t or_st
     w.name_or_ord(d.menu);
     w.wstr(d.class_name);
     w.wstr(d.caption);
-    if (d.style & kDsSetFont) {
+    if (style & kDsSetFont) {  // also when or_style adds it (DS_SHELLFONT includes it)
         w.u16(d.point_size);
         w.wstr(d.face);
     }
@@ -188,7 +219,7 @@ std::vector<MenuItem16> parse_menu16(const std::uint8_t* p, std::size_t n) {
     const std::uint16_t off = r.u16();
     r.skip(off);              // bytes between the header and the first item
     std::vector<MenuItem16> out;
-    parse_menu_level(r, out);
+    parse_menu_level(r, out, 1);
     return out;
 }
 

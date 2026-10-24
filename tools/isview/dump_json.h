@@ -32,34 +32,9 @@ namespace is::isview {
 // ---- resource types and ids
 
 // The names `isre res` gives the integer types (re/isre/ne.py RES_TYPE_NAMES); nullptr for
-// any other type, which isre names by its number.
-inline const char* std_type_name(std::uint16_t t) {
-    switch (t) {
-    case 1: return "CURSOR";
-    case 2: return "BITMAP";
-    case 3: return "ICON";
-    case 4: return "MENU";
-    case 5: return "DIALOG";
-    case 6: return "STRING";
-    case 7: return "FONTDIR";
-    case 8: return "FONT";
-    case 9: return "ACCELERATOR";
-    case 10: return "RCDATA";
-    case 11: return "MESSAGETABLE";
-    case 12: return "GROUP_CURSOR";
-    case 14: return "GROUP_ICON";
-    case 15: return "NAMETABLE";
-    case 16: return "VERSION";
-    case 17: return "DLGINCLUDE";
-    case 19: return "PLUGPLAY";
-    case 20: return "VXD";
-    case 21: return "ANICURSOR";
-    case 22: return "ANIICON";
-    case 23: return "HTML";
-    case 24: return "MANIFEST";
-    default: return nullptr;
-    }
-}
+// any other type, which isre names by its number. The table is fmt::resource_type_name, which
+// the asset store's messages use too.
+inline const char* std_type_name(std::uint16_t t) { return fmt::resource_type_name(t); }
 
 inline bool named_type(const fmt::NeResource& r) { return !r.type_name.empty(); }
 inline bool named_id(const fmt::NeResource& r) { return !r.name.empty(); }
@@ -125,14 +100,21 @@ struct ModuleInfo {
     std::string error;                  // why the module did not load: what(), UTF-8 and cp1252
 };
 
-// A path as UTF-16. Native UTF-16 (Windows) converts as it is; native bytes that are not
-// UTF-8 (elsewhere) decode as message_to_utf16 does.
+// A path as UTF-16. Native UTF-16 (Windows) is copied code unit by code unit, an unpaired
+// surrogate included (path::u16string converts through UTF-8 there and throws on one); native
+// bytes that are not UTF-8 (elsewhere) decode as message_to_utf16 does. Nothing throws but
+// std::bad_alloc.
 inline std::u16string path_utf16(const std::filesystem::path& p) {
+#ifdef _WIN32
+    const auto& n = p.native();
+    return std::u16string(n.begin(), n.end());
+#else
     try {
         return p.u16string();
     } catch (const std::exception&) {
-        return message_to_utf16(p.string());
+        return message_to_utf16(p.native());  // the native bytes, unconverted
     }
+#endif
 }
 
 // Every file of the store's directory that is an NE module, in GameFiles order (by installed
@@ -166,6 +148,15 @@ inline std::vector<ModuleInfo> scan_modules(const assets::AssetStore& store) {
     return out;
 }
 
+// Two cp1252 names are the same name: equal under fmt::fold_name, the case fold by which
+// GameFiles finds files and the asset store finds resources.
+inline bool same_name(const std::string& a, const std::string& b) {
+    return a.size() == b.size() && fmt::fold_name(a) == fmt::fold_name(b);
+}
+
+// ASCII case ignored. Only for a name compared with an ASCII constant (isa::kGraphicsDll,
+// isa::kGameDll), where it agrees with same_name: fold_name never maps a byte above 0x7F to
+// ASCII or the reverse.
 inline bool ascii_ieq(const std::string& a, const std::string& b) {
     if (a.size() != b.size()) return false;
     for (std::size_t i = 0; i < a.size(); ++i) {
@@ -177,10 +168,10 @@ inline bool ascii_ieq(const std::string& a, const std::string& b) {
     return true;
 }
 
-// The module with this installed name (ASCII case ignored), or nullptr.
+// The module with this installed name (cp1252, compared by same_name), or nullptr.
 inline const ModuleInfo* find_module(const std::vector<ModuleInfo>& modules, const std::string& name) {
     for (const ModuleInfo& m : modules)
-        if (ascii_ieq(m.name, name)) return &m;
+        if (same_name(m.name, name)) return &m;
     return nullptr;
 }
 

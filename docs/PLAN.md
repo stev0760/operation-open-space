@@ -5,10 +5,10 @@
 |---|---|---|
 | 0 Bootstrap + oracle smoke | **done** | See the Phase 0 deviations below. Smoke test: `oracle/digests/smoke-0001.md`. |
 | 1 RE pipeline | **done** | `isre rebuild` (loader-equivalent, runs under Wine), `isre asm` (verified), `isre pack`, Ghidra pipeline with C export (`docs/re/ghidra.md`; S4 verifier's findings fixed). Tool guide: `re/README.md`. |
-| 2 Knowledge base | in progress | **Done:** `isre hlp`, `isre res` (`docs/re/resources.md`), checklist (636 rows, 243 with RE addresses) with the doc linter, S3 `docs/re/formats.md`, S4 `docs/re/structs.md` and `globals.md` (Appendix B items settled), each with two independent verification rounds; `re/tests/test_re_facts.py` pins their mechanical facts. **Remaining:** `docs/re/win16-translation.md`. |
+| 2 Knowledge base | **done** | `isre hlp`, `isre res` (`docs/re/resources.md`), checklist (636 rows, 243 with RE addresses) with the doc linter, S3 `docs/re/formats.md`, S4 `docs/re/structs.md` and `globals.md` (Appendix B items settled), each with two independent verification rounds; `re/tests/test_re_facts.py` pins their mechanical facts. `docs/re/win16-translation.md` (pinned by `re/tests/test_win16_facts.py`). |
 | 3 Oracle | **done** | Scripted runs play wave 1 (`wave-0001`); read-only memory probe (`probe-0001`); `docs/re/oracle.md` answers the phase's questions, with the rest listed as open questions. Two Wine bugs found and patched locally (`docs/upstream/`, not filed). |
 | Early spikes | **done** | `docs/re/ispace.md` (ISPACE.DLL owns palette, bitmaps, sound, dialogs), `docs/re/rng.md` (Microsoft C `rand()`), `docs/re/timing.md` and ADR 0001 (accepted). |
-| M1 Foundations | in progress | Proof of concept and stage 1 readers done; ADRs 0001–0003 accepted; stage 2 (asset store) and stage 3 (`isview` v1) next. |
+| M1 Foundations | **done** | Readers for every original format (`src/formats/`), the asset store (`src/assets/`), `isview` v1, ADRs 0001–0003. Each stage independently reviewed, plus a whole-codebase review; converted dialogs match the original's client size (`oracle/digests/dialogs-0001.md`). Open: `isview` on a real Windows machine. |
 
 **Phase 0 deviations:**
 - **Wine 11.0 stable** (Kron4ek `amd64-wow64`) instead of 11.20. On this host 11.20 segfaults in `wineboot` with a bad address-space limit.

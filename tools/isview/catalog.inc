@@ -8,7 +8,7 @@ namespace {
 const ModuleInfo* find_module(const std::string& name) { return isv::find_module(g.modules, name); }
 
 bool is_language_module(const ModuleInfo& m) {
-    return ascii_ieq(m.name, g.store->language_module());
+    return isv::same_name(m.name, g.store->language_module());
 }
 
 // ---- start-up
@@ -309,14 +309,18 @@ void build_tree() {
     }
 }
 
+// A node key or a part of a --select path folded by fmt::fold_name, the case fold by which
+// --dump, GameFiles and the asset store compare names.
+std::wstring name_fold(const std::wstring& s) { return wide(fold_name(u16(s))); }
+
 // The node at PATH: overview, identify, ships[/N], bodies[/N] or MODULE[/TYPE[/ID]], each part
-// compared without case; -1 when there is none.
+// compared by name_fold; -1 when there is none.
 int find_node(const std::wstring& path) {
     std::vector<std::wstring> parts;
     std::size_t start = 0;
     for (;;) {
         const std::size_t slash = path.find(L'/', start);
-        parts.push_back(lower(path.substr(start, slash - start)));
+        parts.push_back(name_fold(path.substr(start, slash - start)));
         if (slash == std::wstring::npos) break;
         start = slash + 1;
     }
@@ -324,7 +328,7 @@ int find_node(const std::wstring& path) {
     for (const std::wstring& part : parts) {
         found = -1;
         for (int i = 0; i < static_cast<int>(g.nodes.size()); ++i)
-            if (g.nodes[i].parent == parent && lower(g.nodes[i].key) == part) {
+            if (g.nodes[i].parent == parent && name_fold(g.nodes[i].key) == part) {
                 found = i;
                 break;
             }

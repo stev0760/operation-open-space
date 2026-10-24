@@ -24,6 +24,7 @@
 #include "formats/sha256.h"
 #include "formats/szdd.h"
 #include "ne_builder.h"
+#include "win32_templates.h"
 
 using namespace is::assets;
 using namespace is::fmt;
@@ -812,6 +813,97 @@ TEST_CASE("assets: sound modules come from the sound directory (SndPath)") {
     a.set_sound_dir({});
     CHECK(&a.sound_files() == &a.files());
     CHECK(a.wav(kSoundDll, 3).file == make_wav());
+}
+
+TEST_CASE("assets: resource names fold like file names; messages name the type") {
+    TempDir t;
+    const fs::path dir = t.sub("folded");
+    // DIALOG 322: make_dialog() without DS_SETFONT, so no point size and face follow the caption
+    Bytes no_font = {0x80, 0x00, 0xC0, 0x90, 1, 62, 0, 18, 0, 198, 0, 117, 0, 0, 0};
+    apps(no_font, "New Game");
+    for (int x : {146, 0, 7, 0, 47, 0, 14, 0, 1, 0, 0x01, 0x00, 0x01, 0x50, 0x80})
+        no_font.push_back(static_cast<std::uint8_t>(x));
+    apps(no_font, "&OK");
+    no_font.push_back(0);
+    const Bytes accel = {0x81, 0x70, 0x00, 0x09, 0x00};
+    // RC stores names in upper case; a crafted module may not, so both sides fold
+    write(dir / path_from_cp1252("\xC9" "CRAN_LANG.DLL"),
+          build_ne("IN_DLOG", {{RT16_ACCELERATOR, 0, "\xC9" "CRAN", accel},
+                               {RT16_MENU, 0, "\x9A\x9C" "menu", make_menu("&Go", 7)},
+                               {RT16_DIALOG, 322, "", no_font}}));
+    write(dir / "IGRAPHIC.DLL", graphic_dll());
+    AssetStore a(dir);
+    a.set_language("\xE9" "cran");  // e acute finds E acute
+    CHECK(a.language_dll().module_name() == "IN_DLOG");
+    CHECK(a.accelerators("\xE9" "cran").size() == 1);
+    CHECK(a.accelerators("\xC9" "CRAN").size() == 1);
+    CHECK_THROWS_AS(a.accelerators("ECRAN"), NotFound);
+    CHECK(a.menu("\x8A\x8C" "MENU").at(0).text == "&Go");
+    CHECK(a.menu("\x9A\x9C" "Menu").at(0).id == 7);
+    CHECK(a.menu_template("\x8A\x9C" "menu") == menu_to_win32(a.menu("\x9A\x8C" "MENU")));
+
+    // messages: a standard type by its name, any other type by #number
+    try {
+        (void)a.bitmap("NOPE");
+        FAIL_CHECK("BITMAP NOPE found");
+    } catch (const NotFound& x) {
+        CHECK(std::string(x.what()) == "IGRAPHIC.DLL: no BITMAP NOPE");
+    }
+    try {
+        (void)a.sprite(61);
+        FAIL_CHECK("#4000 61 found");
+    } catch (const NotFound& x) {
+        CHECK(std::string(x.what()) == "IGRAPHIC.DLL: no #4000 61");
+    }
+
+    // a face from DialogFont sets DS_SETFONT on a dialog stored without it
+    const Dialog16 d = a.dialog(322);
+    CHECK((d.style & kDsSetFont) == 0);
+    CHECK(d.face.empty());
+    CHECK(a.dialog_template(322) == dialog_to_win32(d));
+    win32_templates::check_dialog_template(d, a.dialog_template(322));
+    Dialog16 mapped = d;
+    mapped.style |= kDsSetFont;
+    mapped.face = "MS Sans Serif";
+    mapped.point_size = 9;
+    const Bytes tm = a.dialog_template(322, {"MS Sans Serif", 9});
+    CHECK(tm == dialog_to_win32(mapped));
+    win32_templates::check_dialog_template(mapped, tm);
+    // a size alone leaves a dialog without a font as it is
+    CHECK(a.dialog_template(322, {"", 9}).size() == dialog_to_win32(d).size());
+    // DS_SHELLFONT through or_style: the font fields follow, from DialogFont when it has them
+    win32_templates::check_dialog_template(mapped, a.dialog_template(322, {"MS Sans Serif", 9}, 0x48), 0x48);
+    win32_templates::check_dialog_template(d, a.dialog_template(322, {}, 0x48), 0x48);
+}
+
+TEST_CASE("assets: a path that UTF-8 cannot hold still gives NotFound and FormatError") {
+    TempDir t;
+#ifdef _WIN32
+    // NTFS allows an unpaired surrogate in a name; libstdc++'s path::u8string throws for it
+    const fs::path odd = t.sub("odd") / (std::wstring(L"tw-") + wchar_t(0xD800));
+#else
+    const fs::path odd = t.sub("odd") / std::string("tw-\xFF");  // not UTF-8
+#endif
+    CHECK_THROWS_AS(GameFiles{odd}, NotFound);
+    CHECK_THROWS_AS(AssetStore{odd}, NotFound);
+    std::error_code ec;
+    fs::create_directories(odd, ec);
+    if (ec || !fs::is_directory(odd)) {
+        MESSAGE("the rest skipped: the file system cannot hold the name (Wine cannot)");
+        return;
+    }
+    write(odd / "ENG_LANG.DLL", lang_dll("Limited Inner Space"));
+    Bytes cut = szdd_literal(bytes_of("0123456789"));
+    cut.resize(cut.size() - 3);
+    write(odd / "BROKEN.DL1", cut);
+    GameFiles g(odd);
+    CHECK_THROWS_AS(g.read("MISSING.DLL"), NotFound);
+    CHECK_THROWS_AS(g.bytes("MISSING.DLL"), NotFound);
+    CHECK_THROWS_AS(g.read("BROKEN.DLL"), FormatError);
+    AssetStore a(odd);
+    CHECK(a.string(2338) == "Limited Inner Space");
+    CHECK_THROWS_AS(a.module("ISPACE.DLL"), NotFound);
+    CHECK_THROWS_AS(a.ships(), NotFound);
 }
 
 TEST_CASE("assets: malformed modules and records throw FormatError") {

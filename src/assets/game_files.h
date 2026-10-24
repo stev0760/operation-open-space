@@ -7,7 +7,8 @@
 //
 // Names are matched without regard to case (ADR 0002, decision 3), because the shipped names
 // mix cases (ISPACE.dll, eng_fx.dll, Eng_help.hl1). Case folds for every letter that cp1252
-// holds in both cases (name_key), as Windows and Wine fold file names. Paths stay
+// holds in both cases (is::fmt::fold_name, through name_key), as Windows and Wine fold file
+// names. Paths stay
 // std::filesystem::path; a name that comes from game data (a module name, a file name in
 // MASTER.BOD) is a cp1252 string and converts to a path only for the comparison (ADR 0003).
 //
@@ -46,11 +47,11 @@ std::filesystem::path restored_name(const std::filesystem::path& name, char last
 // A cp1252 name (from game data or the caller) as a path, through UTF-16.
 std::filesystem::path path_from_cp1252(const std::string& name);
 
-// The comparison key of a file name: its native characters with the lower-case letters of
-// cp1252 upper-cased. These are ASCII a-z, U+00E0-U+00FE except U+00F7 (to U+00C0-U+00DE),
-// and U+0161 U+0153 U+017E U+00FF (to U+0160 U+0152 U+017D U+0178). U+00DF and U+00B5 have
-// no upper-case letter in cp1252 and stay. Every other character stays as it is; on a system
-// whose native paths are UTF-8, a byte sequence that is not one of these letters stays too.
+// The comparison key of a file name: its native characters folded by is::fmt::fold_name, which
+// upper-cases the lower-case letters of cp1252: ASCII a-z, U+00E0-U+00FE except U+00F7 (to
+// U+00C0-U+00DE), and U+0161 U+0153 U+017E U+00FF (to U+0160 U+0152 U+017D U+0178). Every
+// other character stays as it is; on a system whose native paths are UTF-8, a byte sequence
+// that is not one of these letters stays too.
 std::filesystem::path::string_type name_key(const std::filesystem::path& name);
 
 class GameFiles {

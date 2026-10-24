@@ -81,6 +81,29 @@ private:
 // Windows-1252 to UTF-16; bytes that cp1252 leaves undefined map to the same code point.
 std::u16string cp1252_to_utf16(const std::string& s);
 
+// UTF-16 to UTF-8. An unpaired surrogate becomes U+FFFD; nothing throws but std::bad_alloc.
+std::string utf8_from_utf16(const std::u16string& w);
+
+// A path for an exception message. On Windows: its native UTF-16 through utf8_from_utf16, so
+// a name with an unpaired surrogate, which NTFS allows, gives U+FFFD where path::u8string
+// throws. Elsewhere: its native bytes as they are, UTF-8 or not, as path::u8string gives
+// them. Nothing throws but std::bad_alloc.
+std::string path_utf8(const std::filesystem::path& p);
+
+// ---- names
+// File, module and resource names compare by one case fold (ADR 0002, decision 3): the
+// lower-case letters that cp1252 holds in both cases become upper case, as Windows and Wine
+// fold file names. They are ASCII a-z, U+00E0-U+00FE except U+00F7 (to U+00C0-U+00DE), and
+// U+0161 U+0153 U+017E U+00FF (to U+0160 U+0152 U+017D U+0178). U+00DF and U+00B5 have no
+// upper-case letter in cp1252 and stay; so does every other character. The three overloads
+// apply this one rule to a code point, to cp1252 bytes and to UTF-16 code units. Two names
+// are the same name when their folds are equal.
+
+char32_t fold_name(char32_t c);
+std::string fold_name(std::string cp1252);
+std::u16string fold_name(std::u16string utf16);
+
+// Throws FormatError when the file cannot be opened.
 std::vector<std::uint8_t> read_file(const std::filesystem::path& path);
 
 }  // namespace is::fmt

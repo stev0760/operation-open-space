@@ -9,8 +9,11 @@
 #include "doctest.h"
 #include "formats/dib.h"
 #include "formats/res16.h"
+#include "win32_templates.h"
 
 using namespace is::fmt;
+using win32_templates::check_dialog_template;
+using win32_templates::check_menu_template;
 namespace fs = std::filesystem;
 
 namespace {
@@ -41,6 +44,46 @@ std::string unescape(const std::string& s) {
 std::string strip_amp(std::string s) {
     s.erase(std::remove(s.begin(), s.end(), '&'), s.end());
     return s;
+}
+
+// An MZ file whose dword at 0x3C points at an "NE" signature.
+bool is_ne_file(const std::vector<std::uint8_t>& b) {
+    if (b.size() < 0x40 || b[0] != 'M' || b[1] != 'Z') return false;
+    const std::size_t ne = b[0x3C] | (b[0x3D] << 8) | (b[0x3E] << 16) |
+                           (static_cast<std::size_t>(b[0x3F]) << 24);
+    return ne <= b.size() - 2 && b[ne] == 'N' && b[ne + 1] == 'E';
+}
+
+struct TemplateCounts {
+    std::size_t modules = 0, dialogs = 0, menus = 0;
+};
+
+// Converts every DIALOG and MENU of every NE module of `dir` and walks each template as
+// user32 reads it (win32_templates.h).
+TemplateCounts walk_templates(const fs::path& dir) {
+    TemplateCounts n;
+    for (const auto& e : fs::directory_iterator(dir)) {
+        if (!e.is_regular_file()) continue;
+        std::vector<std::uint8_t> bytes = read_file(e.path());
+        if (!is_ne_file(bytes)) continue;
+        const NeModule m(std::move(bytes));
+        ++n.modules;
+        for (const NeResource& r : m.resources()) {
+            if (!r.type_name.empty()) continue;
+            INFO(e.path().filename().u8string() << " " << r.type << " " << (r.name.empty() ? std::to_string(r.id) : r.name));
+            if (r.type == RT16_DIALOG) {
+                ++n.dialogs;
+                const Dialog16 d = parse_dialog16(m.data(r), m.size(r));
+                check_dialog_template(d, dialog_to_win32(d));
+                check_dialog_template(d, dialog_to_win32(d, 0x10), 0x10);  // DS_NOFAILCREATE
+            } else if (r.type == RT16_MENU) {
+                ++n.menus;
+                const auto items = parse_menu16(m.data(r), m.size(r));
+                check_menu_template(items, menu_to_win32(items));
+            }
+        }
+    }
+    return n;
 }
 }  // namespace
 
@@ -97,8 +140,9 @@ TEST_CASE("ENG_LANG.DLL: every dialog, menu and accelerator table converts") {
     auto dialogs = m.all(RT16_DIALOG);
     CHECK(dialogs.size() == 22);
     for (const NeResource* r : dialogs) {
+        CAPTURE(r->id);
         Dialog16 d = parse_dialog16(m.data(*r), m.size(*r));
-        CHECK(!dialog_to_win32(d).empty());
+        check_dialog_template(d, dialog_to_win32(d));
     }
     const NeResource* ng = m.find(RT16_DIALOG, 321);
     REQUIRE(ng);
@@ -113,7 +157,8 @@ TEST_CASE("ENG_LANG.DLL: every dialog, menu and accelerator table converts") {
     for (const auto& r : m.resources())
         if (r.type == RT16_MENU) {
             ++menus;
-            CHECK(!menu_to_win32(parse_menu16(m.data(r), m.size(r))).empty());
+            const auto items = parse_menu16(m.data(r), m.size(r));
+            check_menu_template(items, menu_to_win32(items));
         }
     CHECK(menus == 4);
     const NeResource* bar = m.find(RT16_MENU, 101);
@@ -129,6 +174,28 @@ TEST_CASE("ENG_LANG.DLL: every dialog, menu and accelerator table converts") {
     REQUIRE(fact);
     CHECK(parse_accel16(m.data(*main), m.size(*main)).size() == 26);
     CHECK(parse_accel16(m.data(*fact), m.size(*fact)).size() == 29);
+}
+
+TEST_CASE("every DIALOG and MENU template reads back as its Win16 resource") {
+    const fs::path ship = env_dir("IS_ORIGINAL_DIR");
+    if (ship.empty()) {
+        MESSAGE("skipped: IS_ORIGINAL_DIR not available");
+        return;
+    }
+    const TemplateCounts s = walk_templates(ship);
+    CHECK(s.dialogs == 35u);
+    CHECK(s.menus == 4u);
+    // THEWORKS beside the shipdisk tree (work/extracted/theworks)
+    fs::path base = ship.lexically_normal();
+    if (base.filename().empty()) base = base.parent_path();
+    const fs::path works = base.parent_path() / "theworks";
+    if (!fs::is_directory(works)) {
+        MESSAGE("theworks skipped: no theworks directory beside IS_ORIGINAL_DIR");
+        return;
+    }
+    const TemplateCounts w = walk_templates(works);
+    CHECK(w.dialogs == 5u);
+    CHECK(w.menus == 1u);
 }
 
 TEST_CASE("IGRAPHIC.DLL: the sprite DIBs decode") {

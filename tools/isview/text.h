@@ -2,9 +2,9 @@
 // can check them; main.cpp wraps them for std::wstring, which is UTF-16 on Windows.
 //
 // Game text is cp1252 and converts with is::fmt::cp1252_to_utf16. Exception texts are mixed:
-// the asset store writes paths into its messages as UTF-8 (path::u8string) and names from game
-// data or the caller as cp1252, so message_to_utf16 decodes each valid UTF-8 sequence as
-// UTF-8 and every other byte as cp1252.
+// the asset store writes paths into its messages as UTF-8 (is::fmt::path_utf8; native bytes
+// outside Windows) and names from game data or the caller as cp1252, so message_to_utf16
+// decodes each valid UTF-8 sequence as UTF-8 and every other byte as cp1252.
 #pragma once
 
 #include <cstddef>
@@ -16,38 +16,8 @@
 
 namespace is::isview {
 
-// UTF-16 to UTF-8. An unpaired surrogate becomes U+FFFD.
-inline std::string utf8_from_utf16(const std::u16string& w) {
-    std::string o;
-    for (std::size_t i = 0; i < w.size(); ++i) {
-        char32_t c = w[i];
-        if (c >= 0xD800 && c < 0xE000) {
-            const bool pair = c < 0xDC00 && i + 1 < w.size() && w[i + 1] >= 0xDC00 && w[i + 1] < 0xE000;
-            if (pair) {
-                c = 0x10000 + ((c - 0xD800) << 10) + (w[i + 1] - 0xDC00u);
-                ++i;
-            } else {
-                c = 0xFFFD;
-            }
-        }
-        if (c < 0x80) {
-            o += static_cast<char>(c);
-        } else if (c < 0x800) {
-            o += static_cast<char>(0xC0 | (c >> 6));
-            o += static_cast<char>(0x80 | (c & 0x3F));
-        } else if (c < 0x10000) {
-            o += static_cast<char>(0xE0 | (c >> 12));
-            o += static_cast<char>(0x80 | ((c >> 6) & 0x3F));
-            o += static_cast<char>(0x80 | (c & 0x3F));
-        } else {
-            o += static_cast<char>(0xF0 | (c >> 18));
-            o += static_cast<char>(0x80 | ((c >> 12) & 0x3F));
-            o += static_cast<char>(0x80 | ((c >> 6) & 0x3F));
-            o += static_cast<char>(0x80 | (c & 0x3F));
-        }
-    }
-    return o;
-}
+// UTF-16 to UTF-8, an unpaired surrogate as U+FFFD: shared with the asset store's messages.
+using fmt::utf8_from_utf16;
 
 // UTF-16 to cp1252; nullopt when a character has no cp1252 byte. File names only.
 inline std::optional<std::string> cp1252_from_utf16(const std::u16string& w) {

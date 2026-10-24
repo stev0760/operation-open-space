@@ -25,40 +25,27 @@ constexpr std::pair<const char*, const char*> kRestoredExtensions[] = {
 
 Char ascii_lower(Char c) { return c >= Char('A') && c <= Char('Z') ? Char(c - 'A' + 'a') : c; }
 
-// The upper-case partner of a lower-case cp1252 letter (name_key), else `c` itself.
-char32_t fold_letter(char32_t c) {
-    if (c >= U'a' && c <= U'z') return c - 0x20;
-    if (c >= 0xE0 && c <= 0xFE && c != 0xF7) return c - 0x20;  // a grave .. thorn, not division
-    switch (c) {
-    case 0x0161: return 0x0160;  // s caron
-    case 0x0153: return 0x0152;  // oe
-    case 0x017E: return 0x017D;  // z caron
-    case 0x00FF: return 0x0178;  // y diaeresis
-    default: return c;
-    }
-}
-
-// name_key over UTF-16 (Windows): every letter above is one code unit. Only the overload for
-// the platform's native string is used.
+// name_key over UTF-16 (Windows): every letter that fmt::fold_name folds is one code unit.
+// Only the overload for the platform's native string is used.
 [[maybe_unused]] void fold_native(std::wstring& s) {
-    for (wchar_t& c : s) c = static_cast<wchar_t>(fold_letter(static_cast<char16_t>(c)));
+    for (wchar_t& c : s) c = static_cast<wchar_t>(fmt::fold_name(char32_t{static_cast<char16_t>(c)}));
 }
 
-// name_key over UTF-8 (POSIX): a letter above is one byte (ASCII) or a two-byte sequence led
-// by 0xC3 (U+00C0-U+00FF) or 0xC5 (U+0140-U+017F); the upper-case partner has the same
-// length. Other bytes, valid UTF-8 or not, stay.
+// name_key over UTF-8 (POSIX): a letter that fmt::fold_name folds is one byte (ASCII) or a
+// two-byte sequence led by 0xC3 (U+00C0-U+00FF) or 0xC5 (U+0140-U+017F); the upper-case
+// partner has the same length. Other bytes, valid UTF-8 or not, stay.
 [[maybe_unused]] void fold_native(std::string& s) {
     for (std::size_t i = 0; i < s.size(); ++i) {
         const auto b = static_cast<unsigned char>(s[i]);
         if (b < 0x80) {
-            s[i] = static_cast<char>(fold_letter(b));
+            s[i] = static_cast<char>(fmt::fold_name(char32_t{b}));
             continue;
         }
         if ((b != 0xC3 && b != 0xC5) || i + 1 >= s.size()) continue;
         const auto t = static_cast<unsigned char>(s[i + 1]);
         if ((t & 0xC0) != 0x80) continue;
         const char32_t c = (char32_t(b & 0x1F) << 6) | (t & 0x3F);
-        const char32_t up = fold_letter(c);
+        const char32_t up = fmt::fold_name(c);
         s[i] = static_cast<char>(0xC0 | (up >> 6));
         s[i + 1] = static_cast<char>(0x80 | (up & 0x3F));
         ++i;
@@ -72,7 +59,8 @@ bool tail_equals(const Native& s, std::size_t pos, const char* lower) {
     return pos == s.size() && !*lower;
 }
 
-std::string message_path(const fs::path& p) { return p.u8string(); }
+// path::u8string would throw for a Windows name with an unpaired surrogate (fmt::path_utf8).
+std::string message_path(const fs::path& p) { return fmt::path_utf8(p); }
 
 // The SZDD header's stored character of the file, 0 when it is not SZDD or unreadable.
 char stored_last_char(const fs::path& p) {

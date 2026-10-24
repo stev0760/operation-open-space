@@ -11,24 +11,11 @@ namespace fs = std::filesystem;
 
 namespace {
 
-std::string upper(std::string s) {
-    for (char& c : s)
-        if (c >= 'a' && c <= 'z') c = static_cast<char>(c - 'a' + 'A');
-    return s;
-}
-
+// A type in a message: its standard name (fmt::resource_type_name, as isview shows it), else
+// "#number" as docs/ cite a custom type (IGRAPHIC.DLL #4000 60).
 std::string type_label(std::uint16_t type) {
-    switch (type) {
-    case fmt::RT16_BITMAP: return "BITMAP";
-    case fmt::RT16_ICON: return "ICON";
-    case fmt::RT16_MENU: return "MENU";
-    case fmt::RT16_DIALOG: return "DIALOG";
-    case fmt::RT16_STRING: return "STRING";
-    case fmt::RT16_ACCELERATOR: return "ACCELERATOR";
-    case fmt::RT16_GROUP_ICON: return "GROUP_ICON";
-    case fmt::RT16_VERSION: return "VERSION";
-    default: return "#" + std::to_string(type);
-    }
+    if (const char* n = fmt::resource_type_name(type)) return n;
+    return "#" + std::to_string(type);
 }
 
 }  // namespace
@@ -47,7 +34,7 @@ AssetStore::AssetStore(GameFiles files) : files_(std::move(files)) {}
 
 const fmt::NeModule& AssetStore::load(const GameFiles& files, const std::string& name) const {
     const GameFiles::Entry* e = files.find(name);
-    if (!e) throw NotFound(name + ": no such file in " + files.dir().u8string());
+    if (!e) throw NotFound(name + ": no such file in " + fmt::path_utf8(files.dir()));
     auto it = modules_.find(e->path.native());
     if (it == modules_.end()) {
         std::unique_ptr<fmt::NeModule> m;
@@ -92,9 +79,13 @@ const fmt::NeResource& AssetStore::need(const std::string& module_name, std::uin
     // NeModule::find(type, "") would match the first resource with an integer id
     if (name.empty())
         throw NotFound(module_name + ": no " + type_label(type) + " with an empty name");
-    const fmt::NeResource* r = module(module_name).find(type, upper(name));
-    if (!r) throw NotFound(module_name + ": no " + type_label(type) + " " + name);
-    return *r;
+    // the first resource of the type whose name has the same fmt::fold_name, as NeModule::find
+    // takes the first exact match
+    const std::string key = fmt::fold_name(name);
+    for (const fmt::NeResource& r : module(module_name).resources())
+        if (r.type == type && r.type_name.empty() && !r.name.empty() && fmt::fold_name(r.name) == key)
+            return r;
+    throw NotFound(module_name + ": no " + type_label(type) + " " + name);
 }
 
 // ---- the language module
@@ -118,7 +109,10 @@ fmt::Dialog16 AssetStore::dialog(std::uint16_t id) const {
 std::vector<std::uint8_t> AssetStore::dialog_template(std::uint16_t id, const DialogFont& font,
                                                       std::uint32_t or_style) const {
     fmt::Dialog16 d = dialog(id);
-    if (!font.face.empty()) d.face = font.face;
+    if (!font.face.empty()) {
+        d.face = font.face;
+        d.style |= fmt::kDsSetFont;  // a dialog stored without a font takes this one too
+    }
     if (font.point_size != 0) d.point_size = font.point_size;
     return fmt::dialog_to_win32(d, or_style);
 }
