@@ -7,7 +7,8 @@
 | 1 RE pipeline | **done** | `isre rebuild` (loader-equivalent, runs under Wine), `isre asm` (verified), `isre pack`, Ghidra pipeline with C export (`docs/re/ghidra.md`; S4 verifier's findings fixed). Tool guide: `re/README.md`. |
 | 2 Knowledge base | in progress | **Done:** `isre hlp`, `isre res` (`docs/re/resources.md`), checklist (636 rows, 243 with RE addresses) with the doc linter, S3 `docs/re/formats.md`, S4 `docs/re/structs.md` and `globals.md` (Appendix B items settled), each with two independent verification rounds; `re/tests/test_re_facts.py` pins their mechanical facts. **Remaining:** `docs/re/win16-translation.md`. |
 | 3 Oracle | **done** | Scripted runs play wave 1 (`wave-0001`); read-only memory probe (`probe-0001`); `docs/re/oracle.md` answers the phase's questions, with the rest listed as open questions. Two Wine bugs found and patched locally (`docs/upstream/`, not filed). |
-| Early spikes | **done** | `docs/re/ispace.md` (ISPACE.DLL owns palette, bitmaps, sound, dialogs), `docs/re/rng.md` (Microsoft C `rand()`), `docs/re/timing.md` and ADR 0001 (Proposed, awaiting the user's decision). |
+| Early spikes | **done** | `docs/re/ispace.md` (ISPACE.DLL owns palette, bitmaps, sound, dialogs), `docs/re/rng.md` (Microsoft C `rand()`), `docs/re/timing.md` and ADR 0001 (accepted). |
+| M1 Foundations | in progress | Proof of concept done (`src/formats/`, `isview`, `poc_wave`); ADR 0002 accepted; stage 1 readers running. |
 
 **Phase 0 deviations:**
 - **Wine 11.0 stable** (Kron4ek `amd64-wow64`) instead of 11.20. On this host 11.20 segfaults in `wineboot` with a bad address-space limit.
@@ -202,11 +203,8 @@ Cheaper models handle refactors, tests and lint. I merge, update the checklist a
 - The `poc_wave` sandbox.
 
 **Decisions first** (ADRs the user approves before the work that depends on them):
-- **ADR 0001 Timestep:** accept or amend. M2 needs it; `poc_wave` already follows it.
-- **ADR 0002 Asset source:**
-  - The port reads the user's installed game directory: the port's own directory first, then a path from its INI or command line. A distribution directory with SZDD files also works.
-  - A table of known file hashes (v1.29.08 shipdisk, THEWORKS, later the registered copy) identifies the version. It reports an unknown version instead of refusing it.
-  - Nothing is copied or redistributed.
+- **ADR 0001 Timestep:** **accepted** (`docs/decisions/0001-timestep.md`).
+- **ADR 0002 Asset source:** **accepted** (`docs/decisions/0002-asset-source.md`). An installed or distribution directory, the port's own directory first; versions identified by file hashes; read-only.
 - **ADR 0003 Text and paths:** the Win32 W APIs throughout. cp1252 resource text converts at the boundary. Files the original also reads (INI, saves) keep cp1252.
 
 **Stages** (one Workflow run per stage; parallel implementers own disjoint files):

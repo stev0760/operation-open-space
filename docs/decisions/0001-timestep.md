@@ -1,6 +1,6 @@
 # ADR 0001: Timestep
 
-- **Status:** Proposed. [DESIGN]
+- **Status:** Accepted. [DESIGN]
 - **Scope:** the game loop of milestone M2 and every later milestone that adds frame logic. [DESIGN]
 - **Facts:** [docs/re/timing.md](../re/timing.md) holds the original's timing, with its evidence. Each Context bullet links to the section it rests on and keeps only the conclusion the decision needs.
 
