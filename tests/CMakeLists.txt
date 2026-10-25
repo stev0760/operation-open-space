@@ -2,9 +2,11 @@
 file(GLOB IS_TEST_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/test_*.cpp)
 add_executable(is_tests ${IS_TEST_SOURCES})
 target_link_libraries(is_tests PRIVATE isformats)
-if(TARGET isassets)
-  target_link_libraries(is_tests PRIVATE isassets)
-endif()
+foreach(_dep isassets issettings isshell)
+  if(TARGET ${_dep})
+    target_link_libraries(is_tests PRIVATE ${_dep})
+  endif()
+endforeach()
 target_include_directories(is_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party/doctest ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Golden tests read the original files and the isre outputs. Under Wine, drive Z: is /.
