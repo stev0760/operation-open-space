@@ -61,14 +61,14 @@ This session's research ran 4 explorer agents and a plan review. The full findin
 6. **Progress is measured by `docs/spec/checklist.md`,** not by percentages.
 7. **Fidelity first.** Modernisations become ADRs in `docs/decisions/`.
 
-## Target repo layout (`/home/cabal/Git/repos/innerspace-port`, git init)
+## Target repo layout (`the repository root`)
 ```
 CLAUDE.md README.md .gitignore CMakeLists.txt CMakePresets.json
 docs/spec/       checklist.md (master feature ledger, stable IDs) + per-subsystem stubs filled per milestone
 docs/re/         binary-map, structs, globals, functions, resources, formats, oracle, pitfalls, win16-translation
 docs/decisions/  ADRs (timing, window/scaling, filesystem rules, asset loading, save format, help)
 re/isre/         Python package + CLI (ne, szdd, unpack, relocs, rebuild, asm, addr, hlp, res, pack)
-re/ghidra/       headless import/analysis/export scripts (Ghidra 12.1.2 @ /home/cabal/Git/repos/ghidra_12.1.2_DEV, Corretto 21)
+re/ghidra/       headless import/analysis/export scripts (Ghidra 12.1.2 @ /opt/ghidra, JDK 21)
 re/artifacts/    small committed outputs + golden SHA256 manifests (segments, relocs.json)
 re/wine-specs/   Win16 ordinal specs (record source commit);  re/tests/  pytest (goldens, parsers, doc linter)
 oracle/          Wine launch/scenario scripts, fixture directory trees (8.3 ASCII, old icons), mem-probe helper, digests/
