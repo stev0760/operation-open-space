@@ -2,9 +2,9 @@
 # Install a Kron4ek Wine 11.0 build as an oracle runtime (see oracle/env.sh).
 # Usage: oracle/wine/install_kron4ek.sh VARIANT DEST [TARBALL]
 #   VARIANT amd64        old WoW64 (64-bit and 32-bit Unix libraries); the oracle default,
-#                        installed as /opt/wine-11.0-oldwow.
+#                        installed as ~/opt/wine-11.0-oldwow.
 #   VARIANT amd64-wow64  new WoW64 (64-bit Unix libraries only); stock Wine 11.0,
-#                        installed as /opt/wine-11.0, and the base of build_patched.sh.
+#                        installed as ~/opt/wine-11.0, and the base of build_patched.sh.
 #   TARBALL  an already downloaded wine-11.0-VARIANT.tar.xz; otherwise the script downloads
 #            it from the Kron4ek/Wine-Builds release 11.0 into work/wine/dl/.
 # The tarball must match the sha256 in this script (from the release's sha256sums.txt).

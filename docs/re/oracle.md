@@ -18,8 +18,8 @@ The oracle is the original v1.29.08 demo running under Wine. Scripts in `oracle/
 
 ## Running the oracle
 Usage lives in each script's header: `oracle/env.sh`, `oracle/trace.sh`, `oracle/scenarios/common.sh`, `newgame.sh`, `wave.sh`, `oracle/relay_digest.py`, `oracle/probe/isprobe.c` and `oracle/probe/probe_run.sh`. [DESIGN]
-- `ORACLE_WINE` picks the runtime. The default, `/opt/wine-11.0-oldwow-patched`, is Wine 11.0 in old-WoW64 mode, which runs the original into wave 1 without a fault [ORACLE runtime-0001] [ORACLE newgame-0002], plus `oracle/wine/shell16-extracticon-count.patch` [ORACLE wave-0001].
-  - `/opt/wine-11.0-oldwow` (stock old WoW64) matches the digests made on it. `/opt/wine-11.0-patched` is new WoW64 with the krnl386 patch, and stock `/opt/wine-11.0` serves only to reproduce the DS fault. [ORACLE fault-0001]
+- `ORACLE_WINE` picks the runtime. The default, `~/opt/wine-11.0-oldwow-patched`, is Wine 11.0 in old-WoW64 mode, which runs the original into wave 1 without a fault [ORACLE runtime-0001] [ORACLE newgame-0002], plus `oracle/wine/shell16-extracticon-count.patch` [ORACLE wave-0001].
+  - `~/opt/wine-11.0-oldwow` (stock old WoW64) matches the digests made on it. `~/opt/wine-11.0-patched` is new WoW64 with the krnl386 patch, and stock `~/opt/wine-11.0` serves only to reproduce the DS fault. [ORACLE fault-0001]
   - otvdm 0.9.0 inside Wine cross-checks Wine's 16-bit layer. Its set-up, its slow traced runs and the need to keep `+file` off are in [runtime-0001, otvdm](../../oracle/digests/runtime-0001.md#otvdm-090-inside-wine-110-new-wow64). [ORACLE runtime-0001]
   - Wine 11.20 does not run on this host, because its `wineboot` segfaults. [ORACLE smoke-0001]
   - The script `oracle/wine/install_kron4ek.sh` installs a Kron4ek build. The script `oracle/wine/build_patched.sh` builds a copy that differs from the stock install in one module. [ORACLE fault-0001] [ORACLE wave-0001]

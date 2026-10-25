@@ -36,7 +36,7 @@ def env_after_sourcing(home, **env) -> dict[str, str]:
 
 def test_env_defaults(tmp_path):
     e = env_after_sourcing(tmp_path)
-    assert e["ORACLE_WINE"] == "/opt/wine-11.0-oldwow-patched"
+    assert e["ORACLE_WINE"] == f"{tmp_path}/opt/wine-11.0-oldwow-patched"
     assert e["WINEPREFIX"] == f"{tmp_path}/.local/share/wineprefixes/innerspace"
     assert e["DISPLAY"] == ":110"
     assert e["WINEDLLOVERRIDES"].startswith("ctl3d=n")

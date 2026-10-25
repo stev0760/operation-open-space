@@ -15,7 +15,7 @@
 - **Wine 11.0 stable** (Kron4ek `amd64-wow64`) instead of 11.20. On this host 11.20 segfaults in `wineboot` with a bad address-space limit.
 - **Oracle runtime is old-WoW64 Wine 11.0** (Kron4ek `amd64`). New WoW64 loses ISPACE.DLL's DS after `GlobalFree` and faults (`oracle/digests/fault-0001.md`); old WoW64 runs the game into wave 1 (`oracle/digests/runtime-0001.md`).
 - **No original installer:** `INSTALL.EXE` crashes under Wine 11.0, so `oracle/install_layout.py` replaces it.
-- **Displays:** oracle displays start at `:110`, because an unrelated Xvfb owns `:99`.
+- **Displays:** oracle displays start at `:110`, clear of the desktop's `:0` and its Xwayland displays.
 - **Deferred:** helpdeco is built in Phase 2a; doctest is vendored at M1; FluidSynth only if needed.
 
 ## Context

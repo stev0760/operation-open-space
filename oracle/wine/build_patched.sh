@@ -6,9 +6,9 @@
 #          module, dlls/MODULE/, and the copy gets that module's lib/wine/i386-windows/MODULE.
 #          Default: krnl386-clear-saved-selectors.patch.
 # The two oracle installs (see oracle/env.sh):
-#   build_patched.sh /opt/wine-11.0 /opt/wine-11.0-patched
+#   build_patched.sh ~/opt/wine-11.0 ~/opt/wine-11.0-patched
 #       new WoW64 (install_kron4ek.sh amd64-wow64) with the krnl386 patch (digest fault-0001).
-#   build_patched.sh /opt/wine-11.0-oldwow /opt/wine-11.0-oldwow-patched shell16-extracticon-count.patch
+#   build_patched.sh ~/opt/wine-11.0-oldwow ~/opt/wine-11.0-oldwow-patched shell16-extracticon-count.patch
 #       old WoW64 (install_kron4ek.sh amd64) with the shell.dll16 ExtractIcon count patch
 #       (digest wave-0001); the oracle default runtime.
 # Both Kron4ek builds ship byte-identical i386-windows krnl386.exe16 and shell.dll16, so one

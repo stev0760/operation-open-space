@@ -23,7 +23,7 @@ for d in json.load(open(sys.argv[1])):
 }
 for id in "${ids[@]}"; do
     cap="$(caption_of "$id")"
-    "${PORT_WINE:-/opt/wine/bin/wine}" "$exe" "Z:$repo/work/extracted/shipdisk" --dialog "$id" >/dev/null 2>&1 &
+    "${PORT_WINE:-$HOME/opt/wine/bin/wine}" "$exe" "Z:$repo/work/extracted/shipdisk" --dialog "$id" >/dev/null 2>&1 &
     pid=$!
     line=""
     for _ in $(seq 1 80); do
