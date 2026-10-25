@@ -1,4 +1,4 @@
-"""Mechanical facts of docs/re/{structs,globals,timing,rng,ispace,formats}.md.
+"""Mechanical facts of docs/re/{structs,globals,timing,rng,ispace,formats,shell}.md.
 
 CLAUDE.md asks for a test behind every count, offset, table value and writer
 list in docs/. These tests read the ``isre asm`` listings and indexes
@@ -1143,3 +1143,178 @@ def test_scene_record_ids(ins):
         assert ins.at(site).text == f"push {n:#x}", site
     assert ins.call_sites("seg10:0x9526") == ["seg15:0x911", "seg15:0xda9", "seg15:0x320b",
                                               "seg15:0x3292", "seg15:0x3339", "seg15:0x3413"]
+
+
+# ------------------------------------------------------------------ shell.md (start-up, states, intro, geometry)
+
+
+def _imm_push_before(m: Module, site: str) -> int:
+    """The immediate of the last ``push <imm>`` before the call at ``site`` (near calls
+    within a segment are preceded by ``push cs``)."""
+    i = m.at(site)
+    while True:
+        i = m.step(i, -1)
+        if i.mnem == "push" and _IMM_RE.fullmatch(i.ops[0]):
+            return s16(int(i.ops[0], 0) & 0xFFFF)
+        assert i.mnem in ("push", "nop"), (site, i.text)
+
+
+SHELL_WRITERS = {
+    # DGROUP word: {writer: stored constant or None when computed}
+    0x90F8: {"seg2:0x874": 1, "seg6:0x1c16": 0, "seg6:0x1c2d": 1, "seg6:0x1c53": 1,
+             "seg11:0x792c": 0},
+    0x8E66: {"seg6:0x13b9": None},
+    0x8F66: {"seg2:0x4be": 1},
+    0x8E5E: {"seg2:0x85d": None},
+    0x8F6A: {"seg2:0xb6e": 1, "seg2:0x11ea": 1, "seg2:0x1211": 0, "seg6:0x6be": 0},
+    0x0020: {"seg2:0xfd1": 1, "seg2:0x11ac": 0, "seg6:0x1a": None},
+    0x0022: {"seg7:0x19": 1, "seg7:0xff": 0, "seg7:0x197": 0, "seg7:0x1bf": 0, "seg7:0x211": 0},
+    0x93C6: {"seg2:0x10b2": 6, "seg2:0x10fa": 2, "seg2:0x1149": 5, "seg2:0x1559": 4,
+             "seg2:0x1580": 5, "seg2:0x1588": 6, "seg2:0x1590": 1, "seg2:0x1598": 0,
+             "seg11:0x236e": 1, "seg11:0x2376": 0},
+    0x93A6: {"seg9:0x5dc7": 0, "seg18:0x111": 1},
+    0x95B8: {"seg11:0x79b7": 5, "seg11:0x7ab1": 6, "seg11:0x7abe": 7, "seg15:0x12c3": 7,
+             "seg15:0x5809": 0, "seg15:0x5a42": None, "seg15:0x5a70": 7},
+    0x0D1E: {"seg6:0x1f82": None, "seg6:0x2ff1": 0},
+    0x0A70: {"seg2:0xbfc": 85},
+    0x9150: {"seg6:0xb07": None, "seg9:0x2408": None, "seg10:0x9b8d": None},
+    0x9156: {"seg6:0xafd": None, "seg6:0x95ca": None, "seg9:0x23bd": None, "seg9:0x23fe": None,
+             "seg10:0x9ade": None, "seg10:0x9b85": None, "seg15:0x21c5": 1,
+             "seg15:0x21d8": None, "seg15:0x2bdc": 1, "seg15:0x2bf9": None, "seg18:0x131": 0,
+             "seg18:0x72d": None, "seg18:0x800": None, "seg18:0x903": 1, "seg18:0x910": None,
+             "seg18:0x2753": 1, "seg18:0x2ac3": None},
+    0x1212: {"seg15:0x6009": 1},
+}
+
+
+@pytest.mark.parametrize("lo", sorted(SHELL_WRITERS), ids=lambda v: f"DGROUP:{v:#x}")
+def test_shell_word_writers(ins, lo):
+    """shell.md, globals.md: the complete writer lists of start-up, screen and view words."""
+    assert _write_values(ins, lo, lo + 1) == SHELL_WRITERS[lo]
+
+
+SHELL_DWORD_WRITERS = {
+    # DGROUP dword deadline: writers of its low word (16-bit high-word partners skipped)
+    0x1E70: ["seg6:0x36b2", "seg7:0x386"],
+    0x1E74: ["seg6:0x36a5", "seg9:0x6bdf", "seg9:0x6ce1", "seg9:0x6fe1"],
+    0x1E78: ["seg9:0xd97"],
+    0x1E7C: ["seg6:0x5db6", "seg6:0x5f6b"],
+    0x1E80: ["seg7:0xf0", "seg7:0x6a0", "seg8:0x22f", "seg9:0xd2f", "seg11:0xb04c",
+             "seg12:0x1e3b", "seg12:0x246b", "seg12:0x2adf", "seg16:0x45e", "seg16:0xae6",
+             "seg16:0xdb2"],
+    0x1E84: ["seg7:0xec", "seg7:0x1d8", "seg7:0x6f7", "seg8:0x244", "seg9:0xd2b",
+             "seg11:0xb048", "seg12:0x2ac1", "seg12:0x2acf", "seg16:0x45a", "seg16:0xacd",
+             "seg16:0xad3", "seg16:0xdae", "seg16:0x7367", "seg18:0x57c"],
+    0x1E88: ["seg7:0x5e1", "seg9:0xda4", "seg9:0x5d58", "seg16:0x568"],
+    0x1D40: ["seg2:0x87f", "seg6:0x2ede"],
+}
+
+
+@pytest.mark.parametrize("lo", sorted(SHELL_DWORD_WRITERS), ids=lambda v: f"DGROUP:{v:#x}")
+def test_shell_deadline_writers(ins, lo):
+    """shell.md Screen states: the writers of the screen deadlines and of DGROUP:0x1d40."""
+    assert [i.addr for i in ins.writers(lo, lo + 3) if i.mem.disp == lo] == \
+        SHELL_DWORD_WRITERS[lo]
+
+
+def test_shell_reference_lists(ins, dgroup):
+    """shell.md: words with no writer or a single reader, and their initial values."""
+    assert _sites(ins.refs(0x90FC, 0x90FD)) == ["seg6:0x1300", "seg6:0x137f", "seg6:0x138a",
+                                                "seg6:0x13a0"]
+    assert ins.writers(0x90FC, 0x90FD) == []
+    assert _sites(ins.refs(0x8F6E, 0x8F6F)) == ["seg2:0x1214"]
+    assert [i.addr for i in ins.refs(0x1D40, 0x1D43) if not is_write(i)] == []
+    assert [i.addr for i in ins.refs(0x8E5E, 0x8E5F) if not is_write(i)] == [
+        "seg2:0x6ba", "seg2:0x715", "seg6:0x31f0", "seg9:0x234e", "seg11:0x7925",
+        "seg14:0x234e", "seg14:0x246c", "seg14:0x24bb", "seg14:0x250c", "seg15:0x57c4"]
+    assert _sites(ins.refs(0xA70, 0xA71)) == ["seg2:0xb3a", "seg2:0xbfc", "seg2:0x1b25"]
+    assert _sites(ins.refs(0x5B0, 0x5B3)) == ["seg7:0x739", "seg7:0x745", "seg7:0x74c"]
+    assert not [i.addr for i in ins.insns if i.mem is not None and i.mem.ds
+                and (i.mem.regs or i.mnem == "lea") and 0x590 <= i.mem.disp <= 0x5C0]
+    assert [i.addr for i in ins.refs(0x95BA, 0x95BB) if not is_write(i)] == [
+        "seg6:0x3155", "seg6:0x31b1", "seg6:0x3c4c", "seg6:0x3c8f", "seg6:0x3c9a",
+        "seg15:0x5acf"]
+    assert struct.unpack_from("<H", dgroup, 0x22)[0] == 1
+    assert struct.unpack_from("<H", dgroup, 0xA70)[0] == 85
+    assert dgroup[0x5B0:0x5B4] == bytes(4)
+
+
+SHELL_CALLERS = {
+    "seg6:0x1c0c": ["seg2:0x9f", "seg6:0x12e7"],
+    "seg2:0x190a": ["seg2:0x156b", "seg6:0x2379"],
+    "seg10:0x87de": ["seg2:0xe3b"],
+    "seg9:0x6cc4": ["seg9:0x6cb8", "seg16:0x6abd"],
+    "seg9:0x5cca": ["seg7:0x38f", "seg9:0xd5f"],
+    "seg9:0xd6c": ["seg7:0xf4", "seg7:0x437", "seg7:0x68f", "seg7:0x755", "seg11:0x6c67",
+                   "seg11:0x7b55"],
+    "seg6:0x5d58": ["seg7:0x1e1"],
+    "seg15:0x10be": ["seg15:0x59b3", "seg16:0x1b7f", "seg16:0x6a4f"],
+    "seg6:0x1d9a": ["seg11:0x7ad1", "seg15:0x12d6", "seg15:0x5b96"],
+    "seg6:0x92b8": ["seg7:0x64d", "seg11:0x7975", "seg15:0x5b14", "seg15:0x5b61"],
+    "seg10:0x885e": ["seg6:0x13e6", "seg10:0x833d", "seg11:0x79f9", "seg15:0x5803",
+                     "seg15:0x6f9d"],
+    "seg10:0x8568": ["seg2:0x55e", "seg2:0xe5d", "seg2:0x1500"],
+    "seg10:0x7f18": ["seg2:0x14ca"],
+    "seg6:0x1c72": ["seg7:0x3ac", "seg11:0x7ad8", "seg11:0x7ba1", "seg15:0x12dd",
+                    "seg15:0x5b9d"],
+    "seg6:0x301a": ["seg6:0x1eb0", "seg6:0x2384"],
+    "seg11:0x2f0": ["seg6:0x5da4", "seg9:0xd81", "seg9:0x6d5c", "seg10:0x259", "seg11:0x2e5",
+                    "seg16:0xd96", "seg16:0x697a", "seg16:0x7223", "seg18:0x3aa"],
+}
+
+
+@pytest.mark.parametrize("func", sorted(SHELL_CALLERS, key=A))
+def test_shell_call_sites(ins, func):
+    """shell.md: exhaustive caller lists of the start-up, screen and intro routines."""
+    assert ins.call_sites(func) == SHELL_CALLERS[func]
+
+
+def test_dialog_wrapper_commands(ins):
+    """shell.md Game-start dialogs: the ordinal 10 command each seg10:0x82a2 caller passes."""
+    assert {s: _imm_push_before(ins, s) for s in ins.call_sites("seg10:0x82a2")} == {
+        "seg2:0x548": 7, "seg2:0xe0f": 5, "seg2:0xe35": 12, "seg10:0x80c7": 8,
+        "seg10:0x882d": 14, "seg11:0x796b": 4, "seg11:0x7a43": 11, "seg11:0x7a7c": 1,
+        "seg16:0x1365": 6, "seg16:0x4811": -100}
+
+
+def test_shell_import_sites(ins):
+    """shell.md Start-up, Exit, Help: RegisterClass, PostQuitMessage, WinHelp, DestroyWindow."""
+    imp = {k: sorted(v, key=A) for k, v in ins.xj["imports"].items()}
+    assert imp["USER.57 RegisterClass"] == [
+        "seg6:0x14c7", "seg6:0x1520", "seg6:0x1579", "seg6:0x15d2", "seg6:0x1635",
+        "seg6:0x1698", "seg6:0x16ef"]
+    assert imp["USER.6 PostQuitMessage"] == ["seg2:0x83a", "seg6:0x19b0"]
+    assert imp["USER.171 WinHelp"] == ["seg2:0x1987"]
+    destroy = imp["USER.53 DestroyWindow"]
+    assert len(destroy) == 27
+    main = [s for s in destroy if ins.step(ins.at(s), -1).text == "push word ptr [0x16]"]
+    assert main == ["seg2:0x742", "seg2:0xe44", "seg10:0x864c"]
+    # no instruction loads ENG_LANG strings 2114 or 2115 by immediate
+    assert not [i.addr for i in ins.insns
+                if any(_IMM_RE.fullmatch(o) and int(o, 0) in (0x842, 0x843) for o in i.ops)]
+    assert ins.at("seg6:0x146f").text == "mov word ptr [bp + 6], 0x300b"   # main class style
+    assert ins.at("seg2:0xd88").text == "and al, 0xf0"                     # WM_SYSCOMMAND mask
+
+
+def test_shell_jump_tables(ins):
+    """shell.md: the state-0 phase and step tables, the repaint table and the 8 and 9 frames."""
+    expect = {"seg15:0x59c2": 8, "seg15:0x5cfb": 6, "seg15:0x1307": 10, "seg11:0x16be": 9,
+              "seg16:0x6adb": 11, "seg16:0x7375": 10}
+    assert {a: ins.switches[a]["count"] for a in expect} == expect
+    assert ins.owners(*A("seg11:0x16be")) == {"seg11:0xafe"}
+    assert ins.at("seg11:0x16b6").text == "cmp ax, 8"
+
+
+def test_palette_imports_and_ordinal_14_callers(ins, isp):
+    """shell.md Palette: AnimatePalette once in ISPACE.DLL, no palette editors in either
+    module, and 17 calls of the ordinal 32 colour helper ISPACE.DLL seg8:0x27f0."""
+    assert isp.xj["imports"]["GDI.367 AnimatePalette"] == ["seg5:0x441a"]
+    assert sorted(isp.xj["imports"]["GDI.360 CreatePalette"], key=A) == ["seg5:0x2c68",
+                                                                          "seg5:0x38e0"]
+    editors = ("SetPaletteEntries", "GetPaletteEntries", "GetNearestPaletteIndex",
+               "ResizePalette", "SetSystemPaletteUse")
+    for m in (ins, isp):
+        assert not [k for k in m.xj["imports"] if k.split()[-1] in editors]
+    assert not [k for k in ins.xj["imports"] if k.endswith(("AnimatePalette", "CreatePalette"))]
+    assert ins.xj["imports"]["GDI.366 UpdateColors"] == ["seg2:0x5a2"]
+    assert len(isp.call_sites("seg8:0x27f0")) == 17

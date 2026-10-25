@@ -9,6 +9,7 @@
 | 3 Oracle | **done** | Scripted runs play wave 1 (`wave-0001`); read-only memory probe (`probe-0001`); `docs/re/oracle.md` answers the phase's questions, with the rest listed as open questions. Two Wine bugs found and patched locally (`docs/upstream/`, not filed). |
 | Early spikes | **done** | `docs/re/ispace.md` (ISPACE.DLL owns palette, bitmaps, sound, dialogs), `docs/re/rng.md` (Microsoft C `rand()`), `docs/re/timing.md` and ADR 0001 (accepted). |
 | M1 Foundations | **done** | Readers for every original format (`src/formats/`), the asset store (`src/assets/`), `isview` v1, ADRs 0001–0003. Each stage independently reviewed, plus a whole-codebase review; converted dialogs match the original's client size (`oracle/digests/dialogs-0001.md`). Open: `isview` on a real Windows machine. |
+| M2 Shell | **in progress** | Stage 0 done: the RE round on start-up, exit, screen states, intro, dialogs, geometry and palette (`docs/re/shell.md`, 200 claims, 171 confirmed by independent verifiers, 44 fact tests). ADRs 0004–0007 drafted, awaiting the user. Stage 1 (the skeleton) runs next. |
 
 **Phase 0 deviations:**
 - **Wine 11.0 stable** (Kron4ek `amd64-wow64`) instead of 11.20. On this host 11.20 segfaults in `wineboot` with a bad address-space limit.
@@ -240,6 +241,33 @@ Cheaper models handle refactors, tests and lint. I merge, update the checklist a
 **Out of scope:** the game window, INI and timing (M2); the filesystem walk (M3); audio playback (M7); MSVC.
 
 **Carried into M2:** the original loads SND_FX.DLL and `<Language>_FX.DLL` from the INI's `SndPath`, which a regenerated INI sets to `Path` + `SOUNDS\`. A flat distribution keeps them in the game directory. M2's INI ADR decides how the port maps `SndPath` (the asset store takes it through `set_sound_dir`).
+
+## M2 — Shell (detailed plan)
+**Goal:** the port starts, shows the intro and title, lets the player open Restore Game and New Game, reaches the mission briefing and exits, with the original's window modes, timing, palette behaviour and INI. The wave itself stays a black play area with the HUD frame until M3 and M4. M2 is done when a run from launch to the briefing and back to exit matches the oracle's screens and INI writes.
+
+**Source of truth:** `docs/re/shell.md` (start-up and exit sequences, the state table and transitions, the intro phases, the ordinal 10 command map, geometry, palette, help), with `globals.md`, `timing.md` and `formats.md` for what they own.
+
+**Decisions first** (ADRs the user approves before the stage that depends on them):
+- **ADR 0004 INI location:** stage 1 needs it for the default path; until then `--ini <path>` is required.
+- **ADR 0005 Help:** stage 3.
+- **ADR 0006 Window and scaling:** stage 2 (the renderer's logical size and presentation).
+- **ADR 0007 Palette:** stage 2 (the 8-bit surface and the software palette).
+
+**Stages** (one Workflow run per stage; parallel implementers own disjoint files):
+0. **RE round** (done): `docs/re/shell.md`; checklist RE statuses updated.
+1. **Skeleton** (2 implementers, 1 reviewer): `src/shell/`: WinMain, the seven window classes with their styles, the start-up order and failure messages of shell.md, the main window in both modes with the Show rectangle rules, the message loop with the frame scheduler of ADR 0001, the state machine (10 states, frame hooks, requests through the state-change step), the 1000 ms timer with the one-shot, focus watch, pause and resume, WM_SYSCOMMAND and WM_COMMAND tables (menus 101/102/POPUPMENU and MAINACCEL from the asset store, commands posted as key events), the exit sequence and INI write-back, the private messages. `src/settings/`: the INI layer over the W profile functions with every key, default and regeneration rule of formats.md, behind a path. Portable pieces (scheduler, state machine, settings parsing) carry doctest tests on the `host` preset; the window runs under Wine in a headless check that records the class, style, size and title.
+2. **Renderer, intro and title** (2 implementers, 1 reviewer): `src/gfx/`: the 8-bit surface, the software palette and the ported palette manager (ADR 0007), presentation with integer scaling (ADR 0006), the bitmap-font and frame helpers that the title needs (ISPACE ordinals 33–35). The state 0 phases: logo, title with the demo-day line, desk scene with its greeting, launch scene, demo attract, per shell.md's phase table, timings and key handling. Oracle comparison: screenshots of each phase against `smoke-0001`, `newgame-0001` and `depth8-0002`.
+3. **Dialogs, briefing, exit and help** (2 implementers, 1 reviewer): the ordinal 10 dialogs the shell reaches (Restore Game, New Game, New Demo, Exit, Order, Benefits, Important Information, Plus Pack) with their procedures' logic and INI writes; the Navigation window as a stub that M3 fills (creation, Enter, the Help button); state 3 briefing and the transition to state 1; states 4 and 5 (GAME OVER, high scores) as far as the shell reaches them; the exit dialogs and `PlusCount`; help per ADR 0005 (`src/formats/hlp`, HTML export, context map).
+4. **Verify:** independent review of `src/`; an oracle digest comparing the port's run from launch to the briefing and to exit with the original's (screens, window geometry, INI writes); fixes; the orchestrator updates the checklist Port statuses and commits.
+
+**Verification:**
+- `ctest` green on `host`, `mingw-x64` and `mingw-i686`; `re/tests` and `oracle/tests` green.
+- The port's window class, style, size and mode switches match shell.md and the oracle.
+- Title and intro screenshots match the oracle's phase for phase; the demo-day line and greeting follow the rules of shell.md.
+- A run from launch through New Game to the briefing and Exit writes the same INI keys as the oracle's run.
+- Checklist: the WIN, MODE, SYS and INI rows that shell.md covers move to Port `done` or `verified`.
+
+**Out of scope:** the Navigation walk (M3), the wave (M3, M4), sound (M7), the Online Help window and watch windows (M8), MSVC.
 
 ## Verification (Phases 0–3)
 - **Phase 0:** the original reaches its title screen under Wine 11.20, with a screenshot and a relay trace showing 16-bit calls. `original.sha256` and the goldens are committed.

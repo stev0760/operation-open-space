@@ -299,10 +299,10 @@ Type I is an integer and S a string with its buffer size. "→" names the DGROUP
 | `Drive` | S 20 or 10 | `C` | [BYTES seg10:0x8525] [BYTES ISPACE.DLL seg10:0x20a4] | [BYTES ISPACE.DLL seg10:0x25f7] | written by New Game OK; meaning [OPEN] |
 | `Size` | I | 1 | [BYTES seg6:0xaf8 seg9:0x23f9 seg10:0x7fa9] [BYTES ISPACE.DLL seg9:0x17fe] | [BYTES seg6:0x95e8 seg9:0x23df seg10:0xa09d] [BYTES ISPACE.DLL seg9:0x21bb seg10:0x2646] | scale level → DGROUP:0x9156; saved in header +0x171 |
 | `SetSize` | I | 1 | [BYTES ISPACE.DLL seg10:0x1ff7] | [BYTES seg10:0xa0ba] [BYTES ISPACE.DLL seg9:0x21d0 seg10:0x265b] | written with `Size`; meaning [OPEN] |
-| `StratAsk` | I | 0 | [BYTES seg10:0xa988] [BYTES ISPACE.DLL seg10:0x26f5] | [BYTES seg10:0xaa6f] [BYTES ISPACE.DLL seg10:0x27d9] | [OPEN] |
+| `StratAsk` | I | 0 | [BYTES seg10:0xa988] [BYTES ISPACE.DLL seg10:0x26f5] | [BYTES seg10:0xaa6f] [BYTES ISPACE.DLL seg10:0x27d9] | while it is 0 or 10, New Game OK in Command mode asks strings 2850–2853, and Yes writes it + 1 ([shell.md](shell.md#game-start-dialogs)) [BYTES ISPACE.DLL seg10:0x26cd seg10:0x27a0 seg10:0x27d9] |
 | `SavePrompt` | I | 1 | [BYTES seg10:0x85a5] [BYTES ISPACE.DLL seg9:0x2d6a] | [BYTES ISPACE.DLL seg9:0x2f18] | [OPEN] |
 | `Accept` | I | 0 | [BYTES seg11:0x7a28] | [BYTES ISPACE.DLL seg10:0x1290 seg10:0x5ded] | the dialog procedure ISPACE ordinal 39 (ISPACE.DLL seg10:0x124a) writes it when button 1 is pressed. It is the procedure of dialog #988 Important Information! ([ispace.md](ispace.md)), whose button 1 is I Accept [BYTES ISPACE.DLL seg10:0x1290] [BYTES ENG_LANG.DLL DIALOG 988] |
-| `PlusCount` | I | 13 | [BYTES seg10:0x880e] | [BYTES seg10:0x8852] | [OPEN] |
+| `PlusCount` | I | 13 | [BYTES seg10:0x880e] | [BYTES seg10:0x8852] | exit counter: seg10:0x87de adds 1 on each exit while DGROUP:0x11aa = 0 and DGROUP:0x920c is −1 or 3, and above 12 stores 0 and opens dialog #1872 ([shell.md](shell.md#exit)) [BYTES seg10:0x87eb seg10:0x8816 seg10:0x881f seg10:0x882d] |
 
 **Window state and positions.** All are integers. seg6:0x0 reads most of them at start-up and seg6:0x33e writes them back. `Full` and `OnTop` go through seg6:0x1290. The columns give every site. [BYTES seg6:0x0 seg6:0x33e]
 

@@ -47,14 +47,14 @@ The patterns below come from runtimes where ISPACE.DLL keeps its own DS. Stock n
 - Navigation is `IS_NAV` at 30,30, size 560×350 (client 552×316). Enter stores the rectangle as `NavLeft` … `NavBottom`. [ORACLE newgame-0001]
 - The positions and sizes of Restore Game and New Game are in [newgame-0001](../../oracle/digests/newgame-0001.md#restore-game-dialog). Those of the ambulance, Sell.., save, exit and demo dialogs and the `IS_HELP` window are in [wave-0001](../../oracle/digests/wave-0001.md#ambulance-h). Without a window manager, the screenshots show no caption or frame. [ORACLE newgame-0001] [ORACLE wave-0001]
 - The wave HUD is a scrollbar, two `IS_INFO` panels and the `IS_ICON` column ([newgame-0002, Wave 1](../../oracle/digests/newgame-0002.md#wave-1-esc-790-s)). [ORACLE newgame-0002] The game recreates them with the same geometry after every dialog. The ship stays at the screen centre while the view scrolls. [ORACLE wave-0001]
-- Client rect: every digest uses a 1024×768 screen, so whether the play area, the HUD or the world size follow it is [OPEN].
+- Client rect: every digest uses a 1024×768 screen. The bytes make the play area, the HUD layout and the visible world extent follow the client rectangle, with no letterbox or stretch ([shell.md](shell.md#window-geometry)). [BYTES seg2:0xb15 seg2:0x1b07 seg8:0x14 seg11:0xcbe seg2:0x9b0] Some INI defaults follow the screen too: `IconLeft` defaults to the screen width − 48, 976 at 1024 pixels ([formats.md](formats.md#inspaceini-inner-space)). [ORACLE newgame-0001] Whether 3200 × 3200 is the world size is [OPEN] ([ispace.md](ispace.md#ordinal-notes)).
 
 ## Palette and colour depth
 Depth 8 (PseudoColor) against depth 24: [ORACLE depth8-0001] [ORACLE depth8-0002]
 - `GetDeviceCaps` gives BITSPIXEL 8 or 32 and SIZEPALETTE 256 or 0, and NUMRESERVED 20 at both ([depth8-0001, Device answers](../../oracle/digests/depth8-0001.md#device-answers)).
 - At depth 8 the title drops "For best results, change Windows to 256 color mode".
 - Both depths make the same `CreatePalette` and `AnimatePalette(hpal, 10, 236, …)` calls. Depth 8 adds 54 `GetDIBits`/`RealizePalette` pairs (ISPACE.DLL seg5:0x229a, seg5:0x227c) and raises the `RealizePalette` count at seg5:0x20f4 from 27 to 81 ([depth8-0002, Palette calls](../../oracle/digests/depth8-0002.md#palette-calls-whole-run-depth-8-against-depth-24)).
-- The call `GetSystemPaletteEntries` asks for entries 0–9 and 246–255 at depth 8 and gets 10 each time. At depth 24 it asks for 0–9 and 6–15 and gets 0. The digest depth8-0002 derives the range from ISPACE.DLL seg5:0x3649. An independent check of that reading is [OPEN].
+- The call `GetSystemPaletteEntries` asks for entries 0–9 and 246–255 at depth 8 and gets 10 each time. At depth 24 it asks for 0–9 and 6–15 and gets 0. The digest depth8-0002 derives the range from ISPACE.DLL seg5:0x3649, and the bytes confirm it: ordinal 4 command 0 copies system entries 0 … NUMRESERVED/2 − 1 and SIZEPALETTE − NUMRESERVED/2 … into palette entries 0–9 and 246–255 at both depths ([shell.md](shell.md#palette)). [BYTES ISPACE.DLL seg5:0x3649 seg5:0x3651 seg5:0x36dc seg5:0x36e6 seg5:0x3702]
 - At depth 8 the dialogs get wrong system colours, and the title, briefing bars, ship sprite, radar dots and dim HUD text lose theirs. The fixture icons keep their colours. Whether Windows at 256 colours does the same is [OPEN].
 - Both depths reach wave 1 on the default runtime. [ORACLE depth8-0002]
 
@@ -86,13 +86,12 @@ Depth 8 (PseudoColor) against depth 24: [ORACLE depth8-0001] [ORACLE depth8-0002
 
 ## Open questions
 - [OPEN] Which runtime's dialog geometry matches Windows, and whether Windows shows the "ANALYSING DRIVE" screen that only otvdm caught [ORACLE runtime-0001].
-- [OPEN] Whether Windows at 256 colours shows the depth-8 colour losses [ORACLE depth8-0002], and an independent check of the depth8-0002 reading of ISPACE.DLL seg5:0x3649.
-- [OPEN] Whether the play area, the HUD or the world size follow the screen size. Some INI defaults do: `IconLeft` defaults to the screen width − 48, 976 at 1024 pixels ([formats.md](formats.md#inspaceini-inner-space)) [ORACLE newgame-0001]. This needs runs at other Xvfb sizes and with `Full=0`.
+- [OPEN] Whether Windows at 256 colours shows the depth-8 colour losses [ORACLE depth8-0002].
 - [OPEN] Depth and count caps of the walk, which need a larger fixture tree, and whether walk order matters outside the sorted listboxes [ORACLE newgame-0001].
 - [OPEN] Why the full status display is missing at wave start and comes and goes around dialogs, and what Windows shows there [ORACLE wave-0001].
 - [OPEN] What removed the icon that dissolved without a capture in `wave-0001-run2`, and which input issues the Command-mode capture, since Q calls the ambulance [ORACLE wave-0001].
 - [OPEN] The end of a wave, the exit gate, other ships, LASTGAME and runs with sound [ORACLE wave-0001].
 - [OPEN] Why traced otvdm halves the HUD clock [ORACLE runtime-0001]. [timing.md](timing.md) explains the frame pacing and the clock samples.
-- [OPEN] What selects the intro's closing line, "GOOD LUCK" or "ENJOY YOUR FOOD" [ORACLE newgame-0002].
+- [OPEN] Which value of DGROUP:0x9214 the newgame-0002 run had [ORACLE newgame-0002]. That word selects the intro's closing line: 0 gives "GOOD LUCK", 3 "TO LUNCH... ENJOY YOUR FOOD", and 1, 2 and 4 "ENJOY YOUR COFFEE", "TEA" or "FOOD" ([shell.md](shell.md#intro-and-title-screen)). [BYTES seg15:0x56ef seg15:0x5700 seg15:0x572b seg15:0x5737 seg15:0x575d]
 - [OPEN] Whether the Windows KERNEL `GlobalFree` zeroes a stale ES in the caller's frame [ORACLE fault-0001].
 - [OPEN] `+int21` tracing under otvdm [ORACLE runtime-0001].
