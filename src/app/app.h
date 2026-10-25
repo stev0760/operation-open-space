@@ -1,0 +1,122 @@
+// The Win32 program: the shared state of WinMain, the message loop and the window procedure.
+// The fields carry the DGROUP word of INSPACE.EXE they stand for, so a reader can check them
+// against docs/re/shell.md, globals.md and timing.md. Win32 W APIs only (ADR 0003): game text
+// stays cp1252 and converts at the call through widen().
+#pragma once
+
+#include <windows.h>
+
+#include <cstdint>
+#include <memory>
+#include <string>
+
+#include "assets/asset_store.h"
+#include "settings/settings.h"
+#include "shell/frame_scheduler.h"
+#include "shell/game_state.h"
+#include "shell/geometry.h"
+#include "shell/window_keys.h"
+
+namespace is::app {
+
+using shell::Tick;
+
+// Private messages of the main window (globals.md "WndProc", shell.md "Private messages").
+constexpr UINT kMsgShow = 0x914;        // ShowWindow(SW_SHOWNORMAL), SetActiveWindow
+constexpr UINT kMsgPaint = 0x978;       // the paint routine seg2:0x970
+constexpr UINT kMsgAbort = 0x991;       // abort to the intro
+constexpr UINT kMsgAltKey = 0x99b;      // a key with Alt held
+constexpr UINT kMsgCtrlKey = 0x99e;     // a key with Ctrl held
+constexpr UINT kMsgShipWatch = 0x9a0;   // create IS_WATCH
+constexpr UINT kMsgMenuReload = 0x9a5;  // seg2:0x16a2
+constexpr UINT kMsgIconWatch = 0x9aa;   // toggle IS_ICON
+constexpr UINT kMsgAllShips = 0x9b4;    // toggle IS_SMART
+constexpr UINT kMsgInput9c5 = 0x9c5;    // input path
+constexpr UINT kMsgCreated = 0x9cf;     // posted by WM_CREATE
+constexpr UINT kMsgStart = 0x9d0;       // posted by the 0x9cf handler
+constexpr UINT kMsgDemo = 0x9f0;        // DEMO command line
+constexpr UINT kMsgPlay = 0x9fa;        // PLAY command line
+constexpr UINT kMsgMusic = 0xa04;       // seg10:0x7480(wParam)
+// Joystick messages of the input path (mmsystem.h).
+constexpr UINT kMmJoy1Move = 0x3a0, kMmJoy1ButtonDown = 0x3b5, kMmJoy1ButtonUp = 0x3b7;
+
+// The window timer's id and period [BYTES seg6:0xa0f].
+constexpr UINT_PTR kTimerId = 1;
+constexpr UINT kTimerMs = 1000;
+
+// "Inner Space" (DGROUP:0x82), the class and application name.
+inline constexpr const wchar_t* kMainClass = L"Inner Space";
+
+struct App {
+    HINSTANCE instance = nullptr;
+    HWND main = nullptr;            // DGROUP:0x16, set in WM_CREATE
+    HMENU menu = nullptr;           // DGROUP:0x90fa, menu 101 (or 102)
+    HMENU sys_menu = nullptr;       // DGROUP:0x14, set by the first SC_RESTORE
+    HACCEL accel = nullptr;         // MainAccel
+    HFONT font = nullptr;           // DGROUP:0x90fe
+    HICON icon = nullptr;           // GROUP_ICON GAME of INSPACE.EXE
+
+    std::unique_ptr<assets::AssetStore> store;
+    std::unique_ptr<settings::IniFile> ini;
+    shell::WindowKeys keys;  // Full DGROUP:0x20, Show DGROUP:0x1d20, Menu DGROUP:0x90f6, ...
+    shell::GameState game;
+    shell::FrameScheduler scheduler;
+    shell::PlayArea area;  // DGROUP:0x90ea, 0x10, 0x90ec, 0x8e5a
+    shell::Clip clip;      // DGROUP:0x1d30 and the clip region DGROUP:0x12
+
+    int screen_cx = 0, screen_cy = 0;  // SM_CXSCREEN, SM_CYSCREEN
+    int depth = 0;                     // DGROUP:0x90ee: max(BITSPIXEL, PLANES)
+    // DGROUP:0x920c, the edition. The edition check seg10:0x885e needs ISPACE ordinal 24,
+    // which the port does not have yet; 0 is the unregistered "Limited" copy the oracle ran
+    // (newgame-0001's title "Limited Inner Space"). TODO stage 3.
+    int edition = 0;
+    int play_mode = 0;  // DGROUP:0x9134 (INI PlayMode, read at game start)
+
+    bool one_shot = false;       // DGROUP:0x1c: the first WM_TIMER is the one-shot
+    bool timer_seen = false;     // DGROUP:0x1e: set by the one-shot
+    bool idle_allowed = false;   // DGROUP:0x8f66: set by the 0x9d0 handler
+    bool running = false;        // DGROUP:0x8f68: not paused
+    bool calibrated = false;     // DGROUP:0x1212: the Calibrate measurement is over
+    Tick calibrate_start = 0;    // DGROUP:0x120e
+    bool calibrate_started = false;
+    bool frame_running = false;  // DGROUP:0x968c
+    bool torn_down = false;      // DGROUP:0x49e
+    bool focus_own = false;      // DGROUP:0x8e5c: which focus-watch command ran last
+    bool hud_dirty = false;      // DGROUP:0x8f64
+    bool relayout = false;       // DGROUP:0x1038: the next wave frame runs seg2:0xba4 (M3)
+    Tick start_tick = 0;         // DGROUP:0x1d3c
+    POINT start_cursor{};        // DGROUP:0x1d48
+};
+
+extern App g;
+
+// The 32-bit millisecond tick (ADR 0001 decision 5), from the monotonic high-resolution clock,
+// counted from start-up. The original's GetCurrentTime counts from boot and its deadlines
+// compare unsigned (seg7:0x3f5), so a deadline armed shortly before the 32-bit wrap fires at
+// once. Counting from start-up keeps the compares faithful and moves that wrap to 49.7 days of
+// process uptime [DESIGN].
+Tick now_tick();
+
+// cp1252 game text to UTF-16 at the Win32 call (ADR 0003).
+std::wstring widen(const std::string& cp1252);
+// An ENG_LANG string as UTF-16; empty when the store has none.
+std::wstring lang_string(std::uint16_t id);
+
+// The port's log (UTF-8, ADR 0003 decision 5): standard error and OutputDebugString.
+void log(const std::string& utf8);
+// "unimplemented: <what> (<address>)": an action the shell reaches that a later stage ports.
+void log_todo(const std::string& what, const char* address);
+
+// A diagnostic line with the main window's class, styles, rectangles and caption [DESIGN].
+void log_window(const char* when);
+
+LRESULT CALLBACK main_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
+
+// The idle step seg2:0x1c08 (timing.md "Message loop and idle step"). Returns false when it
+// ran a pass that ended early (pass() false: suspended, a deadline, routed input), so that the
+// message loop does not spin on a frame the pass keeps from running.
+bool idle_step();
+// The state-0 frame work the shell owns until stage 2 ports the intro.
+void install_state_hooks();
+
+}  // namespace is::app
