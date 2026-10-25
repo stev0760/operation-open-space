@@ -1,6 +1,6 @@
 # ADR 0006: Window and scaling
 
-- **Status:** Proposed. [DESIGN]
+- **Status:** Accepted. [DESIGN]
 - **Scope:** the main window's modes and size, how the play area maps to pixels, and how the port scales on large or high-DPI displays. The palette is ADR 0007. [DESIGN]
 
 ## Context

@@ -248,9 +248,9 @@ Cheaper models handle refactors, tests and lint. I merge, update the checklist a
 **Source of truth:** `docs/re/shell.md` (start-up and exit sequences, the state table and transitions, the intro phases, the ordinal 10 command map, geometry, palette, help), with `globals.md`, `timing.md` and `formats.md` for what they own.
 
 **Decisions first** (ADRs the user approves before the stage that depends on them):
-- **ADR 0004 INI location:** stage 1 needs it for the default path; until then `--ini <path>` is required.
-- **ADR 0005 Help:** stage 3.
-- **ADR 0006 Window and scaling:** stage 2 (the renderer's logical size and presentation).
+- **ADR 0004 INI location:** accepted; stage 3 implements the default path (stage 1 shipped with `--ini <path>` required).
+- **ADR 0005 Help:** accepted; stage 3.
+- **ADR 0006 Window and scaling:** accepted; stage 2 (the renderer's logical size and presentation).
 - **ADR 0007 Palette:** stage 2 (the 8-bit surface and the software palette).
 
 **Stages** (one Workflow run per stage; parallel implementers own disjoint files):

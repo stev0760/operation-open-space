@@ -1,6 +1,6 @@
 # ADR 0004: INI location
 
-- **Status:** Proposed. [DESIGN]
+- **Status:** Accepted. [DESIGN]
 - **Scope:** where the port keeps `INSPACE.INI`, how it resolves the path keys, and which keys it writes. The meaning of each key stays in [formats.md](../re/formats.md#ini-files). [DESIGN]
 
 ## Context
