@@ -454,4 +454,8 @@ bool regenerate(IniFile& ini, const fs::path& asset_dir, const fs::path& local_d
     return true;
 }
 
+void PortSettings::load(const IniFile& ini) {
+    scale = ini.get_int(kPortSection, "Scale", 0);  // range: shell::scale_factor
+}
+
 }  // namespace is::settings

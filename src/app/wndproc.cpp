@@ -2,7 +2,8 @@
 // calls: WM_CREATE seg6:0x18e0, WM_DESTROY and the teardown seg6:0x19bc, WM_SIZE seg2:0xa74,
 // WM_MOVE seg2:0x11c0, WM_TIMER seg2:0x11f8, WM_SYSCOMMAND seg2:0xd78, WM_COMMAND seg2:0x13b2
 // and the double click seg2:0x1046 (shell.md "Start-up", "Exit", "Window geometry").
-// WM_QUERYNEWPALETTE and WM_PALETTECHANGED wait for ADR 0007 and go to DefWindowProc.
+// WM_QUERYNEWPALETTE and WM_PALETTECHANGED go to DefWindowProc: the port has no hardware palette
+// (ADR 0007 decision 5). Drawing goes to the surface of src/gfx and WM_PAINT presents it.
 #include <windows.h>
 
 #include <cstdio>
@@ -73,21 +74,20 @@ void add_windowed_bits() {
 }
 
 // The paint routine seg2:0x970. The HUD layout seg11:0xafe (M3) runs while DGROUP:0x8f64 is
-// set; a clear flag is only set [BYTES seg2:0x9a3-0x9b7]. The state's repaint follows; until
-// the states draw (stage 2 on), the play area is black.
+// set; a clear flag is only set [BYTES seg2:0x9a3-0x9b7]. The state's repaint follows. A state
+// that does not draw yet (no repaint hook) shows a black play area, PatBlt BLACKNESS on the
+// surface [DESIGN]; then the surface is presented.
 void paint_routine() {
     if (g.hud_dirty) {
         // TODO M3: seg11:0xafe lays out the HUD children (shell::hud_layout).
     } else {
         g.hud_dirty = true;
     }
-    if (HDC dc = GetDC(g.main)) {
-        RECT rc;
-        GetClientRect(g.main, &rc);
-        FillRect(dc, &rc, static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
-        ReleaseDC(g.main, dc);
-    }
+    const int s = g.game.state();
+    if (s >= 0 && s < shell::kStateCount && !g.game.hooks().repaint[s] && !g.gfx->surface().empty())
+        PatBlt(g.gfx->dc(), 0, 0, g.area.w, g.area.h, BLACKNESS);
     g.game.repaint();
+    g.gfx->present(g.main, true);
 }
 
 // seg6:0x19bc: the teardown, once [BYTES seg6:0x19c9-0x1a5a].
@@ -102,7 +102,8 @@ void teardown() {
         DestroyMenu(g.menu);
         g.menu = nullptr;
     }
-    // 6: GDI and memory release (seg10:0x330) comes with the renderer (stage 2).
+    // 6: GDI and memory release (seg10:0x330): the images are released by their owners and the
+    // surface with the renderer at the end of WinMain.
     // 7: the INI write-back seg6:0x33e, bracketed by the wait cursor [BYTES seg6:0x34b
     // seg6:0x6a7].
     SetCursor(LoadCursorW(nullptr, IDC_WAIT));
@@ -119,7 +120,8 @@ void teardown() {
         DeleteObject(g.font);
         g.font = nullptr;
     }
-    // 10: ISPACE ordinal 4 command 2 (the palette, ADR 0007); 11: the DLLs (none).
+    g.gfx->palette_delete();  // 10: seg10:0x6e26, ordinal 4 command 2 [BYTES seg6:0x1a53]
+    // 11: the DLLs (none).
 }
 
 // seg2:0xd78 SC_CLOSE: the exit sequence of shell.md "Exit" without its dialogs.
@@ -230,8 +232,11 @@ void command(WORD id) {
 }
 
 // seg2:0x1046: the double click toggles the mode once DGROUP:0x1e is set.
-void double_click() {
-    // TODO M3: the three HUD hotspots come first [BYTES seg2:0x1046-0x114f].
+void double_click(LPARAM lparam) {
+    // TODO M3: the three HUD hotspots come first [BYTES seg2:0x1046-0x114f], tested with the
+    // position in logical pixels (ADR 0006 Consequences).
+    const POINT at = logical_point(lparam);
+    (void)at;
     if (!g.timer_seen) return;  // seg2:0x1152
     if (g.keys.full) {
         add_windowed_bits();  // seg2:0x1177
@@ -312,7 +317,15 @@ void popup_menu(LPARAM lparam) {
 // WM_CREATE seg6:0x18e0. Returns false when the window timer failed.
 bool create(HWND hwnd) {
     g.main = hwnd;  // DGROUP:0x16 [BYTES seg2:0x390]
-    // The palette set-up (ordinal 4 commands 0, 1, 3) waits for ADR 0007.
+    // The surface at the client's logical size, black.
+    RECT rc;
+    GetClientRect(hwnd, &rc);
+    g.gfx->set_client_size(rc.right, rc.bottom, g.scale_key);
+    g.gfx->blacken();
+    // seg6:0x190c: the palette (seg10:0x6e00) and scheme -1000, all white, in mode 2
+    // (seg10:0x6e76) [BYTES seg6:0x18eb seg6:0x18fa seg6:0x1925 seg6:0x1941].
+    g.gfx->palette_create();
+    g.gfx->palette_scheme(-1000, 2);
     g.font = CreateFontW(14, 0, 0, 0, 0, 0, 0, 0, ANSI_CHARSET, 0, 0, PROOF_QUALITY,
                          VARIABLE_PITCH | FF_SWISS, L"Arial");  // seg6:0x1934
     // LoadBitmap "ALPHABET" (stage 2); seg6:0x2ca's class icon, Aux, QuickIntro and Rate
@@ -364,10 +377,11 @@ void log_window(const char* when) {
     char buf[512];
     std::snprintf(buf, sizeof buf,
                   "window %s: class \"%s\" title \"%s\" style 0x%08lx exstyle 0x%08lx "
-                  "rect %d,%d,%d,%d client %ldx%ld menu %s state %d",
+                  "rect %d,%d,%d,%d client %ldx%ld menu %s state %d scale %d logical %dx%d",
                   when, fmt::utf8_from_utf16(cls16).c_str(), fmt::utf8_from_utf16(title16).c_str(),
                   style, ex, r.left, r.top, r.right, r.bottom, c.right, c.bottom,
-                  GetMenu(g.main) ? "yes" : "no", g.game.state());
+                  GetMenu(g.main) ? "yes" : "no", g.game.state(), g.gfx ? g.gfx->factor() : 0,
+                  g.gfx ? g.gfx->logical_width() : 0, g.gfx ? g.gfx->logical_height() : 0);
     log(buf);
 }
 
@@ -399,8 +413,13 @@ LRESULT handle(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
             if (shell::needs_full_screen_move(g.keys.full != 0, r, g.screen_cx, g.screen_cy)) {
                 MoveWindow(hwnd, 0, 0, g.screen_cx, g.screen_cy, TRUE);  // seg2:0xaf5
             } else {
-                g.area = shell::play_area_from_size(LOWORD(lparam), HIWORD(lparam), g.screen_cx,
-                                                    g.screen_cy);
+                // Logical pixels (ADR 0006): the surface follows the client size, and the play
+                // area is the client and the screen divided by the factor.
+                g.gfx->set_client_size(LOWORD(lparam), HIWORD(lparam), g.scale_key);
+                g.area = shell::play_area_from_size(
+                    static_cast<std::uint16_t>(logical(LOWORD(lparam))),
+                    static_cast<std::uint16_t>(logical(HIWORD(lparam))), logical(g.screen_cx),
+                    logical(g.screen_cy));
             }
             g.area.hud_top = g.area.h - 85;  // seg2:0xb51, on both paths
             g.clip = shell::clip_rect(g.area, g.keys.border != 0, g.play_mode != 0);  // seg2:0xca4
@@ -414,7 +433,7 @@ LRESULT handle(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     case WM_SETFOCUS:  // seg2:0x7fa
         if (!IsIconic(hwnd) && !g.running) resume_game();
         return 0;
-    case WM_PAINT:  // seg2:0x7ac, then DefWindowProc
+    case WM_PAINT: {  // seg2:0x7ac, then DefWindowProc's BeginPaint and EndPaint
         if (g.timer_seen) {
             const int s = g.game.state();
             if (s == shell::kWave || s == shell::kHelp)
@@ -422,7 +441,41 @@ LRESULT handle(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
             else
                 PostMessageW(hwnd, kMsgPaint, 0, 0);
         }
-        break;
+        // The port presents the surface into the update region itself [DESIGN].
+        PAINTSTRUCT ps;
+        HDC dc = BeginPaint(hwnd, &ps);
+        RECT rc;
+        GetClientRect(hwnd, &rc);
+        if (!g.gfx->present_dc(dc, rc.right, rc.bottom, true))
+            FillRect(dc, &rc, static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+    case WM_ERASEBKGND:  // the presented surface covers the client area [DESIGN]
+        // seg2:0x224 leaves WM_ERASEBKGND to DefWindowProc, which fills the client with the
+        // class brush BLACK_BRUSH, clipped to the update region that the wParam DC's clip box
+        // bounds [REF Win32 SDK WM_ERASEBKGND]. State 0 draws only what changes, so the erase
+        // is kept there: on the surface, over the logical cover of that box, before the repaint
+        // seg11:0xafe [DESIGN]. Other states black the play area in the paint routine until
+        // they draw.
+        if (g.game.state() == shell::kIntro && !g.gfx->surface().empty()) {
+            RECT cb;
+            if (GetClipBox(reinterpret_cast<HDC>(wparam), &cb) != ERROR) {
+                const Rect r = shell::logical_cover(Rect{cb.left, cb.top, cb.right, cb.bottom},
+                                                    g.gfx->factor(), g.gfx->logical_width(),
+                                                    g.gfx->logical_height());
+                if (r.width() > 0 && r.height() > 0)
+                    PatBlt(g.gfx->dc(), r.left, r.top, r.width(), r.height(), BLACKNESS);
+            }
+        }
+        return 1;
+    case WM_DPICHANGED:  // per-monitor DPI awareness v2 (ADR 0006 decision 4)
+        if (!g.keys.full) {
+            const auto* r = reinterpret_cast<const RECT*>(lparam);
+            SetWindowPos(hwnd, nullptr, r->left, r->top, r->right - r->left, r->bottom - r->top,
+                         SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+        return 0;
     case WM_GETMINMAXINFO: {  // seg2:0x3eb
         auto* mm = reinterpret_cast<MINMAXINFO*>(lparam);
         if (g.game.resizable()) {
@@ -459,7 +512,7 @@ LRESULT handle(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     case WM_LBUTTONDOWN:  // seg16:0x638a, the ambulance screen's buttons (M4)
         return 0;
     case WM_LBUTTONDBLCLK:  // seg2:0x65e
-        if (g.calibrated && g.game.resizable()) double_click();
+        if (g.calibrated && g.game.resizable()) double_click(lparam);
         return 0;
     case WM_RBUTTONDOWN:  // seg2:0x68e
         if (g.calibrated) popup_menu(lparam);
@@ -472,7 +525,10 @@ LRESULT handle(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
         paint_routine();
         return 0;
     case kMsgCreated:  // seg2:0x458: DC, palette, seg10:0x6e26, seg10:0x6e00, seg10:0x6e76(8, 2)
-        // TODO stage 2 (palette, ADR 0007; the game's DC set-up).
+        // The DC is the surface's; no palette is selected or realised (ADR 0007 decision 5).
+        g.gfx->palette_delete();      // seg2:0x458
+        g.gfx->palette_create();      // seg2:0x469
+        g.gfx->palette_scheme(8, 2);  // seg2:0x484
         PostMessageW(hwnd, kMsgStart, 0, 0);  // seg2:0x4b6
         return 0;
     case kMsgStart:            // seg2:0x4be

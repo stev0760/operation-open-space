@@ -1,0 +1,4 @@
+// inspace.exe's resources: only the application manifest (RT_MANIFEST 24, id 1 =
+// CREATEPROCESS_MANIFEST_RESOURCE_ID). The game's own resources come from the user's original
+// files through the asset store (ADR 0002).
+1 24 "inspace.manifest"

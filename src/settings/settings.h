@@ -179,6 +179,16 @@ struct GameSettings {
     static std::vector<std::string_view> keys();
 };
 
+// The port's own keys (ADR 0006 decision 3): section [Port] of the same file, which the
+// original never reads. Scale: 0 (default) picks the window scale factor automatically, 1-4 fix
+// it; shell::scale_factor owns that range and counts any other value as 0 [DESIGN]. load()
+// keeps the key as written. formats.md documents only the original's keys.
+constexpr std::string_view kPortSection = "Port";
+struct PortSettings {
+    int scale = 0;
+    void load(const IniFile& ini);
+};
+
 // The regeneration of seg6:0x6d8 (formats.md#files-and-sections), with the asset directory
 // as the program directory (ADR 0004, decision 4) and `local_dir` as LocalPath (decision 5):
 // when [Inner Space] Path is empty, writes Path, LocalPath, ShipPath, SndPath, RacePath, Dead,

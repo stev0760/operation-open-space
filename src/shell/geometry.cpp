@@ -1,5 +1,7 @@
 #include "shell/geometry.h"
 
+#include <algorithm>
+
 namespace is::shell {
 
 namespace {
@@ -85,6 +87,32 @@ HudLayout hud_layout(const PlayArea& a, const HudInputs& in) {
     h.info2 = {in.panel2_x + 5, a.hud_top + 5, in.panel2_w - 9, 76};     // seg11:0xd9f
     h.fill = {0, a.hud_top, a.w, 85};                                    // seg11:0xdcc
     return h;
+}
+
+int scale_factor(int key, int client_w, int client_h) {
+    int f;
+    if (key >= 1 && key <= kMaxScale)
+        f = key;
+    else
+        f = client_h / kAutoScaleHeight;
+    if (f < 1) f = 1;
+    while (f > 1 && (client_w / f < kMinTrackWidth || client_h / f < kMinTrackHeight)) --f;
+    return f;
+}
+
+Rect logical_cover(const Rect& physical, int factor, int w, int h) {
+    const int f = factor > 1 ? factor : 1;
+    const auto floor_div = [f](int v) { return v >= 0 ? v / f : -((-v + f - 1) / f); };
+    const auto ceil_div = [f](int v) { return v >= 0 ? (v + f - 1) / f : -(-v / f); };
+    Rect r{floor_div(physical.left), floor_div(physical.top), ceil_div(physical.right),
+           ceil_div(physical.bottom)};
+    r.left = std::clamp(r.left, 0, w);
+    r.top = std::clamp(r.top, 0, h);
+    r.right = std::clamp(r.right, 0, w);
+    r.bottom = std::clamp(r.bottom, 0, h);
+    if (r.right < r.left) r.right = r.left;
+    if (r.bottom < r.top) r.bottom = r.top;
+    return r;
 }
 
 }  // namespace is::shell

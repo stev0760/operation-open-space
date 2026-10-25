@@ -134,9 +134,9 @@ One row per binding. MAINACCEL and FACTACCEL are the accelerator tables in ENG_L
 
 | ID | Feature | Evidence | Spec | RE | Port | Edition |
 |---|---|---|---|---|---|---|
-| WIN-01 | Main window: class `Inner Space`, WS_POPUP full screen by default; title "Limited Inner Space" in the demo | [MANUAL General] [ORACLE newgame-0001] [BYTES ENG_LANG.DLL STRING 147] id 2338 [BYTES seg6:0x12b6] [BYTES seg6:0x146f] | oracle | understood | todo | demo |
-| WIN-02 | Resizable windowed mode | [MANUAL General] [BYTES INSTALL.EXE DIALOG 1774] [BYTES seg2:0x3eb] [BYTES seg6:0x146a] | manual | understood | todo | unknown |
-| WIN-03 | Title screen: OPERATION:, edition and version line, copyright, demo-day line, Press 'R', "ESC to play - Alt-X to Exit" | [ORACLE smoke-0001] [ORACLE depth8-0001] [BYTES ENG_LANG.DLL STRING 133] id 2121 [BYTES ENG_LANG.DLL STRING 159] id 2542 [BYTES seg15:0x5809] | oracle | understood | todo | demo |
+| WIN-01 | Main window: class `Inner Space`, WS_POPUP full screen by default; title "Limited Inner Space" in the demo | [MANUAL General] [ORACLE newgame-0001] [BYTES ENG_LANG.DLL STRING 147] id 2338 [BYTES seg6:0x12b6] [BYTES seg6:0x146f] | oracle | understood | done | demo |
+| WIN-02 | Resizable windowed mode | [MANUAL General] [BYTES INSTALL.EXE DIALOG 1774] [BYTES seg2:0x3eb] [BYTES seg6:0x146a] | manual | understood | done | unknown |
+| WIN-03 | Title screen: OPERATION:, edition and version line, copyright, demo-day line, Press 'R', "ESC to play - Alt-X to Exit" | [ORACLE smoke-0001] [ORACLE depth8-0001] [ORACLE intro-0001] [BYTES ENG_LANG.DLL STRING 133] id 2121 [BYTES ENG_LANG.DLL STRING 159] id 2542 [BYTES seg15:0x5809] | oracle | verified | done | demo |
 | WIN-04 | Title-screen hint "For best results, change Windows to 256 color mode" above 8 bpp | [ORACLE depth8-0001] [BYTES DGROUP:0x129d] [BYTES seg6:0x1716] | oracle | understood | todo | demo |
 | WIN-05 | Paused state: title "Inner Space - PAUSED..", PAUSED, CLICK HERE TO PLAY | [ORACLE smoke-0001] [BYTES ENG_LANG.DLL STRING 128] id 2044 [BYTES ENG_LANG.DLL STRING 127] id 2028 [BYTES ENG_LANG.DLL STRING 127] id 2027 [BYTES seg2:0x9c4] | oracle | located | todo | demo |
 | WIN-06 | Status display: score, target, radar, damage, play time, current weapon | [MANUAL General] [ORACLE runtime-0001] [BYTES seg11:0xafe] | oracle | located | todo | demo |
@@ -150,7 +150,7 @@ One row per binding. MAINACCEL and FACTACCEL are the accelerator tables in ENG_L
 | WIN-14 | Game menu bar: menu 101 (Game, Ship Cmds, Defenders, Watch, Help) and menu 102 (adds Strategy) | [MANUAL QuickStart] [MANUAL Display Options] [BYTES ENG_LANG.DLL MENU 101] [BYTES ENG_LANG.DLL MENU 102] [BYTES seg2:0x13b2] [BYTES seg11:0x6d19] | manual | understood | todo | unknown |
 | WIN-15 | Popup menu: Options Menu, Game Options.., Exit Game | [BYTES ENG_LANG.DLL MENU POPUPMENU] [BYTES seg2:0x13b2] | strings | located | todo | unknown |
 | WIN-16 | 3D game border | [MANUAL Display Options] [BYTES seg2:0xcb1] | manual | understood | todo | unknown |
-| WIN-17 | Logo intro: spinning SD_LOGO and "presents.. " | [ORACLE smoke-0001] [ORACLE depth8-0001] [BYTES ENG_LANG.DLL STRING 133] id 2118 [BYTES seg15:0x5809] | oracle | understood | todo | demo |
+| WIN-17 | Logo intro: spinning SD_LOGO and "presents.. " | [ORACLE smoke-0001] [ORACLE depth8-0001] [ORACLE intro-0001] [BYTES ENG_LANG.DLL STRING 133] id 2118 [BYTES seg15:0x5809] | oracle | verified | done | demo |
 | WIN-18 | Intro desk scene: the monitor types a weekday and time-of-day greeting with the pilot name, then the mission | [ORACLE newgame-0001] [BYTES ENG_LANG.DLL 5000 210] [BYTES ENG_LANG.DLL STRING 190] id 3032 [BYTES seg11:0x7aaa] | oracle | understood | todo | demo |
 | WIN-19 | Launch: ship on a launch pad flies through a monitor; "PREPARE TO LAUNCH.. GOOD LUCK, (pilot)!" | [MANUAL General] [ORACLE runtime-0001] [BYTES ENG_LANG.DLL STRING 190] id 3030 [BYTES seg15:0x59b3] | oracle | understood | todo | demo |
 | WIN-20 | "Analysing Drive" display before the Navigation window | [ORACLE runtime-0001] [BYTES ENG_LANG.DLL STRING 134] id 2141 [BYTES seg15:0x59b3] | oracle | understood | todo | demo |
@@ -189,6 +189,9 @@ One row per binding. MAINACCEL and FACTACCEL are the accelerator tables in ENG_L
 | WIN-53 | Inner Space Plus Pack! dialog (#0750) | [BYTES ENG_LANG.DLL DIALOG 1872] [BYTES ENG_LANG.DLL 5000 138] [BYTES ISPACE.DLL seg10:0x5f96] | strings | located | todo | registered |
 | WIN-54 | Low-resource dialogs: free GDI resources warning and abort prompt | [BYTES ENG_LANG.DLL STRING 191] id 3043 [BYTES ENG_LANG.DLL STRING 191] id 3042 [BYTES seg7:0x39] | strings | located | todo | unknown |
 | WIN-55 | While a game palette exists (DGROUP:0x920e ≠ 0), WM_QUERYNEWPALETTE reselects and realises it and repaints; WM_PALETTECHANGED from another window realises it and calls UpdateColors | [BYTES seg2:0x5cb] [BYTES seg2:0x56d] | code | understood | todo | unknown |
+| WIN-56 | Intro credits: the growing logo, six typed small-capitals entries with lightning bolts, the erase and the logo-only tail | [ORACLE intro-0001] [BYTES seg15:0x7b34] [BYTES seg15:0x7cda] | oracle | verified | done | demo |
+| WIN-57 | Intro text pages: name and version heading in the bitmap font, two 11-line pages of #5000 136, "press ESC to play Inner Space.. " | [ORACLE intro-0001] [BYTES ENG_LANG.DLL 5000 136] [BYTES ENG_LANG.DLL STRING 133] id 2119 [BYTES seg15:0x6890] | oracle | verified | done | demo |
+| WIN-58 | Intro "Basic Key Commands" page: heading and 11 key rows in the bitmap font with graded colours | [ORACLE intro-0001] [BYTES ENG_LANG.DLL STRING 133] id 2120 [BYTES ENG_LANG.DLL STRING 77] [BYTES seg15:0x6b52] | oracle | verified | done | demo |
 
 ## NAV: Navigation, directories and waves
 
@@ -556,7 +559,7 @@ Keys are in `INSPACE.INI` `[Inner Space]` unless the row names another file or s
 | INI-55 | `Enhance`: (Enhanced Graphics), default 1 | [ORACLE newgame-0001] [BYTES seg6:0xc8c] | oracle | located | todo | demo |
 | INI-56 | `Detail`: (Play Detail), default 3 | [ORACLE newgame-0001] [BYTES seg6:0xc76] | oracle | located | todo | demo |
 | INI-57 | `Quick`: (Quickload), default 0 (INSPACE, Factory), 1 (ISPACE.DLL) | [ORACLE newgame-0001] [BYTES seg6:0xc60] | oracle | located | todo | demo |
-| INI-58 | `Calibrate`: speed measure rewritten 1.5 s after each launch; guides the detail level | [MANUAL Optimizing for Your Computer] [ORACLE newgame-0001] [ORACLE smoke-0001] [BYTES seg6:0xa6c] | oracle | understood | todo | demo |
+| INI-58 | `Calibrate`: speed measure rewritten 1.5 s after each launch; guides the detail level | [MANUAL Optimizing for Your Computer] [ORACLE newgame-0001] [ORACLE smoke-0001] [BYTES seg6:0xa6c] | oracle | understood | done | demo |
 | INI-59 | `GameSpeed`: default 20000 | [ORACLE newgame-0001] [BYTES seg6:0xb5c] | oracle | located | todo | demo |
 | INI-60 | `FrameRateSet`: (Play Speed), default 36 | [ORACLE newgame-0001] [BYTES seg6:0xb7d] | oracle | understood | todo | demo |
 | INI-61 | `MixChannels`: (Mix Channels), default 1 (INSPACE), 4 (ISPACE.DLL) | [ORACLE newgame-0001] [BYTES seg6:0xc9c] | oracle | located | todo | demo |
@@ -761,10 +764,10 @@ FACTORY.EXE 1.29.02 ships with the full game. The THEWORKS FACTORY.EXE 1.49.00 i
 | SYS-07 | INSTALL RELEASE: Security # and Release Code reset the master disk | [BYTES INSTALL.EXE DIALOG 891] | strings | none | todo | unknown |
 | SYS-08 | Add-on installer (THEWORKS SETUP.EXE): upgrades keep registration | [BYTES theworks/SETUP.EXE DIALOG 300] | strings | none | todo | unknown |
 | SYS-09 | Empty [Inner Space] `Path`: message, then INSPACE.INI regenerated | [ORACLE smoke-0001] [BYTES seg6:0x6d8] [BYTES seg6:0x1323] | oracle | understood | todo | demo |
-| SYS-10 | Calibrate measured at launch and stored | [MANUAL Optimizing for Your Computer] [ORACLE newgame-0001] [BYTES seg15:0x5f68] | oracle | understood | todo | demo |
+| SYS-10 | Calibrate measured at launch and stored | [MANUAL Optimizing for Your Computer] [ORACLE newgame-0001] [BYTES seg15:0x5f68] | oracle | understood | done | demo |
 | SYS-11 | Install-time speed test picks the detail level | [MANUAL Detail Settings] | manual | none | todo | unknown |
 | SYS-12 | Registration: serial number and registration code enable the demo copy | [MANUAL Ordering Instructions] [BYTES ENG_LANG.DLL DIALOG 693] [BYTES ENG_LANG.DLL STRING 142] id 2270 [BYTES ENG_LANG.DLL STRING 142] id 2271 [BYTES seg6:0x13e6] | manual | understood | todo | demo |
-| SYS-13 | Demo trial-day counter on the title screen | [ORACLE smoke-0001] [BYTES ENG_LANG.DLL STRING 147] id 2341 [BYTES ENG_LANG.DLL STRING 147] id 2342 [BYTES seg15:0x6f9d] | oracle | understood | todo | demo |
+| SYS-13 | Demo trial-day counter on the title screen | [ORACLE smoke-0001] [BYTES ENG_LANG.DLL STRING 147] id 2341 [BYTES ENG_LANG.DLL STRING 147] id 2342 [BYTES seg15:0x6f9d] | oracle | verified | done | demo |
 | SYS-14 | Hard-drive validity check ("The game isn't valid on this hard drive.") | [BYTES ENG_LANG.DLL STRING 147] id 2343 [BYTES ENG_LANG.DLL STRING 147] id 2344 | strings | none | todo | unknown |
 | SYS-15 | CD checks ("Drive %s is not a CD drive", "The CD in drive %s is not Inner Space") | [BYTES ENG_LANG.DLL STRING 159] id 2543 [BYTES ENG_LANG.DLL STRING 160] id 2544 | strings | none | todo | unknown |
 | SYS-16 | Registered/Unregistered copy marks; INSPACE.EXE #5000 143 "Unregistered Copy ILLEGAL" | [BYTES ENG_LANG.DLL STRING 133] ids 2122–2124 [BYTES INSPACE.EXE 5000 143] [BYTES ISPACE.DLL seg10:0x4c68] [BYTES seg6:0x13e6] | code | understood | todo | unknown |

@@ -89,4 +89,21 @@ struct HudLayout {
 };
 HudLayout hud_layout(const PlayArea& a, const HudInputs& in);
 
+// ---- logical pixels (ADR 0006 decisions 2 and 3)
+// The game draws into a surface of the logical size, the client size divided by an integer
+// factor, and every rule above runs in logical pixels: the play area, the clip rectangle and
+// the HUD, with the screen size divided by the same factor. Window rectangles, the Show keys
+// and the 600 x 400 minimum track size stay in physical pixels [DESIGN].
+constexpr int kAutoScaleHeight = 600;  // automatic: the logical height stays at or above it
+constexpr int kMaxScale = 4;           // [Port] Scale 1-4 fix the factor
+// The factor for [Port] Scale `key` and a client size: 0 is automatic, the largest integer
+// that keeps the logical height at or above 600, never below 1; 1-4 fix it. Either way a
+// logical size below 600 x 400 lowers it, down to 1. Other keys count as 0 [DESIGN].
+int scale_factor(int key, int client_w, int client_h);
+// A client or screen length in logical pixels (integer division) [DESIGN].
+inline int logical_length(int physical, int factor) { return factor > 1 ? physical / factor : physical; }
+// The logical rectangle that covers a physical client rectangle: left and top floored, right
+// and bottom rounded up, then clipped to the logical size w x h [DESIGN].
+Rect logical_cover(const Rect& physical, int factor, int w, int h);
+
 }  // namespace is::shell

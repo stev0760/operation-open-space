@@ -8,15 +8,22 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <ctime>
 #include <exception>
 #include <filesystem>
+#include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
 #include "app/app.h"
 #include "formats/bytes.h"
+#include "formats/res16.h"
+#include "intro/gdi_canvas.h"
+#include "intro/intro.h"
 #include "shell/command_table.h"
 #include "shell/options.h"
+#include "shell/rng.h"
 
 namespace is::app {
 
@@ -160,6 +167,9 @@ HACCEL load_accelerators() {
     }
 }
 
+// Releases the intro's canvas and logic before the renderer goes (install_state_hooks).
+void release_intro();
+
 // The message loop of seg2:0x0 (timing.md "Message loop and idle step").
 int message_loop() {
     MSG m;
@@ -269,6 +279,9 @@ int run(HINSTANCE instance) {
     try {
         g.ini = std::make_unique<settings::IniFile>(*opts.options.ini);
         g.keys = shell::read_window_keys(*g.ini);
+        settings::PortSettings port;
+        port.load(*g.ini);
+        g.scale_key = port.scale;
         if (g.ini->get_string(settings::kGameSection, "Path", "").empty())
             log_todo("INI regeneration of an empty Path (ADR 0004 pending)", "seg6:0x7e9");
     } catch (const std::exception& x) {
@@ -281,6 +294,7 @@ int run(HINSTANCE instance) {
         g.store = std::make_unique<assets::AssetStore>(*asset_dir);
         if (!g.keys.language.empty()) g.store->set_language(g.keys.language);
         g.store->language_dll();
+        g.gfx = std::make_unique<gfx::Gfx>(g.store.get());
     } catch (const std::exception& x) {
         usage_box(std::string("Game files: ") + x.what());
         return 2;
@@ -345,6 +359,8 @@ int run(HINSTANCE instance) {
 
     if (g.accel) DestroyAcceleratorTable(g.accel);
     if (g.icon) DestroyIcon(g.icon);
+    release_intro();  // the intro's images belong to the renderer's palette
+    g.gfx.reset();
     if (mutex) {
         ReleaseMutex(mutex);
         CloseHandle(mutex);
@@ -389,12 +405,33 @@ void log_todo(const std::string& what, const char* address) {
     log("unimplemented: " + what + " (" + address + ")");
 }
 
+int logical(int physical) { return shell::logical_length(physical, g.gfx ? g.gfx->factor() : 1); }
+
+POINT logical_point(LPARAM lparam) {
+    return {logical(static_cast<short>(LOWORD(lparam))), logical(static_cast<short>(HIWORD(lparam)))};
+}
+
+// The original draws on the screen DC during its frames; the port draws on the surface and
+// presents it after each frame and state change (ADR 0007 decision 3) [DESIGN].
+void present_frame() {
+    if (!g.gfx || !g.main) return;
+    const bool drew = g.gfx->present(g.main, false);
+    static bool logged = false;  // one diagnostic line for the headless checks [DESIGN]
+    if (!logged) {
+        logged = true;
+        log("presenting: logical " + std::to_string(g.gfx->logical_width()) + "x" +
+            std::to_string(g.gfx->logical_height()) + ", factor " +
+            std::to_string(g.gfx->factor()) + (drew ? ", converted" : ", unchanged"));
+    }
+}
+
 // GameFrame seg2:0x1c08: a pending state change runs the state-change step instead of a
 // pass [BYTES seg2:0x1c64]; otherwise one pass, and the state's frame when it is due.
 bool idle_step() {
     const Tick now = now_tick();
     if (g.game.change_pending()) {
         g.game.change_step(now);
+        present_frame();
         return true;
     }
     g.frame_running = true;  // DGROUP:0x968c
@@ -405,6 +442,7 @@ bool idle_step() {
     if (ran_on && g.scheduler.due(now)) {
         g.game.frame();
         g.scheduler.ran(now);
+        present_frame();
     }
     g.frame_running = false;
     return ran_on;
@@ -427,54 +465,199 @@ void read_rate_settings(Tick now) {
     // seg6:0xd98 posts WM_PAINT; Win32 asks for it through the update region [DESIGN].
     InvalidateRect(g.main, nullptr, FALSE);
 }
+
+// ---- state 0: the intro (src/intro), stage 2
+
+// The intro's view of the program (intro::Host).
+class IntroHost final : public intro::Host {
+public:
+    Tick now() override { return now_tick(); }
+    intro::Area area() override { return {g.area.w, g.area.h, g.area.play_h}; }
+    // The sound wrappers seg10:0x744c and seg10:0x754a and the music selector seg10:0x7480 wait
+    // for the sound milestone: one line per id [DESIGN].
+    void sound(int id) override {
+        if (!sounds_.insert(id).second) return;
+        char buf[48];
+        std::snprintf(buf, sizeof buf, "sound 0x%x", id);
+        log_todo(buf, "seg10:0x754a");
+    }
+    void music(int code) override {
+        if (!music_.insert(code).second) return;
+        log_todo("music seg10:0x7480(" + std::to_string(code) + ", 1)", "seg10:0x7480");
+    }
+    void todo(const std::string& what, const char* address) override { log_todo(what, address); }
+    void show_window() override { ShowWindow(g.main, SW_SHOW); }
+    // Calibrate (ADR 0001 decision 9): the port does not count passes, but keeps the 1000 ms
+    // window from the state-0 entry [BYTES seg15:0x58fb seg15:0x5f68], after which seg15:0x6009
+    // sets DGROUP:0x1212 and seg6:0xa6c reads the rate settings and writes Calibrate back
+    // [BYTES seg6:0xae7 seg6:0xb31].
+    void calibrate_start(Tick now) override {
+        if (g.calibrated) return;
+        g.calibrate_started = true;
+        g.calibrate_start = now;
+    }
+    bool calibrating() override { return g.calibrate_started && !g.calibrated; }
+    bool calibrated() override { return g.calibrated; }
+    bool calibrate_step(Tick now) override;
+    int calibrate_value() override { return shell::kCalibrate; }
+    int mix_channels() override { return mix_channels_; }
+    // The credits' busy waits: the surface is shown, then the time passes without messages, as
+    // the original's loops on GetCurrentTime [BYTES seg15:0x7f24 seg15:0x7fcd] [DESIGN].
+    void present_wait(Tick ms) override {
+        present_frame();
+        const Tick start = now_tick();
+        while (now_tick() - start < ms) Sleep(1);
+    }
+    void demo_start() override { g.game.request(shell::kIntro); }
+    intro::LocalDay local_day() override {
+        const std::time_t t = std::time(nullptr);
+        const std::tm* tm = std::localtime(&t);
+        return tm ? intro::LocalDay{tm->tm_year, tm->tm_yday} : intro::LocalDay{};
+    }
+    std::string lang(int id) override {
+        try {
+            if (g.store)
+                if (auto s = g.store->find_string(static_cast<std::uint16_t>(id))) return *s;
+        } catch (const std::exception& x) {
+            log("string " + std::to_string(id) + ": " + x.what());
+        }
+        return {};
+    }
+    std::string exe_string(int id) override {
+        try {
+            if (g.store)
+                if (auto s = fmt::load_string(g.store->module(assets::kMainProgram),
+                                              static_cast<std::uint16_t>(id)))
+                    return *s;
+        } catch (const std::exception& x) {
+            log("INSPACE.EXE string " + std::to_string(id) + ": " + x.what());
+        }
+        return {};
+    }
+    std::vector<std::uint8_t> lang_resource(int type, int id) override {
+        try {
+            if (g.store) {
+                const fmt::NeModule& m = g.store->language_dll();
+                if (const fmt::NeResource* r = m.find(static_cast<std::uint16_t>(type),
+                                                      static_cast<std::uint16_t>(id)))
+                    return std::vector<std::uint8_t>(m.data(*r), m.data(*r) + m.size(*r));
+            }
+        } catch (const std::exception& x) {
+            log("resource " + std::to_string(type) + " " + std::to_string(id) + ": " + x.what());
+        }
+        return {};
+    }
+
+private:
+    std::set<int> sounds_, music_;
+    int mix_channels_ = 1;  // DGROUP:0x920a before seg6:0xb3e reads MixChannels (default 1)
+};
+
+std::unique_ptr<IntroHost> g_intro_host;
+std::unique_ptr<intro::GdiCanvas> g_intro_canvas;
+std::unique_ptr<intro::Intro> g_intro;
+
+bool IntroHost::calibrate_step(Tick now) {
+    // seg15:0x5f68: the count goes on while now <= DGROUP:0x120e + 1000.
+    if (g.calibrated || now - g.calibrate_start <= 1000) return false;
+    g.calibrated = true;  // DGROUP:0x1212, and DGROUP:0x120e = 0
+    try {
+        read_rate_settings(now);
+        // seg6:0xc9c reads MixChannels (default 1 in INSPACE) into DGROUP:0x920a.
+        mix_channels_ = g.ini->get_int(settings::kGameSection, "MixChannels", 1);
+        g.ini->set_int(settings::kGameSection, "Calibrate", shell::kCalibrate);
+        g.ini->save();
+    } catch (const std::exception& x) {
+        log(std::string("INSPACE.INI: ") + x.what());
+    }
+    log("Calibrate done: FrameRateSet " + std::to_string(g.scheduler.rate()) + " at " +
+        std::to_string(now) + " ms");
+    return true;
+}
+
+// One line per intro phase and step, per credits entry and line, and per text page, with the
+// tick and the frame count, for the headless checks [DESIGN].
+struct IntroTrace {
+    int phase = -1, step = -1, entry = -1, line = -1, page = -1;
+    unsigned long frames = 0;
+    void operator()(const intro::Intro& in) {
+        ++frames;
+        const bool credits = in.phase() == 3, pages = in.phase() == 4;
+        if (in.phase() == phase && in.step() == step &&
+            (!credits || (in.credit_entry() == entry && in.credit_line() == line)) &&
+            (!pages || in.page() == page))
+            return;
+        phase = in.phase();
+        step = in.step();
+        entry = in.credit_entry();
+        line = in.credit_line();
+        page = in.page();
+        std::string extra;
+        if (credits)
+            extra = " entry " + std::to_string(entry) + " line " + std::to_string(line);
+        else if (pages)
+            extra = " page " + std::to_string(page);
+        char buf[160];
+        std::snprintf(buf, sizeof buf, "intro: phase %d step %d%s at %lu ms, frame %lu", phase,
+                      step, extra.c_str(), static_cast<unsigned long>(now_tick()), frames);
+        log(buf);
+    }
+};
+IntroTrace g_intro_trace;
+
+void release_intro() {
+    g_intro.reset();
+    g_intro_canvas.reset();
+    g_intro_host.reset();
+}
+
 }  // namespace
 
 void install_state_hooks() {
     auto& h = g.game.hooks();
-    // The state-0 entry seg15:0x5786 holds the first ShowWindow [BYTES seg15:0x5840]. The rest
-    // of the intro is stage 2.
-    h.enter[shell::kIntro] = [](shell::GameState&) { ShowWindow(g.main, SW_SHOW); };
+    g_intro_host = std::make_unique<IntroHost>();
+    g_intro_canvas = std::make_unique<intro::GdiCanvas>(*g.gfx, [](const std::string& s) { log(s); });
+    g_intro = std::make_unique<intro::Intro>(*g_intro_canvas, *g_intro_host, shell::game_rng());
+    // State 0: the intro of src/intro (shell.md "Intro and title screen"). The entry seg15:0x5786
+    // stores GetCurrentTime in DGROUP:0x1e50; the tick's frame passes redraw 0; the repaint
+    // seg11:0xafe case 0 ends with the frame's redraw.
+    h.enter[shell::kIntro] = [](shell::GameState&) {
+        g_intro->enter(now_tick());
+        g_intro_trace(*g_intro);
+    };
+    h.frame[shell::kIntro] = [](shell::GameState& s) {
+        g_intro->frame(s.now(), false);
+        g_intro_trace(*g_intro);
+    };
+    h.repaint[shell::kIntro] = [](shell::GameState& s) { g_intro->repaint(s.now()); };
     h.enter[shell::kWave] = [](shell::GameState&) {
         log_todo("state-1 set-up", "seg10:0x0");  // M3
     };
     h.play_area = [](shell::GameState&) {
         // seg2:0x1ac8: the play area from the client rectangle and the clip rectangle without
-        // the border inset; srand(GetCurrentTime()) waits for the RTL rand of rng.md (M3).
+        // the border inset. Logical pixels: the client and the screen divided by the scale
+        // factor (ADR 0006).
         RECT rc;
         GetClientRect(g.main, &rc);
-        g.area = shell::play_area_from_client(rc.right, rc.bottom, g.screen_cx, g.screen_cy);
+        g.gfx->set_client_size(rc.right, rc.bottom, g.scale_key);
+        g.area = shell::play_area_from_client(logical(rc.right), logical(rc.bottom),
+                                              logical(g.screen_cx), logical(g.screen_cy));
         g.clip.play = {0, 0, g.area.w, g.area.play_h};  // seg2:0x1b5d
-    };
-    // State 0's frame: the intro is stage 2. The shell keeps the end of the Calibrate
-    // measurement, which turns on keys, commands and the double click (DGROUP:0x1212). The
-    // port does not measure (ADR 0001 decision 9); the measurement's window of 1000 ms from
-    // the first state-0 frame [BYTES seg15:0x58fb seg15:0x5f98] is kept, after which
-    // seg15:0x6009 sets DGROUP:0x1212 and seg6:0xa6c reads the rate settings and writes
-    // Calibrate back [BYTES seg6:0xae7 seg6:0xb31].
-    h.frame[shell::kIntro] = [](shell::GameState& s) {
-        if (g.calibrated) return;
-        if (!g.calibrate_started) {
-            g.calibrate_started = true;
-            g.calibrate_start = s.now();
-            return;
-        }
-        if (s.now() - g.calibrate_start < 1000) return;
-        g.calibrated = true;
-        try {
-            read_rate_settings(s.now());
-            g.ini->set_int(settings::kGameSection, "Calibrate", shell::kCalibrate);
-            g.ini->save();
-        } catch (const std::exception& x) {
-            log(std::string("INSPACE.INI: ") + x.what());
-        }
-        log("Calibrate done: FrameRateSet " + std::to_string(g.scheduler.rate()));
+        // srand(GetCurrentTime()) [BYTES seg2:0x1b6b]: the low word of the port's tick, which
+        // counts from start-up (ADR 0001 decision 5) [DESIGN].
+        shell::game_rng().srand(static_cast<std::uint16_t>(now_tick() & 0xffff));
     };
     h.route_input = [](shell::GameState& s, const shell::Input& in) {
+        if (s.state() == shell::kIntro) {
+            // seg11:0x7902 acts on WM_KEYUP only [BYTES seg11:0x7918].
+            if (in.msg == shell::kWmKeyUp) g_intro->key_up(in.wparam, s.now());
+            return;
+        }
         if (in.msg != shell::kWmKeyUp && in.msg != kMsgAltKey && in.msg != kMsgCtrlKey) return;
         char buf[96];
         std::snprintf(buf, sizeof buf, "input msg 0x%x key 0x%x in state %d", in.msg, in.wparam,
                       s.state());
-        log_todo(buf, s.state() == shell::kIntro ? "seg11:0x7902" : "seg11:0x6aa8");
+        log_todo(buf, "seg11:0x6aa8");
     };
     h.open_navigation = [](shell::GameState&) { log_todo("Navigation window", "seg6:0x1c72"); };
     h.save_scores = [](shell::GameState&) { log_todo("score list save", "seg6:0x626c"); };

@@ -11,6 +11,7 @@
 #include <string>
 
 #include "assets/asset_store.h"
+#include "gfx/gfx.h"
 #include "settings/settings.h"
 #include "shell/frame_scheduler.h"
 #include "shell/game_state.h"
@@ -58,11 +59,15 @@ struct App {
 
     std::unique_ptr<assets::AssetStore> store;
     std::unique_ptr<settings::IniFile> ini;
+    // The renderer (ADR 0006, ADR 0007): the surface is DGROUP:0x13dc's drawing target, the
+    // palette handle DGROUP:0x920e (src/gfx/gfx.h).
+    std::unique_ptr<gfx::Gfx> gfx;
+    int scale_key = 0;  // [Port] Scale (ADR 0006 decision 3)
     shell::WindowKeys keys;  // Full DGROUP:0x20, Show DGROUP:0x1d20, Menu DGROUP:0x90f6, ...
     shell::GameState game;
     shell::FrameScheduler scheduler;
-    shell::PlayArea area;  // DGROUP:0x90ea, 0x10, 0x90ec, 0x8e5a
-    shell::Clip clip;      // DGROUP:0x1d30 and the clip region DGROUP:0x12
+    shell::PlayArea area;  // DGROUP:0x90ea, 0x10, 0x90ec, 0x8e5a, in logical pixels
+    shell::Clip clip;      // DGROUP:0x1d30 and the clip region DGROUP:0x12, logical pixels
 
     int screen_cx = 0, screen_cy = 0;  // SM_CXSCREEN, SM_CYSCREEN
     int depth = 0;                     // DGROUP:0x90ee: max(BITSPIXEL, PLANES)
@@ -112,11 +117,20 @@ void log_window(const char* when);
 
 LRESULT CALLBACK main_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 
+// The client size and the screen size in logical pixels: physical / the scale factor
+// (ADR 0006 decision 2).
+int logical(int physical);
+// A mouse position from lParam in logical pixels, for the HUD hotspot tests (ADR 0006
+// Consequences).
+POINT logical_point(LPARAM lparam);
+// Converts and shows the surface when it or the palette changed (the frame path).
+void present_frame();
+
 // The idle step seg2:0x1c08 (timing.md "Message loop and idle step"). Returns false when it
 // ran a pass that ended early (pass() false: suspended, a deadline, routed input), so that the
 // message loop does not spin on a frame the pass keeps from running.
 bool idle_step();
-// The state-0 frame work the shell owns until stage 2 ports the intro.
+// The state hooks of shell::GameState: state 0 is the intro of src/intro (stage 2).
 void install_state_hooks();
 
 }  // namespace is::app
