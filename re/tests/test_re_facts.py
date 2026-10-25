@@ -1,4 +1,4 @@
-"""Mechanical facts of docs/re/{structs,globals,timing,rng,ispace,formats,shell}.md.
+"""Mechanical facts of docs/re/{structs,globals,timing,rng,ispace,formats,shell,palette-tables}.md.
 
 CLAUDE.md asks for a test behind every count, offset, table value and writer
 list in docs/. These tests read the ``isre asm`` listings and indexes
@@ -1318,3 +1318,272 @@ def test_palette_imports_and_ordinal_14_callers(ins, isp):
     assert not [k for k in ins.xj["imports"] if k.endswith(("AnimatePalette", "CreatePalette"))]
     assert ins.xj["imports"]["GDI.366 UpdateColors"] == ["seg2:0x5a2"]
     assert len(isp.call_sites("seg8:0x27f0")) == 17
+
+
+# ------------------------------------------------------------------ intro graphics, bitmap font, colour tables, credits
+
+
+@functools.lru_cache(maxsize=None)
+def _ne(name: str):
+    from isre.ne import NEModule
+
+    return NEModule.load(require(ORIGINAL / "shipdisk" / name))
+
+
+def _resource(name: str, rtype, rid) -> bytes:
+    m = _ne(name)
+    hits = [r for r in m.resources if r.type_id == rtype and r.id == rid]
+    assert len(hits) == 1, (name, rtype, rid)
+    return m.data[hits[0].file_off:hits[0].file_off + hits[0].length]
+
+
+def _dib(data: bytes) -> tuple[int, int, int, list[str]]:
+    """(width, height, bpp, colour table as RRGGBB) of a packed DIB, with or without BM header."""
+    o = 14 if data[:2] == b"BM" else 0
+    _size, w, h, _planes, bpp, comp = struct.unpack_from("<IiiHHI", data, o)
+    assert comp == 0
+    table = [data[o + 40 + 4 * i:o + 43 + 4 * i][::-1].hex() for i in range(1 << bpp)]
+    return w, h, bpp, table
+
+
+def test_intro_graphic_resources():
+    """ispace.md ordinals 1, 3, 33; shell.md logo and credits: sizes and colour tables of the
+    intro graphics, SD_LOGO, ALPHABET and #5500 100."""
+    grey = ["a0a0a0", "9b9b9b", "919191", "878787", "7d7d7d", "737373", "696969", "5f5f5f",
+            "4b4b4b", "3c3c3c", "323232"]
+    assert _dib(_resource("ISPACE.dll", 4000, 220)) == (40, 40, 4, grey + ["ffffff"] * 4 + ["000000"])
+    w, h, bpp, t = _dib(_resource("ISPACE.dll", 4000, 221))
+    assert (w, h, bpp, t[0], t[10], t[11:]) == (360, 40, 4, "ffffff", "5a0000", ["000000"] * 5)
+    assert _dib(_resource("ISPACE.dll", 4000, 300)) == (138, 138, 4, TITLE_300_COLOURS + ["000000"])
+    assert _resource("ISPACE.dll", 4000, 300)[:2] == b"BM"
+    assert _dib(_resource("ISPACE.dll", 2, "SD_LOGO")) == (130, 32, 1, ["ffffff", "000000"])
+    assert _dib(_resource("IGRAPHIC.DL1", 2, "ALPHABET")) == (828, 20, 1, ["ffffff", "000000"])
+    assert 828 == 46 * 18
+    assert _dib(_resource("IGRAPHIC.DL1", 4000, 340))[:3] == (333, 37, 4)
+    assert not {r.id for r in _ne("IGRAPHIC.DL1").resources if r.type_id == 4000} & {220, 221, 300}
+    raw = _resource("ISPACE.dll", 5500, 100)
+    assert len(raw) == 288 and raw[276:] == bytes(12)
+    trip = [raw[3 * k:3 * k + 3].hex() for k in range(92)]
+    assert "000000" not in trip
+    assert trip[:4] == ["00ffff", "00e9ff", "00d3ff", "00bdff"]
+    assert trip[-4:] == ["007200", "005e00", "005000", "003f00"]
+
+
+def test_graphic_loader_and_strip_constants(ins, isp):
+    """ispace.md ordinals 1 and 2: ISPACE.DLL's own ids 220, 221 and 300, the BM check, and the
+    logo strip's cell size, gap and id -1000."""
+    assert [isp.at(a).ops[1] for a in ("seg5:0x1c23", "seg5:0x1c2a", "seg5:0x1c31")] == \
+        ["0xdc", "0xdd", "0x12c"]
+    assert isp.at("seg5:0x1c38").mem.disp == 0x1A30 and isp.at("seg5:0x1c3d").mem.disp == 0x692
+    assert isp.at("seg5:0x1c56").text == "push 0xfa0" and "FindResource" in isp.at("seg5:0x1c59").text
+    assert isp.at("seg5:0x1cba").ops[1] == "0x4d42"
+    assert isp.at("seg5:0x17f5").text == "mov word ptr [bp - 0x20], 0x28"
+    assert isp.at("seg6:0xd").text == "cmp word ptr [bp + 0x20], 0xfc18"
+    assert isp.call_sites("seg5:0x17c2") == ["seg6:0x1d"]
+    assert ins.at("seg10:0x39bd").text == "push 0xfc18" and ins.at("seg10:0x39ca").text == "push 6"
+    assert ins.at("seg10:0x39dc").mem.disp == 0x3C30 and ins.at("seg10:0x39e0").mem.disp == 0x3ADA
+    assert isp.at("seg6:0xda").text == "cmp byte ptr [bp + 8], 0xff"
+    assert isp.at("seg6:0xe0").text == "cmp byte ptr [bp + 6], 0xff"
+    assert isp.call_sites("seg7:0x12d8") == ["seg6:0x10d"]
+
+
+def test_intro_dgroup_data(dgroup):
+    """shell.md Logo graphics and Title: the pattern-brush rows and the title strings."""
+    assert dgroup[0x6C6:0x6D6] == bytes([0x82, 0, 0x10, 0, 0x45, 0, 0x10, 0, 0x84, 0, 0x20, 0,
+                                         0x02, 0, 0x90, 0])
+    assert sum(bin(b).count("1") for b in dgroup[0x6C6:0x6D6]) == 13
+    assert dgroup[0x6B6:0x6C6] == bytes([0xAA, 0, 0x55, 0]) * 4
+    strings = {0x129D: b" For best results, change Windows to 256 color mode ",
+               0x12D2: b"\xa9 1994-2000 Software Dynamics, inc. All rights reserved.",
+               0x1285: b"\x99", 0x1287: b"", 0x1288: b" - ", 0x128C: b" ", 0x129C: b"",
+               0x1216: b"SD_LOGO", 0x744: b"", 0x7DE: b"", 0x130B: b""}
+    assert {o: _cstr(dgroup, o) for o in strings} == strings
+    assert (len(strings[0x129D]), len(strings[0x12D2])) == (52, 56)
+
+
+def test_ispace_font_and_logo_names(isp):
+    """ispace.md ordinals 3 and 33: the ALPHABET handle's references and the glyph cell."""
+    dg = unpacked_seg("ispace", 11)
+    assert (_cstr(dg, 0x192), _cstr(dg, 0x26)) == (b"ALPHABET", b"SD_LOGO")
+    assert _sites(isp.refs(0x1EA2, 0x1EA3)) == ["seg5:0x3707", "seg5:0x3717", "seg5:0x3b95",
+                                                "seg5:0x3b9e", "seg8:0x3cb"]
+    assert _write_values(isp, 0x1EA2, 0x1EA3) == {"seg5:0x3717": None, "seg5:0x3b9e": 0}
+    assert isp.at("seg8:0x519").text == "imul ax, word ptr [bp - 0x12], 0x12"
+    assert (isp.at("seg8:0x520").text, isp.at("seg8:0x522").text) == ("push 0x12", "push 0x14")
+    assert isp.at("seg8:0x5a9").text == "retf 0x16"
+
+
+def _cdecl_pushes(m: Module, site: str, n: int) -> list[str]:
+    """Operands of the ``n`` pushes before the call at ``site``, nearest first."""
+    out, i = [], m.at(site)
+    while len(out) < n:
+        i = m.step(i, -1)
+        if i.mnem == "push":
+            out.append(i.ops[0])
+    return out
+
+
+def test_bitmap_font_wrapper(ins):
+    """ispace.md ordinal 33: the cell sizes of fonts 0-2 and the align of all 39 calls."""
+    assert [ins.at(a).ops[1] for a in ("seg10:0x94d6", "seg10:0x94e0", "seg10:0x94ea")] == \
+        ["0x140012", "0x12000c", "0xa0009"]
+    sites = ins.call_sites("seg10:0x94c4")
+    assert len(sites) == 39
+    aligns = {int(_cdecl_pushes(ins, s, 2)[1], 0) for s in sites}
+    assert aligns <= {0, 2, 6}
+    assert _cdecl_pushes(ins, "seg6:0x1e1a", 4) == ["0", "6", "0xff00", "0"]
+    assert _sites(ins.refs(0x912C, 0x912D)) == ["seg6:0x199e", "seg10:0x503", "seg10:0x50a",
+                                                "seg10:0x513"]
+
+
+INTRO_WRITERS = {
+    0x95D2: {"seg15:0x5834": 5000, "seg15:0x5edc": 0, "seg15:0x5f36": None, "seg15:0x5f42": 0,
+             "seg15:0x608d": 45, "seg15:0x60ac": 620, "seg15:0x627e": 4, "seg15:0x6376": 3940,
+             "seg15:0x63d5": 45, "seg15:0x7cf7": 6, "seg15:0x7cfe": 3, "seg15:0x7d0a": 0},
+    0x95D0: {"seg15:0x582e": 290, "seg15:0x5bda": 400, "seg15:0x5edf": 0, "seg15:0x5f5b": None,
+             "seg15:0x600f": 240, "seg15:0x7b85": 50, "seg15:0x7d18": 6, "seg15:0x7d1f": 3,
+             "seg15:0x7d2c": 300},
+    0x95DA: {"seg15:0x7e31": 0, "seg15:0x7e49": 2, "seg15:0x7e50": 4},
+    0x1C70: {"seg15:0x8276": 0, "seg15:0x82fc": None},
+}
+
+
+@pytest.mark.parametrize("lo", sorted(INTRO_WRITERS), ids=lambda v: f"DGROUP:{v:#x}")
+def test_intro_counter_writers(ins, lo):
+    """shell.md Logo and Credits: the writers of the logo, credits and typing counters."""
+    assert _write_values(ins, lo, lo + 1) == INTRO_WRITERS[lo]
+
+
+def test_credits_and_title_constants(ins):
+    """shell.md Title and Credits: deadlines, Calibrate thresholds and the reveal count."""
+    expect = {"seg15:0x7b42": "add eax, 0x15f90",
+              "seg15:0x7ce7": "mov dword ptr [bp - 8], 0x260004",
+              "seg15:0x7cef": "cmp word ptr [0x8ffc], 0x320",
+              "seg15:0x7d10": "cmp word ptr [0x8ffc], 0x320",
+              "seg15:0x7e3a": "cmp word ptr [0x8ffc], 0x384",
+              "seg15:0x80eb": "cmp word ptr [0x8ffc], 0x578",
+              "seg15:0x7da8": "cmp word ptr [0x95d0], 0x12c",
+              "seg15:0x7657": "cmp word ptr [0x95d4], 0x69",
+              "seg15:0x62c7": "mov dword ptr [bp - 0x18], 0x808000",
+              "seg15:0x6267": "push 0xc000ca"}
+    assert {a: ins.at(a).text for a in expect} == expect
+
+
+INTRO_CALLERS = {
+    "seg15:0x7b34": ["seg15:0x5c89"],
+    "seg15:0x7ba6": [],
+    "seg15:0x811a": ["seg15:0x7b9b", "seg15:0x7dc8"],
+    "seg15:0x8174": ["seg15:0x7dea", "seg15:0x7e06", "seg15:0x7e2b"],
+    "seg15:0x80b0": ["seg15:0x7edf", "seg15:0x7ffe", "seg15:0x837b"],
+    "seg15:0x7a62": ["seg15:0x8416"],
+    "seg10:0x6d7a": ["seg15:0x363d", "seg15:0x367b", "seg16:0x21bf"],
+    "seg10:0x39a8": ["seg9:0xd4d", "seg9:0x2665", "seg10:0x95d0", "seg15:0x58ba"],
+    "seg10:0x4b2e": ["seg10:0xce", "seg15:0x57ac", "seg15:0x5c0e"],
+}
+
+
+@pytest.mark.parametrize("func", sorted(INTRO_CALLERS, key=A))
+def test_intro_call_sites(ins, func):
+    """shell.md Logo graphics, Credits, Palette: exhaustive caller lists."""
+    assert ins.call_sites(func) == INTRO_CALLERS[func]
+
+
+def test_intro_call_arguments(ins):
+    """shell.md: seg10:0x39a8 is passed 0 only by the state-0 entry."""
+    assert {s: _imm_push_before(ins, s) for s in ins.call_sites("seg10:0x39a8")} == {
+        "seg9:0xd4d": 1, "seg9:0x2665": 1, "seg10:0x95d0": 1, "seg15:0x58ba": 0}
+
+
+# The colours of ISPACE.DLL #4000 300 (entries 0-14) and the title ramps of palette-tables.md.
+TITLE_300_COLOURS = ["ffe66e", "ecd162", "d8bc56", "c4a74a", "b0923e", "9c7d31", "886825",
+                     "745319", "603e0d", "4c2800", "d7d7d6", "b9baba", "9e9e9e", "737373", "565552"]
+
+
+def _trunc(a: int, b: int) -> int:
+    return abs(a) // b * (1 if a >= 0 else -1)
+
+
+def _emulate_5846(isp: Module) -> bytearray:
+    """ISPACE.DLL seg5:0x5846 run from zeroed memory: constant blocks and the two loops."""
+    mem = bytearray(0x2000)
+    code = isp.func_insns("seg5:0x5846")
+
+    def block(lo, hi):
+        al = None
+        for i in code:
+            if not lo <= i.off < hi:
+                continue
+            if i.mnem == "mov" and i.ops[0] == "al":
+                al = int(i.ops[1], 0) & 0xFF
+            elif i.mnem == "xor" and i.ops == ("al", "al"):
+                al = 0
+            elif i.mnem == "mov" and i.abs_ds and i.mem.size == 1:
+                mem[i.mem.disp] = al if i.ops[1] == "al" else int(i.ops[1], 0) & 0xFF
+
+    block(0x5846, 0x596C)
+    for r in range(18):
+        b = 0x117C + 30 * r
+        for k in range(1, 9):
+            for j in range(3):
+                mem[b + 3 * k + j] = (mem[b + j] - _trunc((mem[b + j] - mem[b + 27 + j]) * k, 9)) & 0xFF
+    for r in range(18):
+        b = 0x1CDC + 15 * r
+        for k in range(1, 4):
+            for j in range(3):
+                mem[b + 3 * k + j] = (mem[b + j] - _trunc((mem[b + j] - mem[b + 12 + j]) * k, 4)) & 0xFF
+    block(0x5A3B, 0x61B2)
+    return mem
+
+
+def _doc_rows(heading: str, width: int) -> list[list[str]]:
+    text = (REPO_ROOT / "docs" / "re" / "palette-tables.md").read_text()
+    sect = text.split(f"## {heading}\n", 1)[1].split("\n## ", 1)[0]
+    rows = []
+    for line in sect.splitlines():
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        if cells and cells[0].isdigit():
+            rows.append([c for c in cells if re.fullmatch(r"(?:[0-9a-f]{6} ?)+", c)][0].split())
+    assert all(len(r) == width for r in rows)
+    return rows
+
+
+def test_colour_tables_of_seg5_5846(isp):
+    """palette-tables.md and shell.md Palette: seg5:0x5846 calls nothing, stores only into the
+    two tables, and its emulation equals the documented rows."""
+    code = isp.func_insns("seg5:0x5846")
+    assert not [i.addr for i in code if i.mnem in ("call", "lcall")]
+    stores = {i.mem.disp for i in code if i.abs_ds and is_write(i)}
+    assert all(0x117C <= d <= 0x1397 or 0x1CDC <= d <= 0x1DE9 for d in stores)
+    assert isp.call_sites("seg5:0x5846") == ["seg5:0x39dd"]
+    assert isp.call_sites("seg7:0x4ee8") == ["seg7:0x1726", "seg7:0x1a96", "seg7:0x1c59",
+                                             "seg7:0x1ca4"]
+    mem = _emulate_5846(isp)
+    t1 = [[mem[0x117C + 30 * r + 3 * k:0x117C + 30 * r + 3 * k + 3].hex() for k in range(10)]
+          for r in range(18)]
+    t2 = [[mem[0x1CDC + 15 * r + 3 * k:0x1CDC + 15 * r + 3 * k + 3].hex() for k in range(5)]
+          for r in range(18)]
+    assert _doc_rows("Ten-colour schemes", 10) == t1
+    assert _doc_rows("Five-colour schemes", 5) == t2
+    assert t1[1] == TITLE_300_COLOURS[:10]
+    assert t1[12] == ["000000"] * 10 and t2[12] == ["000000"] * 5
+
+
+def test_title_palette_ramps():
+    """palette-tables.md Title palette: entries 185-229 from graphic 300's colours, and the
+    ramp offsets ISPACE.DLL DGROUP:0x178 / 0x17c."""
+    c = [bytes.fromhex(x) for x in TITLE_300_COLOURS]
+
+    def ramp(ks, n, end):
+        out = [bytes((c[k][j] + s * _trunc(c[k + 1][j] - c[k][j], n)) & 0xFF
+                     for j in range(3)).hex() for k in ks for s in range(n)]
+        return out + [c[end].hex()]
+
+    gold, grey = ramp(range(0, 9), 3, 9), ramp(range(10, 14), 4, 14)
+    assert (len(gold), len(grey)) == (28, 17)
+    text = (REPO_ROOT / "docs" / "re" / "palette-tables.md").read_text()
+    rows = {m.group(1): m.group(2).split() for m in
+            re.finditer(r"^\| (185–212|213–229) \| ([0-9a-f ]+) \|$", text, re.M)}
+    assert rows == {"185–212": gold, "213–229": grey}
+    dg = unpacked_seg("ispace", 11)
+    assert (struct.unpack_from("<H", dg, 0x178)[0], struct.unpack_from("<H", dg, 0x17C)[0]) == \
+        (185 * 4, 213 * 4)
