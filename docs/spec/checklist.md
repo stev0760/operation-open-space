@@ -136,7 +136,7 @@ One row per binding. MAINACCEL and FACTACCEL are the accelerator tables in ENG_L
 |---|---|---|---|---|---|---|
 | WIN-01 | Main window: class `Inner Space`, WS_POPUP full screen by default; title "Limited Inner Space" in the demo | [MANUAL General] [ORACLE newgame-0001] [BYTES ENG_LANG.DLL STRING 147] id 2338 [BYTES seg6:0x12b6] [BYTES seg6:0x146f] | oracle | understood | done | demo |
 | WIN-02 | Resizable windowed mode | [MANUAL General] [BYTES INSTALL.EXE DIALOG 1774] [BYTES seg2:0x3eb] [BYTES seg6:0x146a] | manual | understood | done | unknown |
-| WIN-03 | Title screen: OPERATION:, edition and version line, copyright, demo-day line, Press 'R', "ESC to play - Alt-X to Exit" | [ORACLE smoke-0001] [ORACLE depth8-0001] [ORACLE intro-0001] [BYTES ENG_LANG.DLL STRING 133] id 2121 [BYTES ENG_LANG.DLL STRING 159] id 2542 [BYTES seg15:0x5809] | oracle | verified | done | demo |
+| WIN-03 | Title screen: OPERATION:, edition and version line, copyright, demo-day line, Press 'R', "ESC to play - Alt-X to Exit" | [ORACLE smoke-0001] [ORACLE depth8-0001] [ORACLE intro-0001] [BYTES ENG_LANG.DLL STRING 133] id 2121 [BYTES ENG_LANG.DLL STRING 159] id 2542 [BYTES seg15:0x5809] [ORACLE install-0001] | oracle | verified | done | demo |
 | WIN-04 | Title-screen hint "For best results, change Windows to 256 color mode" above 8 bpp | [ORACLE depth8-0001] [BYTES DGROUP:0x129d] [BYTES seg6:0x1716] | oracle | understood | todo | demo |
 | WIN-05 | Paused state: title "Inner Space - PAUSED..", PAUSED, CLICK HERE TO PLAY | [ORACLE smoke-0001] [BYTES ENG_LANG.DLL STRING 128] id 2044 [BYTES ENG_LANG.DLL STRING 127] id 2028 [BYTES ENG_LANG.DLL STRING 127] id 2027 [BYTES seg2:0x9c4] | oracle | located | todo | demo |
 | WIN-06 | Status display: score, target, radar, damage, play time, current weapon | [MANUAL General] [ORACLE runtime-0001] [BYTES seg11:0xafe] | oracle | located | todo | demo |
@@ -757,20 +757,20 @@ FACTORY.EXE 1.29.02 ships with the full game. The THEWORKS FACTORY.EXE 1.49.00 i
 |---|---|---|---|---|---|---|
 | SYS-01 | Installer: components Inner Space, Ship Factory, Sound Effects, Voice Effects, Music Soundtrack, Screen Savers; directory; disk space | [MANUAL Installing] [BYTES INSTALL.EXE DIALOG 300] | manual | none | todo | unknown |
 | SYS-02 | Installer: personalise name and organisation | [BYTES INSTALL.EXE DIALOG 135] | strings | none | todo | unknown |
-| SYS-03 | Installer: initial difficulty and speed (Slow 20, Normal 36, Fast 54, Red Hot! 72 frames/s) | [BYTES INSTALL.EXE DIALOG 1922] | strings | none | todo | unknown |
-| SYS-04 | Installer: full screen or resizable window | [BYTES INSTALL.EXE DIALOG 1774] | strings | none | todo | unknown |
+| SYS-03 | Installer: initial difficulty and speed (Slow 20, Normal 36, Fast 54, Red Hot! 72 frames/s) | [BYTES INSTALL.EXE DIALOG 1922] [ORACLE install-0001] | oracle | none | todo | unknown |
+| SYS-04 | Installer: full screen or resizable window | [BYTES INSTALL.EXE DIALOG 1774] [ORACLE install-0001] | oracle | none | todo | unknown |
 | SYS-05 | DeInstall and ReInstall | [MANUAL Installing] [BYTES INSTALL.EXE DIALOG 175] | manual | none | todo | unknown |
 | SYS-06 | Master-disk copy protection: install from the master, one computer, one backup | [MANUAL Installing] | manual | none | todo | unknown |
 | SYS-07 | INSTALL RELEASE: Security # and Release Code reset the master disk | [BYTES INSTALL.EXE DIALOG 891] | strings | none | todo | unknown |
 | SYS-08 | Add-on installer (THEWORKS SETUP.EXE): upgrades keep registration | [BYTES theworks/SETUP.EXE DIALOG 300] | strings | none | todo | unknown |
 | SYS-09 | Empty [Inner Space] `Path`: message, then INSPACE.INI regenerated | [ORACLE smoke-0001] [BYTES seg6:0x6d8] [BYTES seg6:0x1323] | oracle | understood | todo | demo |
 | SYS-10 | Calibrate measured at launch and stored | [MANUAL Optimizing for Your Computer] [ORACLE newgame-0001] [BYTES seg15:0x5f68] | oracle | understood | done | demo |
-| SYS-11 | Install-time speed test picks the detail level | [MANUAL Detail Settings] | manual | none | todo | unknown |
-| SYS-12 | Registration: serial number and registration code enable the demo copy | [MANUAL Ordering Instructions] [BYTES ENG_LANG.DLL DIALOG 693] [BYTES ENG_LANG.DLL STRING 142] id 2270 [BYTES ENG_LANG.DLL STRING 142] id 2271 [BYTES seg6:0x13e6] | manual | understood | todo | demo |
+| SYS-11 | Install-time speed test picks the detail level | [MANUAL Detail Settings] [ORACLE install-0001] | oracle | none | todo | unknown |
+| SYS-12 | Registration: the installer's personalization step (Name, Organization) registers the copy; ISPACE.DLL rewrites INSPACE.EXE #5500 110 and #5000 143 and writes SYSTEM.INI vidsp and 32BitSP and WIN.INI PDev; the title then reads Plus Edition with "Reg User" and no trial line | [MANUAL Ordering Instructions] [BYTES ENG_LANG.DLL DIALOG 693] [BYTES ENG_LANG.DLL STRING 142] id 2270 [BYTES ENG_LANG.DLL STRING 142] id 2271 [BYTES seg6:0x13e6] [ORACLE install-0001] [BYTES ISPACE.DLL seg10:0x4c68] | oracle | understood | todo | registered |
 | SYS-13 | Demo trial-day counter on the title screen | [ORACLE smoke-0001] [BYTES ENG_LANG.DLL STRING 147] id 2341 [BYTES ENG_LANG.DLL STRING 147] id 2342 [BYTES seg15:0x6f9d] | oracle | verified | done | demo |
 | SYS-14 | Hard-drive validity check ("The game isn't valid on this hard drive.") | [BYTES ENG_LANG.DLL STRING 147] id 2343 [BYTES ENG_LANG.DLL STRING 147] id 2344 | strings | none | todo | unknown |
 | SYS-15 | CD checks ("Drive %s is not a CD drive", "The CD in drive %s is not Inner Space") | [BYTES ENG_LANG.DLL STRING 159] id 2543 [BYTES ENG_LANG.DLL STRING 160] id 2544 | strings | none | todo | unknown |
-| SYS-16 | Registered/Unregistered copy marks; INSPACE.EXE #5000 143 "Unregistered Copy ILLEGAL" | [BYTES ENG_LANG.DLL STRING 133] ids 2122–2124 [BYTES INSPACE.EXE 5000 143] [BYTES ISPACE.DLL seg10:0x4c68] [BYTES seg6:0x13e6] | code | understood | todo | unknown |
+| SYS-16 | Registered/Unregistered copy marks; INSPACE.EXE #5000 143 "Unregistered Copy ILLEGAL" | [BYTES ENG_LANG.DLL STRING 133] ids 2122–2124 [BYTES INSPACE.EXE 5000 143] [BYTES ISPACE.DLL seg10:0x4c68] [BYTES seg6:0x13e6] [ORACLE install-0001] | code | understood | todo | unknown |
 | SYS-17 | Single instance ("Another version of Inner Space is already running!") | [BYTES ENG_LANG.DLL STRING 133] id 2114 [BYTES DGROUP:0x4a0] [BYTES seg6:0x12c4] | code | understood | todo | unknown |
 | SYS-18 | Startup failures: insufficient memory, no free timer | [BYTES ENG_LANG.DLL STRING 133] id 2115 [BYTES ENG_LANG.DLL STRING 133] id 2116 [BYTES seg6:0x9f8] [BYTES DGROUP:0x4a0] | code | understood | todo | unknown |
 | SYS-19 | Language DLL, voice DLL and help file chosen by Language; missing-file errors | [ORACLE newgame-0001] [BYTES DGROUP:0x779] [BYTES DGROUP:0x783] [BYTES seg10:0x6656] [BYTES seg6:0x13d0] | oracle | understood | todo | demo |

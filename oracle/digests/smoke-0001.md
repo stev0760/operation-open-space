@@ -21,5 +21,5 @@
 5. **Relay trace.** `+relay` logs 16-bit calls in the form `Call KERNEL.128: GETPRIVATEPROFILESTRING(...)`. Before the first MessageBox the game made one `SETTIMER` and one `MMSYSTEM.604 TIMEGETDEVCAPS` call. It made 39 `DOS3CALL`s, matching the 39 static call sites in seg5.
 
 ## Not working
-- **The original `INSTALL.EXE` crashes** after its first dialog: "Unhandled page fault on read access to FFFFFFFF at address 0000633D". The manual layout above replaces it for oracle runs.
+- **The original `INSTALL.EXE` crashes under new-WoW64 Wine** after its first dialog: "Unhandled page fault on read access to FFFFFFFF at address 0000633D". Under the old-WoW64 oracle runtime it completes ([install-0001](install-0001.md)). The manual layout above lays out the unregistered game without it.
 - **Wine 11.20 (Kron4ek `amd64-wow64`) segfaults in `wineboot`** on this host. It computes the host address-space limit as `0xffffffffffff0000` and crashes in `create_view`. Wine 11.0 computes `0x7fffffff0000` and works.

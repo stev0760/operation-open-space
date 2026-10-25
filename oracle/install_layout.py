@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Lay out the original Shipdisk files in a Wine prefix without INSTALL.EXE.
+"""Lay out the original Shipdisk files in a Wine prefix without INSTALL.EXE (the
+unregistered game; oracle/scenarios/install.sh runs the installer for the registered one).
 
 Usage: install_layout.py <shipdisk-dir> <wineprefix> [--game-dir INSPACE]
                          [--with-ini] [--calibrate N]

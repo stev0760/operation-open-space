@@ -14,6 +14,7 @@ sys.path.insert(0, str(ORACLE / "scenarios"))
 import autopilot  # noqa: E402
 
 SCRIPTS = ["env.sh", "trace.sh", "scenarios/common.sh", "scenarios/newgame.sh", "scenarios/wave.sh",
+           "scenarios/intro.sh", "scenarios/install.sh",
            "wine/build_patched.sh", "wine/install_kron4ek.sh"]
 PATCHES = {"krnl386-clear-saved-selectors.patch": "dlls/krnl386.exe16/selector.c",
            "shell16-extracticon-count.patch": "dlls/shell.dll16/shell.c"}
