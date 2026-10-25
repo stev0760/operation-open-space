@@ -35,7 +35,7 @@ The Hermes-era docs in `../innerspace-rea/` (read-only archive) are **not** a so
 - **Wine 11.0, old WoW64 (Kron4ek `amd64`), runs Win16:** the `ORACLE_WINE` default in `oracle/env.sh` is `~/opt/wine-11.0-oldwow-patched`, a copy of `~/opt/wine-11.0-oldwow` whose `shell.dll16` returns Win16 icon counts (`oracle/digests/wave-0001.md`). Stock new-WoW64 Wine (`~/opt/wine` → `~/opt/wine-11.0`) faults in ISPACE.DLL (`oracle/digests/fault-0001.md`); `~/opt/wine-11.0-patched` carries the fix. The runtimes live under `~/opt`, not `/opt`. Installers: `oracle/wine/`. The system Wine (`/usr/bin/wine`, 11.20, new WoW64) only runs the Win32 test executables for CTest. Prefix: `~/.local/share/wineprefixes/innerspace`. Don't set `WINEARCH`. Use `WINEDLLOVERRIDES=ctl3d=n` so the game's own CTL3D loads.
 - **Headless runs:** `source oracle/env.sh; oracle_xvfb` (displays start at `:110`; the desktop is Wayland with Xwayland on `:0`). Screenshots: `oracle_shot out.png`. Input: `xdotool`.
 - **Parallel oracle runs** each need their own `WINEPREFIX` and `DISPLAY`, because the game allows only one instance.
-- **Ghidra 12.1.2:** the Arch `ghidra` package at `/usr/share/ghidra`, with JDK `/usr/lib/jvm/java-21-openjdk` (`jdk21-openjdk`); `re/ghidra/run.sh` reads `GHIDRA_HOME` and `JAVA_HOME`.
+- **Ghidra 12.1.2:** the Arch `ghidra` package at `/opt/ghidra`, with JDK `/usr/lib/jvm/java-21-openjdk` (`jdk21-openjdk`); `re/ghidra/run.sh` reads `GHIDRA_HOME` and `JAVA_HOME`.
 
 ## Orchestration
 Phases run as Workflow scripts with at most 10 agents each.
