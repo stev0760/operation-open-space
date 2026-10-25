@@ -1,6 +1,6 @@
 # ADR 0007: Palette
 
-- **Status:** Proposed. [DESIGN]
+- **Status:** Accepted. [DESIGN]
 - **Scope:** how the port reproduces the original's 256-colour palette, its animation and fades, on displays that have no hardware palette. [DESIGN]
 
 ## Context
@@ -25,5 +25,6 @@
 
 ## Consequences
 - M2 ports the palette manager into `src/gfx/palette` with tests that pin every command's entry ranges against shell.md. [DESIGN]
+- **The presenter is one isolated step** (index surface + palette + window in, pixels on screen out), implemented with GDI (a 32-bit DIB section and `StretchBlt`). A Direct3D or OpenGL presenter can be added later for vsync or borderless full screen without touching the palette or the surface code. GDI stays the only renderer until a need is measured. [DESIGN]
 - The sprite readers of M1 (`src/formats/dib`) already give 8-bit pixels and the 256-colour tables the lookup needs. [DESIGN]
 - Checklist rows SYS-24, SYS-25, WIN-04 and WIN-55 describe the behaviour this ADR replaces or ports. [DESIGN]

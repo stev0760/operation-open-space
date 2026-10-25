@@ -251,7 +251,7 @@ Cheaper models handle refactors, tests and lint. I merge, update the checklist a
 - **ADR 0004 INI location:** accepted; stage 3 implements the default path (stage 1 shipped with `--ini <path>` required).
 - **ADR 0005 Help:** accepted; stage 3.
 - **ADR 0006 Window and scaling:** accepted; stage 2 (the renderer's logical size and presentation).
-- **ADR 0007 Palette:** stage 2 (the 8-bit surface and the software palette).
+- **ADR 0007 Palette:** accepted; stage 2 (the 8-bit surface and the software palette).
 
 **Stages** (one Workflow run per stage; parallel implementers own disjoint files):
 0. **RE round** (done): `docs/re/shell.md`; checklist RE statuses updated.
