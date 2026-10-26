@@ -71,7 +71,7 @@ def test_layout_from_synthetic_shipdisk(tmp_path, monkeypatch):
     assert (c / "INSPACE" / "INSPACE.EXE").read_bytes() == b"MZ exe"
     assert (c / "INSPACE" / "SHIPS" / "MASTER.SHP").read_bytes() == b"ship"
     assert (c / "INSPACE" / "SOUNDS" / "BOOM.WAV").read_bytes() == b"RIFF"
-    assert (c / "windows" / "system" / "CTL3D.DLL").read_bytes() == b"MZ dll"
+    assert (c / "windows" / "CTL3D.DLL").read_bytes() == b"MZ dll"
     assert (c / "INSPACE" / "GAMES").is_dir()
     assert not list(c.rglob("SAVER.AD"))
     win_ini = (c / "windows" / "INSPACE.INI").read_bytes().decode("latin-1")

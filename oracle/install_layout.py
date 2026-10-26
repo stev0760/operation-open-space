@@ -5,8 +5,9 @@ unregistered game; oracle/scenarios/install.sh runs the installer for the regist
 Usage: install_layout.py <shipdisk-dir> <wineprefix> [--game-dir INSPACE]
                          [--with-ini] [--calibrate N]
 
-Directory codes follow the [0]..[7] sections of INSTALL.INI. Their meaning is
-inferred [OPEN]: 0 = game dir, 1 = SHIPS, 2 = SOUNDS, 8 = Windows system dir,
+Directory codes follow the [0]..[7] sections of INSTALL.INI, as INSTALL.EXE
+resolves them (docs/re/install.md): 0 = game dir, 1 = SHIPS, 2 = SOUNDS,
+8 = the Windows directory (GetWindowsDirectory, INSTALL.EXE seg2:0x1950),
 9 = After Dark modules (skipped). INSPACE.INI goes to both the game dir and
 C:\\WINDOWS, because the manual places it in the Windows directory.
 
@@ -116,7 +117,7 @@ def main() -> int:
     c = a.prefix / "drive_c"
     game = c / a.game_dir
     dest = {"0": game, "1": game / "SHIPS", "2": game / "SOUNDS",
-            "8": c / "windows" / "system", "9": None}
+            "8": c / "windows", "9": None}
     ini = configparser.ConfigParser(strict=False)
     ini.optionxform = str
     ini.read(a.shipdisk / "INSTALL.INI")

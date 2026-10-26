@@ -408,6 +408,7 @@ Only the two Factory builds use this section. The window keys sit at the same ad
 - ISPACE.DLL seg10:0x5b24 writes `XCal123`, `vidsp`, `PDev` and `32BitSP` together with `[Inner Space]` `Accept`; [Resources rewritten in place](#resources-rewritten-in-place) gives what the values encode. [BYTES ISPACE.DLL seg10:0x5b24 seg10:0x5ded]
 - ISPACE.DLL seg8:0x5c86 collects the video, sound and network descriptions into ISPACE.DLL DGROUP:0x1b34, 0x1b8e and 0x1be8. [BYTES ISPACE.DLL seg8:0x5cd5 seg8:0x5d6b seg8:0x5eb2] Their use is [OPEN].
 - The oracle runs show these files under `C:\windows`. [ORACLE newgame-0001]
+- INSTALL.EXE also writes SYSTEM.INI [drivers] `MSACM.imaadpcm` and, for the screen saver, SYSTEM.INI [boot] `SCRNSAVE.EXE`, and reads AD_PREFS.INI [After Dark] `Path`; its INSPACE.INI writes are in [install.md](install.md). [BYTES INSTALL.EXE seg2:0x13bb seg2:0x1a18 seg2:0x1a3d]
 
 ## Resource records loaded as data
 This section covers what the loading code shows. [resources.md](resources.md) holds the inventory and the raw bytes. [DESIGN]
@@ -433,13 +434,19 @@ This section covers what the loading code shows. [resources.md](resources.md) ho
   - Bytes +0x50 and +0x51 select one of three modes each (6, 7 or 8) for the dwords +0x5c and +0x60. [BYTES ISPACE.DLL seg8:0xd0 seg8:0xe1 seg8:0x109 seg8:0x11b seg8:0x154]
   - When either of two word arguments is non-zero, ordinal 32 overwrites both dwords +0x5c and +0x60 with the two arguments sign-extended, so a zero argument writes 0. [BYTES ISPACE.DLL seg8:0x87 seg8:0x8d seg8:0x96 seg8:0x9b seg8:0xa6 seg8:0xab]
   - When the body holds more than two records and body byte +0x6b is 0xec, it adds an argument to body word +0x51. [BYTES ISPACE.DLL seg8:0xb3 seg8:0xbe seg8:0xc8]
+  - Dwords +0x5c, +0x60, +0x64 and +0x68 feed the projection constants of ordinal 32 ([ispace.md](ispace.md#ordinal-notes)); scene 100 holds 500, 217, 1000 and 0. [BYTES ISPACE.DLL seg8:0xd0 seg8:0x11b seg8:0x162 seg8:0x18c] [BYTES IGRAPHIC.DLL 6600 100]
 - INSPACE passes ids 100 (seg15:0xd9b, seg15:0x3405), 105 (seg15:0x31fd), 110 (seg15:0x3284), 115 (seg15:0x903) and 120 (seg15:0x332b) through seg10:0x9526, which places them in ordinal 32's id argument. [BYTES seg15:0x903 seg15:0x911 seg15:0xd9b seg15:0xda9 seg15:0x31fd seg15:0x3284 seg15:0x332b seg15:0x3405 seg10:0x9553 seg10:0x955d]
 - **Header colours.** Words +0x00–+0x11 hold three RGB colours, +0x24 the colour count, +0x26 one divisor per colour and +0x2c–+0x3d three dark colours; ordinal 32 builds one shade ramp per colour from them ([ispace.md](ispace.md#ordinal-notes), ordinal 32). Scene 100 has the colours (255, 255, 255), (0, 224, 0) and (220, 202, 70), the count 3, the divisors 4, 4 and 8 and the dark colours (32, 32, 32), (0, 100, 0) and (120, 108, 38). [BYTES ISPACE.DLL seg8:0x14e2 seg8:0x1512 seg8:0x1537] [BYTES IGRAPHIC.DLL 6600]
-  - A record whose slot byte v is below −1 draws only when header byte 0x48 − v names a device that ISPACE.DLL found: v = −10 reads +0x52 (3 in scene 100), v = −11 reads +0x53 (5) and v = −20 reads +0x5c (0xf4, the low byte of the dword 500), which matches no case. [BYTES ISPACE.DLL seg8:0x1641] [BYTES IGRAPHIC.DLL 6600]
+  - A record whose slot byte v is below −1 draws only when header byte 0x48 − v names a condition that holds ([ispace.md](ispace.md#ordinal-notes), ordinal 32): v = −10 reads +0x52 (3 in scene 100), v = −11 reads +0x53 (5) and v = −20 reads +0x5c (0xf4, the low byte of the dword 500), which matches no case. [BYTES ISPACE.DLL seg8:0x1641] [BYTES IGRAPHIC.DLL 6600]
 - **Records.** The 0x26-byte records start at offset 0x80; scene 100 has 62 and its record 61 is all zero. These are the fields the draw loop uses: [BYTES ISPACE.DLL seg8:0x1afb seg8:0x1b31 seg8:0x1b38 seg8:0x28de] [BYTES IGRAPHIC.DLL 6600]
 
   | Offset | Size | Field |
   |---|---|---|
+  | +0x00 | byte | resolved flag of the layout solver; record 0 has it set |
+  | +0x01, +0x03, +0x05 | word | X, Y (depth), Z (height) |
+  | +0x07, +0x09, +0x0b | word | SX, SY, SZ; the end point of a line |
+  | +0x0d, +0x0f, +0x11 | word | position codes per axis |
+  | +0x13, +0x15, +0x17 | word | size codes per axis (a line's end-point codes) |
   | +0x19 | word | string id, type 1 only: a value above 1 is loaded with LoadString; −13, −12, −11 and −10 copy the CPU, display-driver, sound-card and net-card texts |
   | +0x1b, +0x1c | byte | parent record and second parent (the end point of a line) |
   | +0x1d | signed byte | colour index, −1 for none |
@@ -449,7 +456,8 @@ This section covers what the loading code shows. [resources.md](resources.md) ho
   | +0x21 | byte | type 1 only: 100 takes a pattern brush from BITMAP METAL, 120 one from graphic 76 |
 
   - Scene 100's slots are record 42 (slot 0, the monitor screen), 17 (1, the PC tower front), 5 (2), 18 (3) and 60 (4, colour −1, the meal spot). Its conditional records are 36 and 38 (v = −11) and 37 and 39 (v = −10). Every word +0x19 and every byte +0x21–+0x25 is 0, so scene 100 draws no text and loads no bitmap. [BYTES IGRAPHIC.DLL 6600]
-  - Bytes +0x00–+0x18 (a resolved flag, positions, sizes and per-axis reference codes) and the layout solver that reads them are [OPEN] ([ispace.md](ispace.md#ordinal-notes)); so is the text path of scenes 105–120 through ISPACE.DLL seg6:0x7f52. [OPEN] [BYTES ISPACE.DLL seg8:0xa36 seg6:0x7f52]
+  - The layout solver seg8:0xa36 that reads +0x00–+0x17 is in [ispace.md](ispace.md#ordinal-notes) (ordinal 32); it never reads the codes at +0x0f and +0x15. [BYTES ISPACE.DLL seg8:0xa36 seg8:0xa57 seg8:0xdaa]
+  - The text path of scenes 105–120 through ISPACE.DLL seg6:0x7f52 is [OPEN]. [BYTES ISPACE.DLL seg6:0x7f52]
 
 ### ISPACE.DLL #5000 150
 - No `FindResource` in INSPACE.EXE or ISPACE.DLL names this resource. Its reader is [OPEN]. [BYTES ISPACE.DLL 5000 150]
@@ -476,5 +484,6 @@ ISPACE.DLL has its own NE resource walker, ISPACE.DLL seg10:0x4696. It reads the
   - Mode 0xbe first reads SYSTEM.INI [386Enh] `XCal123`. When it is 0 it writes rand() % 6777 + 3913 there and goes on as mode 0x5b; otherwise it goes on as mode 0x54 and returns 0.
 - **What an install leaves.** After modes 0x17 and 0x38, vidsp = s lies in 1987–12095, PDev − vidsp = (D & 0xFFFF) mod 653 + 654 lies in 654–1306, and 32BitSP is a random value other than 2·vidsp − PDev − 1231. Ordinal 24 command 2 then accepts the record through the PDev − vidsp relation when seg10:0x4440 returns 0, and seg10:0x885e never reaches its 32BitSP test ([shell.md](shell.md#intro-and-title-screen)). Two installs give different values because s and D are random, not because of the date or the name. [BYTES ISPACE.DLL seg10:0x4c10 seg10:0x5b95 seg10:0x5252] [BYTES seg10:0x8983] [ORACLE install-0001]
 - **The 35-day code.** The Order dialog's Register button calls seg10:0x5b24(0x5b, day), with day the date number of the day the code is entered ([shell.md](shell.md#game-start-dialogs)). That leaves PDev − vidsp = day with its low byte inverted, 32BitSP = 2·vidsp − PDev − 1231 and Accept = 1. With the shipdisk's all-zero #5500 110, command 2 returns 3, and seg10:0x885e's day block counts the days since the code. [BYTES ISPACE.DLL seg10:0x8c3 seg10:0x5c41 seg10:0x5d69] [BYTES seg10:0x8a91 seg10:0x8ab2]
-- The layouts of IGRAPHIC.DLL #5500 110 (the serial that ISPACE.DLL seg10:0x5dfe shows in the Order dialog) and of INSTALL.EXE #5500 110 and #5500 120 are [OPEN]. So is which of commands 0, 11 and 13 INSTALL.EXE issues after command 9; INSTALL.EXE is not disassembled, and its relay shows ISPACE.DLL seg10:0x4b7e and seg10:0x4c5a writing #5500 110 and then seg10:0x5b24. [OPEN] [BYTES ISPACE.DLL seg10:0x490b seg10:0x4933] [ORACLE install-0001]
+- **IGRAPHIC.DLL #5500 110, the Order serial.** ISPACE.DLL seg10:0x5dfe reads and writes 10 bytes of <LocalPath>IGRAPHIC.DLL #5500 110 (ISPACE.DLL DGROUP:0x2056 + "IGRAPHIC.DLL", seg10:0x4666 and seg10:0x4636 with type 5500 and id 110): the dword at +0 = seg10:0x4440(drive), the volume serial (0 under WF_WINNT); a counter word at +4; and the serial dword at +6. The ship-disk resource is 32 zero bytes. How the Order dialog uses it is in [shell.md](shell.md#game-start-dialogs). [BYTES ISPACE.DLL seg10:0x5e17 seg10:0x5e4d seg10:0x5e59 seg10:0x5e8c seg10:0x5eef seg10:0x5f1c] [BYTES IGRAPHIC.DLL 5500 110]
+- **INSTALL.EXE #5500 120 and #5500 110, the install-set records.** Ordinal 24 command 1 (ISPACE.DLL seg10:0x5416) reads 0x78 bytes of the source INSTALL.EXE's #5500 120 (a serial dword at +0, a drive word at +4 and the previous install directory as a string at +0xa) and 0x10 bytes of #5500 110 (a string at +4). Both are all zero in the ship disk (32 and 128 bytes), so command 1 answers a new install. INSTALL.EXE issues command 0 after personalization, which writes INSPACE.EXE #5500 110 above; how it uses the answers is in [install.md](install.md). [BYTES ISPACE.DLL seg10:0x5416 seg10:0x546c seg10:0x558a] [BYTES INSTALL.EXE 5500 110] [BYTES INSTALL.EXE 5500 120] [BYTES INSTALL.EXE seg2:0x4433]
 - The port reads the user's files and never writes them. [DESIGN]

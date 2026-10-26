@@ -226,6 +226,7 @@ This page covers the DGROUP globals that drive the game, the code that reads the
 |---|---|---|---|---|---|
 | DGROUP:0x16 | 2 | HWND | main window [BYTES seg2:0x390] | seg2:0x390 | seg2:0x196, seg6:0xa02 |
 | DGROUP:0x18 | 2 | BOOL | the message loop runs while non-zero (GetMessage result) [BYTES seg2:0xe7 seg2:0x189 seg2:0x1f9] | seg2:0xe7, seg2:0x189 | seg2:0x1f9 |
+| DGROUP:0x1a | 2 | BOOL | while non-zero the tick seg7:0x0 returns at once, input included ([shell.md](shell.md#exit)) [BYTES seg7:0x10 seg7:0x15] | seg2:0xe07, seg10:0x23c (1); seg2:0xe65, seg7:0x441, seg10:0x2e, seg11:0x7b5f, seg15:0x57fc (0) | seg7:0x10, seg7:0x868, seg7:0x9b3 |
 | DGROUP:0x1c | 2 | BOOL | first timer tick pending [BYTES seg2:0x398 seg2:0x1205 seg2:0x120e] | seg2:0x398, seg2:0x120e | seg2:0x1205 |
 | DGROUP:0x1e | 2 | BOOL | WM_PAINT handling enabled [BYTES seg2:0x123b seg2:0x7ac] | seg2:0x123b | seg2:0x7ac |
 | DGROUP:0x9bc | 48 | long[12] | rating thresholds, initialised data [BYTES DGROUP:0x9bc] | — | seg9:0x4870 |
@@ -249,6 +250,8 @@ This page covers the DGROUP globals that drive the game, the code that reads the
 | DGROUP:0x1e84 | 4 | DWORD ms | as DGROUP:0x1e80, used instead when DGROUP:0x95bc ≠ 0 [BYTES seg12:0x2ac1 seg16:0xacd seg7:0x6b8] | seg12:0x2ac1, seg16:0xacd | seg7:0x6b8, seg7:0x1d1 |
 | DGROUP:0x1e88 | 4 | DWORD ms | due time that leads to state 6 [BYTES seg7:0x5ce seg7:0x5da] | — | seg7:0x5da |
 | DGROUP:0x1e90 | 900 | struct[45] | effect table ([structs.md](structs.md#effect-table-45--0x14-bytes-at-dgroup0x1e90)) [BYTES seg18:0x9b6] | seg12:0x28d8, seg18:0x9b6 | seg7:0x129a |
+| DGROUP:0x2f54 | 2160 | struct[27] | weapon records of 0x50 bytes: +0 name id 186 + i, +0x36 (DGROUP:0x2f8a) the Standard-edition replacement ([shell.md](shell.md#intro-and-title-screen), **Plus content**) [BYTES seg10:0x1fb2 seg10:0x1fe8] | seg10:0x1fb2 | seg14:0x33a, seg14:0xfb7, seg14:0x16e5, seg16:0x3d66, seg16:0x5169 |
+| DGROUP:0x38c8 | string | char[] | directory of the current wave, shown by the briefing ([shell.md](shell.md#game-start-dialogs), **Enter**) [BYTES seg6:0x3044 seg9:0x8b20] | lstrcpy at seg6:0x3044, seg6:0x30ed, seg6:0x348d, seg6:0x3642; seg11:0x4249 | seg9:0x8b20, seg17:0x3463, seg11:0x6ba8 |
 | DGROUP:0x3b94 | 4 | DWORD ms | input is ignored until DGROUP:0x1e50 reaches it [BYTES seg2:0x75c] | — | seg2:0x75c |
 | DGROUP:0x5018 | 4 | long | score as last drawn; −1 forces a redraw [BYTES seg11:0x508 seg9:0xcdd] | seg11:0x508, seg9:0xcdd | seg11:0x4ff |
 | DGROUP:0x5078 | 4 | long | rating ([Scoring](#scoring)) | seg8:0x7c34, seg16:0xb19, seg9:0xc52 | seg9:0x4863 |
@@ -264,6 +267,8 @@ This page covers the DGROUP globals that drive the game, the code that reads the
 | DGROUP:0x9130 | 2 | BOOL | seg18 game mode active ([structs.md](structs.md#pool-roles)). seg18 sets it to 1 and seg10:0xd clears it [BYTES seg18:0x397 seg18:0x8e1 seg10:0xd seg11:0x6abb] | seg18:0x397, seg18:0x8e1, seg10:0xd | seg11:0x6abb, seg7:0x58f |
 | DGROUP:0x9144 | 2 | int | pass counter of the frame gate ([timing.md](timing.md#the-frame-gate)) [BYTES seg7:0x1a0 seg7:0x1b3] | seg7:0x1a0, seg7:0x1b3 | seg7:0x1a4 |
 | DGROUP:0x9212 | 2 | HINSTANCE | ENG_LANG.DLL, the source of strings and accelerators [BYTES seg2:0xb1 seg3:0x223] [ORACLE probe-0001] | — | seg2:0xb1, seg3:0x223 |
+| DGROUP:0x92e4 | 2 | BOOL | keep the player's state: Navigation Enter then requests state 1 and seg9:0xc06 keeps score and wave ([shell.md](shell.md#game-start-dialogs), **Enter**) [BYTES seg6:0x3693 seg9:0xc44] | seg6:0x98c4, seg10:0x9d28, seg16:0x1c3b, seg18:0x5aa, seg18:0x351c (1); seg9:0x698f, seg9:0x6ceb, seg10:0x9da5, seg11:0x7a6c, seg16:0x1c46, seg18:0x724, seg18:0x354a (0) | seg6:0x3693, seg8:0x2d96, seg9:0xc44, seg9:0x6958 |
+| DGROUP:0x92e6 | 2 | BOOL | 0 selects the LOADING GRAPHICS branch of seg9:0x22b4, which sets it to 1 ([shell.md](shell.md#game-start-dialogs), **Load screen**) [BYTES seg9:0x22e9 seg9:0x27b3] | seg10:0xa9 (0), seg9:0x27b3 (1) | seg9:0x22e9, seg9:0x2770, seg9:0x27e4 |
 | DGROUP:0x92ec | 42 | int[21] | allocated records per pool [BYTES seg7:0x52c7] | seg7:0x52c7, seg14:0xa33 | seg7:0x52de, seg12:0x276b |
 | DGROUP:0x9316 | 2 | int | index of the last ship record (ships − 1) [BYTES seg14:0xa23 seg4:0x8c32] | seg14:0xa23 | seg4:0x8c32, seg7:0xb25 |
 | DGROUP:0x9320 | 2 | int | wave kind: 6 race track, 7 duel ([Game state globals](#game-state-globals)) | seg9:0x3ac4, seg9:0x3e00 | seg9:0x703c, seg4:0x7071 |
@@ -274,6 +279,7 @@ This page covers the DGROUP globals that drive the game, the code that reads the
 | DGROUP:0x934a | 2 | int | pool index 3 or 19. Role [OPEN] [BYTES seg18:0x447 seg18:0x985] | seg18:0x447, seg18:0x985 | seg7:0x52d4, seg8:0x5eb8 |
 | DGROUP:0x9406 | 42 | int[21] | records in use per pool ([structs.md](structs.md#pool-table)) [BYTES seg11:0x376e] | seg7:0x10aa, seg14:0xa2f | seg11:0x376e, seg12:0x2761 |
 | DGROUP:0x9460 | 2 | HWND | the Online Help window (class IS_HELP), open during state 7 ([Game state globals](#game-state-globals)) [BYTES seg17:0x57fe seg17:0x600e seg2:0x1ba] | seg17:0x57fe, seg17:0x600e | seg2:0x1ba, seg2:0x1c52 |
+| DGROUP:0x951c | 2 | BOOL | cheat-key mode, toggled by key code 0x2e ([shell.md](shell.md#intro-and-title-screen), **Cheat keys**) [BYTES seg11:0x6ef7 seg11:0x6f00] | seg11:0x6f00, seg6:0x98bb (0), seg10:0x850b (0) | seg11:0x535, seg11:0x6d58, seg11:0x6ef7 |
 | DGROUP:0x9646 | 2 | int | `iMainSmart`, the player's ship record [BYTES seg18:0x203 seg18:0x213] | seg14:0x243, seg11:0xaf29 | seg18:0x203, seg3:0x6fa |
 | DGROUP:0x9684 | 2 | int | player's race place ([Game state globals](#game-state-globals)) | seg4:0x8bda | seg4:0x2e98, seg11:0x427f |
 | DGROUP:0x968c | 2 | BOOL | a frame is running [BYTES seg2:0x1c72 seg2:0x1d4a seg2:0x766] | seg2:0x1c72, seg2:0x1d4a | seg2:0x766 |
