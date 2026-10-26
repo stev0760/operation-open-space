@@ -24,8 +24,9 @@ TEST_CASE("options: --game and --ini") {
 }
 
 TEST_CASE("options: errors") {
-    CHECK_FALSE(parse_options({}).error.empty());                         // --ini missing
-    CHECK_FALSE(parse_options({"--game", "d"}).error.empty());            // --ini missing
+    CHECK(parse_options({}).error.empty());  // --ini is optional (ADR 0004 decision 2)
+    CHECK(parse_options({"--game", "d"}).error.empty());
+    CHECK_FALSE(parse_options({"--game", "d"}).options.ini);
     CHECK_FALSE(parse_options({"--ini"}).error.empty());                  // no value
     CHECK_FALSE(parse_options({"--ini", "a", "--ini", "b"}).error.empty());
     CHECK_FALSE(parse_options({"--ini", "a", "DEMO"}).error.empty());     // not read yet

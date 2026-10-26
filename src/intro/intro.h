@@ -17,6 +17,7 @@
 
 #include "intro/bolt.h"
 #include "intro/texts.h"
+#include "shell/edition.h"
 #include "shell/frame_scheduler.h"
 #include "shell/rng.h"
 
@@ -140,12 +141,56 @@ public:
     // The demo start (seg15:0x5a64) is not ported: the host restarts state 0.
     virtual void demo_start() = 0;
     virtual LocalDay local_day() = 0;
+    // seg10:0x885e(0), the edition check (src/shell/edition.h). The program keeps the state
+    // between calls and runs the check with the user's INSPACE.EXE records and INI values. The
+    // default runs it for a copy without an install record and with V = S = P = 0 on
+    // local_day(), which is the unregistered shipdisk.
+    virtual shell::Edition edition_check();
     // Resources, cp1252: an ENG_LANG.DLL string, an INSPACE.EXE string (DGROUP:0x8e66) and a
     // raw ENG_LANG.DLL resource; empty when missing.
     virtual std::string lang(int id) = 0;
     virtual std::string exe_string(int id) = 0;
     virtual std::vector<std::uint8_t> lang_resource(int type, int id) = 0;
 };
+
+// The game-start side of the program that the state-0 key handler reaches (shell.md "From ESC
+// to the wave" and "Input"): ISPACE ordinal 10 through the wrapper seg10:0x82a2 and the INSPACE
+// routines around it. src/dialogs implements it and registers it with set_game_start(); without
+// one (the tests' default rig) the keys log their missing paths as before.
+class GameStart {
+public:
+    virtual ~GameStart() = default;
+    // seg10:0x82a2(cmd): music -2, ordinal 10, the result tail (DGROUP:0x3b94, seg10:0x7f88,
+    // music -3, the game-start values) except the phase deadline DGROUP:0x6e28, which the intro
+    // applies itself (Intro::after_dialog). Returns the dialog's result.
+    virtual int dialog(int cmd) = 0;
+    // seg10:0x80a8: Order through seg10:0x82a2(8), at most 20 times per run. *opened tells
+    // whether the dialog ran; after the 20th the port returns 0 [DESIGN].
+    virtual int order(bool* opened) = 0;
+    virtual int accept() = 0;  // INI Accept (default 0) [BYTES seg11:0x7a28]
+    // seg6:0x930a with DGROUP:0x920c and DGROUP:0x95bc: 0 when it refuses (string 2325) or the
+    // save does not open, 1 when it restored.
+    virtual int restore(int edition, int player) = 0;
+    virtual void load_table() = 0;        // seg10:0x38e0: #5600 135 into DGROUP:0x3824
+    virtual void delete_demo_save() = 0;  // seg6:0x92b8
+    virtual void stamp_dates() = 0;       // DGROUP:0x939a, 0x939e = seg10:0x804c(1), (0)
+    virtual void set_demo_restore(int v) = 0;  // DGROUP:0x9516
+    virtual int quick_intro() = 0;        // DGROUP:0x8f70 (INI QuickIntro)
+    virtual void clear_restored() = 0;    // DGROUP:0x92e4 = 0
+    virtual void clear_wave_if_new() = 0;  // DGROUP:0x91f8 = 0 when DGROUP:0x92e4 = 0
+    virtual std::string drive_text() = 0;  // seg15:0x6558 of DGROUP:0x94ac
+    virtual void open_navigation() = 0;    // seg6:0x1c72(1)
+    // The pending WM_KEYUP stays for the next tick (DGROUP:0x8e62 not cleared).
+    virtual void keep_key() = 0;
+    // The input path drops keys until DGROUP:0x3b94 (now + 500 after each dialog); the key
+    // that keep_key() keeps passes once.
+    virtual bool keys_held(Tick now) = 0;
+    // The original draws on the screen DC; the port shows what the intro drew so far before
+    // a step that takes time [DESIGN].
+    virtual void present() = 0;
+};
+void set_game_start(GameStart* gs);
+GameStart* game_start();
 
 // The display depth the intro tests (DGROUP:0x90ee): the port behaves as a 256-colour display
 // (ADR 0007 decision 1), so every "8 bpp and above" branch applies and the hint never shows.
@@ -154,6 +199,9 @@ constexpr int kDepth = 8;
 class Intro {
 public:
     Intro(Canvas& canvas, Host& host, shell::Rng& rng);
+    ~Intro();
+    Intro(const Intro&) = delete;
+    Intro& operator=(const Intro&) = delete;
 
     // seg15:0x5786, the state-0 entry. `now` is GetCurrentTime, which it also stores in
     // DGROUP:0x1e50.
@@ -165,6 +213,13 @@ public:
     // seg11:0x7902 with a WM_KEYUP key (the input path already holds back every key before
     // Calibrate ends, shell.md "Input").
     void key_up(std::uint32_t vk, Tick now);
+    // seg10:0x82a2's tail on the phase deadline DGROUP:0x6e28 after dialog `cmd` returned
+    // `result` (rules: dialogs::deadline_after_dialog).
+    void after_dialog(int cmd, int result);
+
+    // The intro of the running program (the last one constructed), for the exit dialog's x5
+    // (DGROUP:0x95bc); null when none.
+    static Intro* current();
 
     // ---- state, for the tests and the logs
     int phase() const { return phase_; }
@@ -183,6 +238,8 @@ public:
     Tick next_entry() const { return next_entry_; }
     int pending_bolt() const { return pending_; }
     int trial_day_value() const { return day_; }
+    int edition() const { return edition_; }  // DGROUP:0x920c
+    int plus() const { return plus_; }        // DGROUP:0x11aa
     bool attract() const { return attract_; }
 
 private:
@@ -214,6 +271,12 @@ private:
     void bolt_lines(Colour main, Colour branch, bool main_too);
     void clipped_line(Colour pen, int width, Point a, Point b);  // seg12:0x7256
     void erase(int s);
+    // the game-start flow (shell.md "From ESC to the wave")
+    void escape(GameStart& gs);
+    void desk_scene(GameStart& gs);  // seg15:0xcb0 and step 9 of seg15:0x10be
+    void analysing(GameStart& gs);   // seg6:0x1d9a
+    void demo_keys(std::uint32_t vk, GameStart& gs);  // S, D and C
+    void key_up_logged(std::uint32_t vk, Tick now);   // the keys without a GameStart
     // phases 4 and 5
     void text_page();  // seg15:0x6890
     void keys();       // seg15:0x6b52
@@ -243,11 +306,12 @@ private:
     int c8_ = 0, ca_ = 0;    // DGROUP:0x95c8, DGROUP:0x95ca
     int rows_ = 0;           // DGROUP:0x95d4
     std::uint8_t row_map_[18] = {};  // DGROUP:0x95e0
-    // edition (stage 3 ports the registration check)
+    // edition: the flags the last seg10:0x885e left (src/shell/edition.h)
     int edition_ = 0;  // DGROUP:0x920c
     int plus_ = 0;     // DGROUP:0x11aa
     int invalid_ = 0;  // DGROUP:0x922a
     int day_ = 0;      // DGROUP:0x9224
+    std::string reg_name_;  // the #5000 143 text seg10:0x946a reads
     // credits
     int which_ = 0;          // DGROUP:0x95dc: 0 heading, 1 name (the title clears it too)
     int typed_ = 0;          // DGROUP:0x95da

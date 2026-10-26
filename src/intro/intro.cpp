@@ -36,12 +36,17 @@ const FontSpec kCreditBig{28, 20, 0, false, "Arial"};             // seg15:0x821
 const FontSpec kCreditSmall{22, 13, 0, false, "Arial"};           // seg15:0x823a
 const FontSpec kPageFont{18, 10, 0, false, "Arial"};              // seg15:0x69cc
 
+GameStart* g_game_start = nullptr;  // set_game_start
+Intro* g_current = nullptr;          // Intro::current
+
 // The logo cell's source x in the strip: 6 + 46 cell [BYTES seg15:0x5f2e].
 int cell_x(int cell) { return 6 + 46 * cell; }
 
 }  // namespace
 
-Intro::Intro(Canvas& canvas, Host& host, shell::Rng& rng) : canvas_(canvas), host_(host), rng_(rng) {}
+Intro::Intro(Canvas& canvas, Host& host, shell::Rng& rng) : canvas_(canvas), host_(host), rng_(rng) {
+    g_current = this;
+}
 
 void Intro::todo_once(const std::string& what, const char* address) {
     if (logged_.insert(what).second) host_.todo(what, address);
@@ -80,16 +85,25 @@ void Intro::enter(Tick now) {
     canvas_.release_dc();
 }
 
-// The registration check seg10:0x885e(0) is stage 3 (it needs ISPACE ordinal 24 and the INI
-// keys of shell.md "Registration check"). The port takes the unregistered Limited edition the
-// oracle ran: DGROUP:0x920c = 0, DGROUP:0x922a = 0, DGROUP:0x11aa = 0, and the day from the local
-// date with V = P = 0 ("Trial day"): DGROUP:0x9224 = dayval - 254. TODO stage 3.
+shell::Edition Host::edition_check() {
+    // Without an install record the check never reaches DGROUP:0x920c = -1, so each call can
+    // start from the file image.
+    shell::EditionInputs in;
+    const LocalDay t = local_day();
+    in.tm_year = t.tm_year;
+    in.tm_yday = t.tm_yday;
+    return shell::edition_check(shell::Edition{}, 0, in);
+}
+
+// seg10:0x885e(0) through the host, which owns the flags (DGROUP:0x920c, 0x11aa, 0x922a,
+// 0x9224) and the name; the intro keeps a copy for its readers.
 void Intro::registration_check() {
-    edition_ = 0;
-    invalid_ = 0;
-    plus_ = 0;
-    const LocalDay t = host_.local_day();
-    day_ = trial_day(day_value(t.tm_year, t.tm_yday), 0, 0);
+    const shell::Edition e = host_.edition_check();
+    edition_ = e.edition;
+    invalid_ = e.invalid;
+    plus_ = e.plus;
+    day_ = e.day;
+    reg_name_ = e.name;
 }
 
 // ---------------------------------------------------------------- the frame seg15:0x5962
@@ -332,12 +346,11 @@ void Intro::title_first_frame() {
     emboss(at.edition.x, at.edition.y, edition_line(edition, version, host_.exe_string(607)));
     registration_check();  // seg15:0x6f9d
     canvas_.text_colour(kSilver);
-    if (edition_ == -1) {
-        // "CD: " or 2124 "Reg User: " with seg10:0x946a: registered copies are stage 3.
-        todo_once("title line of a registered copy", "seg15:0x6fda");
-    }
+    // DGROUP:0x920c = -1: 2124 "Reg User: " + the name; WIN.INI CDDrive counts as empty
+    // (ADR 0008 decision 4) [BYTES seg15:0x6fda].
     const TrialLine trial =
-        trial_line(edition_, invalid_, day_, host_.lang(2341), host_.lang(2342), host_.lang(2343));
+        trial_line(edition_, invalid_, day_, host_.lang(2341), host_.lang(2342), host_.lang(2343),
+                   edition_ == -1 ? registered_line(host_.lang(2124), reg_name_) : std::string());
     if (!trial.none) emboss(at.trial.x, at.trial.y, trial.text);
     if (trial.order_line) {  // [BYTES seg15:0x70fb-0x7145]
         canvas_.text_colour(kBlack);
@@ -732,8 +745,8 @@ void Intro::repaint(Tick now) {
     frame(now, true);  // seg11:0x166a
 }
 
-void Intro::key_up(std::uint32_t vk, Tick now) {
-    now_ = now;
+// The keys without a game-start flow (the tests' rig): each missing path logs once.
+void Intro::key_up_logged(std::uint32_t vk, Tick now) {
     switch (vk) {
     case 'S':  // seg11:0x7959
         sound(0x6e);
@@ -756,6 +769,145 @@ void Intro::key_up(std::uint32_t vk, Tick now) {
         break;
     default: break;
     }
+}
+
+void set_game_start(GameStart* gs) { g_game_start = gs; }
+GameStart* game_start() { return g_game_start; }
+
+Intro* Intro::current() { return g_current; }
+
+Intro::~Intro() {
+    if (g_current == this) g_current = nullptr;
+}
+
+// seg10:0x82a2's tail on DGROUP:0x6e28, with DGROUP:0x1e50 reset to GetCurrentTime: command
+// 12 returns before it; a non-zero result gives now + 40000; a zero result of a command other
+// than 5 and 6 gives now while the phase is below 4, else now + 15000 [BYTES seg10:0x8429
+// seg10:0x8438 seg10:0x843d seg10:0x847d seg10:0x8550 seg10:0x8556].
+void Intro::after_dialog(int cmd, int result) {
+    now_ = host_.now();
+    if (cmd == 12) return;
+    if (result != 0) {
+        deadline_ = now_ + 40000;
+    } else if (cmd != 5 && cmd != 6) {
+        deadline_ = phase_ < 4 ? now_ : now_ + 15000;
+    }
+}
+
+// seg11:0x7902 with a WM_KEYUP key: the table of shell.md "Input".
+void Intro::key_up(std::uint32_t vk, Tick now) {
+    now_ = now;
+    GameStart* gs = g_game_start;
+    if (!gs) {
+        key_up_logged(vk, now);
+        return;
+    }
+    // The input path drops keys until DGROUP:0x3b94 [BYTES seg2:0x75c seg10:0x8401]. The
+    // port's input path (src/app) has no DGROUP:0x3b94 yet, so the state-0 handler tests it,
+    // which holds back the same keys in state 0 [DESIGN].
+    if (gs->keys_held(now)) return;
+    // seg11:0x791e clears DGROUP:0x90f8 for the DEMO command line, which the port lacks.
+    switch (vk) {
+    case 'S':
+    case 'D':
+    case 'C': demo_keys(vk, *gs); break;
+    case 'R':
+        if (edition_ == 0 || edition_ == 1) {  // [BYTES seg11:0x79d5 seg11:0x79dc]
+            sound(0x51);
+            bool opened = false;
+            const int r = gs->order(&opened);  // seg10:0x80a8
+            if (opened) after_dialog(8, r);
+            if (r != 0) registration_check();  // seg10:0x885e(0) [BYTES seg11:0x79f9]
+        }
+        break;
+    case 0x1b: escape(*gs); break;
+    case 0x20:  // Space [BYTES seg11:0x7aea-0x7b13]; the desk scene's typing is stage 3d
+        if (phase_ < 6 && !host_.calibrating()) deadline_ = now;
+        break;
+    default: break;
+    }
+}
+
+// S, D and C [BYTES seg11:0x7959-0x79cc].
+void Intro::demo_keys(std::uint32_t vk, GameStart& gs) {
+    if (vk == 'S') {
+        sound(0x6e);
+        sound(0x13);
+        const int r = gs.dialog(4);  // New Demo
+        after_dialog(4, r);
+        if (r == 0) return;
+        gs.delete_demo_save();  // seg6:0x92b8 [BYTES seg11:0x7975]
+    }
+    if (vk != 'C') gs.load_table();  // D: seg10:0x38e0 [BYTES seg11:0x797a]
+    gs.stamp_dates();                // [BYTES seg11:0x7990 seg11:0x799d]
+    if (phase_ < 6 && !host_.calibrating()) {  // [BYTES seg11:0x79a4 seg11:0x79b3]
+        deadline_ = now_;
+        phase_ = 5;  // seg11:0x79b7
+        gs.set_demo_restore(vk == 'D' ? 1 : 0);  // DGROUP:0x9516: 1 only for D [BYTES seg11:0x79bd seg11:0x79c3 seg11:0x79cc]
+    }
+}
+
+// ESC (shell.md "From ESC to the wave", steps 1 and 5) [BYTES seg11:0x7a02-0x7ad8].
+void Intro::escape(GameStart& gs) {
+    sound(0x6e);
+    if (phase_ == 6) return;  // DGROUP:0x92d4 = 9: the port never stays in phase 6
+    if (edition_ == 2 && gs.accept() != 42) {  // Important Information [BYTES seg11:0x7a43]
+        sound(0x13);                             // [BYTES seg11:0x7a39]
+        const int r = gs.dialog(11);
+        after_dialog(11, r);
+        return;  // whatever the result [BYTES seg11:0x7a48]
+    }
+    if (host_.calibrating() || !host_.calibrated() || phase_ == 7) return;
+    if (phase_ >= 6) return;
+    gs.clear_restored();  // DGROUP:0x92e4 = 0 [BYTES seg11:0x7a65]
+    sound(0x13);
+    const int r = gs.dialog(1);  // Restore Game, then New Game [BYTES seg11:0x7a7c]
+    after_dialog(1, r);
+    if (r == 0) return;
+    if (r == 2) {
+        if (gs.restore(edition_, attract_ ? 1 : 0) == 0) {  // seg6:0x930a
+            gs.keep_key();  // DGROUP:0x8e62 stays: the next tick reopens the dialog
+            return;
+        }
+    } else {
+        gs.load_table();  // seg10:0x38e0 [BYTES seg11:0x7a99]
+    }
+    host_.music(-1);  // seg10:0x7480(-1, 1) [BYTES seg11:0x7aa2]
+    if (gs.quick_intro() < 2) {  // [BYTES seg11:0x7aaa]
+        phase_ = 6;              // seg11:0x7ab1
+        desk_scene(gs);
+        return;
+    }
+    phase_ = 7;  // seg11:0x7abe
+    gs.clear_wave_if_new();
+    analysing(gs);
+    gs.open_navigation();  // seg6:0x1c72(1) [BYTES seg11:0x7ad8]
+}
+
+// seg15:0xcb0, the desk scene, is stage 3d: the port takes step 9's exit at once
+// (shell.md "Desk scene frame", step 9) [DESIGN].
+void Intro::desk_scene(GameStart& gs) {
+    todo_once("desk scene (stage 3d); step 9's exit follows at once", "seg15:0xcb0");
+    canvas_.black(0, 0, area_.w, area_.h);  // the full-screen BLACKNESS [BYTES seg15:0x1286]
+    host_.present_wait(450);                // [BYTES seg15:0x12aa]
+    // seg10:0x6e76(8, 0); seg10:0x6dd4(0) restores the set that the desk entry's
+    // seg10:0x6da6(0, 1) saved, which did not run, so the port skips it [DESIGN].
+    canvas_.palette_scheme(8, 0);
+    phase_ = 7;  // seg15:0x12c3
+    gs.clear_wave_if_new();
+    analysing(gs);
+    gs.open_navigation();  // seg15:0x12dd
+}
+
+// seg6:0x1d9a: "Analysing Drive " + the drive text + "..." in bitmap font 0, colour 0x0000FF00,
+// centred at (W/2, H/2 - 40); a demo adds 2142 at (W/2, H/2) [BYTES seg6:0x1dac-0x1e5c].
+void Intro::analysing(GameStart& gs) {
+    host_.music(-1);
+    area_ = host_.area();
+    const std::string text = host_.lang(2141) + gs.drive_text() + "...";
+    canvas_.font_text(0, 6, 0x0000FF00, area_.w / 2, area_.h / 2 - 40, text);
+    if (!attract_) canvas_.font_text(0, 6, 0x0000FF00, area_.w / 2, area_.h / 2, host_.lang(2142));
+    gs.present();
 }
 
 }  // namespace is::intro

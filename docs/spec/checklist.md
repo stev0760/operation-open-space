@@ -51,8 +51,8 @@ One row per binding. MAINACCEL and FACTACCEL are the accelerator tables in ENG_L
 | KEY-05 | Down Arrow: brake | [MANUAL QuickStart] [BYTES ENG_LANG.DLL STRING 77] id 1225 | manual | none | todo | unknown |
 | KEY-06 | Z or Return: fire weapon system | [MANUAL QuickStart] [BYTES ENG_LANG.DLL STRING 77] id 1228 | manual | none | todo | unknown |
 | KEY-07 | H: call the ambulance | [MANUAL QuickStart] [MANUAL Resource Management] [BYTES ENG_LANG.DLL STRING 77] id 1229 | manual | none | todo | unknown |
-| KEY-08 | F1: online help (MAINACCEL command 240) | [MANUAL QuickStart] [BYTES ENG_LANG.DLL STRING 76] id 1207 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES seg2:0x164b] | manual | located | todo | unknown |
-| KEY-09 | F2: online help (MAINACCEL command 256) | [BYTES ENG_LANG.DLL STRING 76] id 1207 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES seg2:0x1652] | strings | located | todo | unknown |
+| KEY-08 | F1: online help (MAINACCEL command 240) | [MANUAL QuickStart] [BYTES ENG_LANG.DLL STRING 76] id 1207 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES seg2:0x164b] | manual | located | wip | unknown |
+| KEY-09 | F2: online help (MAINACCEL command 256) | [BYTES ENG_LANG.DLL STRING 76] id 1207 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES seg2:0x1652] | strings | located | done | unknown |
 | KEY-10 | T: next target (any type); shows targeting instead of a message | [MANUAL General] [BYTES ENG_LANG.DLL STRING 76] id 1200 | manual | none | todo | unknown |
 | KEY-11 | R: ship target ("Smart Target") | [MANUAL General] [BYTES ENG_LANG.DLL STRING 76] id 1201 [BYTES ENG_LANG.DLL STRING 82] id 1301 | manual | none | todo | unknown |
 | KEY-12 | I: icon target | [MANUAL General] [BYTES ENG_LANG.DLL STRING 76] id 1203 | manual | none | todo | unknown |
@@ -153,13 +153,13 @@ One row per binding. MAINACCEL and FACTACCEL are the accelerator tables in ENG_L
 | WIN-17 | Logo intro: spinning SD_LOGO and "presents.. " | [ORACLE smoke-0001] [ORACLE depth8-0001] [ORACLE intro-0001] [BYTES ENG_LANG.DLL STRING 133] id 2118 [BYTES seg15:0x5809] | oracle | verified | done | demo |
 | WIN-18 | Intro desk scene: the monitor types a weekday and time-of-day greeting with the pilot name, then the mission | [ORACLE newgame-0001] [BYTES ENG_LANG.DLL 5000 210] [BYTES ENG_LANG.DLL STRING 190] id 3032 [BYTES seg11:0x7aaa] | oracle | understood | todo | demo |
 | WIN-19 | Launch: ship on a launch pad flies through a monitor; "PREPARE TO LAUNCH.. GOOD LUCK, (pilot)!" | [MANUAL General] [ORACLE runtime-0001] [BYTES ENG_LANG.DLL STRING 190] id 3030 [BYTES seg15:0x59b3] | oracle | understood | todo | demo |
-| WIN-20 | "Analysing Drive" display before the Navigation window | [ORACLE runtime-0001] [BYTES ENG_LANG.DLL STRING 134] id 2141 [BYTES seg15:0x59b3] | oracle | understood | todo | demo |
-| WIN-21 | Navigation window: class IS_NAV, "Inner Space Navigation", 560x350 at 30,30, child layout | [MANUAL General] [ORACLE newgame-0001] [BYTES ENG_LANG.DLL STRING 134] id 2140 [BYTES seg7:0x373] | oracle | understood | todo | demo |
-| WIN-22 | Restore Game dialog (#010b): GAME, PILOT, SHIP, SCORE, description | [MANUAL High Scores] [BYTES ENG_LANG.DLL DIALOG 267] [ORACLE newgame-0001] [BYTES ISPACE.DLL seg10:0x438b] [BYTES seg11:0x7a02] | oracle | understood | todo | demo |
-| WIN-23 | New Game dialog (#0141): PILOT, SHIP, TEAM, PLAY, DRIVE, ZOOM LEVEL, 96x96 ship preview | [MANUAL General] [BYTES ENG_LANG.DLL DIALOG 321] [ORACLE newgame-0001] [BYTES ISPACE.DLL seg10:0x442b] [BYTES ISPACE.DLL seg10:0x436f] | oracle | understood | todo | demo |
-| WIN-24 | New Demo dialog (#024d): SHIP, TEAM, DRIVE | [MANUAL QuickStart] [BYTES ENG_LANG.DLL DIALOG 589] [BYTES ISPACE.DLL seg10:0xf26] [BYTES seg11:0x7959] | manual | understood | todo | unknown |
-| WIN-25 | Save Game dialog (#00a7): GAME name | [MANUAL High Scores] [BYTES ENG_LANG.DLL DIALOG 167] [BYTES ISPACE.DLL seg10:0xdc0] | manual | located | todo | registered |
-| WIN-26 | Exit dialog (#00f4): Save & Exit, Exit, Cancel | [MANUAL High Scores] [BYTES ENG_LANG.DLL DIALOG 244] [BYTES ISPACE.DLL seg10:0x103c] [BYTES seg2:0xd85] | manual | understood | todo | unknown |
+| WIN-20 | "Analysing Drive" display before the Navigation window | [ORACLE runtime-0001] [BYTES ENG_LANG.DLL STRING 134] id 2141 [BYTES seg15:0x59b3] [ORACLE start-0001] | oracle | understood | done | demo |
+| WIN-21 | Navigation window: class IS_NAV, "Inner Space Navigation", 560x350 at 30,30, child layout | [MANUAL General] [ORACLE newgame-0001] [BYTES ENG_LANG.DLL STRING 134] id 2140 [BYTES seg7:0x373] [ORACLE start-0001] | oracle | understood | wip | demo |
+| WIN-22 | Restore Game dialog (#010b): GAME, PILOT, SHIP, SCORE, description | [MANUAL High Scores] [BYTES ENG_LANG.DLL DIALOG 267] [ORACLE newgame-0001] [BYTES ISPACE.DLL seg10:0x438b] [BYTES seg11:0x7a02] [ORACLE start-0001] | oracle | understood | wip | demo |
+| WIN-23 | New Game dialog (#0141): PILOT, SHIP, TEAM, PLAY, DRIVE, ZOOM LEVEL, 96x96 ship preview | [MANUAL General] [BYTES ENG_LANG.DLL DIALOG 321] [ORACLE newgame-0001] [BYTES ISPACE.DLL seg10:0x442b] [BYTES ISPACE.DLL seg10:0x436f] [ORACLE start-0001] | oracle | understood | wip | demo |
+| WIN-24 | New Demo dialog (#024d): SHIP, TEAM, DRIVE | [MANUAL QuickStart] [BYTES ENG_LANG.DLL DIALOG 589] [BYTES ISPACE.DLL seg10:0xf26] [BYTES seg11:0x7959] | manual | understood | done | unknown |
+| WIN-25 | Save Game dialog (#00a7): GAME name | [MANUAL High Scores] [BYTES ENG_LANG.DLL DIALOG 167] [BYTES ISPACE.DLL seg10:0xdc0] | manual | located | wip | registered |
+| WIN-26 | Exit dialog (#00f4): Save & Exit, Exit, Cancel | [MANUAL High Scores] [BYTES ENG_LANG.DLL DIALOG 244] [BYTES ISPACE.DLL seg10:0x103c] [BYTES seg2:0xd85] [ORACLE start-0001] | oracle | understood | verified | unknown |
 | WIN-27 | Game Settings dialog "Inner Space Options/Setup" (#0064) | [MANUAL Game Settings] [BYTES ENG_LANG.DLL DIALOG 100] [BYTES ISPACE.DLL seg9:0x15cc] | manual | located | todo | unknown |
 | WIN-28 | Audio Options dialog (#03e7) | [MANUAL Game Settings] [BYTES ENG_LANG.DLL DIALOG 999] | manual | none | todo | unknown |
 | WIN-29 | Display Options dialog (#029a) | [MANUAL Display Options] [BYTES ENG_LANG.DLL DIALOG 666] | manual | none | todo | unknown |
@@ -180,13 +180,13 @@ One row per binding. MAINACCEL and FACTACCEL are the accelerator tables in ENG_L
 | WIN-44 | Two dynamic help pages per ship: statistics, damage, behaviour, attitudes | [MANUAL General] | manual | none | todo | unknown |
 | WIN-45 | Help Search dialog (#0194) | [BYTES ENG_LANG.DLL DIALOG 404] | strings | none | todo | unknown |
 | WIN-46 | High-score list "Champions of INNER SPACE": SHIP, SCORE, DATE, STATUS, GAME FILE | [MANUAL High Scores] [BYTES ENG_LANG.DLL STRING 58] id 925 [BYTES ENG_LANG.DLL STRING 129] ids 2062–2063 [BYTES ENG_LANG.DLL STRING 130] ids 2064–2066 [BYTES seg6:0x6576] [BYTES seg6:0x5de3] | manual | understood | todo | unknown |
-| WIN-47 | Pre-wave mission briefing: "WAVE n MISSION BRIEFING", directory, icon count, program names | [MANUAL Game Settings] [ORACLE runtime-0001] [BYTES ENG_LANG.DLL STRING 159] id 2537 [BYTES seg9:0x5d19] | oracle | understood | todo | demo |
+| WIN-47 | Pre-wave mission briefing: "WAVE n MISSION BRIEFING", directory, icon count, program names | [MANUAL Game Settings] [ORACLE runtime-0001] [BYTES ENG_LANG.DLL STRING 159] id 2537 [BYTES seg9:0x5d19] [ORACLE start-0001] | oracle | understood | wip | demo |
 | WIN-48 | Wave debriefing: "WAVE n MISSION DEBRIEFING", score, captured, destroyed, credit, resources | [BYTES ENG_LANG.DLL STRING 188] id 3003 [BYTES ENG_LANG.DLL STRING 190] id 3035 [BYTES seg9:0x6e00] | code | understood | todo | unknown |
 | WIN-49 | Game over screens: GAME OVER, "YOU'RE DEAD, (pilot)" | [BYTES ENG_LANG.DLL STRING 21] id 325 [BYTES ENG_LANG.DLL STRING 127] id 2021 [BYTES seg9:0xddd] | code | understood | todo | unknown |
-| WIN-50 | Order Inner Space Now! dialog (#02b5): trial day, Serial #, Registration #, More Info.., Order Form.. | [MANUAL Ordering Instructions] [BYTES ENG_LANG.DLL DIALOG 693] [BYTES ISPACE.DLL seg10:0x664] [BYTES seg11:0x79d5] | manual | understood | todo | demo |
-| WIN-51 | Registration Benefits dialog (#031f) with the benefits text | [MANUAL Why Register Inner Space?] [BYTES ENG_LANG.DLL DIALOG 799] [BYTES ENG_LANG.DLL 5000 330] [BYTES ISPACE.DLL seg10:0x5f96] [BYTES seg2:0xe1a] | manual | understood | todo | demo |
-| WIN-52 | Important Information! dialog (#03dc): licence terms, I Accept, Cancel | [BYTES ENG_LANG.DLL DIALOG 988] [BYTES ENG_LANG.DLL 5000 105] [BYTES ISPACE.DLL seg10:0x124a] [BYTES seg11:0x7a02] | code | understood | todo | unknown |
-| WIN-53 | Inner Space Plus Pack! dialog (#0750) | [BYTES ENG_LANG.DLL DIALOG 1872] [BYTES ENG_LANG.DLL 5000 138] [BYTES ISPACE.DLL seg10:0x5f96] | strings | located | todo | registered |
+| WIN-50 | Order Inner Space Now! dialog (#02b5): trial day, Serial #, Registration #, More Info.., Order Form.. | [MANUAL Ordering Instructions] [BYTES ENG_LANG.DLL DIALOG 693] [BYTES ISPACE.DLL seg10:0x664] [BYTES seg11:0x79d5] [ORACLE start-0001] | oracle | understood | wip | demo |
+| WIN-51 | Registration Benefits dialog (#031f) with the benefits text | [MANUAL Why Register Inner Space?] [BYTES ENG_LANG.DLL DIALOG 799] [BYTES ENG_LANG.DLL 5000 330] [BYTES ISPACE.DLL seg10:0x5f96] [BYTES seg2:0xe1a] [ORACLE start-0001] | oracle | understood | done | demo |
+| WIN-52 | Important Information! dialog (#03dc): licence terms, I Accept, Cancel | [BYTES ENG_LANG.DLL DIALOG 988] [BYTES ENG_LANG.DLL 5000 105] [BYTES ISPACE.DLL seg10:0x124a] [BYTES seg11:0x7a02] | code | understood | done | unknown |
+| WIN-53 | Inner Space Plus Pack! dialog (#0750) | [BYTES ENG_LANG.DLL DIALOG 1872] [BYTES ENG_LANG.DLL 5000 138] [BYTES ISPACE.DLL seg10:0x5f96] | strings | located | done | registered |
 | WIN-54 | Low-resource dialogs: free GDI resources warning and abort prompt | [BYTES ENG_LANG.DLL STRING 191] id 3043 [BYTES ENG_LANG.DLL STRING 191] id 3042 [BYTES seg7:0x39] | strings | located | todo | unknown |
 | WIN-55 | While a game palette exists (DGROUP:0x920e ≠ 0), WM_QUERYNEWPALETTE reselects and realises it and repaints; WM_PALETTECHANGED from another window realises it and calls UpdateColors | [BYTES seg2:0x5cb] [BYTES seg2:0x56d] | code | understood | todo | unknown |
 | WIN-56 | Intro credits: the growing logo, six typed small-capitals entries with lightning bolts, the erase and the logo-only tail | [ORACLE intro-0001] [BYTES seg15:0x7b34] [BYTES seg15:0x7cda] | oracle | verified | done | demo |
@@ -197,7 +197,7 @@ One row per binding. MAINACCEL and FACTACCEL are the accelerator tables in ENG_L
 
 | ID | Feature | Evidence | Spec | RE | Port | Edition |
 |---|---|---|---|---|---|---|
-| NAV-01 | Drive list in New Game: C: to Z: probed, A: and B: never; entries `L: label`, unlabelled drives `Unknown_HD` | [MANUAL General] [ORACLE newgame-0001] | oracle | none | todo | demo |
+| NAV-01 | Drive list in New Game: C: to Z: probed, A: and B: never; entries `L: label`, unlabelled drives `Unknown_HD` | [MANUAL General] [ORACLE newgame-0001] [ORACLE start-0001] | oracle | none | done | demo |
 | NAV-02 | Directory tree: lower case, sorted, green root, yellow real directories, red locked levels; double-click expands | [MANUAL General] [ORACLE newgame-0001] | oracle | none | todo | demo |
 | NAV-03 | Directory walk with findfirst/findnext (attr 0x15), one level ahead of the expanded node | [ORACLE newgame-0001] [BYTES seg5:0x352] [BYTES seg5:0x364] [BYTES DGROUP:0x1260] | oracle | located | todo | demo |
 | NAV-04 | Directory status line: icons and files counted, visited or not, "No apps in this directory" | [MANUAL General] [ORACLE newgame-0001] [BYTES ENG_LANG.DLL STRING 59] ids 938–943 | oracle | none | todo | demo |
@@ -502,8 +502,8 @@ Keys are in `INSPACE.INI` `[Inner Space]` unless the row names another file or s
 
 | ID | Feature | Evidence | Spec | RE | Port | Edition |
 |---|---|---|---|---|---|---|
-| INI-01 | `Path`: install directory; regenerated from the module path when missing | [ORACLE smoke-0001] [ORACLE newgame-0001] [BYTES seg6:0x70a] | oracle | understood | todo | demo |
-| INI-02 | `LocalPath`: regenerated with Path | [ORACLE smoke-0001] [ORACLE newgame-0001] [BYTES seg6:0x725] | oracle | understood | todo | demo |
+| INI-01 | `Path`: install directory; regenerated from the module path when missing | [ORACLE smoke-0001] [ORACLE newgame-0001] [BYTES seg6:0x70a] | oracle | understood | done | demo |
+| INI-02 | `LocalPath`: regenerated with Path | [ORACLE smoke-0001] [ORACLE newgame-0001] [BYTES seg6:0x725] | oracle | understood | done | demo |
 | INI-03 | `ShipPath`: ships directory (MASTER.BOD, MASTER.SHP) | [ORACLE smoke-0001] [ORACLE newgame-0001] [BYTES seg14:0x3dea] | oracle | understood | todo | demo |
 | INI-04 | `SndPath`: sounds directory | [ORACLE smoke-0001] [ORACLE newgame-0001] [BYTES ISPACE.DLL seg9:0x152] | oracle | located | todo | demo |
 | INI-05 | `RacePath`: directory of the race records (.rac) | [MANUAL Race Records] [ORACLE smoke-0001] [ORACLE newgame-0001] [BYTES seg6:0x9c8] | oracle | understood | todo | demo |
@@ -569,22 +569,22 @@ Keys are in `INSPACE.INI` `[Inner Space]` unless the row names another file or s
 | INI-65 | `ShipAnim`: (Animated Ship Watches), default 1 | [ORACLE newgame-0001] [BYTES seg6:0xd0a] | oracle | located | todo | demo |
 | INI-66 | `Border`: (Game Border), default 1 | [ORACLE newgame-0001] [BYTES seg6:0xd20] [BYTES seg2:0xcb1] | oracle | understood | todo | demo |
 | INI-67 | `Bright`: (Enhanced Brightness), default 0 | [ORACLE newgame-0001] [BYTES seg6:0xe88] | oracle | located | todo | demo |
-| INI-68 | `Size`: default 1; New Game OK writes it | [ORACLE newgame-0001] [BYTES seg6:0xaf8] [BYTES seg10:0x9a5f] | oracle | understood | todo | demo |
-| INI-69 | `SetSize`: default 1; New Game OK writes it | [ORACLE newgame-0001] [BYTES ISPACE.DLL seg10:0x1ff7] | oracle | located | todo | demo |
-| INI-70 | `Accept`: (I Accept), default 0 | [ORACLE newgame-0001] [BYTES seg11:0x7a28] | oracle | located | todo | demo |
-| INI-71 | `Restore`: Restore Game choice; OK writes " NEW GAME" with a leading space | [ORACLE newgame-0001] [BYTES seg6:0x9396] | oracle | understood | todo | demo |
-| INI-72 | `Drive`: (DRIVE), default C | [ORACLE newgame-0001] [BYTES seg10:0x8525] | oracle | located | todo | demo |
-| INI-73 | `ThePlayer`: (PILOT), default "" (INSPACE), AutoPilot (ISPACE.DLL) | [ORACLE newgame-0001] [BYTES seg10:0x8c] | oracle | located | todo | demo |
-| INI-74 | `MainShip`: (SHIP), default EAGLE; regenerated as TRANSFORMER | [ORACLE smoke-0001] [ORACLE newgame-0001] [BYTES seg14:0x23bf] | oracle | located | todo | demo |
-| INI-75 | `PlayMode`: (PLAY), default 0 | [ORACLE newgame-0001] [BYTES seg10:0x8478] | oracle | located | todo | demo |
+| INI-68 | `Size`: default 1; New Game OK writes it | [ORACLE newgame-0001] [BYTES seg6:0xaf8] [BYTES seg10:0x9a5f] | oracle | understood | done | demo |
+| INI-69 | `SetSize`: default 1; New Game OK writes it | [ORACLE newgame-0001] [BYTES ISPACE.DLL seg10:0x1ff7] | oracle | located | done | demo |
+| INI-70 | `Accept`: (I Accept), default 0 | [ORACLE newgame-0001] [BYTES seg11:0x7a28] | oracle | located | done | demo |
+| INI-71 | `Restore`: Restore Game choice; OK writes " NEW GAME" with a leading space | [ORACLE newgame-0001] [BYTES seg6:0x9396] | oracle | understood | done | demo |
+| INI-72 | `Drive`: (DRIVE), default C | [ORACLE newgame-0001] [BYTES seg10:0x8525] | oracle | located | done | demo |
+| INI-73 | `ThePlayer`: (PILOT), default "" (INSPACE), AutoPilot (ISPACE.DLL) | [ORACLE newgame-0001] [BYTES seg10:0x8c] | oracle | located | done | demo |
+| INI-74 | `MainShip`: (SHIP), default EAGLE; regenerated as TRANSFORMER | [ORACLE smoke-0001] [ORACLE newgame-0001] [BYTES seg14:0x23bf] | oracle | located | done | demo |
+| INI-75 | `PlayMode`: (PLAY), default 0 | [ORACLE newgame-0001] [BYTES seg10:0x8478] | oracle | located | done | demo |
 | INI-76 | `Breakfast`: default 800 | [MANUAL Special Times of Day] [ORACLE newgame-0001] [BYTES seg10:0x96df] | oracle | located | todo | demo |
 | INI-77 | `Coffee`: default 1000 | [MANUAL Special Times of Day] [ORACLE newgame-0001] [BYTES seg10:0x970b] | oracle | located | todo | demo |
 | INI-78 | `Lunch`: default 1200 | [MANUAL Special Times of Day] [ORACLE newgame-0001] [BYTES seg10:0x96b2] | oracle | located | todo | demo |
 | INI-79 | `Tea`: default 1530 | [MANUAL Special Times of Day] [ORACLE newgame-0001] [BYTES seg10:0x9737] | oracle | located | todo | demo |
-| INI-80 | `NavLeft`: Navigation window, default 30 | [ORACLE newgame-0001] [BYTES seg6:0x1cb6] | oracle | located | todo | demo |
-| INI-81 | `NavTop`: default 30 | [ORACLE newgame-0001] [BYTES seg6:0x1ccc] | oracle | located | todo | demo |
-| INI-82 | `NavRight`: default 560 | [ORACLE newgame-0001] [BYTES seg6:0x1ce3] | oracle | located | todo | demo |
-| INI-83 | `NavBottom`: default 350 | [ORACLE newgame-0001] [BYTES seg6:0x1cfa] | oracle | located | todo | demo |
+| INI-80 | `NavLeft`: Navigation window, default 30 | [ORACLE newgame-0001] [BYTES seg6:0x1cb6] | oracle | located | done | demo |
+| INI-81 | `NavTop`: default 30 | [ORACLE newgame-0001] [BYTES seg6:0x1ccc] | oracle | located | done | demo |
+| INI-82 | `NavRight`: default 560 | [ORACLE newgame-0001] [BYTES seg6:0x1ce3] | oracle | located | done | demo |
+| INI-83 | `NavBottom`: default 350 | [ORACLE newgame-0001] [BYTES seg6:0x1cfa] | oracle | located | done | demo |
 | INI-84 | `Racers`: (RACE competitors), default 1 | [ORACLE newgame-0001] [BYTES seg6:0x2773] | oracle | located | todo | demo |
 | INI-85 | `RaceDiff`: (RACE difficulty), default 0 | [ORACLE newgame-0001] [BYTES seg6:0x2930] | oracle | located | todo | demo |
 | INI-86 | `RaceLaps`: (RACE laps), default 1 | [ORACLE newgame-0001] [BYTES seg6:0x2aee] | oracle | located | todo | demo |
@@ -593,9 +593,9 @@ Keys are in `INSPACE.INI` `[Inner Space]` unless the row names another file or s
 | INI-89 | `DuelDiff`: (DUEL difficulty), default 0 | [ORACLE newgame-0001] [BYTES seg6:0x2a0f] | oracle | located | todo | demo |
 | INI-90 | `DuelOpp`: (DUEL toughness), default 2 | [ORACLE newgame-0001] [BYTES seg6:0x2d7f] | oracle | located | todo | demo |
 | INI-91 | `Tree`: default 0 | [ORACLE newgame-0001] [BYTES seg6:0x37ef] | oracle | located | todo | demo |
-| INI-92 | `SavePrompt`: (Always Ask for Save Name) | [BYTES DGROUP:0x865] [BYTES ISPACE.DLL DGROUP:0x9dd] [BYTES seg10:0x85a5] | strings | located | todo | unknown |
-| INI-93 | `PlusCount` | [BYTES DGROUP:0x879] [BYTES seg10:0x880e] | strings | located | todo | unknown |
-| INI-94 | `StratAsk` | [BYTES DGROUP:0x915] [BYTES ISPACE.DLL DGROUP:0x3c0] [BYTES seg10:0xa988] | strings | located | todo | unknown |
+| INI-92 | `SavePrompt`: (Always Ask for Save Name) | [BYTES DGROUP:0x865] [BYTES ISPACE.DLL DGROUP:0x9dd] [BYTES seg10:0x85a5] | strings | located | done | unknown |
+| INI-93 | `PlusCount` | [BYTES DGROUP:0x879] [BYTES seg10:0x880e] | strings | located | done | unknown |
+| INI-94 | `StratAsk` | [BYTES DGROUP:0x915] [BYTES ISPACE.DLL DGROUP:0x3c0] [BYTES seg10:0xa988] | strings | located | done | unknown |
 | INI-95 | `DemoType`: (Demo Options mode) | [BYTES DGROUP:0x121e] [BYTES ISPACE.DLL DGROUP:0x41c] [BYTES seg15:0x5aa6] | strings | located | todo | unknown |
 | INI-96 | `Ship1`: (SHIP #1) | [BYTES DGROUP:0x11ae] [BYTES ISPACE.DLL DGROUP:0x445] [BYTES seg14:0x236c] | strings | located | todo | unknown |
 | INI-97 | `Ship2`: (SHIP #2) | [BYTES DGROUP:0x11b5] [BYTES ISPACE.DLL DGROUP:0x44c] [BYTES seg14:0x239c] | strings | located | todo | unknown |
@@ -763,20 +763,20 @@ FACTORY.EXE 1.29.02 ships with the full game. The THEWORKS FACTORY.EXE 1.49.00 i
 | SYS-06 | Master-disk copy protection: install from the master, one computer, one backup | [MANUAL Installing] | manual | none | todo | unknown |
 | SYS-07 | INSTALL RELEASE: Security # and Release Code reset the master disk | [BYTES INSTALL.EXE DIALOG 891] | strings | none | todo | unknown |
 | SYS-08 | Add-on installer (THEWORKS SETUP.EXE): upgrades keep registration | [BYTES theworks/SETUP.EXE DIALOG 300] | strings | none | todo | unknown |
-| SYS-09 | Empty [Inner Space] `Path`: message, then INSPACE.INI regenerated | [ORACLE smoke-0001] [BYTES seg6:0x6d8] [BYTES seg6:0x1323] | oracle | understood | todo | demo |
+| SYS-09 | Empty [Inner Space] `Path`: message, then INSPACE.INI regenerated | [ORACLE smoke-0001] [BYTES seg6:0x6d8] [BYTES seg6:0x1323] | oracle | understood | done | demo |
 | SYS-10 | Calibrate measured at launch and stored | [MANUAL Optimizing for Your Computer] [ORACLE newgame-0001] [BYTES seg15:0x5f68] | oracle | understood | done | demo |
 | SYS-11 | Install-time speed test picks the detail level | [MANUAL Detail Settings] [ORACLE install-0001] | oracle | none | todo | unknown |
-| SYS-12 | Registration: the installer's personalization step (Name, Organization) registers the copy; ISPACE.DLL rewrites INSPACE.EXE #5500 110 and #5000 143 and writes SYSTEM.INI vidsp and 32BitSP and WIN.INI PDev; the title then reads Plus Edition with "Reg User" and no trial line | [MANUAL Ordering Instructions] [BYTES ENG_LANG.DLL DIALOG 693] [BYTES ENG_LANG.DLL STRING 142] id 2270 [BYTES ENG_LANG.DLL STRING 142] id 2271 [BYTES seg6:0x13e6] [ORACLE install-0001] [BYTES ISPACE.DLL seg10:0x4c68] | oracle | understood | todo | registered |
+| SYS-12 | Registration: the installer's personalization step (Name, Organization) registers the copy; ISPACE.DLL rewrites INSPACE.EXE #5500 110 and #5000 143 and writes SYSTEM.INI vidsp and 32BitSP and WIN.INI PDev; the title then reads Plus Edition with "Reg User" and no trial line | [MANUAL Ordering Instructions] [BYTES ENG_LANG.DLL DIALOG 693] [BYTES ENG_LANG.DLL STRING 142] id 2270 [BYTES ENG_LANG.DLL STRING 142] id 2271 [BYTES seg6:0x13e6] [ORACLE install-0001] [BYTES ISPACE.DLL seg10:0x4c68] [ORACLE start-0001] | oracle | understood | wip | registered |
 | SYS-13 | Demo trial-day counter on the title screen | [ORACLE smoke-0001] [BYTES ENG_LANG.DLL STRING 147] id 2341 [BYTES ENG_LANG.DLL STRING 147] id 2342 [BYTES seg15:0x6f9d] | oracle | verified | done | demo |
-| SYS-14 | Hard-drive validity check ("The game isn't valid on this hard drive.") | [BYTES ENG_LANG.DLL STRING 147] id 2343 [BYTES ENG_LANG.DLL STRING 147] id 2344 | strings | none | todo | unknown |
+| SYS-14 | Hard-drive validity check ("The game isn't valid on this hard drive.") | [BYTES ENG_LANG.DLL STRING 147] id 2343 [BYTES ENG_LANG.DLL STRING 147] id 2344 [BYTES seg10:0x885e] | strings | understood | done | unknown |
 | SYS-15 | CD checks ("Drive %s is not a CD drive", "The CD in drive %s is not Inner Space") | [BYTES ENG_LANG.DLL STRING 159] id 2543 [BYTES ENG_LANG.DLL STRING 160] id 2544 | strings | none | todo | unknown |
-| SYS-16 | Registered/Unregistered copy marks; INSPACE.EXE #5000 143 "Unregistered Copy ILLEGAL" | [BYTES ENG_LANG.DLL STRING 133] ids 2122–2124 [BYTES INSPACE.EXE 5000 143] [BYTES ISPACE.DLL seg10:0x4c68] [BYTES seg6:0x13e6] [ORACLE install-0001] | code | understood | todo | unknown |
+| SYS-16 | Registered/Unregistered copy marks; INSPACE.EXE #5000 143 "Unregistered Copy ILLEGAL" | [BYTES ENG_LANG.DLL STRING 133] ids 2122–2124 [BYTES INSPACE.EXE 5000 143] [BYTES ISPACE.DLL seg10:0x4c68] [BYTES seg6:0x13e6] [ORACLE install-0001] [ORACLE start-0001] | oracle | understood | done | unknown |
 | SYS-17 | Single instance ("Another version of Inner Space is already running!") | [BYTES ENG_LANG.DLL STRING 133] id 2114 [BYTES DGROUP:0x4a0] [BYTES seg6:0x12c4] | code | understood | todo | unknown |
 | SYS-18 | Startup failures: insufficient memory, no free timer | [BYTES ENG_LANG.DLL STRING 133] id 2115 [BYTES ENG_LANG.DLL STRING 133] id 2116 [BYTES seg6:0x9f8] [BYTES DGROUP:0x4a0] | code | understood | todo | unknown |
 | SYS-19 | Language DLL, voice DLL and help file chosen by Language; missing-file errors | [ORACLE newgame-0001] [BYTES DGROUP:0x779] [BYTES DGROUP:0x783] [BYTES seg10:0x6656] [BYTES seg6:0x13d0] | oracle | understood | todo | demo |
-| SYS-20 | Static help: WinHelp file named from Language plus `_HELP.HLP`, with a context map | [MANUAL Contents] [BYTES DGROUP:0x113] [BYTES seg2:0x156b] | manual | understood | todo | unknown |
-| SYS-21 | Help menu: About Inner Space, User Manual, Playing Inner Space, General, Scores, This Game, Target, Weapons | [BYTES ENG_LANG.DLL MENU 101] [BYTES seg2:0x1559] [BYTES seg6:0x17f5] | code | understood | todo | unknown |
-| SYS-22 | ORDER.TXT and README.TXT opened in Notepad | [BYTES ISPACE.DLL DGROUP:0x1d4] [BYTES ISPACE.DLL DGROUP:0x1dd] [BYTES ISPACE.DLL DGROUP:0x1f0] | strings | none | todo | unknown |
+| SYS-20 | Static help: WinHelp file named from Language plus `_HELP.HLP`, with a context map | [MANUAL Contents] [BYTES DGROUP:0x113] [BYTES seg2:0x156b] | manual | understood | done | unknown |
+| SYS-21 | Help menu: About Inner Space, User Manual, Playing Inner Space, General, Scores, This Game, Target, Weapons | [BYTES ENG_LANG.DLL MENU 101] [BYTES seg2:0x1559] [BYTES seg6:0x17f5] | code | understood | wip | unknown |
+| SYS-22 | ORDER.TXT and README.TXT opened in Notepad | [BYTES ISPACE.DLL DGROUP:0x1d4] [BYTES ISPACE.DLL DGROUP:0x1dd] [BYTES ISPACE.DLL DGROUP:0x1f0] | strings | none | done | unknown |
 | SYS-23 | CTL3D 3D dialogs | [BYTES DGROUP:0x26] [BYTES seg2:0x83] | code | understood | todo | unknown |
 | SYS-24 | 8-bit palette: system colours read, entries 10–245 animated | [ORACLE depth8-0001] [BYTES ISPACE.DLL seg5:0x3596] [BYTES ISPACE.DLL seg5:0x34eb] | oracle | understood | todo | demo |
 | SYS-25 | Display depth: 256 colours recommended; ships dithered at 16 colours | [MANUAL Ship Factory] [ORACLE depth8-0001] [BYTES seg6:0x1716] | oracle | understood | todo | demo |

@@ -2,8 +2,9 @@
 // docs/re/shell.md "Start-up" as far as stage 1 of M2 reaches; the message loop is timing.md's
 // "Message loop and idle step" with the frame scheduler of ADR 0001.
 //
-//   inspace.exe [--game <dir>] --ini <path>        (src/shell/options.h)
+//   inspace.exe [--game <dir>] [--ini <path>]      (src/shell/options.h, ADR 0004)
 #include <windows.h>
+#include <objbase.h>
 #include <shellapi.h>
 
 #include <algorithm>
@@ -17,10 +18,13 @@
 #include <vector>
 
 #include "app/app.h"
+#include "app/startup.h"
+#include "settings/ini_location.h"
 #include "formats/bytes.h"
 #include "formats/res16.h"
 #include "intro/gdi_canvas.h"
 #include "intro/intro.h"
+#include "nav/nav.h"
 #include "shell/command_table.h"
 #include "shell/options.h"
 #include "shell/rng.h"
@@ -58,7 +62,7 @@ void fail_box(const std::string& cp1252_text) {
 void usage_box(const std::string& utf8) {
     log(utf8);
     MessageBoxW(nullptr,
-                utf16_of_utf8(utf8 + "\n\nUsage: inspace.exe [--game <dir>] --ini <path>").c_str(),
+                utf16_of_utf8(utf8 + "\n\nUsage: inspace.exe [--game <dir>] [--ini <path>]").c_str(),
                 L"Inner Space", MB_ICONEXCLAMATION);
 }
 
@@ -212,6 +216,7 @@ int message_loop() {
         if (g.accel && g.main && GetActiveWindow() == g.main &&
             TranslateAcceleratorW(g.main, g.accel, &m))
             continue;
+        if (HWND nav = nav::window(); nav && IsDialogMessageW(nav, &m)) continue;  // [BYTES seg2:0x1dc]
         TranslateMessage(&m);
         DispatchMessageW(&m);
     }
@@ -220,6 +225,9 @@ int message_loop() {
 int run(HINSTANCE instance) {
     g.instance = instance;
     init_clock();
+    // ShellExecute (the manual, Order's text files) can use COM, so the GUI thread initialises
+    // it first, as the ShellExecute documentation asks [REF Win32 SDK ShellExecute] [DESIGN].
+    CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
 
     // ---- the port's command line, the asset directory and the INI
     std::vector<std::filesystem::path> args;
@@ -229,6 +237,7 @@ int run(HINSTANCE instance) {
         for (int i = 1; argv && i < argc; ++i) args.emplace_back(argv[i]);
         if (argv) LocalFree(argv);
     }
+    // --ini is optional (ADR 0004 decision 2).
     const shell::OptionsResult opts = shell::parse_options(args);
     if (!opts.error.empty()) {
         usage_box(opts.error);
@@ -240,6 +249,7 @@ int run(HINSTANCE instance) {
         usage_box("No game directory found (ADR 0002):\n" + why);
         return 2;
     }
+    g.asset_dir = *asset_dir;
 
     // Step 1: the cursor to the bottom centre, only x halved; the position saved
     // [BYTES seg2:0x37-0x55].
@@ -275,15 +285,18 @@ int run(HINSTANCE instance) {
     // kills the id it got [DESIGN].
     KillTimer(nullptr, probe);
 
-    // Step 6: the INI loader. --ini names the file until ADR 0004 is accepted.
+    // Step 6: the INI loader seg6:0x6d8 with ADR 0004's location, first-run copy and
+    // regeneration (src/app/startup.cpp).
     try {
-        g.ini = std::make_unique<settings::IniFile>(*opts.options.ini);
+        std::string ini_why;
+        if (!open_ini(opts.options.ini, exe_dir(), &ini_why)) {
+            usage_box("INSPACE.INI: " + ini_why);
+            return 2;
+        }
         g.keys = shell::read_window_keys(*g.ini);
         settings::PortSettings port;
         port.load(*g.ini);
         g.scale_key = port.scale;
-        if (g.ini->get_string(settings::kGameSection, "Path", "").empty())
-            log_todo("INI regeneration of an empty Path (ADR 0004 pending)", "seg6:0x7e9");
     } catch (const std::exception& x) {
         usage_box(std::string("INSPACE.INI: ") + x.what());
         return 2;
@@ -299,12 +312,15 @@ int run(HINSTANCE instance) {
         usage_box(std::string("Game files: ") + x.what());
         return 2;
     }
-    log("game directory: " + fmt::path_utf8(*asset_dir) + ", INI: " +
-        fmt::path_utf8(*opts.options.ini));
+    log("game directory: " + fmt::path_utf8(*asset_dir) + ", INI: " + fmt::path_utf8(g.ini_path) +
+        ", LocalPath: " + fmt::path_utf8(g.local_path));
 
-    // Steps 8-10: the edition check (TODO stage 3, needs ISPACE ordinal 24), the low-resource
-    // check (GetFreeSystemResources has no Win32 counterpart) and the pools (the game state
-    // of M3 and M4) are not ported yet.
+    // Step 8: the edition check seg10:0x885e(1) [BYTES seg6:0x13e6]. The CD branch that can end
+    // start-up with string 2543 is not ported: CDDrive counts as empty (ADR 0008 decision 4).
+    run_edition_check(1);
+
+    // Steps 9-10: the low-resource check (GetFreeSystemResources has no Win32 counterpart) and
+    // the pools (the game state of M3 and M4) are not ported yet.
 
     // Step 11: seg6:0x0 defaults and clamps the windowed rectangle.
     g.keys.show = shell::clamp_show_rect(g.keys.show, g.screen_cx, g.screen_cy);
@@ -323,7 +339,7 @@ int run(HINSTANCE instance) {
     g.menu = load_menu(101);
 
     // Step 15: the main window [BYTES seg6:0x180e-0x18a5], without WS_VISIBLE.
-    const std::wstring title = lang_string(g.edition == 0 ? 2338 : 2337);  // seg6:0x185c
+    const std::wstring title = lang_string(g.edition.edition == 0 ? 2338 : 2337);  // seg6:0x185c
     DWORD style;
     int x, y, w, h;
     if (g.keys.full) {
@@ -340,6 +356,9 @@ int run(HINSTANCE instance) {
         h = g.keys.show.height();
     }
     install_state_hooks();
+    install_dialog_hooks(g);
+    install_help_hooks(g);
+    install_briefing_hooks(g);
     // The result is discarded; DGROUP:0x16 comes from WM_CREATE [BYTES seg2:0x390].
     CreateWindowExW(0, kMainClass, title.c_str(), style, x, y, w, h, nullptr,
                     g.keys.menu ? g.menu : nullptr, instance, nullptr);
@@ -501,14 +520,22 @@ public:
     bool calibrate_step(Tick now) override;
     int calibrate_value() override { return shell::kCalibrate; }
     int mix_channels() override { return mix_channels_; }
-    // The credits' busy waits: the surface is shown, then the time passes without messages, as
-    // the original's loops on GetCurrentTime [BYTES seg15:0x7f24 seg15:0x7fcd] [DESIGN].
+    // The credits' and the desk exit's busy waits: the surface is shown, then the time passes
+    // without messages, as the original's loops on GetCurrentTime [BYTES seg15:0x7f24
+    // seg15:0x7fcd seg15:0x12aa]. MsgWaitForMultipleObjectsEx with an empty wake mask removes
+    // no message but lets the display driver show the surface (Wine flushes window surfaces
+    // there; a Sleep loop leaves the old picture on screen, start-0001) [DESIGN].
     void present_wait(Tick ms) override {
-        present_frame();
+        if (g.gfx && g.main) g.gfx->present(g.main, true);
+        GdiFlush();
         const Tick start = now_tick();
-        while (now_tick() - start < ms) Sleep(1);
+        for (Tick t = now_tick(); t - start < ms; t = now_tick())
+            MsgWaitForMultipleObjectsEx(0, nullptr, static_cast<DWORD>(ms - (t - start)), 0, 0);
     }
     void demo_start() override { g.game.request(shell::kIntro); }
+    // seg10:0x885e(0) from the state-0 entry and title step 0: the program's check
+    // (src/app/startup.cpp), which keeps the flags in g.edition.
+    shell::Edition edition_check() override { return run_edition_check(0); }
     intro::LocalDay local_day() override {
         const std::time_t t = std::time(nullptr);
         const std::tm* tm = std::localtime(&t);

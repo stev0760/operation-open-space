@@ -50,15 +50,21 @@ std::string format_day(const std::string& format, int day);
 
 // The title's trial line (shell.md "Trial line") for the edition DGROUP:0x920c, DGROUP:0x922a
 // and the day DGROUP:0x9224, from the strings 2341, 2342 and 2343. `order_line` is the
-// local [bp-0x12] that draws the Press 'R' line. `none` for DGROUP:0x920c = 3; -1 (the CD and
-// registered-user line) is not reached by the port before stage 3 and gives `none` as well.
+// local [bp-0x12] that draws the Press 'R' line. `none` for DGROUP:0x920c = 3. For -1 the line
+// is `registered`, the text registered_line() builds.
 struct TrialLine {
     bool none = false;
     std::string text;
     bool order_line = false;
 };
 TrialLine trial_line(int edition, int invalid, int day, const std::string& s2341,
-                     const std::string& s2342, const std::string& s2343);
+                     const std::string& s2342, const std::string& s2343,
+                     const std::string& registered = {});
+// The DGROUP:0x920c = -1 line: string 2124 "Reg User: " + the name seg10:0x946a reads, when
+// WIN.INI [Inner Space] CDDrive is empty [BYTES seg15:0x6fda seg15:0x6feb seg15:0x6ffb
+// seg15:0x700e seg15:0x701d]. The CD form "CD: " + CDDrive is not ported: the port counts
+// CDDrive as empty (ADR 0008 decision 4) [DESIGN].
+std::string registered_line(const std::string& s2124, const std::string& name);
 
 // The copyright DGROUP:0x12d2, 56 bytes, cp1252 (0xA9 is the copyright sign) [BYTES
 // DGROUP:0x12d2].

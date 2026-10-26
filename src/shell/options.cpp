@@ -40,7 +40,6 @@ OptionsResult parse_options(const std::vector<std::filesystem::path>& args) {
         }
         *slot = args[++i];
     }
-    if (!r.options.ini) r.error = "--ini <path> is required";
     return r;
 }
 

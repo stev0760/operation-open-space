@@ -12,7 +12,10 @@
 #include <string>
 
 #include "app/app.h"
+#include "dialogs/hooks.h"
 #include "formats/bytes.h"
+#include "help/help.h"
+#include "nav/nav.h"
 #include "shell/command_table.h"
 
 namespace is::app {
@@ -94,7 +97,7 @@ void paint_routine() {
 void teardown() {
     if (g.torn_down) return;  // DGROUP:0x49e
     g.torn_down = true;
-    // 1: the Navigation window and its keys (stage 3).
+    nav::close();  // 1: the Navigation window and its keys (seg6:0x2ebc)
     g.game.teardown();  // 2: the current state (seg2:0x1d58)
     // 3: ISPACE ordinal 7 command 1 (M7); 4: the clip region (the port keeps a rectangle).
     if (g.main) SetMenu(g.main, nullptr);  // 5
@@ -124,32 +127,8 @@ void teardown() {
     // 11: the DLLs (none).
 }
 
-// seg2:0xd78 SC_CLOSE: the exit sequence of shell.md "Exit" without its dialogs.
-void exit_sequence() {
-    log_window("at SC_CLOSE");
-    // 1: sounds 0x6e and 11 + rand() % 3, a 450 ms wait and sound 0x50: TODO M7.
-    g.game.set_suspended(true);  // 2: DGROUP:0x1a = 1 [BYTES seg2:0xe07]
-    // 2-3: dialog #244 through ISPACE ordinal 10 command 5 decides; until stage 3 ports it the
-    // result is 1, Exit. Exit sets state 9 and opens #799 when DGROUP:0x920c is 0 or 1: both
-    // skipped for now (state 9 never runs a frame on this path: DGROUP:0x1a is set).
-    log_todo("exit dialog #244, state 9 and dialog #799", "seg2:0xe0f");
-    // 4: seg10:0x87de acts only while DGROUP:0x11aa = 0 and DGROUP:0x920c is -1 or 3
-    // [BYTES seg10:0x87eb seg10:0x87f2].
-    if (g.edition == -1 || g.edition == 3) {
-        try {
-            int count = g.ini->get_int(settings::kGameSection, "PlusCount", 13) + 1;
-            if (count > 12) {
-                count = 0;
-                log_todo("state 9 and dialog #1872", "seg10:0x882d");
-            }
-            g.ini->set_int(settings::kGameSection, "PlusCount", count);  // seg10:0x8852
-            g.ini->save();
-        } catch (const std::exception& x) {
-            log(std::string("PlusCount: ") + x.what());
-        }
-    }
-    DestroyWindow(g.main);  // seg2:0xe44
-}
+// seg2:0xd78 SC_CLOSE: the exit sequence of shell.md "Exit" (src/dialogs/hooks.cpp).
+void exit_sequence() { dialogs::exit_sequence(); }
 
 // seg2:0xd78: WM_SYSCOMMAND. Returns true when DefWindowProc also runs.
 bool sys_command(WPARAM wparam) {
@@ -207,8 +186,7 @@ void command(WORD id) {
     case shell::Call::kSave: {
         const int arg = shell::save_argument(g.game.state());
         if (arg < 0) return;
-        std::snprintf(what, sizeof what, "save seg10:0x8568(%d)", arg);
-        log_todo(what, a.address);
+        dialogs::save_step(arg);  // seg10:0x8568(arg), src/dialogs/hooks.cpp
         return;
     }
     case shell::Call::kHelpTopic:
@@ -218,11 +196,10 @@ void command(WORD id) {
     case shell::Call::kF1:
         // DGROUP:0xa7c, the targeting display, comes with the HUD (M3); without it F1 calls
         // seg2:0x190a(0, 0).
-        log_todo("WinHelp seg2:0x190a(0, 0)", a.address);
+        help::open_manual(0);
         return;
     case shell::Call::kHelpFile:
-        std::snprintf(what, sizeof what, "WinHelp seg2:0x190a(%d, 0)", a.arg);
-        log_todo(what, a.address);
+        help::open_manual(static_cast<std::uint32_t>(a.arg));  // seg2:0x190a(arg, 0)
         return;
     case shell::Call::kBossKey:  // seg2:0x1486
         if (g.keys.full) add_windowed_bits();
@@ -277,7 +254,7 @@ void timer() {
         log_todo("focus back: ISPACE 7:4", "seg10:0x86a8");
     }
     // DGROUP:0x934c and the Navigation window DGROUP:0xd1e also count as the game's own.
-    if (active != g.main) {
+    if (active != g.main && active != nav::window()) {
         if (g.running) pause_game();  // seg2:0x1327
     } else if (!g.running && !IsIconic(g.main)) {
         resume_game();  // seg2:0x1341
@@ -535,8 +512,8 @@ LRESULT handle(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
         g.idle_allowed = true;  // DGROUP:0x8f66 = 1
         g.game.start(now_tick());  // seg6:0x1b3c
         return 0;
-    case kMsgAbort:
-        log_todo("abort dialog #244 (ordinal 10 command 7)", "seg2:0x536");
+    case kMsgAbort:  // seg2:0x536 (src/dialogs/hooks.cpp)
+        dialogs::abort_sequence();
         return 0;
     case kMsgShipWatch: log_todo("Ship Watch window", "seg13:0x5878"); return 0;
     case kMsgMenuReload: reload_menu(); return 0;  // seg2:0x4e9

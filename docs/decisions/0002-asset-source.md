@@ -18,7 +18,7 @@
    - This keeps ships edited with the Ship Factory loadable.
 
    [DESIGN]
-5. **Read-only:** the port writes into the game directory only where the original writes: the Ship Factory's MASTER.BOD and MASTER.SHP (M8) and saved games under `LocalPath` (M4), as their ADRs decide. It never copies, converts or uploads the files. [DESIGN]
+5. **Read-only:** the port writes into the game directory only where the original writes: the Ship Factory's MASTER.BOD and MASTER.SHP (M8) and saved games under `LocalPath` (M4), as their ADRs decide, and the install step of ADR 0008, which writes only into the fresh copy of the files it creates. It never copies, converts or uploads the user's files. [DESIGN]
 6. **Language:** the language module is `<Language>_LANG.DLL`, with the `Language` key's value and ENG by default, as in the original. [DESIGN]
 
 ## Alternatives

@@ -454,6 +454,15 @@ bool regenerate(IniFile& ini, const fs::path& asset_dir, const fs::path& local_d
     return true;
 }
 
+void RegistrationSettings::load(const IniFile& ini) {
+    present = false;
+    for (const std::string& name : ini.sections())
+        if (same_name(name, kRegistrationSection)) present = true;
+    vidsp = ini.get_int(kRegistrationSection, "vidsp", 0);
+    bit32sp = ini.get_int(kRegistrationSection, "32BitSP", 0);
+    pdev = ini.get_int(kRegistrationSection, "PDev", 0);
+}
+
 void PortSettings::load(const IniFile& ini) {
     scale = ini.get_int(kPortSection, "Scale", 0);  // range: shell::scale_factor
 }

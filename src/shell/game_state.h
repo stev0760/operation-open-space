@@ -117,6 +117,7 @@ public:
     void set_briefing_phase(int p) { briefing_phase_ = p; }
     // DGROUP:0x9462: WM_KEYUP VK_SPACE in state 3 sets it to -1 [BYTES seg11:0x7bf7].
     int briefing_skip() const { return briefing_skip_; }
+    void set_briefing_skip(int v) { briefing_skip_ = v; }  // seg17:0x3b2 clears it
     // DGROUP:0x93a6: the Inner Demon visit flag; state 6's ESC needs it 0.
     bool demon_visit() const { return demon_visit_; }
 

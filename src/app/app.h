@@ -7,12 +7,14 @@
 #include <windows.h>
 
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <string>
 
 #include "assets/asset_store.h"
 #include "gfx/gfx.h"
 #include "settings/settings.h"
+#include "shell/edition.h"
 #include "shell/frame_scheduler.h"
 #include "shell/game_state.h"
 #include "shell/geometry.h"
@@ -59,6 +61,9 @@ struct App {
 
     std::unique_ptr<assets::AssetStore> store;
     std::unique_ptr<settings::IniFile> ini;
+    std::filesystem::path asset_dir;   // the game directory (ADR 0002)
+    std::filesystem::path ini_path;    // the resolved INSPACE.INI (ADR 0004 decision 2)
+    std::filesystem::path local_path;  // DGROUP:0x9078, INI LocalPath (ADR 0004 decision 5)
     // The renderer (ADR 0006, ADR 0007): the surface is DGROUP:0x13dc's drawing target, the
     // palette handle DGROUP:0x920e (src/gfx/gfx.h).
     std::unique_ptr<gfx::Gfx> gfx;
@@ -71,10 +76,9 @@ struct App {
 
     int screen_cx = 0, screen_cy = 0;  // SM_CXSCREEN, SM_CYSCREEN
     int depth = 0;                     // DGROUP:0x90ee: max(BITSPIXEL, PLANES)
-    // DGROUP:0x920c, the edition. The edition check seg10:0x885e needs ISPACE ordinal 24,
-    // which the port does not have yet; 0 is the unregistered "Limited" copy the oracle ran
-    // (newgame-0001's title "Limited Inner Space"). TODO stage 3.
-    int edition = 0;
+    // DGROUP:0x920c, 0x11aa, 0x922a, 0x922c and 0x9224 with the decoded name: what the last
+    // edition check seg10:0x885e left (run_edition_check).
+    shell::Edition edition;
     int play_mode = 0;  // DGROUP:0x9134 (INI PlayMode, read at game start)
 
     bool one_shot = false;       // DGROUP:0x1c: the first WM_TIMER is the one-shot
@@ -132,5 +136,28 @@ void present_frame();
 bool idle_step();
 // The state hooks of shell::GameState: state 0 is the intro of src/intro (stage 2).
 void install_state_hooks();
+
+// The hook points of the parts that live outside src/app. main.cpp calls them right after
+// install_state_hooks(), before the main window exists; each installs its own GameState hooks,
+// handlers and windows. Their owners: src/dialogs/hooks.cpp, src/help/hooks.cpp and
+// src/briefing/hooks.cpp.
+void install_dialog_hooks(App& app);
+void install_help_hooks(App& app);
+void install_briefing_hooks(App& app);
+
+// ---- access from outside src/app
+
+// The flags of the last edition check (DGROUP:0x920c and its companions).
+const shell::Edition& edition();
+// seg10:0x885e(arg): runs the edition check again with the asset directory's INSPACE.EXE
+// records, the registration values and the local date, keeps and returns the result. Callers:
+// start-up (arg 1), the state-0 entry and title step 0 (through the intro host), and 'R' after
+// the Order dialog returns non-zero (arg 0).
+const shell::Edition& run_edition_check(int arg);
+// PostMessage to the main window (the private kMsg* messages of WndProc). False when there is
+// no main window or the post fails.
+bool post(UINT msg, WPARAM wparam = 0, LPARAM lparam = 0);
+// A state request: DGROUP:0x968e = state, DGROUP:0x13de = 1 (shell::GameState::request).
+void request_state(int state);
 
 }  // namespace is::app

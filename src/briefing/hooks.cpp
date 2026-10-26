@@ -1,0 +1,324 @@
+// The hook point of src/briefing (declared in src/app/app.h, called by WinMain after
+// install_state_hooks): state 3, the wave mission briefing, and the state-1 hand-off before M3
+// (docs/re/shell.md "Screen states"). Win32 only: the host build compiles this file empty.
+#ifdef _WIN32
+#include "briefing/hooks.h"
+
+#include <windows.h>
+#include <shellapi.h>
+
+#include <cstdio>
+#include <cstdlib>
+#include <memory>
+#include <set>
+#include <string>
+#include <vector>
+
+#include "app/app.h"
+#include "briefing/briefing.h"
+#include "briefing/gdi_canvas.h"
+#include "formats/ne.h"
+
+namespace is::briefing {
+
+namespace {
+
+using app::g;
+
+// ---- the program's side of the briefing
+
+class BriefingHost final : public Host {
+public:
+    std::string lang(int id) override {
+        try {
+            if (g.store)
+                if (auto s = g.store->find_string(static_cast<std::uint16_t>(id))) return *s;
+        } catch (const std::exception& x) {
+            app::log("string " + std::to_string(id) + ": " + x.what());
+        }
+        return {};
+    }
+    // The sound wrappers wait for the sound milestone: one line per id [DESIGN].
+    void sound(int id) override {
+        if (!sounds_.insert(id).second) return;
+        char buf[48];
+        std::snprintf(buf, sizeof buf, "sound 0x%x", id);
+        app::log_todo(buf, "seg10:0x754a");
+    }
+    void todo(const std::string& what, const char* address) override {
+        if (todos_.insert(what + address).second) app::log_todo(what, address);
+    }
+    std::vector<std::uint8_t> page(int id) override {
+        try {
+            if (g.store) {
+                const fmt::NeModule& m = g.store->language_dll();
+                if (const fmt::NeResource* r = m.find(5000, static_cast<std::uint16_t>(id)))
+                    return std::vector<std::uint8_t>(m.data(*r), m.data(*r) + m.size(*r));
+            }
+        } catch (const std::exception& x) {
+            app::log("#5000 " + std::to_string(id) + ": " + x.what());
+        }
+        app::log("#5000 " + std::to_string(id) + " missing");
+        return {};
+    }
+
+private:
+    std::set<int> sounds_;
+    std::set<std::string> todos_;
+};
+
+std::unique_ptr<BriefingHost> g_host;
+std::unique_ptr<GdiCanvas> g_canvas;
+std::unique_ptr<Briefing> g_briefing;
+std::string g_selection;        // DGROUP:0x38c8 as the game-start flow set it
+bool g_handoff = false;         // state 3 is live: the next state-1 entry is seg9:0x60bc
+bool g_loading_drawn = false;   // DGROUP:0x92e6 [BYTES seg10:0xa9 seg9:0x27b3]
+unsigned long g_wave_frames = 0;  // state-1 frames since seg9:0x60bc
+int g_logged_phase = -1;
+
+void todo_once(const std::string& what, const char* address) {
+    if (g_host) g_host->todo(what, address);
+}
+
+std::wstring widen(const std::string& s) { return app::widen(s); }
+
+// The INI Drive root: the first character of Drive (default "C", 10 bytes) + ":\" [DESIGN:
+// stands for the Navigation window's selection until it exists].
+std::string drive_root() {
+    std::string d = g.ini ? g.ini->get_string(settings::kGameSection, "Drive", "C", 10) : "C";
+    char c = d.empty() ? 'C' : d[0];
+    if (c >= 'a' && c <= 'z') c = static_cast<char>(c - 'a' + 'A');
+    return std::string(1, c) + ":\\";
+}
+
+// The icon files of the directory: *.exe, then *.dll, files only (FINDFIRST attribute 0x01),
+// as newgame-0002 records [ORACLE newgame-0002]. The wave set-up's icon records and cells are
+// M3 (seg9:0x17d, seg9:0x256): the port lists the files for the count DGROUP:0x91fe and draws
+// each file's first icon into its cell of DGROUP:0x3a02 [DESIGN].
+constexpr int kMaxIcons = 100;  // [DESIGN] bounds the cell image; the original's limit is [OPEN]
+std::vector<std::wstring> icon_files(const std::string& dir) {
+    std::vector<std::wstring> out;
+    std::wstring base = widen(dir);
+    if (!base.empty() && base.back() != L'\\' && base.back() != L'/') base += L'\\';
+    for (const wchar_t* pat : {L"*.exe", L"*.dll"}) {
+        WIN32_FIND_DATAW fd;
+        HANDLE h = FindFirstFileW((base + pat).c_str(), &fd);
+        if (h == INVALID_HANDLE_VALUE) continue;
+        do {
+            if (fd.dwFileAttributes &
+                (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM))
+                continue;
+            if (static_cast<int>(out.size()) < kMaxIcons) out.push_back(base + fd.cFileName);
+        } while (FindNextFileW(h, &fd));
+        FindClose(h);
+    }
+    return out;
+}
+
+gfx::ImagePtr icon_cells(const std::vector<std::wstring>& files, int b) {
+    const int o = (6 << b) >> 1, s = (32 << b) >> 1;
+    if (files.empty() || !g.gfx) return {};
+    gfx::ImagePtr img;
+    try {
+        img = g.gfx->create_image((s + o) * static_cast<int>(files.size()) + o, s + 2 * o);
+    } catch (const std::exception& x) {
+        app::log(std::string("icon cells: ") + x.what());
+        return {};
+    }
+    for (std::size_t k = 0; k < files.size(); ++k) {
+        HICON ic = ExtractIconW(g.instance, files[k].c_str(), 0);
+        if (reinterpret_cast<UINT_PTR>(ic) > 1) {
+            DrawIconEx(img->hdc(), (s + o) * static_cast<int>(k) + o, o, ic, s, s, 0, nullptr,
+                       DI_NORMAL);
+            DestroyIcon(ic);
+        }
+    }
+    GdiFlush();
+    return img;
+}
+
+Setup make_setup() {
+    Setup st;
+    st.W = g.area.w;
+    st.H = g.area.h;
+    if (g.ini) {
+        st.quick_intro = g.ini->get_int(settings::kGameSection, "QuickIntro", 0);  // DGROUP:0x8f70
+        st.size_level = g.ini->get_int(settings::kGameSection, "Size", 1);         // DGROUP:0x9156
+    }
+    if (st.size_level < 0 || st.size_level > 2) st.size_level = 1;
+    // DGROUP:0x90f8: the DEMO and PLAY command lines are not ported yet (0x9f0, 0x9fa).
+    st.command_line = 0;
+    st.play_mode = g.play_mode;  // DGROUP:0x9134
+    st.directory = g_selection.empty() ? drive_root() : g_selection;
+    const auto files = icon_files(st.directory);
+    st.icons = static_cast<int>(files.size());
+    st.gone.assign(files.size(), false);
+    if (g_canvas) g_canvas->set_icon_cells(icon_cells(files, st.size_level));
+    todo_once("icon records and cells of the wave set-up", "seg9:0x17d");
+    return st;
+}
+
+void trace_phase(const shell::GameState& s) {
+    if (s.briefing_phase() == g_logged_phase) return;
+    g_logged_phase = s.briefing_phase();
+    app::log("briefing: phase " + std::to_string(g_logged_phase) + " at " +
+             std::to_string(app::now_tick()) + " ms");
+}
+
+// ---- seg9:0x5cca: the state-3 entry
+
+void enter_briefing(shell::GameState& s) {
+    todo_once("seg9:0x8908 at the briefing entry", "seg9:0x8908");
+    if (g.main) ShowWindow(g.main, SW_SHOW);
+    PatBlt(g.gfx->dc(), 0, 0, g.area.w, g.area.h, BLACKNESS);
+    // DGROUP:0x95bc: the port has no demo yet, so every game is a player game.
+    if (g.main) {
+        // SetCursorPos(DGROUP:0x1d48, H): the client's bottom in screen coordinates [DESIGN:
+        // the original's full-screen window has its client at the screen origin].
+        POINT p{0, g.area.h * (g.gfx ? g.gfx->factor() : 1)};
+        ClientToScreen(g.main, &p);
+        SetCursorPos(g.start_cursor.x, p.y);
+    }
+    if (s.hooks().play_area) s.hooks().play_area(s);  // seg2:0xba4
+    // seg9:0x22b4(1) draws nothing here: seg10:0x0's call has set DGROUP:0x92e6 = 1.
+    todo_once("seg9:0x22b4(1) graphics and the wave resets of seg9:0x5cca", "seg9:0x5cca");
+    g_logged_phase = -1;
+    const Setup setup = make_setup();
+    const int id = g_briefing->enter(s, setup);
+    app::log("briefing: wave " + std::to_string(g_briefing->wave()) + ", text #5000 " +
+             std::to_string(id) + ", directory " + setup.directory + ", " +
+             std::to_string(setup.icons) + " icons, QuickIntro " +
+             std::to_string(setup.quick_intro));
+    g_handoff = true;
+    trace_phase(s);
+}
+
+// ---- seg10:0x0 for state 1: the state-1 set-up before the briefing
+
+void state1_setup(shell::GameState&) {
+    todo_once("state-1 set-up: palette scheme 8, the wave's resources, ThePlayer",
+              "seg10:0x0");
+    const shell::Tick start = app::now_tick();  // GetCurrentTime [BYTES seg10:0x91]
+    g_loading_drawn = false;             // DGROUP:0x92e6 = 0 [BYTES seg10:0xa9]
+    // seg9:0x22b4: string 899 + "..." (DGROUP:0x111a) in bitmap font 2, align 6, colour
+    // 0x0200FF00 at (W/2, 3H/4 + 20) [BYTES seg9:0x22e9-0x233d].
+    if (!g_loading_drawn && g.gfx && g_host) {
+        std::string text = g_host->lang(899);
+        if (text.size() > 39) text.resize(39);  // LoadString into 0x28 bytes
+        text += "...";
+        const int H = g.area.h;
+        g.gfx->font_text(2, 6, 0x0200FF00, g.area.w / 2, (H * 3) / 4 + 20, text);
+        g_loading_drawn = true;  // seg9:0x27b3
+    }
+    if (g.gfx && g.main) {
+        g.gfx->present(g.main, true);
+        GdiFlush();
+    }
+    app::log(std::string("state 1: LOADING GRAPHICS drawn") +
+             (g.gfx && g.gfx->alphabet() ? "" : " (no ALPHABET)"));
+    // The busy wait to start + 2000 ms [BYTES seg10:0xb7-0xc6]: shown, then the time passes
+    // without dispatching messages, as the original's loop on GetCurrentTime. The wait goes
+    // through MsgWaitForMultipleObjectsEx with an empty wake mask, which removes no message but
+    // lets the display driver show the surface (Wine flushes window surfaces there) [DESIGN].
+    while (app::now_tick() - start < 2000)
+        MsgWaitForMultipleObjectsEx(0, nullptr, 10, 0, 0);
+}
+
+// ---- seg9:0x60bc: state 3 -> 1
+
+void enter_wave(shell::GameState&) {
+    g_handoff = false;
+    todo_once("seg9:0x699e at the wave start", "seg9:0x699e");
+    if (g.main) ShowWindow(g.main, SW_SHOW);
+    PatBlt(g.gfx->dc(), 0, 0, g.area.w, g.area.h, BLACKNESS);  // seg9:0x60bc
+    // DGROUP:0xa76 = 2, DGROUP:0x9e49 = 10, DGROUP:0x93a4 = 0 and the wave set-up are M3.
+    todo_once("wave set-up (seg8:0x190e, seg13:0x2dcc, seg5:0xdc ...)", "seg9:0x60bc");
+    g_wave_frames = 0;
+    app::log("briefing: wave " + std::to_string(g_briefing->wave()) + " starts at " +
+             std::to_string(app::now_tick()) + " ms");
+}
+
+}  // namespace
+
+void set_selection(const std::string& dos_path) { g_selection = dos_path; }
+void set_wave(int wave) {
+    if (g_briefing) g_briefing->set_wave(wave);
+}
+int wave() { return g_briefing ? g_briefing->wave() : 0; }
+
+}  // namespace is::briefing
+
+namespace is::app {
+
+void install_briefing_hooks(App& app) {
+    using namespace is::briefing;
+    auto& h = app.game.hooks();
+    g_host = std::make_unique<BriefingHost>();
+    g_canvas = std::make_unique<GdiCanvas>(*app.gfx);
+    g_briefing = std::make_unique<Briefing>(*g_canvas, *g_host);
+
+    h.enter[shell::kBriefing] = [](shell::GameState& s) { enter_briefing(s); };
+    h.frame[shell::kBriefing] = [](shell::GameState& s) {
+        g_briefing->frame(s);
+        trace_phase(s);
+    };
+    // seg11:0xafe case 3: seg9:0x8934(0) unless the phase is 18; a WM_PAINT replays the
+    // briefing from phase 0 [BYTES seg11:0x1696-0x169f seg9:0x8bcb].
+    h.repaint[shell::kBriefing] = [](shell::GameState& s) {
+        g_briefing->repaint(s);
+        trace_phase(s);
+    };
+    // The state-1 entry hook is both seg10:0x0 (the state-change step, before the briefing)
+    // and seg9:0x60bc (the briefing's end).
+    h.enter[shell::kWave] = [](shell::GameState& s) {
+        if (g_handoff)
+            enter_wave(s);
+        else
+            state1_setup(s);
+    };
+    // State 1 before M3: a black play area. The paint routine blacks it while state 1 has no
+    // repaint hook.
+    h.frame[shell::kWave] = [](shell::GameState&) {
+        if (g_wave_frames++ == 0) todo_once("wave frame and the HUD", "seg11:0xafe");
+    };
+    auto prev_teardown = h.teardown;
+    h.teardown = [prev_teardown](shell::GameState& s) {
+        if (prev_teardown) prev_teardown(s);
+        g_handoff = false;
+    };
+    // ESC in a player game posts 0x991 (seg11:0x6c54) once DGROUP:0x934e > 2. DGROUP:0x934e
+    // comes with the wave (M3); the port counts state-1 frames in its place [OPEN].
+    auto prev_route = h.route_input;
+    h.route_input = [prev_route](shell::GameState& s, const shell::Input& in) {
+        if (s.state() == shell::kWave && in.msg == shell::kWmKeyUp &&
+            in.wparam == shell::kVkEscape) {
+            if (g_wave_frames > 2) {
+                log("state 1: ESC posts 0x991");
+                if (!post(kMsgAbort)) log("state 1: the 0x991 post failed");
+            }
+            return;
+        }
+        if (prev_route) prev_route(s, in);
+    };
+
+    // A test hook for the headless checks: IS_TEST_BRIEFING set to a directory (or "1" for the
+    // INI Drive root) requests state 1 from the first state-0 frame after the Calibrate
+    // measurement, as Navigation Enter does [DESIGN].
+    const char* t = std::getenv("IS_TEST_BRIEFING");
+    if (t && *t) {
+        if (std::string(t) != "1") g_selection = t;
+        auto prev_frame = h.frame[shell::kIntro];
+        h.frame[shell::kIntro] = [prev_frame](shell::GameState& s) {
+            if (prev_frame) prev_frame(s);
+            static bool once = false;
+            if (!once && g.calibrated) {
+                once = true;
+                log("test hook: IS_TEST_BRIEFING requests state 1");
+                s.request(shell::kWave);
+            }
+        };
+    }
+}
+
+}  // namespace is::app
+#endif

@@ -79,10 +79,15 @@ std::string format_day(const std::string& format, int day) {
 }
 
 TrialLine trial_line(int edition, int invalid, int day, const std::string& s2341,
-                     const std::string& s2342, const std::string& s2343) {
+                     const std::string& s2342, const std::string& s2343,
+                     const std::string& registered) {
     TrialLine t;
-    if (edition == 3 || edition == -1) {
+    if (edition == 3) {
         t.none = true;
+        return t;
+    }
+    if (edition == -1) {
+        t.text = registered;
         return t;
     }
     if (edition == 2) {
@@ -97,6 +102,12 @@ TrialLine trial_line(int edition, int invalid, int day, const std::string& s2341
         t.text = format_day(s2341, day);
     t.order_line = true;
     return t;
+}
+
+std::string registered_line(const std::string& s2124, const std::string& name) {
+    // seg9:0x955c loads 2124 (0x84c) with at most 0xa0 bytes, seg10:0x946a reads the name,
+    // lstrcat joins them [BYTES seg9:0x955c seg15:0x6feb seg15:0x701d].
+    return load_limit(s2124, 0xa0) + name;
 }
 
 const char* const kCopyright = "\xA9 1994-2000 Software Dynamics, inc. All rights reserved.";
