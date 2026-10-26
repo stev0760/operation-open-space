@@ -1587,3 +1587,265 @@ def test_title_palette_ramps():
     dg = unpacked_seg("ispace", 11)
     assert (struct.unpack_from("<H", dg, 0x178)[0], struct.unpack_from("<H", dg, 0x17C)[0]) == \
         (185 * 4, 213 * 4)
+
+
+# ------------------------------------------------------------------ registration, dialogs, briefing, desk
+
+
+def _texts(m: Module, expect: dict[str, str]) -> dict[str, str]:
+    return {a: m.at(a).text for a in expect}
+
+
+def test_edition_check_constants(ins):
+    """shell.md Edition check: the day block and the decision constants of seg10:0x885e."""
+    expect = {"seg10:0x886d": "cmp word ptr [0x920c], -1",
+              "seg10:0x8899": "sub ax, 0x5d",
+              "seg10:0x88a0": "imul ax, ax, 0x16d",
+              "seg10:0x88ab": "mov word ptr [0x922c], 1",
+              "seg10:0x88d9": "push 0x28",
+              "seg10:0x88f3": "push 0x15",
+              "seg10:0x891a": "push 0x9ef",
+              "seg10:0x8954": "push 0x9f0",
+              "seg10:0x8947": "push 0x30",
+              "seg10:0x894e": "mov ax, 0xfff6",
+              "seg10:0x8981": "push 2",
+              "seg10:0x89d0": "cmp ax, 1",
+              "seg10:0x8a75": "sub ax, 0x4cf",
+              "seg10:0x8a91": "xor al, 0xff",
+              "seg10:0x8aa8": "mov word ptr [0x9224], 0xc8",
+              "seg10:0x8ab8": "mov ax, 0xffff",
+              "seg10:0x8ac9": "cmp word ptr [bp - 0x152], 0x23",
+              "seg10:0x8aec": "cmp word ptr [bp - 0x152], 0xe",
+              "seg10:0x8afc": "cmp word ptr [bp - 0x16e], 0x3e8"}
+    assert _texts(ins, expect) == expect
+    # strings 2543 and 2544, and the only ordinal-24 calls with commands 0x15 and 2
+    assert (0x9EF, 0x9F0) == (2543, 2544)
+    assert [s for s in ("seg10:0x88f5", "seg10:0x8983") if ins.at(s).text == "lcall [0x3c68]"] == \
+        ["seg10:0x88f5", "seg10:0x8983"]
+
+
+def test_edition_check_dead_constants(ins, dgroup):
+    """shell.md Edition check: DGROUP:0x5d0, 0x1120 and 0x1122 are zero with no writer, so
+    DGROUP:0x920c = 3 and the CD flag are dead; DGROUP:0x922c is written once and never read."""
+    assert [struct.unpack_from("<H", dgroup, o)[0] for o in (0x5D0, 0x1120, 0x1122)] == [0, 0, 0]
+    assert _sites(ins.refs(0x5D0, 0x5D1)) == ["seg10:0x8959", "seg10:0x89b1"]
+    assert _sites(ins.refs(0x1120, 0x1121)) == ["seg10:0x8969", "seg10:0x89bf"]
+    assert _sites(ins.refs(0x1122, 0x1123)) == ["seg10:0x8960", "seg10:0x89b8"]
+    assert ins.writers(0x5D0, 0x5D1) == [] and ins.writers(0x1120, 0x1123) == []
+    assert not [i.addr for i in ins.insns if i.mem is not None and i.mem.ds
+                and (i.mem.regs or i.mnem == "lea")
+                and any(lo <= i.mem.disp <= lo + 1 for lo in (0x5D0, 0x1120, 0x1122))]
+    assert _write_values(ins, 0x922C, 0x922D) == {"seg10:0x88ab": 1}
+    assert _sites(ins.refs(0x922C, 0x922D)) == ["seg10:0x88ab"]
+    threes = [a for a, v in _write_values(ins, 0x920C, 0x920D).items() if v == 3]
+    assert threes == ["seg10:0x89c7"]
+    assert {a for a, v in _write_values(ins, 0x11AA, 0x11AB).items() if v == 1} == {"seg10:0x8907"}
+
+
+def test_ordinal_24_command_table(isp):
+    """ispace.md ordinal 24: the 22-entry switch of ISPACE.DLL seg10:0x48d2 and its retf."""
+    sw = isp.switches["seg10:0x4ae0"]
+    assert (sw["table"], sw["count"]) == ("seg10:0x4ae5", 22)
+    t = sw["targets"]
+    assert {c: t[c] for c in (0, 2, 9, 10, 11, 13, 14, 17, 19, 20, 21)} == {
+        0: "seg10:0x490b", 2: "seg10:0x4a6b", 9: "seg10:0x4a7e", 10: "seg10:0x4a99",
+        11: "seg10:0x4933", 13: "seg10:0x490b", 14: "seg10:0x4b11", 17: "seg10:0x4a7a",
+        19: "seg10:0x4b11", 20: "seg10:0x4a12", 21: "seg10:0x49bf"}
+    assert isp.at("seg10:0x4b17").text == "retf 0xa"
+    assert isp.owners(*A("seg10:0x4ae0")) == {"seg10:0x48d2"}
+
+
+def test_registration_record_constants(isp):
+    """formats.md Resources rewritten in place: the install record, the name scramble and the
+    INI writer seg10:0x5b24."""
+    expect = {
+        # install record: D = rand() % 7651 + 5432, x = D mod 653 + 654, resource #5500 110
+        "seg10:0x4bd0": "mov cx, 0x1de3", "seg10:0x4bd8": "add ax, 0x1538",
+        "seg10:0x4c09": "mov cx, 0x28d", "seg10:0x4c10": "add dx, 0x28e",
+        "seg10:0x4c1b": "push 0x6e", "seg10:0x4c1d": "push 0x157c",
+        # the command-2 relation in seg10:0x51b6
+        "seg10:0x5243": "mov cx, 0x28d", "seg10:0x524a": "add dx, 0x28e",
+        # name scramble: key 2A 32 2D, rand() % 96 + 2
+        "seg10:0x4dc9": "mov byte ptr [bp - 0xc], 0x2a",
+        "seg10:0x4dcd": "mov byte ptr [bp - 0xb], 0x32",
+        "seg10:0x4dd1": "mov byte ptr [bp - 0xa], 0x2d",
+        "seg10:0x4df0": "mov cx, 0x60", "seg10:0x4df6": "add dl, 2",
+        "seg10:0x4e13": "jl seg10:0x4e20", "seg10:0x4e20": "mov byte ptr es:[bx + si], 0",
+        # INI writer: s = rand() % 1111 + rand() % 8999 + 1987, X = 2s - P - 1231
+        "seg10:0x5b4a": "mov cx, 0x457", "seg10:0x5b57": "mov cx, 0x2327",
+        "seg10:0x5b5f": "add si, 0x7c3", "seg10:0x5d52": "sub ax, 0x4cf",
+        "seg10:0x5c0d": "mov cx, 0x1a79", "seg10:0x5c13": "add dx, 0xf49",
+        "seg10:0x5c44": "xor al, 0xff", "seg10:0x5c51": "mov cx, 0xc8",
+        "seg10:0x5c5c": "sub dx, 0xc7"}
+    assert _texts(isp, expect) == expect
+    assert (0x1DE3, 0x1538, 0x28D, 0x28E, 0x157C) == (7651, 5432, 653, 654, 5500)
+    assert (0x457, 0x2327, 0x7C3, 0x1A79, 0xF49) == (1111, 8999, 1987, 6777, 3913)
+    assert isp.call_sites("seg10:0x4dba") and isp.call_sites("seg10:0x5b24")
+
+
+def test_registration_resources_on_the_shipdisk():
+    """formats.md: the shipdisk's #5500 110 is all zero and #5000 143 holds the clear text."""
+    m = _ne("INSPACE.ex_")
+    rec = {(r.type_id, r.id): r for r in m.resources}
+    r110, r143 = rec[(5500, 110)], rec[(5000, 143)]
+    assert (r110.file_off, r143.file_off) == (0x4B840, 0x4B860)
+    assert m.data[r110.file_off:r110.file_off + 10] == bytes(10)
+    assert m.data[r143.file_off:r143.file_off + 50].startswith(b"Unregistered Copy   ILLEGAL")
+
+
+def _refused_ships(isp: Module) -> list[int]:
+    """Emulate the sub/je chain of ISPACE.DLL seg10:0x61da over MASTER.BOD word +0x21."""
+    out = []
+    for v in range(2000):
+        ax, pc = v, A("seg10:0x61da")[1]
+        while pc not in (0x61C0, 0x6167):
+            i = isp.at(f"seg10:{pc:#x}")
+            nxt = isp.step(i, 1).off
+            tgt = int(i.ops[0].split(":")[1], 16) if i.mnem.startswith("j") else None
+            if i.mnem == "sub":
+                ax -= int(i.ops[1], 0)
+            elif i.mnem == "dec":
+                ax -= 1
+            taken = {"je": ax == 0, "jne": ax != 0, "jge": ax >= 0, "jle": ax <= 0,
+                     "jno": True, "jmp": True}.get(i.mnem)
+            pc = tgt if taken else nxt
+        if pc == 0x61C0:
+            out.append(v)
+    return out
+
+
+def test_ship_availability_list(isp):
+    """shell.md Ship availability: the MASTER.BOD ids that seg10:0x611c refuses."""
+    assert _refused_ships(isp) == [178, 310, 320, 400, 440, 450, 520, 550, 560, 590, 600, 604,
+                                   605, 710, 720, 730, 750, 890, 900, 930, 950]
+
+
+def test_dialog_constants(isp):
+    """shell.md Game-start dialogs: fonts, the Order edit message, runtime windows and ids."""
+    expect = {"seg9:0x29ca": "push 0xe", "seg9:0x29cc": "push 6", "seg9:0x29f8": "push 0x2da",
+              "seg10:0x12b": "push 0x2bd", "seg10:0x134": "push 0x401",
+              "seg10:0xbee": "push 0x5021", "seg10:0xbf1": "push 0x102",
+              "seg10:0xbf4": "push 0x41", "seg10:0xbf6": "push 0xa", "seg10:0xbf8": "push 0x8c",
+              "seg10:0xbfb": "push 0x1e", "seg10:0xc00": "push 0x14c",
+              "seg10:0x1659": "push 0x5000", "seg10:0x165e": "push 4",
+              "seg10:0x1663": "sub ax, 0x71", "seg10:0x166e": "push 0x64",
+              "seg10:0x22cb": "sub ax, 0x68", "seg10:0x22d2": "sub ax, 0x67",
+              "seg10:0x22d6": "push 0x60"}
+    assert _texts(isp, expect) == expect
+    for site in ("seg9:0x29e8", "seg9:0x2a0f"):
+        assert "CreateFont" in isp.at(site).text
+    for site in ("seg10:0xc0b", "seg10:0x1678", "seg10:0x22e7"):
+        assert "CreateWindow" in isp.at(site).text
+    assert (0x2DA, 0x2BD, 0x14C, 0x71, 0x68, 0x67) == (730, 701, 332, 113, 104, 103)
+
+
+def test_briefing_constants(ins):
+    """shell.md State 3: box geometry, label strings, typewriter timings and phase 4's PatBlt."""
+    expect = {"seg9:0x8943": "cmp word ptr [0x90ea], 0x280", "seg9:0x8959": "cmp ax, 0x26c",
+              "seg9:0x8965": "cmp word ptr [0x10], 0x1b8", "seg9:0x897b": "cmp ax, 0x1cc",
+              "seg9:0x89c4": "sub ax, 0xb4", "seg9:0x89ca": "cmp word ptr [0x10], 0x190",
+              "seg9:0x8a9b": "push 0x9e9", "seg9:0x8ad7": "push 0x8dc",
+              "seg9:0x8b4a": "push 0x9d3", "seg9:0x8b53": "push 0x90c",
+              "seg9:0x8d41": "add ax, 0x19", "seg9:0x8d4b": "add cx, 0x37",
+              "seg9:0x8d6c": "add eax, 0x1f4", "seg9:0x8dae": "mov word ptr [bp - 0x48], 0x7d0",
+              "seg9:0x8df1": "add eax, 0x190", "seg9:0x8e78": "push 0x11",
+              "seg9:0x8f22": "add word ptr [0x1832], 0x19", "seg9:0x9019": "add eax, 0x7d0",
+              "seg15:0x6a16": "sub ax, 0x73", "seg15:0x6a1e": "add cx, 0x95"}
+    assert _texts(ins, expect) == expect
+    assert (0x9E9, 0x8DC, 0x9D3, 0x90C) == (2537, 2268, 2515, 2316)
+    assert "SetBkColor" in ins.at("seg15:0x6956").text and "PatBlt" in ins.at("seg15:0x6a27").text
+    assert ins.switches["seg17:0x350"]["count"] == 19
+
+
+def test_desk_typing_and_launch_constants(ins):
+    """shell.md Game-start dialogs items 7-9: desk typing, fly-up and CRT flash constants."""
+    expect = {"seg15:0x1599": "sub ax, 0x3f", "seg15:0x15a8": "mov cx, 0x15",
+              "seg15:0x1605": "add ax, 0x1f4", "seg15:0x167a": "add ax, 0x28",
+              "seg15:0x1872": "add ax, 0x76c", "seg15:0x1844": "push 0x2b",
+              "seg15:0xce": "mov word ptr [0x92d6], 0x3c",
+              "seg15:0x169": "mov word ptr [0x17c8], 0x96",
+              "seg15:0x175": "mov word ptr [0x17d0], 0x64",
+              "seg15:0x2c4": "cmp word ptr [0x8ffc], 0x578", "seg15:0x611": "push 0x4c",
+              "seg15:0x72f": "add ax, 0x5b4", "seg15:0x84d3": "push 0x14",
+              "seg15:0x8553": "cmp word ptr [bp - 4], 0xc8"}
+    assert _texts(ins, expect) == expect
+
+
+def test_credits_typing_counter_references(ins):
+    """shell.md Credits: DGROUP:0x95da has exactly five direct accesses, all keeping it even."""
+    refs = ins.refs(0x95DA, 0x95DA)
+    assert _sites(refs) == ["seg15:0x7de1", "seg15:0x7e31", "seg15:0x7e49", "seg15:0x7e50",
+                            "seg15:0x7e55"]
+    assert ins.at("seg15:0x7e55").text == "test byte ptr [0x95da], 1"
+
+
+def _ord14(v: int, p: int) -> int:
+    q = s16(v * p & 0xFFFF)
+    q = int(q / 100)                          # idiv truncates toward zero
+    return 255 if q > 255 else q & 0xFF
+
+
+def test_ordinal_14_wrap(isp):
+    """shell.md Palette: ordinal 14 sign-extends the 16-bit product (byte 0x99, CWD)."""
+    assert isp.at("seg5:0x518c").raw == b"\x99"
+    assert isp.at("seg5:0x5186").text == "imul word ptr [bp + 0xa]"
+    assert isp.at("seg5:0x518f").text == "cmp ax, 0xff"
+    assert {v: _ord14(v, 204) for v in (125, 126, 160, 161, 180, 195, 200, 220, 240, 255)} == {
+        125: 255, 126: 255, 160: 255, 161: 186, 180: 224, 195: 255, 200: 9, 220: 50, 240: 91,
+        255: 121}
+    assert all(_ord14(v, 204) == v * 204 // 100 for v in range(126))
+    assert {v: _ord14(v, 137) for v in (186, 187, 239, 240, 250, 255)} == {
+        186: 254, 187: 255, 239: 255, 240: 186, 250: 200, 255: 206}
+
+
+def _pixels4(data: bytes) -> Counter:
+    o = 14 if data[:2] == b"BM" else 0
+    _size, w, h, _planes, bpp, _comp = struct.unpack_from("<IiiHHI", data, o)
+    assert bpp == 4
+    stride = (w * 4 + 31) // 32 * 4
+    bits = o + 40 + 4 * 16
+    out: Counter = Counter()
+    for y in range(abs(h)):
+        row = data[bits + y * stride:bits + y * stride + stride]
+        for x in range(w):
+            b = row[x // 2]
+            out[(b >> 4) if x % 2 == 0 else (b & 15)] += 1
+    return out
+
+
+def test_credits_logo_340():
+    """shell.md Credits: IGRAPHIC.DLL #4000 340's colour table and pixel counts."""
+    data = _resource("IGRAPHIC.DL1", 4000, 340)
+    w, h, bpp, table = _dib(data)
+    assert (w, h, bpp) == (333, 37, 4)
+    assert table == ["ffffff", "e0e0e0", "b4b4ff", "a0a0dc", "8c8cff", "6969ff", "4040ff",
+                     "0000ff", "0000b4", "000080"] + ["000000"] * 6
+    assert dict(_pixels4(data)) == {1: 156, 2: 836, 3: 4, 4: 1550, 5: 769, 6: 1768, 7: 1010,
+                                    8: 6, 9: 1424, 15: 4798}
+
+
+def test_desk_scene_resource():
+    """formats.md IGRAPHIC.DLL #6600: scene 100's header colours, conditions, records and slots;
+    shell.md: BITMAP CORNER."""
+    d = _resource("IGRAPHIC.DL1", 6600, 100)
+    w = lambda o: struct.unpack_from("<h", d, o)[0]              # noqa: E731
+    assert [w(2 * k) for k in range(9)] == [255, 255, 255, 0, 224, 0, 220, 202, 70]
+    assert [w(0x24 + 2 * k) for k in range(4)] == [3, 4, 4, 8]
+    assert [w(0x2C + 2 * k) for k in range(9)] == [32, 32, 32, 0, 100, 0, 120, 108, 38]
+    assert (d[0x50], d[0x51], d[0x52], d[0x53], d[0x5C]) == (6, 7, 3, 5, 0xF4)
+    assert struct.unpack_from("<ii", d, 0x5C) == (500, 217)
+    assert d[0x6C:0x80] == bytes(0x14)
+    n = (len(d) - 0x80) // 0x26
+    recs = [d[0x80 + 0x26 * k:0x80 + 0x26 * (k + 1)] for k in range(n)]
+    assert n == 62 and recs[61] == bytes(0x26)
+    sb = lambda b: b - 256 if b > 127 else b                    # noqa: E731
+    slots = {k: sb(r[0x1F]) for k, r in enumerate(recs) if r[0x1E] == 1 and sb(r[0x1F]) >= 0}
+    assert slots == {42: 0, 17: 1, 5: 2, 18: 3, 60: 4}
+    assert sb(recs[60][0x1D]) == -1
+    cond = {k: sb(r[0x1F]) for k, r in enumerate(recs) if r[0x1E] == 1 and sb(r[0x1F]) < -1}
+    assert cond == {2: -20, 36: -11, 37: -10, 38: -11, 39: -10}
+    assert {k: (r[0x1E], sb(r[0x1F])) for k, r in enumerate(recs) if 32 <= k <= 35} == {
+        32: (2, -11), 33: (2, -11), 34: (2, -10), 35: (2, -10)}
+    assert all(r[0x19:0x1B] == b"\0\0" and r[0x21:0x26] == bytes(5) for r in recs)
+    assert d[0x48 + 10] == 3 and d[0x48 + 11] == 5 and d[0x48 + 20] == 0xF4
+    assert _dib(_resource("IGRAPHIC.DL1", 2, "CORNER"))[:3] == (8, 5, 4)
