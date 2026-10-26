@@ -5,6 +5,8 @@
 #include <cmath>
 #include <string>
 
+#include "gfx/palette.h"
+
 namespace is::desk {
 
 namespace {
@@ -329,8 +331,8 @@ void GdiDesk::flash(int x, int y) {
     DeleteObject(wp);
 }
 
-// ---- launch: the pad of seg15:0x4a2e and the ship of seg15:0x2a08 are approximations drawn to
-// look like newgame-0002's intro-03/04 shots [OPEN seg15:0x4a2e seg15:0x2a08 seg15:0x9e6].
+// ---- launch: the pad drawer seg15:0x4a2e is an approximation drawn to look like newgame-0002's
+// intro-03/04 shots [OPEN seg15:0x4a2e]; its size is seg15:0x482e's (src/desk/desk.cpp).
 
 void GdiDesk::make_pad(int w, int h) {
     gfx::Gfx* x = g();
@@ -384,16 +386,69 @@ void GdiDesk::draw_ship(HDC d, int x0, int y0, int s) {
     poly(gem, {{56, 108}, {72, 108}, {64, 118}});
 }
 
-int GdiDesk::make_ship() {
+// seg15:0x2a08 and seg15:0x9e6 (shell.md "Game-start dialogs", item 7, Ship image and Frames)
+// [BYTES seg15:0x2a2f seg15:0x2a50 seg15:0x2a7d seg15:0x2b8f seg15:0x2ba7 seg15:0x9f4
+// seg15:0xa35 seg15:0xb97 seg15:0xbee seg15:0xc2e seg15:0xc50 seg15:0xc56].
+int GdiDesk::make_ship(const std::string& main_ship) {
     gfx::Gfx* x = g();
     if (!x) return 0;
-    const int size = 32;  // DGROUP:0x92da; s4 = 128 matches the oracle's ship width [OPEN]
-    ship_ = x->create_image(4 * size, 4 * size);
-    PatBlt(ship_->hdc(), 0, 0, 4 * size, 4 * size, BLACKNESS);
-    draw_ship(ship_->hdc(), 0, 0, 4 * size);
-    ship_mask_ = x->mask(*ship_);
+    std::optional<ShipArt> art;
+    if (ships_) art = ships_(main_ship);
+    int s = 0;
+    gfx::ImagePtr square;  // DGROUP:0x92b2, k·s × k·s
+    if (art && art->body.height > 0) {
+        // seg10:0x73a6(BOD + 0x21, BOD + 0x23, -2, -2, 2, 0, 1, SHP + 0x07, SHP + 0x08): ordinal 12
+        // at twice the body height through seg5:0x1b8e(d 0, a, b) with DGROUP:0x188 = 1. The
+        // port's device answers 8 bpp (ADR 0007), so k = 2 and s is the body height. Ordinal 12's
+        // smoothing, the flame and wing overlays of seg15:0x2a08 and which part of the 2× strip
+        // fills the square are [OPEN]: the port doubles the body's first w × w cell, as the
+        // dialogs' preview shows it [OPEN seg15:0x2a7d ISPACE.DLL seg7:0x12d8].
+        std::vector<std::uint32_t> table = art->body.palette;
+        gfx::PaletteManager pm;
+        pm.recolour_graphic(0, art->id, table, 0, art->a, art->b, 0, true);
+        const int h = art->body.height;
+        s = h;
+        const int k = 2;
+        // The colours through command 6 and PALETTERGB, as the scene's (ADR 0007) [DESIGN].
+        for (std::uint32_t c : table)
+            colour(Rgb{static_cast<std::uint8_t>(c >> 16), static_cast<std::uint8_t>(c >> 8), static_cast<std::uint8_t>(c)});
+        x->palette_animate();
+        colours_.clear();
+        square = x->create_image(k * s, k * s);
+        HDC sq = square->hdc();
+        PatBlt(sq, 0, 0, k * s, k * s, BLACKNESS);
+        for (int yy = 0; yy < h; ++yy)
+            for (int xx = 0; xx < h && xx < art->body.width; ++xx) {
+                const std::size_t i = art->body.bpp <= 8 ? art->body.index_at(xx, yy) : 0;
+                const std::uint32_t c = art->body.bpp <= 8 ? (i < table.size() ? table[i] : 0) : art->body.rgb_at(xx, yy);
+                if ((c & 0xFFFFFF) == 0) continue;
+                const COLORREF cr = colour(Rgb{static_cast<std::uint8_t>(c >> 16), static_cast<std::uint8_t>(c >> 8), static_cast<std::uint8_t>(c)});
+                HBRUSH br = CreateSolidBrush(cr);
+                RECT rc{k * xx, k * yy, k * xx + k, k * yy + k};
+                FillRect(sq, &rc, br);
+                DeleteObject(br);
+            }
+    } else {
+        // No MainShip record or body: what seg15:0x2a08 does then is [OPEN seg15:0x2a50]; the
+        // port draws its drawn stand-in at s = 32 [DESIGN].
+        if (todo_) todo_("launch ship: MainShip " + main_ship + " not rendered", "seg15:0x2a08");
+        s = 32;
+        square = x->create_image(2 * s, 2 * s);
+        PatBlt(square->hdc(), 0, 0, 2 * s, 2 * s, BLACKNESS);
+        draw_ship(square->hdc(), 0, 0, 2 * s);
+    }
+    // seg15:0x9e6: the 16 frames stacked at x 0, each a COLORONCOLOR stretch of the whole square.
+    frames_ = ship_frames(s);
+    const int total = frames_[kShipFrames - 1].y + frames_[kShipFrames - 1].h;
+    ship_ = x->create_image(4 * s, total);
+    HDC fd = ship_->hdc();
+    PatBlt(fd, 0, 0, 4 * s, total, BLACKNESS);
+    SetStretchBltMode(fd, COLORONCOLOR);
+    for (const ShipFrame& f : frames_)
+        StretchBlt(fd, 0, f.y, f.w, f.h, square->hdc(), 0, 0, square->width(), square->height(), SRCCOPY);
+    ship_mask_ = x->mask(*ship_);  // seg10:0x6ec6(DGROUP:0x3ccc)
     x->palette_animate();
-    return size;
+    return s;
 }
 
 // seg15:0x4c76's strip [BYTES seg15:0x4cf2 seg15:0x4d0f seg15:0x4dbf seg15:0x4eb8 seg15:0x4f16
@@ -424,25 +479,33 @@ void GdiDesk::pad_to_screen(int x, int y) {
     pad_x_ = x;
     pad_y_ = y;
     pad_shown_ = true;
-    last_ship_ = {};
 }
 
-// One launch frame: the old ship rectangle back from the scene DC, the pad again where it
-// overlaps, then the ship scaled to `size` with its mask [OPEN seg15:0x0 seg15:0x3bfa: the
-// frames, the occlusion mask and their blits].
-Rect GdiDesk::ship(int, int size, int x, int y) {
+// One seg15:0x0 drawing (shell.md item 9, Drawing) [BYTES seg15:0x163 seg15:0x30b seg15:0x32b
+// seg15:0x377 seg15:0x390 seg15:0x3d4 seg15:0x4e1 seg15:0x518 seg15:0x55f seg15:0x58d]. The shadow
+// that the original adds at 8 bpp or less (ROP 0x00A803A9, seg15:0x4c5) is left out: the port
+// shows what the oracle's true-colour display shows [DESIGN, ADR 0007] [OPEN seg15:0x4c5].
+void GdiDesk::launch_frame(const LaunchDraw& d) {
+    gfx::Gfx* x = g();
     HDC s = screen();
-    if (!s || !ship_) return {};
-    if (last_ship_.w() > 0 && scene_) {
-        BitBlt(s, last_ship_.l, last_ship_.t, last_ship_.w(), last_ship_.h(), scene_->hdc(), last_ship_.l, last_ship_.t, SRCCOPY);
-        if (pad_shown_ && pad_ && last_ship_.b > pad_y_)
-            BitBlt(s, pad_x_, pad_y_, pad_->width(), pad_->height(), pad_->hdc(), 0, 0, SRCCOPY);
-    }
-    SetStretchBltMode(s, COLORONCOLOR);
-    StretchBlt(s, x, y, size, size, ship_mask_->hdc(), 0, 0, ship_->width(), ship_->height(), SRCAND);
-    StretchBlt(s, x, y, size, size, ship_->hdc(), 0, 0, ship_->width(), ship_->height(), SRCPAINT);
-    last_ship_ = {x, y, x + size, y + size};
-    return last_ship_;
+    if (!x || !s || !ship_) return;
+    const int ww = d.ship.w(), wh = d.ship.h();
+    if (!work_ || work_->width() != ww || work_->height() != wh) work_ = x->create_image(ww, wh);
+    HDC w = work_->hdc();
+    PatBlt(w, 0, 0, ww, wh, BLACKNESS);
+    const auto part = [&](const Rect& r, HDC src, int sx0, int sy0) {
+        const int l = std::max(r.l, d.ship.l), t = std::max(r.t, d.ship.t);
+        const int rr = std::min(r.r, d.ship.r), b = std::min(r.b, d.ship.b);
+        if (l >= rr || t >= b) return;  // IntersectRect: empty
+        BitBlt(w, l - d.ship.l, t - d.ship.t, rr - l, b - t, src, l - sx0, t - sy0, SRCCOPY);
+    };
+    if (d.scene && scene_) part(d.column, scene_->hdc(), 0, 0);
+    if (pad_) part(d.pad, pad_->hdc(), d.pad.l, d.pad.t);
+    const ShipFrame& f = frames_[static_cast<std::size_t>(std::clamp(d.f, 0, kShipFrames - 1))];
+    const int fx = frames_[0].w / 2 - f.w / 2;
+    BitBlt(w, fx, 0, f.w, f.h, ship_mask_->hdc(), 0, f.y, SRCAND);
+    BitBlt(w, fx, 0, f.w, f.h, ship_->hdc(), 0, f.y, SRCPAINT);
+    BitBlt(s, d.ship.l, d.ship.t, ww, wh, w, 0, 0, SRCCOPY);
 }
 
 void GdiDesk::free_all() {
@@ -450,9 +513,9 @@ void GdiDesk::free_all() {
     pad_.reset();
     ship_.reset();
     ship_mask_.reset();
+    work_.reset();
     scene_.reset();
     pad_shown_ = false;
-    last_ship_ = {};
 }
 
 }  // namespace is::desk

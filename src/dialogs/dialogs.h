@@ -106,7 +106,6 @@ protected:
     // seg10:0x602a(hDlg, 0): the bold font to push buttons, the normal one to the rest, and
     // every child shown.
     void set_fonts();
-    void win16_edit_borders();
     void bold(int id);
     // The MoveWindow centring of every procedure, from the window rectangle taken at init.
     void centre();
@@ -278,6 +277,9 @@ private:
 // [BYTES ISPACE.DLL seg10:0x436f-0x4426 seg10:0x434c seg10:0x4355]. Other commands log and
 // return 0. Command 4 and the second half of 1 enumerate the drives.
 int ordinal10(Env& env, int cmd);
+
+// The LevClass frame of ISPACE.DLL seg10:0x309c on the client rectangle `r`, with GDI.
+void paint_frame(HDC dc, const RECT& r);
 
 // The window class "LevClass" (ISPACE.DLL seg10:0x4250(0)): registered once per instance.
 bool register_lev_class(HINSTANCE instance);

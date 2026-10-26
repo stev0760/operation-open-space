@@ -37,7 +37,7 @@ const FontSpec kCreditSmall{22, 13, 0, false, "Arial"};           // seg15:0x823
 const FontSpec kPageFont{18, 10, 0, false, "Arial"};              // seg15:0x69cc
 
 GameStart* g_game_start = nullptr;  // set_game_start
-DeskScene* g_desk = nullptr;         // set_desk_scene [stage 3d]
+DeskScene* g_desk = nullptr;         // set_desk_scene (src/desk)
 Intro* g_current = nullptr;          // Intro::current
 
 // The logo cell's source x in the strip: 6 + 46 cell [BYTES seg15:0x5f2e].
@@ -62,7 +62,7 @@ void Intro::enter(Tick now) {
     // tables, which no intro phase reaches (shell.md "Phase 2 entry calls"); the port has none.
     canvas_.black(0, 0, area_.w, area_.h);
     host_.music(-1);  // seg10:0x7480(-1, 1) [BYTES seg15:0x57b5]
-    // 2: the DEMO branch needs DGROUP:0x90f8 (the DEMO command line, stage 3). DGROUP:0x1a is
+    // 2: the DEMO branch needs DGROUP:0x90f8 (the DEMO command line, [OPEN] M3). DGROUP:0x1a is
     // cleared by GameState; DGROUP:0x9516 = 0 matters only to the demo start.
     registration_check();  // seg15:0x5803
     // 3 [BYTES seg15:0x5809 seg15:0x5821 seg15:0x582e seg15:0x5834]
@@ -133,7 +133,7 @@ void Intro::phase_work(bool redraw) {
     case 5:
         if (redraw && deadline_ != now_) keys();
         break;
-    case 6: desk_frame(); break;  // seg15:0x10be [stage 3d]
+    case 6: desk_frame(); break;  // seg15:0x10be (src/desk)
     default: break;  // 1: nothing
     }
 }
@@ -153,7 +153,7 @@ void Intro::transition() {
     // demo-start path [BYTES seg15:0x5a46]; the port has no DEMO command line yet.
     if (phase_ > 5) {
         // The demo start seg15:0x5a64 (DGROUP:0x95bc = 0, DGROUP:0x95b8 = 7, the demo set-up)
-        // is stage 3. The port restarts state 0 at the logo instead, as a demo that ends with
+        // is [OPEN] (M3, with the demo game). The port restarts state 0 at the logo instead, as a demo that ends with
         // ESC does (shell.md "Self-playing demo") [DESIGN].
         attract_ = false;
         phase_ = 7;
@@ -737,9 +737,11 @@ void Intro::keys() {  // seg15:0x6b52
 // ---------------------------------------------------------------- repaint and keys
 
 void Intro::repaint(Tick now) {
-    now_ = now;
     // seg11:0x15fc-0x1661: phases 1 and 2 end now; 3-5 get 15 s from now unless the deadline is
-    // already DGROUP:0x1e50. Both read GetCurrentTime afresh.
+    // already DGROUP:0x1e50. Both read GetCurrentTime afresh, but the compare reads the stored
+    // DGROUP:0x1e50 (now_), which the repaint does not refresh, so the "end now" deadline that
+    // after_dialog sets survives the repaint that follows the dialog [BYTES seg11:0x164b
+    // seg11:0x164f].
     if (phase_ > 0 && phase_ < 6) {
         if (phase_ < 3) deadline_ = host_.now();
         else if (deadline_ != now_) deadline_ = host_.now() + 15000;
@@ -764,7 +766,7 @@ void Intro::key_up_logged(std::uint32_t vk, Tick now) {
         }
         break;
     case 0x1b:  // ESC: the game-start flow (shell.md "Game-start dialogs")
-        if (phase_ < 6) todo_once("Restore Game dialog of the ESC flow (stage 3)", "seg11:0x7a02");
+        if (phase_ < 6) todo_once("Restore Game dialog of the ESC flow", "seg11:0x7a02");
         break;
     case 0x20:  // Space [BYTES seg11:0x7aea-0x7b13]
         if (phase_ < 6 && !host_.calibrating()) deadline_ = now;
@@ -903,7 +905,8 @@ void Intro::desk_scene(GameStart& gs) {
         g_desk->enter(now_, area_);
         return;
     }
-    todo_once("desk scene (stage 3d); step 9's exit follows at once", "seg15:0xcb0");
+    todo_once("desk scene (no DeskScene set: the tests' rig); step 9's exit follows at once",
+              "seg15:0xcb0");
     canvas_.black(0, 0, area_.w, area_.h);  // the full-screen BLACKNESS [BYTES seg15:0x1286]
     host_.present_wait(450);                // [BYTES seg15:0x12aa]
     // seg10:0x6e76(8, 0); seg10:0x6dd4(0) restores the set that the desk entry's

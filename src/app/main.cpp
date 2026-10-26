@@ -7,6 +7,7 @@
 #include <windows.h>
 #include <objbase.h>
 #include <shellapi.h>
+#include <mmsystem.h>
 
 #include <algorithm>
 #include <cstdio>
@@ -131,8 +132,9 @@ bool register_classes() {
         {L"IS_WATCH", 3, DefWindowProcW, true, false, BLACK_BRUSH, "seg13:0x4f4e"},  // TODO M8
         {L"IS_ICON", 3, DefWindowProcW, true, false, BLACK_BRUSH, "seg7:0x6184"},    // TODO M3
         {L"IS_SMART", 3, DefWindowProcW, true, false, BLACK_BRUSH, "seg13:0x613a"},  // TODO M8
-        {L"IS_NAV", 0xb, DefWindowProcW, true, true, LTGRAY_BRUSH, "seg6:0x1f22"},   // TODO stage 3
-        {L"IS_HELP", 3, DefWindowProcW, true, true, BLACK_BRUSH, "seg17:0x5782"},    // TODO stage 3
+        // src/nav registers IS_NAV again with its procedure when it opens the window.
+        {L"IS_NAV", 0xb, DefWindowProcW, true, true, LTGRAY_BRUSH, "seg6:0x1f22"},
+        {L"IS_HELP", 3, DefWindowProcW, true, true, BLACK_BRUSH, "seg17:0x5782"},    // TODO M8
         {L"IS_INFO", 0xb, DefWindowProcW, false, true, BLACK_BRUSH, "seg11:0x22fa"},  // TODO M3
     };
     for (const ClassDef& d : defs) {
@@ -183,8 +185,8 @@ int message_loop() {
     MSG m;
     for (;;) {
         // PeekMessage while running; a modeless Navigation window (DGROUP:0xd1e with
-        // DGROUP:0x95bc = 0) and the help dialog DGROUP:0x9460 join the condition in stage 3
-        // [BYTES seg2:0xc9].
+        // DGROUP:0x95bc = 0) and the help dialog DGROUP:0x9460 also belong to the condition
+        // [BYTES seg2:0xc9], which the port leaves out [OPEN] (M3 Navigation, M8 help).
         const bool poll = g.running;
         if (poll) {
             if (PeekMessageW(&m, nullptr, 0, 0, PM_REMOVE)) {  // seg2:0xfa
@@ -226,6 +228,13 @@ int message_loop() {
     }
 }
 
+// The executable's directory when it holds the game, else empty: its INSPACE.INI is the
+// game's own, never the port's (ADR 0002 decision 5, ADR 0004 decision 2) [DESIGN].
+std::filesystem::path exe_game_dir() {
+    return shell::choose_asset_dir(exe_dir(), std::nullopt, nullptr)
+        .value_or(std::filesystem::path{});
+}
+
 // The install step's Win32 driver with the port's INI location (ADR 0004 decision 2; the new
 // game directory is not the executable's, so portable mode follows the usual rule) [DESIGN].
 std::optional<std::filesystem::path> run_install_step(const std::filesystem::path& source,
@@ -233,7 +242,8 @@ std::optional<std::filesystem::path> run_install_step(const std::filesystem::pat
                                                       const std::optional<std::filesystem::path>& ini,
                                                       bool open_readme) {
     const settings::IniLocation loc =
-        settings::resolve_ini_location(ini, exe_dir(), roaming_app_data(), {});
+        settings::resolve_ini_location(ini, exe_dir(), roaming_app_data(),
+                                       exe_game_dir());
     install::Win32Options o;
     o.instance = g.instance;
     o.source = source;
@@ -250,7 +260,8 @@ std::optional<std::filesystem::path> run_install_step(const std::filesystem::pat
 std::optional<std::filesystem::path> ini_named_game(const std::optional<std::filesystem::path>& ini) {
     try {
         const settings::IniLocation loc =
-            settings::resolve_ini_location(ini, exe_dir(), roaming_app_data(), {});
+            settings::resolve_ini_location(ini, exe_dir(), roaming_app_data(),
+                                       exe_game_dir());
         std::error_code ec;
         if (!std::filesystem::exists(loc.path, ec)) return std::nullopt;
         const settings::IniFile f(loc.path);
@@ -268,7 +279,13 @@ int run(HINSTANCE instance) {
     init_clock();
     // ShellExecute (the manual, Order's text files) can use COM, so the GUI thread initialises
     // it first, as the ShellExecute documentation asks [REF Win32 SDK ShellExecute] [DESIGN].
-    CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+    struct ComScope {
+        HRESULT hr;
+        ~ComScope() {
+            if (SUCCEEDED(hr)) CoUninitialize();
+        }
+    } const com{CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE)};
+    if (FAILED(com.hr)) log("CoInitializeEx failed; ShellExecute runs without COM");
 
     // ---- the port's command line, the asset directory and the INI
     std::vector<std::filesystem::path> args;
@@ -283,6 +300,16 @@ int run(HINSTANCE instance) {
     if (!opts.error.empty()) {
         usage_box(opts.error);
         return 2;
+    }
+    // Step 3: single instance, done before the install step and the INI resolution, so two
+    // copies never install at once. Win32 has no hPrevInstance; a named mutex stands in for
+    // it (ADR 0010) [DESIGN]. DEMO and PLAY forwarding to the first instance (seg6:0x1c0c,
+    // seg6:0x1309) is M3 [OPEN].
+    HANDLE mutex = CreateMutexW(nullptr, TRUE, L"Local\\InnerSpacePort.SingleInstance");
+    if (mutex && GetLastError() == ERROR_ALREADY_EXISTS) {
+        fail_box(kAnotherInstance);  // seg6:0x1305
+        CloseHandle(mutex);
+        return 0;
     }
     // The install step (ADR 0008 decision 1) [DESIGN]: --install runs it and exits.
     if (opts.options.install) {
@@ -318,21 +345,8 @@ int run(HINSTANCE instance) {
     SetCursorPos(g.screen_cx / 2, g.screen_cy);
     GetCursorPos(&g.start_cursor);
 
-    // Step 3: single instance. Win32 has no hPrevInstance; a named mutex stands in for it
-    // and FindWindow for the previous instance's DGROUP:0x16 [DESIGN].
-    HANDLE mutex = CreateMutexW(nullptr, TRUE, L"Local\\InnerSpacePort.Instance");
-    if (mutex && GetLastError() == ERROR_ALREADY_EXISTS) {
-        HWND prev = FindWindowW(kMainClass, nullptr);
-        if (prev && IsWindow(prev)) {
-            // seg6:0x1c0c would forward DEMO or PLAY first (TODO with the command line).
-            PostMessageW(prev, WM_SYSCOMMAND, SC_MAXIMIZE, 0);  // seg6:0x1309
-        } else {
-            fail_box(kAnotherInstance);  // seg6:0x1305
-        }
-        CloseHandle(mutex);
-        return 0;
-    }
-    // Step 4: SetMessageQueue has no Win32 counterpart; Win32 queues grow as needed.
+    // Step 4: SetMessageQueue has no Win32 counterpart; Win32 queues grow as needed [DESIGN]
+    // (win16-translation.md).
 
     // Step 5: the timer probe [BYTES seg6:0x138a-0x13b1]. timeGetDevCaps's fine-timer flag
     // DGROUP:0x912e only feeds the millisecond gates, which ADR 0001 decision 7 drops.
@@ -379,8 +393,9 @@ int run(HINSTANCE instance) {
     // start-up with string 2543 is not ported: CDDrive counts as empty (ADR 0008 decision 4).
     run_edition_check(1);
 
-    // Steps 9-10: the low-resource check (GetFreeSystemResources has no Win32 counterpart) and
-    // the pools (the game state of M3 and M4) are not ported yet.
+    // Steps 9-10: the low-resource check never fires, since Win32 has no fixed resource heaps
+    // and the port counts 100 % free (win16-translation.md, GetFreeSystemResources) [DESIGN];
+    // the pools hold the game state of M3 and M4 [OPEN] (M3).
 
     // Step 11: seg6:0x0 defaults and clamps the windowed rectangle.
     g.keys.show = shell::clamp_show_rect(g.keys.show, g.screen_cx, g.screen_cy);
@@ -419,7 +434,7 @@ int run(HINSTANCE instance) {
     install_dialog_hooks(g);
     install_help_hooks(g);
     install_briefing_hooks(g);
-    install_desk_hooks(g);  // src/desk/hooks.cpp (stage 3d)
+    install_desk_hooks(g);  // src/desk/hooks.cpp
     // The result is discarded; DGROUP:0x16 comes from WM_CREATE [BYTES seg2:0x390].
     CreateWindowExW(0, kMainClass, title.c_str(), style, x, y, w, h, nullptr,
                     g.keys.menu ? g.menu : nullptr, instance, nullptr);
@@ -428,9 +443,10 @@ int run(HINSTANCE instance) {
     if (g.keys.full && shell::read_on_top(*g.ini))  // seg6:0x18aa-0x18d3
         SetWindowPos(g.main, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
 
-    // Step 17: strings 2900-2902 (DGROUP:0x94e4, DGROUP:0x94fa, DGROUP:0x967a) feed the
-    // intro: TODO stage 2. Step 18: CTL3D is not loaded; Win32 controls draw in 3D already.
-    // Step 20: seg6:0x1c0c's DEMO and PLAY: TODO stage 3.
+    // Step 17: strings 2900-2902 (DGROUP:0x94e4, DGROUP:0x94fa, DGROUP:0x967a): src/intro
+    // loads the strings it draws itself. Step 18: CTL3D is not loaded; Win32 controls draw in
+    // 3D already, and dropping CTL3D needs an ADR (win16-translation.md "CTL3D") [OPEN]. Step 20: seg6:0x1c0c's DEMO and PLAY are
+    // not ported [OPEN] (M3, with the demo game they start; shell.md "DEMO and PLAY").
 
     // Step 19: the start time and MainAccel, then the loop [BYTES seg2:0xa5 seg2:0xb9].
     g.start_tick = now_tick();
@@ -516,7 +532,7 @@ bool idle_step() {
     }
     g.frame_running = true;  // DGROUP:0x968c
     // The help window's dialog pass seg17:0x60d8 replaces the tick while DGROUP:0x9460 is set
-    // (stage 3).
+    // [OPEN] (M8, the Online Help window).
     g.scheduler.set_pace(shell::pace_for_state(g.game.state()), now);
     const bool ran_on = g.game.pass(now);
     if (ran_on && g.scheduler.due(now)) {
@@ -546,7 +562,7 @@ void read_rate_settings(Tick now) {
     InvalidateRect(g.main, nullptr, FALSE);
 }
 
-// ---- state 0: the intro (src/intro), stage 2
+// ---- state 0: the intro (src/intro)
 
 // The intro's view of the program (intro::Host).
 class IntroHost final : public intro::Host {
@@ -747,6 +763,7 @@ void install_state_hooks() {
                       s.state());
         log_todo(buf, "seg11:0x6aa8");
     };
+    // The default until install_dialog_hooks (src/dialogs/hooks.cpp) puts in src/nav's window.
     h.open_navigation = [](shell::GameState&) { log_todo("Navigation window", "seg6:0x1c72"); };
     h.save_scores = [](shell::GameState&) { log_todo("score list save", "seg6:0x626c"); };
 }
@@ -754,6 +771,15 @@ void install_state_hooks() {
 }  // namespace is::app
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
+    // Timer resolution (ADR 0001 decision 11) [DESIGN]: the scheduler's waits would otherwise
+    // round up to the 15.6 ms tick on Windows 10 and 11. Wine wakes to the millisecond.
+    struct TimerPeriod {
+        bool on;
+        explicit TimerPeriod() : on(timeBeginPeriod(1) == TIMERR_NOERROR) {}
+        ~TimerPeriod() {
+            if (on) timeEndPeriod(1);
+        }
+    } const period;
     try {
         return is::app::run(instance);
     } catch (const std::exception& x) {

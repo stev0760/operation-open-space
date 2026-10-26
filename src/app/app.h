@@ -134,7 +134,7 @@ void present_frame();
 // ran a pass that ended early (pass() false: suspended, a deadline, routed input), so that the
 // message loop does not spin on a frame the pass keeps from running.
 bool idle_step();
-// The state hooks of shell::GameState: state 0 is the intro of src/intro (stage 2).
+// The state hooks of shell::GameState: state 0 is the intro of src/intro.
 void install_state_hooks();
 
 // The hook points of the parts that live outside src/app. main.cpp calls them right after

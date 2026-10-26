@@ -9,6 +9,7 @@
 // through intro::DeskScene (src/desk/hooks.cpp).
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -27,6 +28,45 @@ struct Clock {
     int wday = 0;  // tm_wday, 0 = Sunday
     int hour = 0;
     int minute = 0;
+};
+
+// seg15:0x9e6's 16 perspective frames of the ship (shell.md "Game-start dialogs", item 7,
+// Frames): frame i is w × h at y in the 4s-wide frame bitmap DGROUP:0x3ccc, its width and height
+// at DGROUP:0x3d08 + 4i and DGROUP:0x3d0a + 4i, its y at DGROUP:0x3ce8 + 2i.
+struct ShipFrame {
+    int w = 0, h = 0, y = 0;
+};
+constexpr int kShipFrames = 16;
+// W0 = H0 = 4s, step = (4s + trunc(-54s/100))/15, w_i = w_(i-1) - step, h_i = trunc(w_i p_i/100)
+// with p = 95, 89, ... 47 for i = 1..9 and 41, 54, ... 106 for i = 10..15 [BYTES seg15:0x9f4
+// seg15:0xa35 seg15:0xa54 seg15:0xa69 seg15:0xa75 seg15:0xa84 seg15:0xa9a seg15:0xac0
+// seg15:0xa6f seg15:0xa96].
+std::array<ShipFrame, kShipFrames> ship_frames(int s);
+
+// seg15:0x0's step rule (item 9, Step rule) [BYTES seg15:0x18b seg15:0x1b6 seg15:0x1c9
+// seg15:0x1ef seg15:0x212 seg15:0x216 seg15:0x21c seg15:0x2c4 seg15:0x2dc seg15:0x2e4
+// seg15:0x598 seg15:0x5ac seg15:0x5b2 seg15:0x5b6]:
+// the frame f from y0 (DGROUP:0x92d8), ye (DGROUP:0x92d6), pos10 (DGROUP:0x17c2) and the previous
+// frame DGROUP:0x17ca, capped at 15;
+int launch_frame_of(int y0, int ye, int pos10, int prev_f);
+// the speed DGROUP:0x17c8: max(9, 150 - 4f) at Calibrate >= 1400, max(9, 150 - trunc(f/2)) below;
+int launch_speed(int f, bool fast);
+// the change of pos10 after drawing: trunc(3 speed/-7), or trunc(5 speed/-7) below 1400.
+int launch_advance10(int speed, bool fast);
+
+// The hold before seg15:0x0's exit path, the oracle's t065.54-t066.97 [OPEN] (desk.cpp launch).
+constexpr Tick kLaunchEndHold = 1430;
+
+// What one seg15:0x0 call draws (item 9, Drawing) [BYTES seg15:0x30b seg15:0x310 seg15:0x377
+// seg15:0x3d4 seg15:0x481 seg15:0x4c5 seg15:0x4e1 seg15:0x4f8 seg15:0x518 seg15:0x55f
+// seg15:0x58d].
+struct LaunchDraw {
+    int f = 0;        // DGROUP:0x17ca
+    int s = 0;        // DGROUP:0x92da
+    Rect ship;        // DGROUP:0x17da: the work DC's place on the screen, 4s × (4s + 15)
+    bool scene = false;  // desk phase 6 or state 8: the scene part is copied in
+    Rect column;      // DGROUP:0x17d2: slot 0 left, top, right and DGROUP:0x92de
+    Rect pad;         // DGROUP:0x3cb0: the pad on the screen
 };
 
 class Canvas {
@@ -56,17 +96,20 @@ public:
     virtual int text_extent(const std::string& cp1252) = 0;     // GetTextExtent's cx
     virtual void scroll_up(const Rect& r, int pixels) = 0;      // ScrollDC(0, -1) `pixels` times
     virtual void flash(int x, int y) = 0;                       // seg15:0x84b0's drawing
-    // ---- launch [OPEN: seg15:0x4a2e, seg15:0x2a08 and seg15:0x3bfa are approximations]
+    // ---- launch [OPEN: the pad drawer seg15:0x4a2e and the rise-strip mask DGROUP:0x181e]
     virtual void make_pad(int w, int h) = 0;   // seg15:0x482e: DGROUP:0x92a8 in DC 0x92b6
-    virtual int make_ship() = 0;               // seg15:0x9e6: returns DGROUP:0x92da
+    // seg15:0x9e6 with seg15:0x2a08: the ship image of INI MainShip and its 16 frames
+    // (ship_frames) with their mask; returns s (DGROUP:0x92da).
+    virtual int make_ship(const std::string& main_ship) = 0;
     // seg15:0x4c76's strip: black, the pad at its bottom, the ship at (padW/2 - s4/2, 5), blitted
     // at (x, y).
     virtual void rise(int pad_w, int pad_h, int s4, int x, int y) = 0;
     virtual void free_rise() = 0;              // DGROUP:0x92ac and DGROUP:0x92b8
     virtual void pad_to_screen(int x, int y) = 0;
-    // One launch frame: the previous ship rectangle back from the scene DC (and the pad), then
-    // frame f (0-15) of size `size` at (x, y). Returns the ship rectangle.
-    virtual Rect ship(int f, int size, int x, int y) = 0;
+    // One seg15:0x0 drawing: the work DC DGROUP:0x92b8 (seg15:0x3bfa(4s, 4s + 15)) blacked, the
+    // scene and pad parts inside d.ship copied in, frame d.f with its mask, then the work DC to
+    // the screen at d.ship.
+    virtual void launch_frame(const LaunchDraw& d) = 0;
     virtual void free_all() = 0;               // seg15:0x1328(1) and seg15:0x14be
     virtual bool pad_alive() = 0;              // DGROUP:0x92ac still present
 };
@@ -186,7 +229,6 @@ private:
     int f_ = 0;                   // DGROUP:0x17ca
     int lum_ = 100;               // DGROUP:0x17d0
     Rect ship_rect_;              // DGROUP:0x17da-0x17e0
-    bool logged_rise_ = false;
 };
 
 }  // namespace is::desk

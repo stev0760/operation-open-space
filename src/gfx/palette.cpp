@@ -360,8 +360,8 @@ void PaletteManager::scale(PalHandle pal, int mode, int percent) {
                 // imul word [bp+0xa], then cwd (0x99) replaces DX with AX's sign, so the product
                 // keeps its low 16 bits as a signed word before idiv by 100; cmp ax, 0xff / jle
                 // caps at 255 and keeps a negative, and the low byte is stored [BYTES ISPACE.DLL
-                // seg5:0x5186 seg5:0x518c seg5:0x518d seg5:0x518f seg5:0x5192]. shell.md states
-                // only the cap; the wrap awaits a verifier there [OPEN].
+                // seg5:0x5186 seg5:0x518c seg5:0x518d seg5:0x518f seg5:0x5192] (shell.md
+                // "Palette", Arithmetic; pitfalls.md, byte 0x99).
                 int v = w16(static_cast<long>(*p) * percent) / 100;
                 if (v > 0xff) v = 0xff;
                 *p = static_cast<std::uint8_t>(v);
@@ -428,8 +428,7 @@ void PaletteManager::recolour_graphic(PalHandle pal, int id, std::vector<std::ui
     // The fixed set when entry 15 is not black, except that its red byte counts only with
     // DGROUP:0x188: red (+0x66 of the BITMAPINFO) is tested only when DGROUP:0x188 != 0, green
     // (+0x65) and blue (+0x64) always [BYTES ISPACE.DLL seg5:0x2706 seg5:0x270b seg5:0x2710
-    // seg5:0x271a seg5:0x2721 seg5:0x272b]. shell.md's wording ("only entry 15's red byte
-    // decides") disagrees and awaits a verifier [OPEN].
+    // seg5:0x271a seg5:0x2721 seg5:0x272b] (shell.md "Palette").
     {
         const Rgb e15 = rgb(15);
         if ((ordinal12 && e15.r != 0) || e15.g != 0 || e15.b != 0)

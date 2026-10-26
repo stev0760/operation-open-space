@@ -242,11 +242,21 @@ void IniFile::save() const {
     }
     std::error_code ec;
     if (path_.has_parent_path()) fs::create_directories(path_.parent_path(), ec);
-    std::ofstream f(path_, std::ios::binary | std::ios::trunc);
-    if (!f) throw std::runtime_error("settings: cannot write " + is::fmt::path_utf8(path_));
-    f.write(out.data(), static_cast<std::streamsize>(out.size()));
-    f.close();
-    if (!f) throw std::runtime_error("settings: cannot write " + is::fmt::path_utf8(path_));
+    // Atomic save (ADR 0004 decision 8) [DESIGN]: the whole file goes to a temporary beside the
+    // INI, which then replaces it (MoveFileEx with REPLACE_EXISTING on Windows).
+    const fs::path tmp = path_.string() + ".tmp";
+    {
+        std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
+        if (!f) throw std::runtime_error("settings: cannot write " + is::fmt::path_utf8(tmp));
+        f.write(out.data(), static_cast<std::streamsize>(out.size()));
+        f.close();
+        if (!f) throw std::runtime_error("settings: cannot write " + is::fmt::path_utf8(tmp));
+    }
+    fs::rename(tmp, path_, ec);
+    if (ec) {
+        fs::remove(tmp, ec);
+        throw std::runtime_error("settings: cannot replace " + is::fmt::path_utf8(path_));
+    }
 }
 
 std::vector<std::string> IniFile::sections() const {

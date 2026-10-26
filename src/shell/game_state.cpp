@@ -204,7 +204,7 @@ void GameState::frame() {
     }
     // The briefing frame seg17:0x0 arms DGROUP:0x5ac when the phase reaches 18 with
     // DGROUP:0x5ac = 0 [BYTES seg17:0x332 seg17:0x33e]. The phases before it are the frame
-    // hook's (stage 3); the arming is kept here so that ESC ends the briefing already.
+    // hook's (src/briefing); the arming is kept here so that ESC ends the briefing without it.
     if (state_ == kBriefing && briefing_phase_ == kBriefingLastPhase &&
         deadlines_.briefing_end == 0)
         deadlines_.briefing_end = now_;

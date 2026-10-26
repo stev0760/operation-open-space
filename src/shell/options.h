@@ -7,7 +7,7 @@
 // game's modules (ADR 0002, decision 1). --ini names INSPACE.INI and wins over ADR 0004's
 // other locations (decision 2) [DESIGN]. The original's own command line, DEMO or
 // PLAY compared with the whole upper-cased line (shell.md "Start-up" step 20), is not read
-// yet: TODO stage 3 with the DEMO and PLAY handlers 0x9f0 and 0x9fa.
+// [OPEN] (M3, with the DEMO and PLAY handlers 0x9f0 and 0x9fa and the demo game).
 // --install runs the port's install step (ADR 0008 decision 1, src/install) from the install
 // set <source> (a directory with INSTALL.INI, or that file) and exits; --to gives the
 // directory the components dialog proposes (the original proposes C:\SPACE\) [DESIGN].

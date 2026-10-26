@@ -288,8 +288,8 @@ void timer() {
 
 // The input path of globals.md "Input path".
 void input(UINT msg, WPARAM wparam, LPARAM lparam) {
-    // DEMO mode (DGROUP:0x90f8 and DGROUP:0x8e5e) quits on input after 4000 ms: TODO with the
-    // DEMO command line. Otherwise input needs DGROUP:0x1212, DGROUP:0x8f68 and
+    // DEMO mode (DGROUP:0x90f8 and DGROUP:0x8e5e) quits on input after 4000 ms; the port has
+    // no DEMO command line [OPEN] (M3, shell.md "DEMO and PLAY"). Otherwise input needs DGROUP:0x1212, DGROUP:0x8f68 and
     // DGROUP:0x3b94 <= DGROUP:0x1e50; DGROUP:0x3b94 belongs to the wave (M3) and is 0 here.
     if (!g.calibrated || !g.running) return;
     const shell::Input in{msg, static_cast<std::uint32_t>(wparam), static_cast<std::int32_t>(lparam)};
@@ -330,8 +330,10 @@ bool create(HWND hwnd) {
     g.gfx->palette_scheme(-1000, 2);
     g.font = CreateFontW(14, 0, 0, 0, 0, 0, 0, 0, ANSI_CHARSET, 0, 0, PROOF_QUALITY,
                          VARIABLE_PITCH | FF_SWISS, L"Arial");  // seg6:0x1934
-    // LoadBitmap "ALPHABET" (stage 2); seg6:0x2ca's class icon, Aux, QuickIntro and Rate
-    // (stage 2).
+    // LoadBitmap "ALPHABET" belongs to the palette manager's command 0 (src/gfx/gfx.cpp).
+    // seg6:0x2ca's class icon is main.cpp's load_game_icon; its INI Aux, QuickIntro and Rate
+    // reads are left to their readers (the briefing and dialog hooks read QuickIntro) [OPEN]
+    // (M3).
     if (!SetTimer(hwnd, kTimerId, kTimerMs, nullptr)) {  // seg6:0x9f8 [BYTES seg6:0xa0f]
         // Caption DGROUP:0x9690 "Inner Space", flags 0x30 [BYTES seg6:0xa29-0xa2f].
         MessageBoxW(hwnd, lang_string(2116).c_str(), widen("Inner Space").c_str(),
@@ -552,7 +554,7 @@ LRESULT handle(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     case kMsgIconWatch: log_todo("Icon Watch toggle", "seg2:0x4f0"); return 0;
     case kMsgAllShips: log_todo("All Ships toggle", "seg2:0x513"); return 0;
     case kMsgDemo:
-    case kMsgPlay: log_todo("DEMO and PLAY", "seg2:0x86a"); return 0;
+    case kMsgPlay: log_todo("DEMO and PLAY", "seg2:0x86a"); return 0;  // [OPEN] (M3)
     case kMsgMusic: log_todo("music selector seg10:0x7480", "seg2:0x4cc"); return 0;
     default: break;
     }

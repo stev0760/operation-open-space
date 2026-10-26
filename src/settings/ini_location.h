@@ -23,9 +23,13 @@ enum class IniSource {
 struct IniLocation {
     std::filesystem::path path;
     IniSource source = IniSource::kAppData;
+    // --ini named a file in the asset directory, which the port never writes (ADR 0002
+    // decision 5); the override was dropped and the usual rule chose `path` [DESIGN].
+    bool override_refused = false;
 };
 
-// ADR 0004 decision 2: --ini wins; else an existing INSPACE.INI in `exe_dir` (portable mode);
+// ADR 0004 decision 2: --ini wins, unless it names a file in `asset_dir` (ADR 0002 decision
+// 5, see IniLocation::override_refused); else an existing INSPACE.INI in `exe_dir` (portable mode);
 // else `appdata_dir`\Inner Space\INSPACE.INI. The file need not exist.
 // Portable mode is off when `exe_dir` is the asset directory `asset_dir`: the INSPACE.INI
 // there is the distribution's own file, which the original never writes (its installer copies

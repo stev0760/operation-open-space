@@ -44,6 +44,9 @@ bool open_ini(const std::optional<fs::path>& override_path, const fs::path& exe_
             settings::resolve_ini_location(override_path, exe_dir, roaming_app_data(),
                                                g.asset_dir);
         g.ini_path = loc.path;
+        if (loc.override_refused)
+            log("--ini names a file in the game directory, which the port never writes (ADR "
+                "0002 decision 5); using " + fmt::path_utf8(loc.path));
         const char* source = loc.source == settings::IniSource::kOverride   ? "--ini"
                              : loc.source == settings::IniSource::kPortable ? "portable"
                                                                              : "%APPDATA%";

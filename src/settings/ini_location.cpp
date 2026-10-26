@@ -9,8 +9,16 @@ namespace fs = std::filesystem;
 IniLocation resolve_ini_location(const std::optional<fs::path>& override_path,
                                  const fs::path& exe_dir, const fs::path& appdata_dir,
                                  const fs::path& asset_dir) {
-    if (override_path) return {*override_path, IniSource::kOverride};
     std::error_code ec;
+    bool refused = false;
+    if (override_path) {
+        // The game directory stays read-only (ADR 0002 decision 5), so an --ini inside it is
+        // dropped, as portable mode is below [DESIGN].
+        refused = !asset_dir.empty() &&
+                  fs::equivalent(ini_directory(*override_path), asset_dir, ec) && !ec;
+        ec.clear();
+        if (!refused) return {*override_path, IniSource::kOverride};
+    }
     const fs::path portable = exe_dir / kIniName;
     // Not in the asset directory: that INSPACE.INI is the game's own file [DESIGN].
     const bool in_assets = !asset_dir.empty() && fs::equivalent(exe_dir, asset_dir, ec) && !ec;
@@ -21,8 +29,8 @@ IniLocation resolve_ini_location(const std::optional<fs::path>& override_path,
     const bool in_set = !exe_dir.empty() && fs::is_regular_file(exe_dir / "INSTALL.INI", ec);
     ec.clear();
     if (!exe_dir.empty() && !in_assets && !in_set && fs::is_regular_file(portable, ec))
-        return {portable, IniSource::kPortable};
-    return {appdata_dir / kAppDataFolder / kIniName, IniSource::kAppData};
+        return {portable, IniSource::kPortable, refused};
+    return {appdata_dir / kAppDataFolder / kIniName, IniSource::kAppData, refused};
 }
 
 bool first_run_copy(const fs::path& target, const fs::path& windows_ini) {

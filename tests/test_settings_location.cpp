@@ -81,6 +81,16 @@ TEST_CASE("INI location: %APPDATA% by default, portable next to the executable, 
     loc = resolve_ini_location(named, exe, appdata);
     CHECK(loc.source == IniSource::kOverride);
     CHECK(loc.path == named);  // need not exist
+    CHECK_FALSE(loc.override_refused);
+    // not a file in the asset directory, which stays read-only (ADR 0002 decision 5) [DESIGN]
+    const fs::path game = t.path() / "game";
+    fs::create_directories(game);
+    loc = resolve_ini_location(game / "INSPACE.INI", exe, appdata, game);
+    CHECK(loc.override_refused);
+    CHECK(loc.source == IniSource::kPortable);
+    CHECK(loc.path == exe / "INSPACE.INI");
+    CHECK(resolve_ini_location(game / "INSPACE.INI", exe, appdata, exe).source ==
+          IniSource::kOverride);
 
     // a directory named INSPACE.INI is not a portable file
     fs::remove(exe / "INSPACE.INI");

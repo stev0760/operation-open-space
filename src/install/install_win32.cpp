@@ -9,6 +9,7 @@
 #include <commdlg.h>
 #include <shellapi.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -17,6 +18,7 @@
 #include "formats/bytes.h"
 #include "formats/ne.h"
 #include "formats/res16.h"
+#include "gfx/win16_edit.h"
 
 namespace is::install {
 
@@ -68,6 +70,7 @@ std::vector<std::uint8_t> dialog_template(const SourceSet& set, std::uint16_t id
 
 INT_PTR run_dialog(Ctx& c, std::uint16_t id, DLGPROC proc) {
     const std::vector<std::uint8_t> t = dialog_template(*c.set, id);
+    const gfx::Win16EditScope edits;  // the Win16 edit borders (gfx/win16_edit.h) [DESIGN]
     return DialogBoxIndirectParamW(c.o->instance, reinterpret_cast<const DLGTEMPLATE*>(t.data()),
                                    nullptr, proc, reinterpret_cast<LPARAM>(&c));
 }
@@ -88,23 +91,6 @@ void centre(HWND h, int dy) {
     const int x = GetSystemMetrics(SM_CXSCREEN) / 2 + (r.left - r.right) / 2;
     const int y = GetSystemMetrics(SM_CYSCREEN) / 2 + (r.top - r.bottom) / 2 + dy;
     MoveWindow(h, x, y, r.right - r.left, r.bottom - r.top, TRUE);
-}
-
-// The Win16 dialog manager draws a WS_BORDER edit with a 1-pixel border, a version-4 Win32
-// dialog adds WS_EX_CLIENTEDGE; the port takes the client edge off, as Dialog::
-// win16_edit_borders does for the game's dialogs (src/dialogs/dialogs.cpp) [DESIGN].
-void win16_edit_borders(HWND h) {
-    for (HWND c = GetWindow(h, GW_CHILD); c; c = GetWindow(c, GW_HWNDNEXT)) {
-        wchar_t name[16] = L"";
-        GetClassNameW(c, name, 16);
-        if (lstrcmpiW(name, L"Edit") != 0) continue;
-        const LONG_PTR ex = GetWindowLongPtrW(c, GWL_EXSTYLE);
-        if (!(ex & WS_EX_CLIENTEDGE)) continue;
-        SetWindowLongPtrW(c, GWL_EXSTYLE, ex & ~static_cast<LONG_PTR>(WS_EX_CLIENTEDGE));
-        SetWindowLongPtrW(c, GWL_STYLE, GetWindowLongPtrW(c, GWL_STYLE) | WS_BORDER);
-        SetWindowPos(c, nullptr, 0, 0, 0, 0,
-                     SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-    }
 }
 
 void pump() {
@@ -128,8 +114,9 @@ void show_required(HWND h, const Components& c) {
 
 bool show_available(HWND h) {
     // seg2:0xc44: the free space of the typed drive, or "N/A" [BYTES INSTALL.EXE seg2:0xc44
-    // seg2:0xd1d]. The port asks GetDiskFreeSpaceExW for the typed path's root in 64 bits; the
-    // DOS call's 2 GB ceiling is not reproduced [DESIGN].
+    // seg2:0xd1d]. The port asks GetDiskFreeSpaceExW for the typed path's root in 64 bits and
+    // shows the figure capped at 999999 KB, the width of the original's field; the original
+    // never compares it with the required space (ADR 0008) [DESIGN].
     wchar_t buf[0x6e] = {};
     GetDlgItemTextW(h, 301, buf, 0x6e);
     std::wstring root(buf);
@@ -140,7 +127,8 @@ bool show_available(HWND h) {
         ok = GetDiskFreeSpaceExW(root.c_str(), &avail, nullptr, nullptr) != 0;
     }
     SetDlgItemTextW(h, 131,
-                    ok ? (std::to_wstring(avail.QuadPart / 1024) + L" KB").c_str() : L"N/A");
+                    ok ? (std::to_wstring(std::min<ULONGLONG>(avail.QuadPart / 1024, 999999)) + L" KB").c_str()
+                       : L"N/A");
     // OK (100) is disabled only for N/A or a Required of 0 [BYTES INSTALL.EXE seg2:0xf16].
     EnableWindow(GetDlgItem(h, 100), ok);
     return ok;
@@ -151,7 +139,6 @@ INT_PTR CALLBACK proc300(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_INITDIALOG: {
         centre(h, 14);  // [BYTES INSTALL.EXE seg2:0x762]
-        win16_edit_borders(h);
         Components& k = *c->comp;
         if (!k.caption.empty()) SetWindowTextW(h, wide(k.caption).c_str());
         for (std::size_t i = 0; i < 6; ++i)
@@ -254,7 +241,6 @@ INT_PTR CALLBACK proc135(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     Ctx* c = ctx_of(h, msg, lp);
     if (msg == WM_INITDIALOG) {
         centre(h, 0);  // [BYTES INSTALL.EXE seg2:0x295c]
-        win16_edit_borders(h);
         // [BYTES INSTALL.EXE seg2:0x2964 seg2:0x2997 DGROUP:0x724 DGROUP:0x729]
         SetDlgItemTextW(h, 2, L"name");
         SetDlgItemTextW(h, 3, L"organization");

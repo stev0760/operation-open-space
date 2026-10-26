@@ -227,11 +227,13 @@ struct FakeCanvas final : Canvas {
     void scroll_up(const Rect&, int) override { calls.push_back("scroll"); }
     void flash(int, int) override { calls.push_back("flash"); }
     void make_pad(int w, int h) override { calls.push_back("pad " + std::to_string(w) + " " + std::to_string(h)); pad = true; }
-    int make_ship() override { return 32; }
+    std::string main_ship;
+    std::vector<LaunchDraw> draws;
+    int make_ship(const std::string& n) override { main_ship = n; return 32; }
     void rise(int, int, int, int, int) override {}
     void free_rise() override { pad = false; calls.push_back("free rise"); }
     void pad_to_screen(int, int) override { calls.push_back("pad shown"); }
-    Rect ship(int, int size, int x, int y) override { return {x, y, x + size, y + size}; }
+    void launch_frame(const LaunchDraw& d) override { draws.push_back(d); }
     void free_all() override { calls.push_back("free all"); }
     bool pad_alive() override { return pad; }
 };
@@ -404,4 +406,81 @@ TEST_CASE("desk: ESC jumps to step 9; Space at step 1 skips to the launch; ShowL
         CHECK(std::find(cv.calls.begin(), cv.calls.end(), "meal 70") != cv.calls.end());
         CHECK(d.monitor_text().find("ENJOY YOUR X, PILOT!") != std::string::npos);  // string 648 is "x" here
     }
+}
+
+TEST_CASE("desk: seg15:0x9e6's frame sizes for s = 33") {
+    const auto f = ship_frames(33);
+    const int want_h[16] = {132, 118, 105, 92, 80, 68, 58, 48, 40, 32, 25, 29, 32, 32, 31, 28};
+    int y = 0;
+    for (int i = 0; i < 16; ++i) {
+        CHECK(f[i].w == 132 - 7 * i);
+        CHECK(f[i].h == want_h[i]);
+        CHECK(f[i].y == y);
+        y += f[i].h;
+    }
+    CHECK(f[15].w == 27);  // the oracle's last frame, 27 x 28
+    const auto g = ship_frames(32);
+    CHECK(g[0].w == 128);
+    CHECK(g[1].w == 128 - (128 - 17) / 15);
+}
+
+TEST_CASE("desk: seg15:0x0's step rule, 108 and 50 calls for y0 = 574") {
+    for (const bool fast : {true, false}) {
+        const int y0 = 574, ye = 60;
+        int pos10 = 10 * y0, f = 0, calls = 0;
+        std::vector<int> steps;
+        while (calls < 1000) {
+            f = launch_frame_of(y0, ye, pos10, f);
+            const int speed = launch_speed(f, fast);
+            const int before = pos10;
+            pos10 += launch_advance10(speed, fast);
+            steps.push_back(before - pos10);  // tenths of a pixel
+            ++calls;
+            if (10 * ye > pos10) break;
+        }
+        CHECK(calls == (fast ? 108 : 50));
+        CHECK(f == 15);
+        if (fast) {
+            CHECK(steps.front() == 64);  // about 6 px, falling to 4
+            CHECK(steps.back() == 3 * 90 / 7);
+        } else {
+            CHECK(steps.front() == 107);  // about 11 px, then 10
+            CHECK(steps.back() == 5 * 143 / 7);
+        }
+    }
+    CHECK(launch_speed(0, true) == 150);
+    CHECK(launch_speed(40, true) == 9);
+    CHECK(launch_speed(15, false) == 143);
+    CHECK(launch_advance10(150, true) == -64);
+    CHECK(launch_advance10(150, false) == -107);
+}
+
+TEST_CASE("desk: the pad size at play height 683 and the launch drawing rectangles") {
+    FakeCanvas cv;
+    FakeHost h;
+    Desk d(cv, h);
+    d.enter(h.t, 1024, 768, 683);
+    h.t += 1101;
+    d.frame(h.t);
+    d.space(h.t);
+    REQUIRE(d.step() == 2);
+    d.frame(h.t);
+    // k = trunc(4 · 683/3) - 1100 = -190: width 159, DGROUP:0x3c9a 74, bitmap 159 x 126.
+    CHECK(std::find(cv.calls.begin(), cv.calls.end(), "pad 159 126") != cv.calls.end());
+    CHECK(cv.main_ship == "EAGLE");
+    while (d.step() == 3) d.frame(h.t);
+    for (int i = 0; i < 3000 && d.step() == 4; ++i) {
+        h.t += 40;
+        d.frame(h.t);
+    }
+    REQUIRE(d.step() == 5);
+    d.frame(h.t);
+    REQUIRE(!cv.draws.empty());
+    const LaunchDraw& first = cv.draws.front();
+    // s = 32: the work DC is 128 x 143 at (512 - 64, y0), y0 = 768 - 128 - 62.
+    CHECK(first.ship == Rect{448, 578, 576, 721});
+    CHECK(first.f == 0);
+    CHECK(first.scene);
+    CHECK(first.column == Rect{350, 22, 672, 360});
+    CHECK(first.pad == Rect{512 - 79, 768 - 74 - 52, 512 - 79 + 159, 768});
 }

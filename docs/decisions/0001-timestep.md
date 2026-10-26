@@ -35,6 +35,8 @@
 | Pacing by `SetTimer`/`WM_TIMER` | Rejected. The original does not pace this way, and window-timer resolution cannot hold 27.78 ms intervals. [BYTES seg2:0x11f8] [REF Win32 SetTimer] |
 | Catch-up: run several frames after a stall to keep game time in step with real time | Rejected. The original never catches up. [BYTES seg7:0x9ce] |
 
+11. **Timer resolution.** The waits of the scheduler round up to the system timer tick, about 15.6 ms on Windows 10 and 11 by default, which would turn the 27-28 ms wave frame into about 31 ms and the 13 ms state-0 gate into 15.6 ms. The port therefore calls `timeBeginPeriod(1)` after start-up and `timeEndPeriod(1)` at exit. Wine wakes to the millisecond either way, so the oracle comparisons cannot show the difference; the first run on Windows measures it. [DESIGN] [REF Win32 SDK, timeBeginPeriod] [OPEN]
+
 ## Consequences
 - On a machine that holds R, game time matches the original exactly: R / 36 of real time, with the same frame-counted rules. [DESIGN]
 - Frames are evenly spaced (27.78 ms at 36), where the original mixes 27, 28 and 29 ms. Frame logic does not see the difference. Wall-clock deadlines move by up to one frame relative to the frame count. [DESIGN]

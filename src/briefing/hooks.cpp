@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "app/app.h"
+#include "shell/geometry.h"
 #include "briefing/briefing.h"
 #include "briefing/gdi_canvas.h"
 #include "formats/ne.h"
@@ -267,6 +268,41 @@ void state1_setup(shell::GameState&) {
         MsgWaitForMultipleObjectsEx(0, nullptr, 10, 0, 0);
 }
 
+// ---- the wave HUD of the state-1 repaint seg11:0xafe (shell.md "Window geometry", HUD)
+
+HWND g_hud_scroll = nullptr;  // DGROUP:0xa7a
+
+// seg11:0x2f0: the HUD child windows destroyed and zeroed [BYTES seg11:0x2f0].
+void close_hud() {
+    if (g_hud_scroll && IsWindow(g_hud_scroll)) DestroyWindow(g_hud_scroll);
+    g_hud_scroll = nullptr;
+}
+
+// seg11:0xafe's HUD layout before its state dispatch, as far as it is documented: the PATCOPY
+// fill of (0, DGROUP:0x8e5a, W, 85) with DGROUP:0x8e5a = H - 85, and the scrollbar (class
+// "scrollbar", style 0x50000001, id 200) at (W/2 + 50, DGROUP:0x8e5a, 14, 85) while DGROUP:0x94e
+// is 0 (a player game) [BYTES seg11:0xca2 seg11:0xcb1 seg11:0xcbe seg11:0xcc2 seg11:0xcd9
+// seg11:0xd28 seg2:0x1b29]. The fill's brush is [OPEN]: the oracle's band is black. The IS_INFO
+// panels 210 and 220 (DGROUP:0x93ba, DGROUP:0x5024) and what the panels draw are [OPEN] (shell.md
+// "Open questions", the HUD drawing seg11:0xafe-0x15b0 and seg11:0x1774); the port leaves them
+// out until M3 [OPEN]. Case 1 of the dispatch then draws the wave (seg7:0x11cc ...), M3.
+void lay_out_hud() {
+    if (!g.gfx || g.area.w <= 0 || g.area.h <= 0) return;
+    const shell::HudLayout l = shell::hud_layout(g.area, {});
+    PatBlt(g.gfx->dc(), l.fill.x, l.fill.y, l.fill.cx, l.fill.cy, BLACKNESS);
+    if (g_hud_scroll && IsWindow(g_hud_scroll)) return;
+    const int f = g.gfx->factor();
+    g_hud_scroll = CreateWindowExW(0, L"scrollbar", nullptr, 0x50000001, l.scrollbar.x * f,
+                                   l.scrollbar.y * f, l.scrollbar.cx * f, l.scrollbar.cy * f, g.main,
+                                   reinterpret_cast<HMENU>(static_cast<INT_PTR>(200)),
+                                   GetModuleHandleW(nullptr), nullptr);
+    if (!g_hud_scroll) return;
+    // The range 100-500 (shell.md "Open questions"); the start of DGROUP:0xa6c is [OPEN]: the
+    // oracle's thumb sits at the bottom, 600 - 100 [OPEN seg11:0xafe].
+    SetScrollRange(g_hud_scroll, SB_CTL, 100, 500, FALSE);
+    SetScrollPos(g_hud_scroll, SB_CTL, 600 - 100, TRUE);
+}
+
 // ---- seg9:0x60bc: state 3 -> 1
 
 void enter_wave(shell::GameState&) {
@@ -319,16 +355,36 @@ void install_briefing_hooks(App& app) {
         else
             state1_setup(s);
     };
-    // State 1 before M3: a black play area. The paint routine blacks it while state 1 has no
-    // repaint hook.
+    // State 1 before M3: a black play area under the HUD.
+    // The first frame lays out the HUD as the state-1 repaint does; the wave itself is M3.
     h.frame[shell::kWave] = [](shell::GameState&) {
-        if (g_wave_frames++ == 0) todo_once("wave frame and the HUD", "seg11:0xafe");
+        if (g_wave_frames++ == 0) {
+            lay_out_hud();
+            todo_once("wave frame and the HUD panels (IS_INFO 210, 220)", "seg11:0xafe");
+        }
+    };
+    // The repaint: the black play area of the port before M3 (the wave of case 1 is M3), then
+    // the HUD [BYTES seg11:0x15b3 seg11:0x15b9].
+    h.repaint[shell::kWave] = [](shell::GameState&) {
+        if (g.gfx && !g.gfx->surface().empty()) PatBlt(g.gfx->dc(), 0, 0, g.area.w, g.area.h, BLACKNESS);
+        lay_out_hud();
     };
     auto prev_teardown = h.teardown;
     h.teardown = [prev_teardown](shell::GameState& s) {
         if (prev_teardown) prev_teardown(s);
         g_handoff = false;
+        close_hud();
     };
+    // Every other state's entry closes the HUD, as seg11:0x2f0's callers do on the state changes
+    // out of the wave (shell.md "Closing the HUD") [BYTES seg11:0x2f0].
+    for (int st = 0; st < shell::kStateCount; ++st) {
+        if (st == shell::kWave) continue;
+        auto prev = h.enter[static_cast<std::size_t>(st)];
+        h.enter[static_cast<std::size_t>(st)] = [prev](shell::GameState& s) {
+            close_hud();
+            if (prev) prev(s);
+        };
+    }
     // ESC in a player game posts 0x991 (seg11:0x6c54) once DGROUP:0x934e > 2. DGROUP:0x934e
     // comes with the wave (M3); the port counts state-1 frames in its place [OPEN].
     auto prev_route = h.route_input;

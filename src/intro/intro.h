@@ -224,7 +224,8 @@ public:
     void enter(Tick now);
     // seg15:0x5962(redraw) with DGROUP:0x1e50 = now: the tick passes redraw = false.
     void frame(Tick now, bool redraw);
-    // seg11:0xafe case 0 with DGROUP:0x1e50 = now, ending with seg15:0x5962(1).
+    // seg11:0xafe case 0, ending with seg15:0x5962(1) at `now`; the deadline rule before it
+    // compares with the stored DGROUP:0x1e50, which the repaint does not refresh.
     void repaint(Tick now);
     // seg11:0x7902 with a WM_KEYUP key (the input path already holds back every key before
     // Calibrate ends, shell.md "Input").

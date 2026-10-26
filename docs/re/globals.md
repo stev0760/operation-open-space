@@ -261,12 +261,14 @@ This page covers the DGROUP globals that drive the game, the code that reads the
 | DGROUP:0x8e64 | 2 | WPARAM | pending input wParam [BYTES seg2:0x792] | seg2:0x792 | seg7:0x111 |
 | DGROUP:0x8f66 | 2 | BOOL | idle frames allowed; private message 0x9d0 sets it [BYTES seg2:0x4be seg2:0x14a] | seg2:0x4be | seg2:0x14a, seg2:0x12b6 |
 | DGROUP:0x8f68 | 2 | BOOL | 0 while the game is paused ([timing.md](timing.md#window-timers)); the input path ignores input then [BYTES seg2:0x9d7 seg2:0xa66 seg2:0x751] | seg2:0x9d7, seg2:0xa66 | seg2:0xc9, seg2:0x751 |
+| DGROUP:0x90ec | 2 | int | play-area height: the client height DGROUP:0x10 minus the HUD band DGROUP:0xa70 (85) ([shell.md](shell.md#window-geometry)) [BYTES seg2:0xb34 seg2:0xb3d seg2:0xc05 seg2:0x1b29] | seg2:0xb34, seg2:0xb3d, seg2:0xc05, seg2:0x1b29 | 95 instructions, among them seg2:0xce5 and seg15:0x483d |
 | DGROUP:0x90f4 | 2 | int | game state ([Game state globals](#game-state-globals)) | see that section | seg7:0xf9, seg11:0x6aef |
 | DGROUP:0x90f8 | 2 | BOOL | command line was `DEMO` or `PLAY` [BYTES seg6:0x1c2d seg6:0x1c53] | seg6:0x1c16, seg6:0x1c2d, seg6:0x1c53 | seg2:0x70e |
 | DGROUP:0x9100 | 42 | HGLOBAL[21] | pool handles [BYTES seg6:0x1bc2 seg18:0x1e2f] | seg6:0x1bc2, seg18:0x1e2f | seg6:0x1b7c |
 | DGROUP:0x9130 | 2 | BOOL | seg18 game mode active ([structs.md](structs.md#pool-roles)). seg18 sets it to 1 and seg10:0xd clears it [BYTES seg18:0x397 seg18:0x8e1 seg10:0xd seg11:0x6abb] | seg18:0x397, seg18:0x8e1, seg10:0xd | seg11:0x6abb, seg7:0x58f |
 | DGROUP:0x9144 | 2 | int | pass counter of the frame gate ([timing.md](timing.md#the-frame-gate)) [BYTES seg7:0x1a0 seg7:0x1b3] | seg7:0x1a0, seg7:0x1b3 | seg7:0x1a4 |
 | DGROUP:0x9212 | 2 | HINSTANCE | ENG_LANG.DLL, the source of strings and accelerators [BYTES seg2:0xb1 seg3:0x223] [ORACLE probe-0001] | — | seg2:0xb1, seg3:0x223 |
+| DGROUP:0x92da | 2 | int | size s of the launch ship image: 4s is the width of the ship frames ([shell.md](shell.md#game-start-dialogs), item 7) [BYTES seg15:0xa35 seg15:0xa4c] | seg15:0xa35 | seg15:0x15 |
 | DGROUP:0x92e4 | 2 | BOOL | keep the player's state: Navigation Enter then requests state 1 and seg9:0xc06 keeps score and wave ([shell.md](shell.md#game-start-dialogs), **Enter**) [BYTES seg6:0x3693 seg9:0xc44] | seg6:0x98c4, seg10:0x9d28, seg16:0x1c3b, seg18:0x5aa, seg18:0x351c (1); seg9:0x698f, seg9:0x6ceb, seg10:0x9da5, seg11:0x7a6c, seg16:0x1c46, seg18:0x724, seg18:0x354a (0) | seg6:0x3693, seg8:0x2d96, seg9:0xc44, seg9:0x6958 |
 | DGROUP:0x92e6 | 2 | BOOL | 0 selects the LOADING GRAPHICS branch of seg9:0x22b4, which sets it to 1 ([shell.md](shell.md#game-start-dialogs), **Load screen**) [BYTES seg9:0x22e9 seg9:0x27b3] | seg10:0xa9 (0), seg9:0x27b3 (1) | seg9:0x22e9, seg9:0x2770, seg9:0x27e4 |
 | DGROUP:0x92ec | 42 | int[21] | allocated records per pool [BYTES seg7:0x52c7] | seg7:0x52c7, seg14:0xa33 | seg7:0x52de, seg12:0x276b |

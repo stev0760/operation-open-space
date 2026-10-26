@@ -48,15 +48,18 @@ HWND child(HWND parent, const wchar_t* cls, const std::string& text, DWORD style
     HWND c = CreateWindowExW(0, cls, wide(text).c_str(), style, b.x, b.y, b.w, b.h, parent,
                              reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)), g_host.instance,
                              nullptr);
-    // seg8:0x1a7a on each child: the font DGROUP:0x90fe [OPEN: read from the decompilation].
+    // seg6:0x23d4 sends WM_SETFONT DGROUP:0x90fe with lParam 1 to the buttons and the controls
+    // after them [BYTES seg6:0x25c1 seg6:0x261f seg6:0x2c89] (shell.md "Navigation window").
+    // The call after each child, seg2:0x1a7a, is the Ctl3dSubclassCtl wrapper (win16-translation.md),
+    // which does nothing without CTL3D, as in the port (start-up step 18) [BYTES seg2:0x1a84].
     if (c && g_host.font) SendMessageW(c, WM_SETFONT, reinterpret_cast<WPARAM>(g_host.font), TRUE);
     return c;
 }
 
 // seg6:0x23d4: the children of WM_CREATE, for the parts the stub builds.
 void build(HWND h) {
-    // seg6:0x23d4 starts with EnableWindow(main, FALSE); seg6:0x2ebc enables it again [OPEN:
-    // read from the decompilation of seg6:0x23d4 and seg6:0x2ebc, not in the docs].
+    // seg6:0x23d4 starts with EnableWindow(main, FALSE) [BYTES seg6:0x23f4]; seg6:0x2ebc
+    // enables it again.
     if (g_host.main) EnableWindow(g_host.main, FALSE);
     RECT c;
     GetClientRect(h, &c);
@@ -64,7 +67,7 @@ void build(HWND h) {
     child(h, L"button", lang(2144), 0x50010000, help_box(c.right, c.bottom), kHelpId);    // "&Help"
     HWND list = child(h, L"listbox", "", kDirListStyle, dir_list_box(c.right, c.bottom), kDirListId);
     if (list) {
-        SendMessageW(list, LB_SETHORIZONTALEXTENT, 200, 0);  // Win16 0x415 [OPEN: decompilation]
+        SendMessageW(list, LB_SETHORIZONTALEXTENT, 200, 0);  // Win16 0x415 [BYTES seg6:0x2507]
         // The fixture-independent minimum: the root of drive DGROUP:0xd18. The tree walk
         // seg6:0x37ca and the built-in levels come with M3.
         SendMessageW(list, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(wide(drive_root(g_drive)).c_str()));
@@ -75,8 +78,7 @@ void build(HWND h) {
         todo("Navigation directory tree, file list, race and duel boxes, preview and status line",
              "seg6:0x37ca");
     }
-    // Sounds 0x6e and 0x4d while DGROUP:0xd20 != 0 [OPEN: read from the decompilation of
-    // seg6:0x23d4].
+    // Sounds 0x6e and 0x4d while DGROUP:0xd20 != 0 [BYTES seg6:0x2d99 seg6:0x2da2 seg6:0x2daa].
     if (g_arg != 0 && g_host.sound) {
         g_host.sound(0x6e);
         g_host.sound(0x4d);
@@ -126,8 +128,8 @@ LRESULT handle(HWND h, UINT msg, WPARAM w, LPARAM l) {
         return 0;
     }
     case WM_MEASUREITEM: {
-        // tmHeight + tmExternalLeading + 3 of DGROUP:0x90fe, at least 14 [OPEN: read from the
-        // decompilation of seg6:0x1f22].
+        // tmHeight + tmExternalLeading + 3 of DGROUP:0x90fe, at least 14 [BYTES seg6:0x2016
+        // seg6:0x2021 seg6:0x2034].
         auto* m = reinterpret_cast<MEASUREITEMSTRUCT*>(l);
         int height = 14;
         if (HDC dc = GetDC(g_host.main)) {
@@ -247,7 +249,8 @@ void open(int arg, int drive_offset) {  // seg6:0x1c72
 
 void close() {  // seg6:0x2ebc
     if (!g_nav) return;
-    // DGROUP:0x1d40 = now + 1000 [BYTES seg6:0x2ede]: its reader is not in the docs [OPEN].
+    // DGROUP:0x1d40 = now + 1000 [BYTES seg6:0x2ede]: no instruction reads that dword
+    // (shell.md "DEMO and PLAY"), so the port does not keep it.
     if (g_host.ini) {
         try {
             for (const auto& kv : close_writes(g_rect.left, g_rect.top, g_rect.right, g_rect.bottom))
@@ -276,16 +279,18 @@ int enter() {  // seg6:0x301a
     // come with M3; the stub accepts the selection.
     todo("Navigation Enter's directory checks; the selection is accepted", "seg6:0x301a");
     g_accepted = g_sel;  // DGROUP:0xd1c = DGROUP:0x94b4
-    // The accepted entry becomes the next wave's directory DGROUP:0x38c8. The stub's list
-    // holds only the drive root; the writer of DGROUP:0x38c8 and its exact form ("D:\GAMES\"
-    // in newgame-0002) are not in docs/re, so the port upper-cases the entry [OPEN].
+    // The accepted entry becomes the next wave's directory DGROUP:0x38c8: Enter copies
+    // DGROUP:0x6990 verbatim, the drive letter, ":\", the path and a trailing "\" in on-disk
+    // case ("D:\GAMES\" in start-0001) [BYTES seg6:0x3044] [ORACLE start-0001]. The stub's
+    // list holds only the drive root, whose letter the port writes in upper case as the oracle
+    // shows it; the drive-letter form of seg6:0x5318 is [OPEN] until the tree walk (M3).
     if (g_host.entered && g_nav) {
         if (HWND list = GetDlgItem(g_nav, kDirListId)) {
             const LRESULT n = SendMessageW(list, LB_GETTEXTLEN, static_cast<WPARAM>(g_sel), 0);
             if (n > 0 && n < MAX_PATH) {
                 wchar_t buf[MAX_PATH + 1] = L"";
                 SendMessageW(list, LB_GETTEXT, static_cast<WPARAM>(g_sel), reinterpret_cast<LPARAM>(buf));
-                CharUpperW(buf);
+                if (buf[0] >= L'a' && buf[0] <= L'z') buf[0] = static_cast<wchar_t>(buf[0] - 32);
                 char out[MAX_PATH * 2 + 1] = "";
                 WideCharToMultiByte(1252, 0, buf, -1, out, sizeof out, nullptr, nullptr);
                 g_host.entered(out);

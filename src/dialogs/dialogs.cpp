@@ -3,9 +3,12 @@
 #ifdef _WIN32
 #include "dialogs/dialogs.h"
 
+#include <cstring>
 #include <exception>
 
 #include "assets/asset_store.h"
+#include "dialogs/preview.h"
+#include "gfx/win16_edit.h"
 #include "settings/settings.h"
 
 namespace is::dialogs {
@@ -17,7 +20,12 @@ namespace {
 HWND g_order = nullptr;
 // The todo sink of the open dialog, for the LevClass procedure.
 std::function<void(const std::string&, const char*)> g_todo;
-bool g_logged_bitmap = false, g_logged_logo = false;
+// The slot-0 bitmap of the open dialog (ISPACE.DLL DGROUP:0x157c[0] in DGROUP:0x1588[0]) and the
+// Order logo with its mask (DGROUP:0x1584, DGROUP:0x1586), loaded on the logo's first paint.
+std::optional<ShipBitmap> g_slot;
+std::optional<Logo> g_logo;
+bool g_logo_tried = false;
+const assets::AssetStore* g_store = nullptr;
 
 constexpr const wchar_t* kLevClass = L"LevClass";
 constexpr int kPreviewId = 100;
@@ -41,7 +49,10 @@ INT_PTR CALLBACK dialog_proc(HWND h, UINT msg, WPARAM w, LPARAM l) {
     return FALSE;
 }
 
-// The frame of ISPACE.DLL seg10:0x309c's WM_PAINT [BYTES ISPACE.DLL seg10:0x3103-0x3303].
+}  // namespace
+
+// The frame of ISPACE.DLL seg10:0x309c's WM_PAINT [BYTES ISPACE.DLL seg10:0x3103-0x3303]
+// (preview.h lev_frame is the same picture, computed).
 void paint_frame(HDC dc, const RECT& r) {
     const int l = r.left, t = r.top, rr = r.right, b = r.bottom;
     const auto fill = [&](int x0, int y0, int x1, int y1, int stock) {
@@ -68,6 +79,88 @@ void paint_frame(HDC dc, const RECT& r) {
     SelectObject(dc, old);
 }
 
+namespace {
+
+// An Image as a 32 bpp DIB section selected into a new memory DC: the port's stand-in for the
+// display-compatible memory DCs of ISPACE.DLL (CreateCompatibleDC(DGROUP:0x2012), ispace.md
+// ordinal 10).
+struct MemImage {
+    HDC dc = nullptr;
+    HBITMAP bm = nullptr;
+    HGDIOBJ old = nullptr;
+    MemImage(HDC ref, const Image& im) {
+        BITMAPINFO bi{};
+        bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+        bi.bmiHeader.biWidth = im.w;
+        bi.bmiHeader.biHeight = -im.h;
+        bi.bmiHeader.biPlanes = 1;
+        bi.bmiHeader.biBitCount = 32;
+        void* bits = nullptr;
+        dc = CreateCompatibleDC(ref);
+        bm = CreateDIBSection(ref, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+        if (bits) std::memcpy(bits, im.px.data(), im.px.size() * 4);
+        if (dc && bm) old = SelectObject(dc, bm);
+    }
+    ~MemImage() {
+        if (dc && old) SelectObject(dc, old);
+        if (bm) DeleteObject(bm);
+        if (dc) DeleteDC(dc);
+    }
+    MemImage(const MemImage&) = delete;
+    MemImage& operator=(const MemImage&) = delete;
+};
+
+// ISPACE.DLL seg10:0x2c68(slot) [BYTES ISPACE.DLL seg10:0x2c7b seg10:0x2c8e seg10:0x2c9c
+// seg10:0x2cd5 seg10:0x2ce1 seg10:0x2cfb seg10:0x2d09 seg10:0x2d1d seg10:0x2d2e]. The stretch
+// helper seg10:0x2d3c takes StretchBlt for every true-colour source; the port's dialogs draw at
+// the display's depth, so it is always StretchBlt, in COLORONCOLOR, never HALFTONE (shell.md
+// "Ship previews") [DESIGN].
+void paint_slot_window(HWND h) {
+    HDC d = GetDC(h);
+    PatBlt(d, 3, 3, 90, 90, BLACKNESS);
+    if (g_slot) {
+        const int w = g_slot->w;
+        MemImage m(d, g_slot->image);
+        SetStretchBltMode(d, COLORONCOLOR);
+        StretchBlt(d, 48 - w, 48 - w, 2 * w, 2 * w, m.dc, 0, 0, w, w, SRCCOPY);
+    }
+    ReleaseDC(h, d);
+}
+
+// ISPACE.DLL seg10:0x2f4, the Order logo (shell.md "Game-start dialogs", Logo).
+void paint_logo_window(HWND h) {
+    if (!g_logo && !g_logo_tried) {  // the first paint, while DGROUP:0x1584 is 0
+        g_logo_tried = true;
+        try {
+            if (g_store) g_logo = order_logo(g_store->sprite(300, assets::kGameDll));
+        } catch (const std::exception& x) {
+            if (g_todo) g_todo(std::string("Order logo: ") + x.what(), "ISPACE.DLL seg10:0x30e");
+        }
+    }
+    if (!g_logo) return;
+    HDC d = GetDC(h);
+    // The mask as the monochrome bitmap of ordinal 6, rows padded to 16 bits [REF Win32 SDK
+    // CreateBitmap].
+    const int stride = ((g_logo->w + 15) / 16) * 2;
+    std::vector<std::uint8_t> bits(static_cast<std::size_t>(stride) * g_logo->h, 0);
+    for (int y = 0; y < g_logo->h; ++y)
+        for (int x = 0; x < g_logo->w; ++x)
+            if (g_logo->white(x, y))
+                bits[static_cast<std::size_t>(y) * stride + x / 8] |= static_cast<std::uint8_t>(0x80 >> (x % 8));
+    HBITMAP mono = CreateBitmap(g_logo->w, g_logo->h, 1, 1, bits.data());
+    HDC md = CreateCompatibleDC(d);
+    HGDIOBJ mold = SelectObject(md, mono);
+    MemImage im(d, g_logo->image);
+    SetBkColor(d, RGB(255, 255, 255));
+    SetTextColor(d, RGB(0, 0, 0));
+    BitBlt(d, kLogoX, kLogoY, kLogoW, kLogoH, md, 0, 0, SRCAND);
+    BitBlt(d, kLogoX, kLogoY, kLogoW, kLogoH, im.dc, 0, 0, SRCPAINT);
+    SelectObject(md, mold);
+    DeleteDC(md);
+    DeleteObject(mono);
+    ReleaseDC(h, d);
+}
+
 // ISPACE.DLL seg10:0x309c, the LevClass procedure (ordinal 21).
 LRESULT CALLBACK lev_proc(HWND h, UINT msg, WPARAM w, LPARAM l) {
     switch (msg) {
@@ -80,27 +173,17 @@ LRESULT CALLBACK lev_proc(HWND h, UINT msg, WPARAM w, LPARAM l) {
         const bool order = g_order != nullptr;
         if (!order) paint_frame(dc, r);
         EndPaint(h, &ps);
-        if (!order) {
-            // seg10:0x2c68 for the slot: PatBlt BLACKNESS (3, 3, 90, 90) on the slot window's
-            // DC [BYTES ISPACE.DLL seg10:0x2b70]. The port blacks its own window only; the
-            // original also takes GetDC of slot 1, which these dialogs never create [DESIGN].
-            HDC d = GetDC(h);
-            PatBlt(d, 3, 3, 90, 90, BLACKNESS);
-            ReleaseDC(h, d);
-            // The ship image (seg10:0x2aac, ISPACE.DLL seg5:0x0 and the stretch seg10:0x2d3c)
-            // is not ported: the preview stays black [OPEN].
-            if (!g_logged_bitmap && g_todo) {
-                g_logged_bitmap = true;
-                g_todo("ship preview bitmap [OPEN]; the LevClass child stays black",
-                       "ISPACE.DLL seg10:0x2aac");
-            }
-        } else if (!g_logged_logo && g_todo) {
-            // The Order logo seg10:0x2f4 after seg5:0x446e(palette, 5) [OPEN].
-            g_logged_logo = true;
-            g_todo("Order logo [OPEN]; the LevClass child stays black", "ISPACE.DLL seg10:0x2f4");
-        }
+        // seg10:0x2c68 for slot 0; the original also runs it for slot 1, whose window these
+        // dialogs never create, so it returns at once [BYTES ISPACE.DLL seg10:0x2c7b].
+        if (!order) paint_slot_window(h);
+        else paint_logo_window(h);
         return 0;
     }
+    case WM_ERASEBKGND:
+        // The Order dialog registers LevClass with NULL_BRUSH (seg10:0x4250(1)), so the logo
+        // window erases nothing [BYTES ISPACE.DLL seg10:0x290 seg10:0x293].
+        if (g_order) return 1;
+        break;
     case WM_NCPAINT: return 0;  // [BYTES ISPACE.DLL seg10:0x3311]
     case WM_COMMAND:            // posted on to the parent [BYTES ISPACE.DLL seg10:0x3335]
         PostMessageW(GetParent(h), WM_COMMAND, w, l);
@@ -108,6 +191,29 @@ LRESULT CALLBACK lev_proc(HWND h, UINT msg, WPARAM w, LPARAM l) {
     default: break;
     }
     return DefWindowProcW(h, msg, w, l);
+}
+
+// ISPACE.DLL seg10:0x2aac(ship, 0, flags) for slot 0: the slot's bitmap freed, then built for a
+// ship at or above 0 (ispace.md ordinal 10, Ship previews) [BYTES ISPACE.DLL seg10:0x2b0c
+// seg10:0x2b2a].
+void build_preview(const Env& env, const fmt::MasterShp& ships, const fmt::MasterBod& bodies,
+                   int ship, int flags) {
+    g_slot.reset();
+    if (ship < 0 || static_cast<std::size_t>(ship) >= ships.records.size() || !env.store) return;
+    const fmt::ShipRecord& s = ships.records[static_cast<std::size_t>(ship)];
+    if (s.body >= bodies.records.size()) return;
+    const fmt::BodyRecord& b = bodies.records[s.body];
+    if (b.bitmap_id == fmt::kBodyBitmapFromFile) {
+        // The BOD + 0x23 file of an imported ship is not read yet [OPEN ISPACE.DLL seg5:0x1c16].
+        if (env.todo) env.todo("ship preview from a .DIB file (" + b.bitmap_file + ")", "ISPACE.DLL seg5:0x1c16");
+        return;
+    }
+    try {
+        g_slot = ship_bitmap(env.store->sprite(b.bitmap_id), b.bitmap_id, s.byte_07, s.byte_08,
+                             b.byte_1a, flags);
+    } catch (const std::exception& x) {
+        if (env.todo) env.todo(std::string("ship preview: ") + x.what(), "ISPACE.DLL seg5:0x0");
+    }
 }
 
 std::string class_of(HWND h) {
@@ -224,6 +330,7 @@ int Dialog::run_modal() {
         return -1;
     }
     modal_ = true;
+    const gfx::Win16EditScope edits;  // the Win16 edit borders (gfx/win16_edit.h) [DESIGN]
     const INT_PTR r = DialogBoxIndirectParamW(env_.instance,
                                               reinterpret_cast<const DLGTEMPLATE*>(t.data()),
                                               env_.owner, dialog_proc, reinterpret_cast<LPARAM>(this));
@@ -235,6 +342,7 @@ HWND Dialog::create_modeless() {
     if (!env_.store) return nullptr;
     const auto t = env_.store->dialog_template(template_, {}, DS_NOFAILCREATE);
     modal_ = false;
+    const gfx::Win16EditScope edits;  // the Win16 edit borders (gfx/win16_edit.h) [DESIGN]
     return CreateDialogIndirectParamW(env_.instance, reinterpret_cast<const DLGTEMPLATE*>(t.data()),
                                       env_.owner, dialog_proc, reinterpret_cast<LPARAM>(this));
 }
@@ -249,7 +357,6 @@ INT_PTR Dialog::handle(HWND h, UINT msg, WPARAM w, LPARAM) {
         // weights 0 and 730 [BYTES ISPACE.DLL seg9:0x29e8 seg9:0x2a0f].
         normal_ = CreateFontW(14, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0x22, L"Arial");
         bold_ = CreateFontW(14, 6, 0, 0, 730, 0, 0, 0, 0, 0, 0, 2, 0x22, L"Arial");
-        win16_edit_borders();
         init();
         return FALSE;  // every procedure sets the focus itself
     case WM_COMMAND:
@@ -264,24 +371,6 @@ void Dialog::end(int result) {
     result_ = result;
     ended_ = true;
     if (modal_) EndDialog(hwnd_, result);
-}
-
-// A Win32 dialog of a version-4 program draws its WS_BORDER edits with a 3D client edge
-// (WS_EX_CLIENTEDGE, 2 pixels); the Win16 dialog manager draws them with a 1-pixel border,
-// as the oracle shows (start-0001: Restore's 330, New Game's PILOT, #799's 801, Order's 701).
-// The port takes the client edge off again and keeps WS_BORDER [DESIGN].
-void Dialog::win16_edit_borders() {
-    for (HWND c = GetWindow(hwnd_, GW_CHILD); c; c = GetWindow(c, GW_HWNDNEXT)) {
-        wchar_t name[16] = L"";
-        GetClassNameW(c, name, 16);
-        if (lstrcmpiW(name, L"Edit") != 0) continue;
-        const LONG_PTR ex = GetWindowLongPtrW(c, GWL_EXSTYLE);
-        if (!(ex & WS_EX_CLIENTEDGE)) continue;
-        SetWindowLongPtrW(c, GWL_EXSTYLE, ex & ~static_cast<LONG_PTR>(WS_EX_CLIENTEDGE));
-        SetWindowLongPtrW(c, GWL_STYLE, GetWindowLongPtrW(c, GWL_STYLE) | WS_BORDER);
-        SetWindowPos(c, nullptr, 0, 0, 0, 0,
-                     SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-    }
 }
 
 void Dialog::set_fonts() {  // ISPACE.DLL seg10:0x602a(hDlg, 0)
@@ -416,6 +505,7 @@ RestoreGame::RestoreGame(Env& env, std::vector<std::string> saves)
     : Dialog(env, kDlgRestoreGame), saves_(std::move(saves)) {}
 
 void RestoreGame::init() {  // ISPACE.DLL seg10:0x1438
+    g_slot.reset();
     set_fonts();
     load_ships(env_, &ships_, &bodies_);
     add(332, kNewGameEntry);  // [BYTES ISPACE.DLL seg10:0x1535]
@@ -443,6 +533,7 @@ void RestoreGame::fill(int index) {  // ISPACE.DLL seg10:0x1a80
         set_text(269, "?");
         set_text(330, lang(1149));  // "NEW GAME, STARTING AT WAVE 1."
         ship_ = -1;
+        build_preview(env_, ships_, bodies_, -1, 0);  // seg10:0x1b0a
         InvalidateRect(GetDlgItem(hwnd_, kPreviewId), nullptr, TRUE);
         return;
     }
@@ -459,6 +550,7 @@ void RestoreGame::fill(int index) {  // ISPACE.DLL seg10:0x1a80
     Availability a{env_.availability_cache, env_.x5, &ships_, &bodies_};
     ship_ = restore_ship_index(h->ship, a);
     pilot_ = h->pilot;
+    build_preview(env_, ships_, bodies_, ship_, h->preview);  // seg10:0x1c57, header +0x170
     set_text(331, h->pilot);
     std::string ship_name;
     if (ship_ >= 0 && static_cast<std::size_t>(ship_) < ships_.records.size())
@@ -504,9 +596,12 @@ std::vector<NewGame::Drive> NewGame::system_drives() {
     SetErrorMode(SEM_FAILCRITICALERRORS);
     std::vector<Drive> out;
     // _getdrive() is saved and restored around the loop [BYTES ISPACE.DLL seg10:0x207d
-    // seg10:0x223c]; the port saves the whole current directory.
-    wchar_t cwd[MAX_PATH + 1] = L"";
-    const DWORD cwd_len = GetCurrentDirectoryW(MAX_PATH + 1, cwd);
+    // seg10:0x223c]; the port saves the whole current directory, of any length.
+    std::wstring cwd(GetCurrentDirectoryW(0, nullptr), L'\0');
+    if (!cwd.empty()) {
+        const DWORD n = GetCurrentDirectoryW(static_cast<DWORD>(cwd.size()), cwd.data());
+        cwd.resize(n < cwd.size() ? n : 0);
+    }
     const DWORD mask = GetLogicalDrives();
     for (int d = 3; d <= 26; ++d) {  // C: to Z: [BYTES ISPACE.DLL seg10:0x20b1]
         if (!(mask & (1u << (d - 1)))) continue;
@@ -529,11 +624,12 @@ std::vector<NewGame::Drive> NewGame::system_drives() {
             dr.label = label_as_find_first(narrow(label));
         out.push_back(dr);
     }
-    if (cwd_len > 0 && cwd_len <= MAX_PATH) SetCurrentDirectoryW(cwd);
+    if (!cwd.empty()) SetCurrentDirectoryW(cwd.c_str());
     return out;
 }
 
 void NewGame::init() {  // ISPACE.DLL seg10:0x1e7c
+    g_slot.reset();
     set_fonts();
     load_ships(env_, &ships_, &bodies_);
     const Availability a{env_.availability_cache, env_.x5, &ships_, &bodies_};
@@ -589,6 +685,7 @@ void NewGame::show_ship(const std::string& name) {
         if (env_.ini)
             team = env_.ini->get_string(lang(2279) + "s", team_key(ships_.records[i].team), "", 20);
         set_text(326, team);
+        build_preview(env_, ships_, bodies_, static_cast<int>(i), 0);
         InvalidateRect(GetDlgItem(hwnd_, kPreviewId), nullptr, TRUE);
         return;
     }
@@ -715,10 +812,15 @@ void Important::command(int id, int) {  // ISPACE.DLL seg10:0x124a
 
 Order::~Order() {
     if (g_order == hwnd_) g_order = nullptr;
+    g_logo.reset();
+    g_logo_tried = false;
 }
 
 void Order::init() {  // ISPACE.DLL seg10:0x0
-    g_order = hwnd_;  // DGROUP:0x1f82; the attempt counter DGROUP:0x1f8e is the code check's
+    g_order = hwnd_;
+    g_store = env_.store;
+    g_logo.reset();  // DGROUP:0x1584 starts at 0: the first paint loads the logo
+    g_logo_tried = false;  // DGROUP:0x1f82; the attempt counter DGROUP:0x1f8e is the code check's
     // seg10:0x5dfe(hDlg, 0): the serial record, regenerated by seg10:0x492 when its counter is
     // above 8 or its serial 0, shown with ltoa in static 700, then the focus to edit 701.
     show_serial(false);
@@ -736,8 +838,10 @@ void Order::init() {  // ISPACE.DLL seg10:0x0
     if (order_tshirt(env_.x5)) set_text(704, lang(2545));
     set_text(712, format_ints(text(712, 255), {env_.tm_mon + 1, env_.tm_mday, env_.tm_year}));
     if (order_phone_hidden(env_.x4)) ShowWindow(GetDlgItem(hwnd_, 694), SW_HIDE);
-    // The logo child at (window width - 161, 70), 146 x 114 [BYTES ISPACE.DLL seg10:0x28b
-    // seg10:0x2c6].
+    // seg5:0x446e(hPal, 5), the gold ramp of DGROUP:0x117c row 1, changes nothing visible at
+    // the dialogs' true colour and is not ported [DESIGN] [BYTES ISPACE.DLL seg10:0x285
+    // seg5:0x446e]. The logo child at (window width - 161, 70), 146 x 114 [BYTES ISPACE.DLL
+    // seg10:0x28b seg10:0x2c6].
     RECT w;
     GetWindowRect(hwnd_, &w);
     logo_ = preview((w.right - w.left) - 161, 70, 146, 114);
@@ -793,6 +897,8 @@ void Order::cleanup(int result) {  // ISPACE.DLL seg10:0x78e's cleanup
     if (logo_ && IsWindow(logo_)) DestroyWindow(logo_);
     logo_ = nullptr;
     g_order = nullptr;
+    g_logo.reset();
+    g_logo_tried = false;
     end(result);
 }
 

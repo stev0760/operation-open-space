@@ -169,7 +169,7 @@ bool Desk::frame(Tick now) {
         pad_c_ = k / 30 + 80;
         canvas_.make_pad(pad_w_, pad_c_ + 52);
         host_.pump();
-        size_ = canvas_.make_ship();  // seg15:0x9e6
+        size_ = canvas_.make_ship(host_.ini("MainShip", "EAGLE"));  // seg15:0x9e6, seg15:0x2a08
         host_.pump_until(t);
         rise(true);
         ++step_;
@@ -352,6 +352,38 @@ bool Desk::rise(bool first) {
     return false;
 }
 
+std::array<ShipFrame, kShipFrames> ship_frames(int s) {
+    std::array<ShipFrame, kShipFrames> out{};
+    const int s4 = 4 * s;
+    const int step = (s4 + (-54 * s) / 100) / 15;
+    int w = s4, y = 0;
+    out[0] = {s4, s4, 0};
+    for (int i = 1; i < kShipFrames; ++i) {
+        w -= step;
+        const int p = i <= 9 ? 101 - 6 * i : 41 + 13 * (i - 10);
+        y += out[i - 1].h;
+        out[i] = {w, w * p / 100, y};
+    }
+    return out;
+}
+
+int launch_frame_of(int y0, int ye, int pos10, int prev_f) {
+    const int span = (y0 - ye) / 2;
+    int f;
+    if (prev_f < 10) {
+        const int d = std::max(1, span / 10);
+        f = (y0 - pos10 / 10) / d;
+    } else {
+        const int d = std::max(1, span / 6);
+        f = ((ye - y0) / 2 - pos10 / 10 + y0) / d + 10;
+    }
+    return std::min(f, 15);
+}
+
+int launch_speed(int f, bool fast) { return std::max(9, fast ? 150 - 4 * f : 150 - f / 2); }
+
+int launch_advance10(int speed, bool fast) { return (fast ? 3 : 5) * speed / -7; }
+
 // seg15:0x0(arg) in state 0 [BYTES seg15:0x58 seg15:0xc3 seg15:0xce seg15:0x14f seg15:0x185
 // seg15:0x18b-0x221 seg15:0x25d seg15:0x262 seg15:0x272 seg15:0x290 seg15:0x2c4 seg15:0x598
 // seg15:0x5b6 seg15:0x5cb seg15:0x613 seg15:0x6c3 seg15:0x6db seg15:0x6ea seg15:0x72f
@@ -365,10 +397,6 @@ int Desk::launch(int arg) {
         start_y_ = py - s4_ + pad_c_ - 10;   // DGROUP:0x92d8 = H − s4 − 62
         end_y_ = 60;                         // DGROUP:0x92d6
         pos10_ = start_y_ * 10;
-        if (!logged_rise_) {
-            logged_rise_ = true;
-            host_.todo("desk launch occlusion mask (the ship is drawn over the scene)", "seg15:0x3bfa");
-        }
         speed_ = 150;
         f_ = 0;
         lum_ = 100;
@@ -376,21 +404,7 @@ int Desk::launch(int arg) {
     } else if (arg == 1) {
         host_.sound(0x1c);
     }
-    // The frame index [BYTES seg15:0x18b-0x221].
-    const int span = (start_y_ - end_y_) / 2;
-    int f;
-    if (f_ < 10) {
-        const int a = pos10_ / -10 + start_y_;
-        int d = span / 10;
-        if (d == 0) d = 1;
-        f = a / d;
-    } else {
-        const int a = (end_y_ - start_y_) / 2 - pos10_ / 10 + start_y_;
-        int d = span / 6;
-        if (d == 0) d = 1;
-        f = a / d + 10;
-    }
-    f = std::min(f, 15);
+    const int f = launch_frame_of(start_y_, end_y_, pos10_, f_);
     if (f > f_) {  // the fade [BYTES seg15:0x25d-0x2b0 seg10:0x9956]
         const int old = lum_ == 0 ? 1 : lum_;
         lum_ = 100 - 100 * f / 40;
@@ -400,12 +414,27 @@ int Desk::launch(int arg) {
     }
     f_ = f;
     const bool fast = host_.calibrate_value() >= 1400;
-    speed_ = std::max(fast ? 150 - 4 * f : 150 - f / 2, 9);
-    pos10_ -= fast ? speed_ * 3 / 7 : speed_ * 5 / 7;
-    // The 16 ship frames of seg15:0x9e6 shrink with f [OPEN seg15:0x9e6: the frame sizes].
-    const int size = std::max(s4_ - s4_ * f / 16, 4);
-    ship_rect_ = canvas_.ship(f, size, W_ / 2 - size / 2, pos10_ / 10);
+    speed_ = launch_speed(f, fast);
+    // The drawing at the position before the step (item 9, Drawing).
+    LaunchDraw d;
+    d.f = f;
+    d.s = size_;
+    const int y = pos10_ / 10;
+    d.ship = {W_ / 2 - 2 * size_, y, W_ / 2 - 2 * size_ + s4_, y + s4_ + 15};
+    d.scene = true;  // desk phase 6 (DGROUP:0x95b8)
+    d.column = {monitor_.l, monitor_.t, monitor_.r, desk_bottom_};
+    const int px = W_ / 2 - pad_w_ / 2, py = H_ - pad_c_ - 0x34;
+    d.pad = {px, py, px + pad_w_, py + pad_c_ + 52};
+    canvas_.launch_frame(d);
+    ship_rect_ = d.ship;
+    pos10_ += launch_advance10(speed_, fast);
     if (10 * end_y_ > pos10_) {
+        // The oracle shows the ship at the top for 1.43 s before the second restore; how that time
+        // splits among the first restore, the ordinal-9 sound call and the flash is [OPEN]
+        // (shell.md item 9, End of the rise). The port, whose sound call returns at once and
+        // whose flash takes no time to speak of, holds the shown frame for that time before the
+        // exit path [OPEN seg15:0x5cb seg15:0x613 seg15:0x6db] [ORACLE start-0001 main].
+        host_.busy_until(host_.now() + kLaunchEndHold);
         const int x = monitor_.l + 29, y = monitor_.t + 29, w = monitor_.w() - 58, h = screen_h_ - 58;
         canvas_.scene_to_screen(x, y, w, h);
         host_.sound_at(0x4c, 0, 0, 0);

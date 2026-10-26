@@ -6,8 +6,10 @@
 #ifdef _WIN32
 #include <windows.h>
 
+#include <array>
 #include <functional>
 #include <map>
+#include <optional>
 #include <tuple>
 
 #include "desk/desk.h"
@@ -15,10 +17,22 @@
 
 namespace is::desk {
 
+// What seg15:0x2a08 renders for a MainShip: the body graphic (IGRAPHIC.DLL #4000 BOD + 0x21) and
+// the scheme rows SHP + 0x07 and SHP + 0x08 of its MASTER.SHP record.
+struct ShipArt {
+    fmt::Dib body;
+    int id = 0;
+    int a = 0, b = 0;
+};
+// The record of a MainShip name, found by exact compare against SHP + 0x0a [BYTES seg15:0x2a50];
+// nullopt when no record matches or the body cannot be read.
+using ShipSource = std::function<std::optional<ShipArt>(const std::string& main_ship)>;
+
 class GdiDesk final : public Canvas {
 public:
     using Log = std::function<void(const std::string&, const char*)>;
-    GdiDesk(std::function<gfx::Gfx*()> gfx, Log todo) : gfx_(std::move(gfx)), todo_(std::move(todo)) {}
+    GdiDesk(std::function<gfx::Gfx*()> gfx, Log todo, ShipSource ships = {})
+        : gfx_(std::move(gfx)), todo_(std::move(todo)), ships_(std::move(ships)) {}
     ~GdiDesk() override;
 
     void palette_save(int set, int blank) override;
@@ -40,11 +54,11 @@ public:
     void scroll_up(const Rect& r, int pixels) override;
     void flash(int x, int y) override;
     void make_pad(int w, int h) override;
-    int make_ship() override;
+    int make_ship(const std::string& main_ship) override;
     void rise(int pad_w, int pad_h, int s4, int x, int y) override;
     void free_rise() override;
     void pad_to_screen(int x, int y) override;
-    Rect ship(int f, int size, int x, int y) override;
+    void launch_frame(const LaunchDraw& d) override;
     void free_all() override;
     bool pad_alive() override { return strip_ != nullptr; }
 
@@ -60,13 +74,15 @@ private:
 
     std::function<gfx::Gfx*()> gfx_;
     Log todo_;
+    ShipSource ships_;
     gfx::ImagePtr scene_;      // DGROUP:0x9294 in DGROUP:0x929a
     gfx::ImagePtr pad_;        // DGROUP:0x92a8 in DGROUP:0x92b6
-    gfx::ImagePtr ship_;       // DGROUP:0x3ccc (frame 0), mask DGROUP:0x3cce
+    gfx::ImagePtr ship_;       // DGROUP:0x3ccc: the 16 frames, mask DGROUP:0x3cce
     gfx::ImagePtr ship_mask_;
+    std::array<ShipFrame, kShipFrames> frames_{};  // DGROUP:0x3ce8, DGROUP:0x3d08
+    gfx::ImagePtr work_;       // DGROUP:0x92b8: seg15:0x3bfa(4s, 4s + 15)
     gfx::ImagePtr strip_;      // DGROUP:0x953c / DGROUP:0x92ac
     HFONT font_ = nullptr;
-    Rect last_ship_;
     int pad_x_ = 0, pad_y_ = 0;
     bool pad_shown_ = false;
     std::map<std::tuple<int, int, int>, COLORREF> colours_;

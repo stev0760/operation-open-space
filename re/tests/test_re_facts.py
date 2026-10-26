@@ -2414,3 +2414,246 @@ def test_registration_strings_have_no_user(ins, isp):
     assert hits == {("inspace", "seg10:0x8485"), ("ispace", "seg9:0x17f5")}
     assert _c_string(unpacked_seg("inspace", 19), 0x84A) == "ThePlayer"
     assert _c_string(unpacked_seg("ispace", 11), 0x84B) == "Size"
+
+
+# ------------------------------------------------------------------ ship previews, Order logo, desk launch
+
+
+def _calls(m: Module, expect: dict[str, str]) -> dict[str, bool]:
+    """Each call site in ``expect`` names the import or target given."""
+    return {a: name in m.at(a).text and m.at(a).mnem in ("call", "lcall") for a, name in expect.items()}
+
+
+def test_levclass_frame(isp):
+    """shell.md Ship previews: the LevClass frame of ISPACE.DLL seg10:0x309c and its net pixels
+    on the 96 x 96 client."""
+    calls = {"seg10:0x3122": "SetRect", "seg10:0x3137": "FillRect", "seg10:0x3151": "SetRect",
+             "seg10:0x3166": "FillRect", "seg10:0x3183": "SetRect", "seg10:0x3198": "FillRect",
+             "seg10:0x31b6": "SetRect", "seg10:0x31cb": "FillRect", "seg10:0x31ee": "SetPixel",
+             "seg10:0x320b": "SetPixel", "seg10:0x322c": "SetPixel", "seg10:0x324c": "SetPixel",
+             "seg10:0x3268": "SelectObject", "seg10:0x327b": "MoveTo", "seg10:0x3289": "LineTo",
+             "seg10:0x3299": "LineTo", "seg10:0x32a9": "SelectObject", "seg10:0x32bb": "LineTo",
+             "seg10:0x32cd": "LineTo", "seg10:0x32d8": "SelectObject"}
+    assert all(_calls(isp, calls).values())
+    expect = {"seg10:0x311b": "add ax, 3", "seg10:0x312f": "push 1", "seg10:0x314d": "add ax, 3",
+              "seg10:0x315e": "push 1", "seg10:0x3179": "sub ax, 3", "seg10:0x3190": "push 3",
+              "seg10:0x31a5": "sub ax, 3", "seg10:0x31c3": "push 3",
+              "seg10:0x31e8": "push 0xc0", "seg10:0x31eb": "push 0xc0c0",
+              "seg10:0x3205": "push 0x80", "seg10:0x3208": "push 0x8080",
+              "seg10:0x3226": "push 0xc0", "seg10:0x3229": "push 0xc0c0",
+              "seg10:0x3248": "push 0", "seg10:0x324a": "push 0",
+              "seg10:0x3254": "cmp word ptr [bp - 0x38], 3", "seg10:0x3260": "push 6",
+              "seg10:0x32a1": "push 7"}
+    assert _texts(isp, expect) == expect
+    # The documented drawing list, rasterised (LineTo leaves out its end point).
+    L, T, R, B = 0, 0, 96, 96
+    px = {}
+    for (l, t, r, b), c in [((L, T, L + 3, B), "c0c0c0"), ((L, T, R, T + 3), "c0c0c0"),
+                            ((L + 2, B - 3, R, B), "404040"), ((R - 3, T + 1, R, B - 1), "404040")]:
+        px.update({(x, y): c for x in range(l, r) for y in range(t, b)})
+    for i in range(3):
+        px.update({(R - 2 - i, T + i): "c0c0c0", (R - 1 - i, T + i): "808080",
+                   (L + 2 - i, B - 3 + i): "c0c0c0", (L + 3 - i, B - 3 + i): "000000"})
+
+    def line(a, b, c):
+        (x0, y0), (x1, y1) = a, b
+        n = max(abs(x1 - x0), abs(y1 - y0))
+        for k in range(n):
+            px[(x0 + (x1 - x0) * k // n, y0 + (y1 - y0) * k // n)] = c
+        return b
+
+    p = line((L, B - 1), (L, T), "ffffff")
+    p = line(p, (R - 1, T), "ffffff")
+    p = line(p, (R - 1, B - 1), "000000")
+    line(p, (L - 1, B - 1), "000000")
+    assert all(px[(0, y)] == "ffffff" for y in range(95)) and all(px[(x, 0)] == "ffffff" for x in range(95))
+    assert all(px[(95, y)] == "000000" and px[(y, 95)] == "000000" for y in range(96))
+
+
+def test_preview_slot_paint_and_stretch(isp):
+    """shell.md Ship previews and ispace.md ordinal 10: seg10:0x2c68 and the stretch helper
+    seg10:0x2d3c."""
+    expect = {"seg10:0x2cc7": "push 3", "seg10:0x2cc9": "push 3", "seg10:0x2ccb": "push 0x5a",
+              "seg10:0x2ccd": "push 0x5a", "seg10:0x2ccf": "push 0", "seg10:0x2cd1": "push 0x42",
+              "seg10:0x2ce1": "push 0xcc", "seg10:0x2ce4": "push 0x20",
+              "seg10:0x2cf7": "add ax, ax", "seg10:0x2cfb": "mov ax, 0x30",
+              "seg10:0x2cfe": "sub ax, word ptr [bp - 8]",
+              "seg10:0x2d51": "push 2", "seg10:0x2d53": "push 2",
+              "seg10:0x2d75": "cmp cx, 8", "seg10:0x2d87": "cmp word ptr [0x1f7e], 0",
+              "seg10:0x2d97": "add ax, ax", "seg10:0x2da1": "add ax, ax"}
+    assert _texts(isp, expect) == expect
+    assert all(_calls(isp, {"seg10:0x2c8e": "GetDC", "seg10:0x2cd5": "PatBlt",
+                            "seg10:0x2d09": "seg10:0x2d3c", "seg10:0x2d2e": "ReleaseDC",
+                            "seg10:0x2d55": "CreateCompatibleBitmap", "seg10:0x2d65": "GetObject",
+                            "seg10:0x2de4": "seg10:0x2e1a",
+                            "seg10:0x2e0d": "StretchBlt"}).values())
+    assert isp.call_sites("seg10:0x2d3c") == ["seg10:0x2d09"]
+    assert isp.call_sites("seg10:0x2c68") == ["seg10:0x2c5b", "seg10:0x3311"]
+    assert 0x5A == 90 and 0x30 == 48
+
+
+def test_preview_bitmap_builder(isp):
+    """ispace.md ordinal 10 Ship previews: seg10:0x2aac and the hdc slot DGROUP:0x2012."""
+    expect = {"seg10:0x2aba": "cmp word ptr [bp + 8], 2", "seg10:0x2ac5": "mov word ptr [bp - 4], 2",
+              "seg10:0x2b26": "cmp word ptr [bp + 6], -1",
+              "seg10:0x2b32": "imul bx, word ptr [bp + 6], 0x41",
+              "seg10:0x2b4a": "imul ax, word ptr es:[bx + 0x21], 0x2c",
+              "seg10:0x2b59": "add ax, 0x23", "seg10:0x2b85": "push 0x2014",
+              "seg10:0x2bd0": "mov ax, word ptr [0x2018]", "seg10:0x2bd3": "mov word ptr [0x1f88], ax",
+              "seg10:0x2bf8": "mov al, byte ptr es:[bx + si + 0x1a]",
+              "seg10:0x2c0b": "cmp word ptr [bp + 0xa], 2", "seg10:0x2c29": "push 0x42",
+              "seg10:0x2c30": "sub word ptr [bp + 0xa], 2", "seg10:0x2c50": "push 0x42"}
+    assert _texts(isp, expect) == expect
+    assert all(_calls(isp, {"seg10:0x2b70": "seg5:0x0", "seg10:0x2b8a": "GetObject",
+                            "seg10:0x2b93": "CreateCompatibleDC", "seg10:0x2c2b": "PatBlt",
+                            "seg10:0x2c52": "PatBlt", "seg10:0x2c5b": "seg10:0x2c68"}).values())
+    assert _sites(isp.writers(0x2012, 0x2013)) == ["seg10:0x42f8"]
+    assert _sites([i for i in isp.refs(0x2012, 0x2013) if not is_write(i)]) == ["seg10:0x2b8f"]
+    assert isp.call_sites("seg10:0x2aac") == ["seg10:0x19e2", "seg10:0x1b0a", "seg10:0x1c57",
+                                              "seg10:0x24bd", "seg10:0x29db", "seg10:0x2a90",
+                                              "seg10:0x3a83"]
+    assert [_cdecl_pushes(isp, s, 4)[3] for s in ("seg10:0x1b0a", "seg10:0x2a90", "seg10:0x3a83")] \
+        == ["0", "0", "0"]
+    assert isp.at("seg10:0x1b02").text == "mov ax, 0xffff"
+    assert isp.at("seg10:0x1c49").text == "mov al, byte ptr es:[bx + 0x170]"
+
+
+def test_preview_transformer(master, isp):
+    """shell.md Ship previews: the oracle's TRANSFORMER preview, its body graphic and the scheme
+    rows that recolour it."""
+    bod, shp = master
+    r = shp[65:130]
+    assert (_cstr(r, 0x0A), r[7], r[8], struct.unpack_from("<H", r, 0x21)[0]) == \
+        (b"TRANSFORMER", 0, 10, 33)
+    assert struct.unpack_from("<H", bod, 33 * 44 + 0x21)[0] == 60
+    assert _dib(_resource("IGRAPHIC.DL1", 4000, 60))[:3] == (132, 33, 4)
+    assert (48 - 33, 2 * 33, 96 * 96) == (15, 66, 9216)
+    mem = _emulate_5846(isp)
+    row0 = [mem[0x117C + 3 * k:0x117C + 3 * k + 3].hex() for k in range(10)]
+    row10 = [mem[0x1CDC + 150 + 3 * k:0x1CDC + 150 + 3 * k + 3].hex() for k in range(5)]
+    assert (row0[0], row0[1], row0[9]) == ("ffffff", "e6e6e8", "1e1e28")
+    assert (row10[0], row10[4]) == ("c8ff00", "004b00")
+
+
+def test_order_logo(isp):
+    """shell.md Order: the logo window, graphic 300, the mask patch and the two blits."""
+    expect = {"seg10:0x289": "push 5", "seg10:0x290": "push 1", "seg10:0x2a3": "push 0x5000",
+              "seg10:0x2ae": "sub ax, 0xa1", "seg10:0x2b2": "push 0x46", "seg10:0x2b4": "push 0x92",
+              "seg10:0x2b7": "push 0x72", "seg10:0x2bc": "push 0x64",
+              "seg10:0x30e": "cmp word ptr [0x1584], 0", "seg10:0x31f": "push 0x12c",
+              "seg10:0x327": "push 3", "seg10:0x329": "push -1", "seg10:0x3ad": "push 4",
+              "seg10:0x3c0": "push 0x7d", "seg10:0x3c2": "push 0x1d", "seg10:0x3c4": "push 2",
+              "seg10:0x3c6": "push 2", "seg10:0x3c8": "push 0xf0", "seg10:0x3cb": "push 0x21",
+              "seg10:0x3d5": "push 0x23", "seg10:0x3d7": "push 0x2f",
+              "seg10:0x3e5": "push 0x69", "seg10:0x3e7": "push 0x30",
+              "seg10:0x400": "push 4", "seg10:0x402": "push 4", "seg10:0x404": "push 0x8a",
+              "seg10:0x407": "push 0x6a", "seg10:0x410": "push 0x88", "seg10:0x413": "push 0xc6",
+              "seg10:0x42e": "push 0xee", "seg10:0x431": "push 0x86"}
+    assert _texts(isp, expect) == expect
+    assert all(_calls(isp, {"seg10:0x28b": "seg5:0x446e", "seg10:0x293": "seg10:0x4250",
+                            "seg10:0x2c6": "CreateWindow", "seg10:0x32b": "seg5:0x402",
+                            "seg10:0x341": "seg5:0x650", "seg10:0x3cd": "PatBlt",
+                            "seg10:0x3dd": "FloodFill", "seg10:0x3ed": "FloodFill",
+                            "seg10:0x416": "BitBlt", "seg10:0x434": "BitBlt"}).values())
+    assert (0xA1, 0x46, 0x92, 0x72, 0x7D, 0x1D, 0x23, 0x2F, 0x69, 0x30, 0x8A, 0x6A) == \
+        (161, 70, 146, 114, 125, 29, 35, 47, 105, 48, 138, 106)
+    raw = _resource("ISPACE.dll", 4000, 300)
+    w, h, bpp, table = _dib(raw)
+    off, stride = struct.unpack_from("<I", raw, 10)[0], (w * bpp + 31) // 32 * 4
+    black = {k for k, c in enumerate(table) if c == "000000"}
+
+    def pix(x, y):  # top-down y; the DIB is bottom-up
+        b = raw[off + (h - 1 - y) * stride + x // 2]
+        return b >> 4 if x % 2 == 0 else b & 15
+
+    assert (w, h) == (138, 138)
+    assert all(pix(x, y) in black for y in range(106, 138) for x in range(w))
+
+
+def _launch_heights(s: int) -> list[tuple[int, int]]:
+    step = _trunc(4 * s + _trunc(2 * s * -27, 100), 15)
+    w, out = 4 * s, [(4 * s, 4 * s)]
+    for i in range(1, 16):
+        p = 95 - 6 * (i - 1) if i < 10 else 41 + 13 * (i - 10)
+        w -= step
+        out.append((w, _trunc(w * p, 100)))
+    return out
+
+
+def test_launch_ship_frames(ins):
+    """shell.md Game-start dialogs item 7: seg15:0x9e6's 16 frame sizes."""
+    expect = {"seg15:0x9f4": "cmp word ptr [0x90ee], 8", "seg15:0x9fb": "mov word ptr [bp - 0x12], 4",
+              "seg15:0xa02": "mov word ptr [bp - 0x12], 2", "seg15:0xa35": "mov word ptr [0x92da], ax",
+              "seg15:0xa49": "shl cx, 2", "seg15:0xa54": "imul ax, ax, -0x1b",
+              "seg15:0xa57": "mov dx, 0x64", "seg15:0xa61": "mov dx, 0xf",
+              "seg15:0xa6f": "mov word ptr [0x3ce8], 0", "seg15:0xa75": "mov word ptr [bp - 0x10], 0x5f",
+              "seg15:0xa84": "sub word ptr [bp - 0x10], 6", "seg15:0xa88": "cmp word ptr [bp - 0xa], 0xa",
+              "seg15:0xac0": "add word ptr [bp - 0x10], 0xd",
+              "seg15:0xac4": "cmp word ptr [bp - 0xa], 0x10", "seg15:0xbec": "push 3",
+              "seg15:0xbfd": "push 0xcc", "seg15:0xc00": "push 0x20",
+              "seg15:0xc56": "mov word ptr [0x3cce], ax"}
+    assert _texts(ins, expect) == expect
+    assert all(_calls(ins, {"seg15:0xbee": "SetStretchBltMode", "seg15:0xc2e": "seg10:0x9962",
+                            "seg15:0xc50": "seg10:0x6ec6", "seg15:0xa16": "seg15:0x2a08"}).values())
+    sizes = _launch_heights(33)
+    assert [w for w, _ in sizes] == [132 - 7 * i for i in range(16)]
+    heights = ", ".join(str(hh) for _, hh in sizes)
+    text = (REPO_ROOT / "docs" / "re" / "shell.md").read_text()
+    assert heights.rsplit(", ", 1)[0] + " and " + heights.rsplit(", ", 1)[1] in text
+    assert sizes[-1] == (27, 28)
+    assert _sites(ins.writers(0x92DA, 0x92DB)) == ["seg15:0xa35"]
+
+
+def _launch_calls(y0: int, cal: int, ye: int = 60) -> int:
+    pos, f, n = 10 * y0, 0, 0
+    while True:
+        n += 1
+        if f < 10:
+            f = _trunc(y0 - _trunc(pos, 10), max(1, _trunc(_trunc(y0 - ye, 2), 10)))
+        else:
+            f = _trunc(_trunc(ye - y0, 2) - _trunc(pos, 10) + y0, max(1, _trunc(_trunc(y0 - ye, 2), 6))) + 10
+        f = min(f, 15)
+        speed = max(9, 150 - (4 * f if cal >= 1400 else _trunc(f, 2)))
+        pos += -_trunc(speed * (3 if cal >= 1400 else 5), 7)
+        if 10 * ye > pos:
+            return n
+
+
+def test_launch_step_rule(ins):
+    """shell.md Game-start dialogs item 9: seg15:0x0's step constants and the call counts."""
+    expect = {"seg15:0x14f": "imul ax, word ptr [0x92d8], 0xa", "seg15:0x191": "cmp ax, 0xa",
+              "seg15:0x199": "mov cx, 0xfff6", "seg15:0x1b2": "mov cx, 0xa",
+              "seg15:0x1bf": "mov word ptr [0x17c6], 1", "seg15:0x1fb": "mov cx, 6",
+              "seg15:0x216": "add ax, 0xa", "seg15:0x219": "cmp ax, 0xf",
+              "seg15:0x2c4": "cmp word ptr [0x8ffc], 0x578", "seg15:0x2d9": "shl ax, 2",
+              "seg15:0x2dc": "sub ax, 0x96", "seg15:0x2e4": "cmp ax, 9",
+              "seg15:0x5a0": "imul ax, word ptr [0x17c8], 5", "seg15:0x5a7": "imul ax, word ptr [0x17c8], 3",
+              "seg15:0x5ac": "mov cx, 0xfff9", "seg15:0x5b6": "imul ax, word ptr [0x92d6], 0xa"}
+    assert _texts(ins, expect) == expect
+    assert all(_calls(ins, {"seg15:0x163": "seg15:0x3bfa", "seg15:0x58d": "BitBlt"}).values())
+    assert (_launch_calls(574, 13625), _launch_calls(574, 1000)) == (108, 50)
+
+
+def test_play_height_and_pad(ins, dgroup):
+    """globals.md DGROUP:0x90ec and shell.md item 7: the play height and the pad at 1024 x 768."""
+    assert _sites(ins.writers(0x90EC, 0x90ED)) == ["seg2:0xb34", "seg2:0xb3d", "seg2:0xc05",
+                                                   "seg2:0x1b29"]
+    assert len([i for i in ins.refs(0x90EC, 0x90ED) if not is_write(i)]) == 95
+    expect = {"seg2:0xb37": "mov word ptr [0x10], ax", "seg2:0xb3d": "sub word ptr [0x90ec], ax",
+              "seg2:0xbfc": "mov word ptr [0xa70], 0x55", "seg2:0x1b25": "sub ax, word ptr [0xa70]",
+              "seg15:0x484b": "sub ax, 0x44c", "seg15:0x485e": "mov dx, 0x24",
+              "seg15:0x486a": "add ax, 0xa4", "seg15:0x48af": "mov cx, 0x1e",
+              "seg15:0x48bc": "add ax, 0x50"}
+    assert _texts(ins, expect) == expect
+    assert struct.unpack_from("<H", dgroup, 0xA70)[0] == 0x55
+    k = _trunc(4 * (768 - 85), 3) - 1100
+    assert (k, _trunc(k, 36) + 164, _trunc(k, 30) + 80, _trunc(k, 30) + 80 + 52) == (-190, 159, 74, 126)
+
+
+def test_state1_repaint_dispatch(ins):
+    """shell.md State-1 repaint: case 1 of seg11:0xafe's state dispatch."""
+    expect = {"seg11:0x15b9": "cmp word ptr [0x951a], 0", "seg11:0x15c2": "cmp word ptr [0x9130], 0",
+              "seg11:0x15d7": "mov word ptr es:[bx + 0x1c], 1", "seg11:0x15ea": "mov word ptr [0x58c], 1"}
+    assert _texts(ins, expect) == expect
+    assert all(_calls(ins, {"seg11:0x15e0": "seg7:0x11cc", "seg11:0x15e5": "seg7:0x1208",
+                            "seg11:0x15f0": "seg7:0x1f38", "seg11:0x15f6": "seg11:0x33cc"}).values())

@@ -385,6 +385,17 @@ TEST_CASE("intro: the repaint rule of seg11:0xafe") {
     CHECK(r.intro.deadline() == r.host.t);
 }
 
+TEST_CASE("intro: a dialog cancelled in the credits ends them (seg10:0x8550, seg11:0x164b)") {
+    Rig r;
+    r.until_phase(3);
+    r.host.t += 40;
+    r.intro.after_dialog(8, 0);  // Order Cancel: phase < 4 gives deadline = DGROUP:0x1e50
+    CHECK(r.intro.deadline() == r.host.t);
+    r.host.t += 30;  // the repaint comes later; it compares with the stored DGROUP:0x1e50
+    r.intro.repaint(r.host.t);  // the deadline stays, so the repaint's frame ends the credits
+    CHECK(r.intro.phase() == 4);
+}
+
 TEST_CASE("intro: a second run's credits keep the typing state (shell.md Skipped runs)") {
     Rig r;
     r.until_phase(3);

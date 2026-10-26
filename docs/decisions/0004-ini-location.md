@@ -16,12 +16,14 @@
 2. **Location:** `%APPDATA%\Inner Space\INSPACE.INI` (`FOLDERID_RoamingAppData`). Under Wine that is inside the prefix. [DESIGN]
    - **Portable mode:** when an `INSPACE.INI` exists in the directory that holds the port's executable, the port uses that file instead. [DESIGN]
      - Portable mode is off when the executable's directory is the asset directory (ADR 0002 decision 1): the `INSPACE.INI` there is the game's own file, which the port never writes (ADR 0002 decision 5). The shipdisk contains such a file. [DESIGN]
-   - **Override:** the command-line option `--ini <path>` names the file to use and wins over both. [DESIGN]
+   - **Override:** the command-line option `--ini <path>` names the file to use and wins over both, unless the file lies in the asset directory, which ADR 0002 decision 5 keeps read-only; such an override is refused with a log line and the usual rule applies. [DESIGN]
 3. **First run.** When the chosen file does not exist and `<Windows directory>\INSPACE.INI` does, the port copies it first, so a prefix or machine that ran the original keeps its settings. Then the original's rule applies: an empty `Path` regenerates the keys, with the same message. [DESIGN] [BYTES seg6:0x7e9]
 4. **Path keys resolve against the asset directory,** not the executable's directory. Regeneration sets `Path` to the asset directory (ADR 0002), `ShipPath` to its `SHIPS\`, `SndPath` to its `SOUNDS\` and `RacePath` to its `GAMES\`. When a named subdirectory does not exist, the asset store reads the ships or sounds from the asset directory itself, which covers a flat distribution. [DESIGN]
 5. **`LocalPath` defaults to the INI's own directory,** so saved games (`LocalPath` + `Games`) and retired games (`LocalPath` + `Dead`) land under `%APPDATA%\Inner Space\` by default, and the asset directory stays read-only unless the user points `LocalPath` at it. ADR 0002 decision 5 names the only writes into the game directory. [DESIGN]
 6. **The port writes the same keys at the same events** as the original. `Calibrate` receives the constant of ADR 0001, decision 9. A Factory build that reads the same file then sees a valid value. [DESIGN]
 7. **No `GRMSETUP.EXE`.** Where the original starts `GRMSETUP.EXE` when the INI is missing, the port regenerates the file instead ([formats.md](../re/formats.md#files-and-sections)). [DESIGN] [BYTES seg6:0x791]
+
+8. **Atomic saves.** The port writes the whole file at every save (there is no per-key profile write into a port-owned path), so it writes a temporary file beside the INI and replaces the INI with `MoveFileExW(MOVEFILE_REPLACE_EXISTING)`, and a crash mid-write leaves the previous file intact. [DESIGN] [REF Win32 SDK, MoveFileEx]
 
 ## Alternatives
 - **The Windows directory, as the original:** needs elevation or relies on virtualization, which a 64-bit process does not get. [DESIGN]

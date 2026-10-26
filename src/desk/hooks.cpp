@@ -7,11 +7,14 @@
 
 #include <cstdio>
 #include <ctime>
+#include <filesystem>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 
 #include "app/app.h"
+#include "assets/asset_store.h"
 #include "desk/desk.h"
 #include "desk/gdi_desk.h"
 #include "formats/ne.h"
@@ -154,6 +157,45 @@ private:
     Desk desk_;
 };
 
+// INI ShipPath resolved as ADR 0004 decision 4 (the same rule as src/dialogs/hooks.cpp): the
+// key's directory when it holds MASTER.SHP, else the asset directory's SHIPS\, else the asset
+// directory [DESIGN].
+std::filesystem::path ship_dir() {
+    std::error_code ec;
+    const std::string s = g.ini ? g.ini->get_string(settings::kGameSection, "ShipPath", "") : std::string();
+    if (!s.empty()) {
+        const int n = MultiByteToWideChar(1252, 0, s.data(), static_cast<int>(s.size()), nullptr, 0);
+        std::wstring w(static_cast<std::size_t>(n), L'\0');
+        MultiByteToWideChar(1252, 0, s.data(), static_cast<int>(s.size()), w.data(), n);
+        const std::filesystem::path p(w);
+        if (std::filesystem::exists(p / L"MASTER.SHP", ec)) return p;
+    }
+    if (std::filesystem::exists(g.asset_dir / L"SHIPS" / L"MASTER.SHP", ec)) return g.asset_dir / L"SHIPS";
+    return g.asset_dir;
+}
+
+// seg15:0x2a08's record lookup: MainShip against SHP + 0x0a by exact lstrcmp, then the body
+// record SHP + 0x21 and its graphic BOD + 0x21 [BYTES seg15:0x2a2f seg15:0x2a50 seg15:0x2b8f].
+std::optional<ShipArt> ship_art(const std::string& name) {
+    if (!g.store) return std::nullopt;
+    try {
+        const assets::Ships ships = g.store->ships(ship_dir());
+        const fmt::ShipRecord* r = ships.find(name);
+        if (!r) return std::nullopt;
+        const fmt::BodyRecord* b = ships.body(*r);
+        if (!b || b->bitmap_id == fmt::kBodyBitmapFromFile) return std::nullopt;  // [OPEN] a .DIB file
+        ShipArt a;
+        a.body = g.store->sprite(b->bitmap_id);
+        a.id = b->bitmap_id;
+        a.a = r->byte_07;
+        a.b = r->byte_08;
+        return a;
+    } catch (const std::exception& x) {
+        app::log_todo(std::string("launch ship: ") + x.what(), "seg15:0x2a08");
+        return std::nullopt;
+    }
+}
+
 std::unique_ptr<DeskHost> g_host;
 std::unique_ptr<GdiDesk> g_canvas;
 std::unique_ptr<SceneHook> g_scene;
@@ -167,7 +209,8 @@ void install_desk_hooks(App&) {
     using namespace is::desk;
     g_host = std::make_unique<DeskHost>();
     g_canvas = std::make_unique<GdiDesk>([] { return g.gfx.get(); },
-                                         [](const std::string& w, const char* a) { log_todo(w, a); });
+                                         [](const std::string& w, const char* a) { log_todo(w, a); },
+                                         ship_art);
     g_scene = std::make_unique<SceneHook>(*g_canvas, *g_host);
     intro::set_desk_scene(g_scene.get());
 }
