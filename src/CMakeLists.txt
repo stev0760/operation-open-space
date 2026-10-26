@@ -54,7 +54,7 @@ endif()
 # window and the briefing. Each directory is a library of its *.cpp, so parallel work never
 # edits this file; src/app/app.h declares their hook points (install_*_hooks).
 set(IS_PART_LIBS)
-foreach(_part dialogs help briefing nav)
+foreach(_part dialogs help briefing nav install desk)
   file(GLOB _part_sources CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${_part}/*.cpp)
   if(_part_sources AND TARGET isgfx)
     add_library(is${_part} STATIC ${_part_sources})
