@@ -26,6 +26,12 @@ OptionsResult parse_options(const std::vector<std::filesystem::path>& args) {
         } else if (same(a, "--ini")) {
             slot = &r.options.ini;
             name = "--ini";
+        } else if (same(a, "--install")) {
+            slot = &r.options.install;
+            name = "--install";
+        } else if (same(a, "--to")) {
+            slot = &r.options.to;
+            name = "--to";
         } else {
             r.error = "unknown argument: " + fmt::path_utf8(a);
             return r;
@@ -40,6 +46,8 @@ OptionsResult parse_options(const std::vector<std::filesystem::path>& args) {
         }
         *slot = args[++i];
     }
+    if (r.options.to && !r.options.install) r.error = "--to needs --install";
+    else if (r.options.install && r.options.game_dir) r.error = "--install and --game exclude each other";
     return r;
 }
 

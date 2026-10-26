@@ -7,11 +7,14 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
 
 #include "formats/ships.h"
+#include "shell/rng.h"
+#include "shell/shared_rules.h"
 
 namespace is::dialogs {
 
@@ -165,18 +168,21 @@ bool limited_ship_refused(int x5, const std::string& ship);
 int zoom_index(int set_size);
 int size_for_zoom(int index);
 
-// A volume label as the find-first of attribute 8 returns it, 8.3 with a '.' after 8
-// characters: the '.' at index 8 of a name longer than 7 characters is removed, and an empty
-// or failed result is "Unknown_HD" [BYTES ISPACE.DLL seg10:0x2138 seg10:0x214c seg10:0x215a]
-// [BYTES seg15:0x65cc seg15:0x65da seg15:0x6602].
-std::string label_text(const std::optional<std::string>& find_first_name);
-// A Win32 volume label (GetVolumeInformation, up to 32 characters) as the Win16 find-first
-// gives it: the first 8 characters, a '.', the next 3 [DESIGN].
-std::optional<std::string> label_as_find_first(const std::string& win32_label);
-// "X: " + the label text [BYTES ISPACE.DLL seg10:0x216d].
+// drop_label_dot, label_text and label_as_find_first live in shell/shared_rules.h.
+using shell::drop_label_dot;
+using shell::label_as_find_first;
+using shell::label_text;
+// The New Game DRIVE list's label (ISPACE.DLL seg10:0x1e7c): "Unknown_HD" (DGROUP:0x320,
+// exact case) only when the find-first fails (null); a found name is kept as found, an empty
+// one too; then the '.' rule, which leaves "Unknown_HD" as it is [BYTES ISPACE.DLL seg10:0x2138
+// seg10:0x2145 seg10:0x214c seg10:0x2187 seg10:0x2197].
+std::string drive_label_text(const std::optional<std::string>& find_first_name);
+// "C: " (DGROUP:0x32b) with its letter raised to the drive's, + drive_label_text
+// [BYTES ISPACE.DLL seg10:0x216d seg10:0x2178 seg10:0x217a seg10:0x20e1].
 std::string drive_entry(char letter, const std::optional<std::string>& find_first_name);
-// The entry whose letter equals Drive's first character, else 0 [BYTES ISPACE.DLL
-// seg10:0x2197 seg10:0x219f].
+// The selection: the index of the entry whose letter equals Drive's first byte (a
+// case-sensitive byte compare, made for every listed drive, so the last equal entry wins),
+// else 0 [BYTES ISPACE.DLL seg10:0x20ab seg10:0x2154 seg10:0x2157 seg10:0x215a seg10:0x2164].
 int drive_index(const std::vector<std::string>& entries, const std::string& drive_key);
 // seg15:0x6558: 'C' + offset, string 937 ':', the label text of drive 'C' + offset.
 std::string drive_text(int offset, const std::string& colon,
@@ -244,11 +250,44 @@ bool order_phone_hidden(int x4);
 // wsprintf of a template text with %d conversions only (static 712's "%d/%d/%d" with tm_mon +
 // 1, tm_mday and tm_year) [BYTES ISPACE.DLL seg10:0x259].
 std::string format_ints(const std::string& fmt, const std::vector<int>& args);
-// ltoa(serial, 10) of the IGRAPHIC.DLL #5500 110 record: the dword at +6 [OPEN: the record
-// layout is not in the docs; read from ISPACE.DLL seg10:0x5dfe, words 3 and 4]. Null when the
-// record is short, its dword is 0 or its word +4 is above 8, where the original draws a new
-// serial and writes it back (ISPACE.DLL seg10:0x492) [OPEN].
-std::optional<std::string> order_serial(const std::vector<std::uint8_t>& record);
+// The serial record IGRAPHIC.DLL #5500 110 (formats.md "Resources rewritten in place"), as
+// ISPACE.DLL seg10:0x5dfe reads it: dword +0 the volume serial (not used by the port), signed
+// word +4 the attempt counter, dword +6 the serial [BYTES ISPACE.DLL seg10:0x5e8c seg10:0x5e90
+// seg10:0x5ea1]. Null when the resource is shorter than 10 bytes.
+struct SerialRecord {
+    std::int32_t serial = 0;  // +6, DGROUP:0x154c
+    int count = 0;            // +4, signed 16-bit
+    bool operator==(const SerialRecord& o) const { return serial == o.serial && count == o.count; }
+};
+std::optional<SerialRecord> serial_record(const std::vector<std::uint8_t>& resource);
+// ISPACE.DLL seg10:0x492 after srand: n = rand() % 10 + 3 rounds, each computing v afresh from
+// the 16-bit terms, D * (rand() % 17 + 813) with D the date number (x5 of command 8, ISPACE.DLL
+// DGROUP:0x213a) sign-extended, the v < 21400 top-up, labs, the 600000 < v < 700000 fold and
+// (rand() % 6) * 100000 [BYTES ISPACE.DLL seg10:0x4ac-0x618]. `r` is ISPACE.DLL's own copy of
+// the Microsoft C generator (seg3:0x650 srand, seg3:0x668 rand).
+std::int32_t generate_serial(shell::Rng& r, int date_number);
+// The same with srand(seed) first; the original seeds with GetCurrentTime's low word
+// [BYTES ISPACE.DLL seg10:0x4a0 seg10:0x4a6].
+std::int32_t generate_serial(std::uint16_t seed, int date_number);
+// seg10:0x5dfe(hDlg, bump) on a record read: a counter above 8 (signed) or a zero serial draws
+// a new serial and sets the counter to 0; otherwise a non-zero bump adds 1 to the counter
+// (16-bit). `changed` says the record differs from `in` (the original writes it back either
+// way) [BYTES ISPACE.DLL seg10:0x5ea1 seg10:0x5ea8 seg10:0x5ec1 seg10:0x5ed0 seg10:0x5edc
+// seg10:0x5ef8 seg10:0x5f02].
+struct SerialStep {
+    SerialRecord record;
+    bool regenerated = false;
+    bool changed = false;
+};
+SerialStep serial_step(const SerialRecord& in, bool bump,
+                       const std::function<std::int32_t()>& generate);
+// ltoa(v, 10) into control 700 [BYTES ISPACE.DLL seg10:0x5f5c seg10:0x62e].
+std::string serial_text(std::int32_t v);
+// The port's copy of the record (ADR 0008 decision 1: the port never writes a game file): keys
+// Serial and SerialCount of the port INI's [Registration] section, read and written only
+// there [DESIGN, for ADR 0008].
+inline constexpr const char* kSerialKey = "Serial";
+inline constexpr const char* kSerialCountKey = "SerialCount";
 // seg10:0x80a8 opens Order at most 20 times per run (counter DGROUP:0x921e) [BYTES seg10:0x80b5
 // seg10:0x80bc].
 constexpr int kOrderLimit = 20;

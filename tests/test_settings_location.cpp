@@ -70,6 +70,13 @@ TEST_CASE("INI location: %APPDATA% by default, portable next to the executable, 
     CHECK(resolve_ini_location(std::nullopt, exe, appdata, t.path() / "game").source ==
           IniSource::kPortable);
 
+    // nor when the executable sits in an install set (INSTALL.INI beside it): that INSPACE.INI
+    // is the set's own, the install step's source (ADR 0008 decision 1) [DESIGN]
+    write_text(exe / "INSTALL.INI", "[Vers]\r\nV=12908\r\n");
+    CHECK(resolve_ini_location(std::nullopt, exe, appdata).source == IniSource::kAppData);
+    fs::remove(exe / "INSTALL.INI");
+    CHECK(resolve_ini_location(std::nullopt, exe, appdata).source == IniSource::kPortable);
+
     const fs::path named = t.path() / "else" / "my.ini";
     loc = resolve_ini_location(named, exe, appdata);
     CHECK(loc.source == IniSource::kOverride);
@@ -157,11 +164,23 @@ TEST_CASE("settings: the [Registration] keys are read, never written") {
     CHECK(reg.vidsp == 12);
     CHECK(reg.bit32sp == -7);
     CHECK(reg.pdev == 700);
-    // an empty section is present: the Windows files are not consulted, the values read 0
+    // a section without the three values is absent, so the Windows files are read: an empty
+    // one, or one holding only the Order dialog's Serial and SerialCount (ADR 0008 decision 2)
     write_text(p, "[Registration]\r\n");
     IniFile empty(p);
     reg.load(empty);
+    CHECK_FALSE(reg.present);
+    CHECK(reg.vidsp == 0);
+    write_text(p, "[Registration]\r\nSerial=5\r\nSerialCount=1\r\n");
+    IniFile serial_only(p);
+    reg.load(serial_only);
+    CHECK_FALSE(reg.present);
+    // one value is enough; the others read 0
+    write_text(p, "[Registration]\r\nPDev=3\r\n");
+    IniFile one(p);
+    reg.load(one);
     CHECK(reg.present);
+    CHECK(reg.pdev == 3);
     CHECK(reg.vidsp == 0);
     // GameSettings::store writes [Inner Space] only
     GameSettings s = GameSettings::defaults(640);

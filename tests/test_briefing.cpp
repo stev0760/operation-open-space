@@ -66,6 +66,12 @@ public:
     void icon(int x, int y, int w, int h, int sx, int sy, int sw, int sh) override {
         put("icon %d %d %d %d %d %d %d %d", x, y, w, h, sx, sy, sw, sh);
     }
+    bool slots = true;
+    bool has_slot(int) override { return slots; }
+    void slot_blit(int slot, int x, int y, int w, int h, int sx, int sy, int sw,
+                   int sh) override {
+        put("slot %d %d %d %d %d %d %d %d %d", slot, x, y, w, h, sx, sy, sw, sh);
+    }
 };
 
 class FakeHost : public Host {
@@ -77,7 +83,13 @@ public:
         {3037, "%# OUT TO GET YOU."}, {1189, "CONCENTRATE ON GETTING THE ICONS."},
         {1190, "THIS DIRECTORY HAS FALLEN ILL WITH VIRUSES!"},
         {1998, "THE ICONS HAVE BEEN INFECTED BY VIRUSES!"}, {10153, "Rocks"},
-        {10170, "Viruses"}, {797, " AND"}};
+        {10170, "Viruses"}, {797, " AND"}, {311, "GOOD"}, {590, "It's "},
+        {639, "Morning"}, {640, "Afternoon"}, {641, "Evening"}, {642, "Late"},
+        {645, "Welcome to Inner Space"}, {936, "Entering Drive "}, {523, "REALITY CHECK"},
+        {2522, "(%<this is you%>%<from %? team%>)"}, {2053, "YOU HAVE BEEN"},
+        {3035, "WAVE %d%N%s%NSCORE : %l%N%NCAPTURED: %#%NDESTROYED : %#%NCREDIT : %s "
+               "ICONS%NRESOURCES : %s ICONS"},
+        {12530, "Defenders"}};
     std::map<int, std::string> pages = {{300, "IF YOU CAPTURE AN ICON"}};
     std::vector<std::string> todos;
     std::vector<int> sounds;
@@ -323,9 +335,9 @@ TEST_CASE("briefing: pages") {
     CHECK(page_resource(3, 9, 0) == 3);
     CHECK(page_resource(15, 0, 2) == 322);
     CHECK(page_resource(17, 0, 0) == 137);
-    CHECK(page_resource(402, 0, 0) == 402);
+    CHECK(page_resource(402, 0, 0) == 0);  // seg17:0x76e4 [BYTES seg17:0x313a]
     CHECK(page_resource(8, 0, 0) == 0);
-    CHECK(page_resource(406, 0, 0) == 0);
+    CHECK(page_resource(406, 0, 0) == 406);
     for (int p : {2, 3, 8, 9, 10, 11, 12, 13, 15, 16, 17}) CHECK(page_wraps(p));
     for (int p : {0, 1, 4, 5, 6, 7, 14, 18}) CHECK_FALSE(page_wraps(p));
     CHECK(slide_in_frames(3) == 150);
@@ -352,7 +364,8 @@ TEST_CASE("briefing: the typewriter's steps") {
     CHECK(tw.step(1550, 0, 0) == 0);  // the space and C
     CHECK(tw.step(1600, 0, 0) == 1);  // D, then NUL: done
     CHECK(c.count("text ") == 5);
-    CHECK(h.sounds.size() == 5);
+    CHECK(h.sounds.size() == 6);  // the CRT flash's 0x14, then one 0x2b per character
+    CHECK(h.sounds.front() == 0x14);
     // Done: the cursor blinks every 400 ms, black first.
     c.ops.clear();
     CHECK(tw.step(1650, 0, 0) == 1);
@@ -446,16 +459,21 @@ TEST_CASE("briefing: the phase cycle of a player game, ESC and the hand-off") {
     Rig r;
     r.start();
     REQUIRE(r.until_phase(1));
-    // No icons: phase 1 ends at the next frame; 2-4 pass one per frame; 5 holds 190 frames
-    // (slide-in kind 7, wave 1).
+    // No icons: phase 1 ends at the next frame; 2-4 pass one per frame; 5 is the slide-in of
+    // kind 7 (wave 1): 190 growth blits, the first in the init.
     REQUIRE(r.until_phase(5));
-    int frames = 0;
-    while (r.s.briefing_phase() == 5) {
-        r.tick();
-        ++frames;
-    }
-    CHECK(frames == 190);
-    // 11 (the ship page) holds one frame; 17 turns into 1 when PlayMode is 0.
+    CHECK(r.c.count("slot 5 ") == 1);
+    while (r.s.briefing_skip() == 0) r.tick();
+    CHECK(r.c.count("slot 5 ") == 190);
+    // Its last growth frame: (333, 264, 80, 80) from cell (a / 2) of the strip, and the page
+    // #5000 303 from (503, 254) (start-0001).
+    CHECK(r.c.with("slot 5 ").back().compare(0, 21, "slot 5 333 264 80 80 ") == 0);
+    // Then the page, the 51 shrink frames and 1000 ms.
+    while (r.s.briefing_skip() == 1) r.tick();
+    const auto before = r.c.count("slot 5 ");
+    REQUIRE(r.until_phase(6));
+    CHECK(r.c.count("slot 5 ") - before == 51);
+    // 11 (the ship page) flies, types and flies out; 17 turns into 1 when PlayMode is 0.
     REQUIRE(r.until_phase(17));
     r.tick();
     CHECK(r.s.briefing_phase() == 1);
@@ -563,4 +581,217 @@ TEST_CASE("briefing: phase 1 with three icons") {
     CHECK(r.c.with("icon ").front() == "icon 392 324 64 64 4 4 36 36");
     REQUIRE(r.until_phase(2));
     CHECK(r.t - r.b.phase1_end() < 1000);  // DGROUP:0x187a was armed, then passed
+}
+
+// ---- the remaining pages (stage 3d)
+
+namespace {
+// The phases in the order they were entered, and the frames each lasted, over one cycle from
+// phase 1 back to phase 1.
+struct Cycle {
+    std::vector<int> order;
+    std::map<int, int> frames;
+};
+Cycle one_cycle(Rig& r) {
+    Cycle c;
+    REQUIRE(r.until_phase(1));
+    int last = -1;
+    for (int i = 0; i < 20000; ++i) {
+        const int p = r.s.briefing_phase();
+        if (p != last) {
+            if (last != -1 && p == 1) break;
+            c.order.push_back(p);
+            last = p;
+        }
+        ++c.frames[p];
+        r.tick();
+    }
+    return c;
+}
+}  // namespace
+
+TEST_CASE("briefing: the phase map of state 3 (0 and 3 icons)") {
+    for (int icons : {0, 3}) {
+        CAPTURE(icons);
+        Rig r;
+        r.setup.icons = icons;
+        r.setup.gone.assign(static_cast<std::size_t>(icons), false);
+        r.setup.names = {"ALPHA.EXE", "BRAVO.EXE", "CHARLIE.EXE"};
+        r.start();
+        const Cycle c = one_cycle(r);
+        // Every phase 1-17 is entered in order.
+        std::vector<int> want;
+        for (int p = 1; p <= 17; ++p) want.push_back(p);
+        CHECK(c.order == want);
+        // Phases 2-4, 6-10 and 12-17 pass in one frame each (3 and 4 need wave 0, which state 3
+        // never has); 5 (the ambulance) and 11 (the ship) run.
+        for (int p : {2, 3, 4, 6, 7, 8, 9, 10, 12, 13, 14, 15, 16, 17})
+            CHECK(c.frames.at(p) == 1);
+        CHECK(c.frames.at(5) > 190 + 51);
+        CHECK(c.frames.at(11) > 20 + 10 + 10 + 40);
+        if (icons == 0)
+            CHECK(c.frames.at(1) == 1);
+        else
+            CHECK(c.frames.at(1) > 3 * 21);
+    }
+}
+
+TEST_CASE("briefing: the icon labels seg17:0xc2e") {
+    Rig r;
+    r.setup.icons = 3;
+    r.setup.gone = {false, false, false};
+    r.setup.names = {"ALPHA.EXE", "BRAVO.EXE", "CHARLIE.EXE"};
+    r.start();
+    REQUIRE(r.until_phase(1));
+    while (r.s.briefing_skip() == 0) r.tick();
+    const auto labels = r.c.with("text 12/0/0 ");
+    REQUIRE(labels.size() == 3);
+    // At (x + 32, y + 68) of the size-64 frame, centred: ALPHA.EXE at (424, 392) (newgame-0002).
+    CHECK(labels[0] == "text 12/0/0 0200ff80 6 424 392 ALPHA.EXE");
+    CHECK(labels[1] == "text 12/0/0 0200ff80 6 504 392 BRAVO.EXE");
+    CHECK(labels[2] == "text 12/0/0 0200ff80 6 584 392 CHARLIE.EXE");
+}
+
+TEST_CASE("briefing: the slide-ins' frame counts per kind") {
+    CHECK(slide_kind(3).frames == 150);
+    CHECK(slide_kind(7).frames == 190);
+    CHECK(slide_kind(8).frames == 112);
+    CHECK(slide_kind(9).frames == 102);
+    CHECK(slide_kind(7).slot == kSlotStrip);
+    CHECK(slide_kind(3).slot == kSlotRocks);
+    CHECK(slide_kind(9).slot == kSlotViruses);
+    // Kinds 9 (phase 6, pool-9 records) and 8 (phase 8, DGROUP:0x4ee0) run their counts.
+    struct K {
+        int kind, phase;
+    };
+    for (K k : {K{9, 6}, K{8, 8}}) {
+        CAPTURE(k.kind);
+        Rig r;
+        if (k.kind == 9) r.setup.flags.f92fe = 1;
+        if (k.kind == 8) r.setup.flags.f4ee0 = 1;
+        r.start();
+        REQUIRE(r.until_phase(k.phase));
+        const std::string tag = "slot " + std::to_string(slide_kind(k.kind).slot) + " ";
+        const int start = r.c.count(tag);
+        while (r.s.briefing_skip() == 0) r.tick();
+        CHECK(r.c.count(tag) - start + 1 == slide_kind(k.kind).frames);
+    }
+}
+
+TEST_CASE("briefing: the ship page of phase 11") {
+    Rig r;
+    r.start();
+    REQUIRE(r.until_phase(11));
+    // The init draws the first fly-in frame; the flight ends at (423, 255, 99 x 99) after the
+    // 10-frame spin with cells 4, 3, 3, 2, 2, 2, 1, 1, 0, 0 (start-0001).
+    while (r.s.briefing_skip() == 0) r.tick();
+    const auto blits = r.c.with("slot -1 ");
+    REQUIRE(blits.size() > 10);
+    const std::vector<std::string> spin(blits.end() - 10, blits.end());
+    const char* sx[] = {"157", "119", "119", "81", "81", "81", "43", "43", "5", "5"};
+    for (int i = 0; i < 10; ++i) {
+        CAPTURE(i);
+        CHECK(spin[static_cast<std::size_t>(i)].find(" 99 99 " + std::string(sx[i]) + " 5 33 33") !=
+              std::string::npos);
+    }
+    CHECK(blits.size() - 10 == 20);  // 20 fly-in frames (start-0001)
+    // The labels and the 3035 page.
+    CHECK(r.c.count("text 15/10/0 02ffd600 0 231 218 REALITY CHECK") == 1);
+    CHECK(r.c.count("text 15/10/0 02ffd600 0 231 238 (this is you)") == 1);
+    CHECK(r.c.count("text 13/6/0 00ffff00 0 231 380 YOU HAVE BEEN") == 1);
+    // The page types, then the invisible spin and the fly-out; 1000 ms later phase 12.
+    while (r.s.briefing_skip() == 1) r.tick();
+    const int before = r.c.count("slot -1 ");
+    REQUIRE(r.until_phase(12));
+    const int out = r.c.count("slot -1 ") - before;
+    // 10 invisible frames and 46 fly-out frames to (793, 296, 3 x 16) (start-0001).
+    CHECK(out == 10 + 46);
+    CHECK(r.c.with("slot -1 ").back() == "slot -1 793 296 3 16 157 5 33 33");
+}
+
+TEST_CASE("briefing: the 3035 page text") {
+    FakeHost h;
+    ShipStats st;
+    st.credit = 150;
+    const std::string t = ship_page_text(h, 1, "D:\\GAMES\\", st);
+    CHECK(t == "WAVE 1\r\nD:\\GAMES\\\r\nSCORE : 0\r\n\r\nCAPTURED: 0 ICONS\r\nDESTROYED : 0 "
+               "ICONS\r\nCREDIT : 1.50 ICONS\r\nRESOURCES : 0.0 ICONS");
+}
+
+TEST_CASE("briefing: the load screen's greeting") {
+    FakeHost h;
+    // Hours 3-11 morning, 12-17 afternoon, 18-23 evening (not remapped here), 0-2 "It's Late".
+    CHECK(day_part(3) == 0);
+    CHECK(day_part(11) == 0);
+    CHECK(day_part(12) == 1);
+    CHECK(day_part(17) == 1);
+    CHECK(day_part(18) == 2);
+    CHECK(day_part(23) == 2);
+    CHECK(day_part(0) == 3);
+    CHECK(day_part(2) == 3);
+    auto g = greeting_lines(h, 1024, 768, 9, "Pilot", "D:Unknown_HD");
+    REQUIRE(g.size() == 3);
+    CHECK(g[0].text == "GOOD Morning, Pilot!");
+    CHECK(g[0].x == 512);
+    CHECK(g[0].y == 294);
+    CHECK(g[0].colour == 0x0000FF80u);
+    CHECK(g[1].text == "Welcome to Inner Space");
+    CHECK(g[1].y == 329);
+    CHECK(g[1].colour == 0x0000FF80u);
+    CHECK(g[2].text == "Entering Drive D:Unknown_HD");
+    CHECK(g[2].y == 384);
+    CHECK(g[2].colour == 0x0000FF00u);
+    CHECK(greeting_lines(h, 1024, 768, 13, "P", "")[0].text == "GOOD Afternoon, P!");
+    CHECK(greeting_lines(h, 1024, 768, 20, "P", "")[0].text == "GOOD Evening, P!");
+    CHECK(greeting_lines(h, 1024, 768, 1, "P", "")[0].text == "It's Late, P!");
+    CHECK(greeting_lines(h, 640, 480, 1, "", "")[0].y == 150);
+}
+
+TEST_CASE("briefing: the typers' gate is max(50 ms, one frame)") {
+    for (int frame : {1, 5, 14, 16, 100}) {
+        CAPTURE(frame);
+        FakeCanvas c;
+        FakeHost h;
+        Typewriter tw(c, h);
+        tw.set_text(std::string(200, 'A'));
+        tw.set_panel(202, 434, 822, 614, 100000);
+        tw.step(0, 1, 0);
+        std::vector<Tick> steps;
+        int typed = 0;
+        for (Tick t = 0; t < 3000; t += frame) {
+            tw.step(t, 0, 0);
+            const int n = c.count("text ");
+            if (n != typed) steps.push_back(t);
+            typed = n;
+        }
+        REQUIRE(steps.size() > 3);
+        const Tick want = static_cast<Tick>(((50 + frame - 1) / frame) * frame);
+        CHECK(steps[2] - steps[1] == want);
+        CHECK(steps[0] >= 500);
+    }
+    // The page typer: 10 characters per step behind the same gate.
+    FakeCanvas c;
+    FakeHost h;
+    PageTyper pt(c, h);
+    pt.set_page(std::string(100, 'B'), false, 1000);
+    pt.set_origin(0, 0, 100000);
+    pt.step(0, 1, 0, 1);
+    pt.step(500, 0, 0, 1);
+    CHECK(c.count("text ") == 10);
+    pt.step(549, 0, 0, 1);
+    CHECK(c.count("text ") == 10);
+    pt.step(550, 0, 0, 1);
+    CHECK(c.count("text ") == 20);
+}
+
+TEST_CASE("briefing: the CRT flash seg15:0x84b0") {
+    FakeCanvas c;
+    FakeHost h;
+    crt_flash(c, h, 100, 200);
+    CHECK(h.sounds == std::vector<int>{0x14});
+    CHECK(c.count("line 00ffffff ") == 2 * 198);
+    CHECK(c.count("pixel ") == 4 * 200);
+    CHECK(c.count("black 99 199 2 2") == 200);
+    // The longest arm: half-length 19.
+    CHECK(c.with("line ").back() == "line 00ffffff 81 200 119 200");
 }

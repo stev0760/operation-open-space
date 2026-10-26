@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <climits>
 
 namespace is::dialogs {
 
@@ -170,28 +171,20 @@ bool limited_ship_refused(int x5, const std::string& ship) {
 int zoom_index(int set_size) { return 2 - set_size; }
 int size_for_zoom(int index) { return 2 - index; }
 
-std::string label_text(const std::optional<std::string>& name) {
-    if (!name || name->empty()) return "Unknown_HD";
-    std::string s = *name;
-    if (s.size() > 7 && s.size() > 8 && s[8] == '.') s.erase(8, 1);
-    return s;
-}
-
-std::optional<std::string> label_as_find_first(const std::string& label) {
-    if (label.empty()) return std::nullopt;
-    if (label.size() <= 8) return label;
-    return label.substr(0, 8) + "." + label.substr(8, 3);
+std::string drive_label_text(const std::optional<std::string>& name) {
+    return drop_label_dot(name ? *name : std::string("Unknown_HD"));
 }
 
 std::string drive_entry(char letter, const std::optional<std::string>& name) {
-    return std::string(1, letter) + ": " + label_text(name);
+    return std::string(1, letter) + ": " + drive_label_text(name);
 }
 
 int drive_index(const std::vector<std::string>& entries, const std::string& drive_key) {
     const char want = drive_key.empty() ? '\0' : drive_key[0];
+    int index = 0;
     for (std::size_t i = 0; i < entries.size(); ++i)
-        if (!entries[i].empty() && entries[i][0] == want) return static_cast<int>(i);
-    return 0;
+        if (!entries[i].empty() && entries[i][0] == want) index = static_cast<int>(i);
+    return index;
 }
 
 std::string drive_text(int offset, const std::string& colon,
@@ -280,13 +273,59 @@ std::string format_ints(const std::string& fmt, const std::vector<int>& args) {
     return out;
 }
 
-std::optional<std::string> order_serial(const std::vector<std::uint8_t>& record) {
+std::optional<SerialRecord> serial_record(const std::vector<std::uint8_t>& record) {
     if (record.size() < 10) return std::nullopt;
-    const int count = word16(rd16(record, 4));
-    const auto serial = static_cast<std::int32_t>(rd32(record, 6));
-    if (count > 8 || serial == 0) return std::nullopt;
-    return std::to_string(serial);
+    return SerialRecord{static_cast<std::int32_t>(rd32(record, 6)), word16(rd16(record, 4))};
 }
+
+std::int32_t generate_serial(shell::Rng& r, int date_number) {
+    // Each term is a 16-bit value sign-extended into the dword DGROUP:0x154c; the remainders of
+    // the non-negative rand() are non-negative, so the casts only mark the widths.
+    const std::int32_t d = word16(date_number);  // DGROUP:0x213a, cwd [BYTES seg10:0x535]
+    const int n = r.rand() % 10 + 3;               // [BYTES ISPACE.DLL seg10:0x4b4 seg10:0x4b7]
+    std::int32_t v = 0;
+    for (int i = 0; i < n; ++i) {
+        v = word16((r.rand() % 5 + 1) * 2931);   // seg10:0x4d1, imul 0xb73
+        v += word16((r.rand() % 32) << 2);       // seg10:0x4ea
+        v += word16((r.rand() % 50) * 17);       // seg10:0x501
+        const int a = r.rand() % 321;            // seg10:0x512, then seg10:0x51f
+        v += word16(a + r.rand() % 1242);
+        // _lmul(D, rand() % 17 + 813) (seg3:0xfe), D pushed before the rand call
+        // [BYTES ISPACE.DLL seg10:0x53c seg10:0x554].
+        v = static_cast<std::int32_t>(static_cast<std::uint32_t>(v) +
+                                      static_cast<std::uint32_t>(d * (r.rand() % 17 + 813)));
+        if (v < 21400) {  // signed [BYTES ISPACE.DLL seg10:0x567-0x576]
+            v += word16((r.rand() % 4 + 2) * 1234);  // seg10:0x585
+            v += r.rand() % 1010;                     // seg10:0x597
+        }
+        if (v < 0 && v != INT32_MIN) v = -v;  // labs, seg2:0x824
+        if (v > 600000 && v < 700000) v -= 500000;  // [BYTES ISPACE.DLL seg10:0x5bf-0x5dd]
+        v += (r.rand() % 6) * 100000;               // seg3:0x53c [BYTES ISPACE.DLL seg10:0x600]
+    }
+    return v;
+}
+
+std::int32_t generate_serial(std::uint16_t seed, int date_number) {
+    shell::Rng r;
+    r.srand(seed);
+    return generate_serial(r, date_number);
+}
+
+SerialStep serial_step(const SerialRecord& in, bool bump,
+                       const std::function<std::int32_t()>& generate) {
+    SerialStep s{in, false, false};
+    if (in.count > 8 || in.serial == 0) {
+        s.record.serial = generate();
+        s.record.count = 0;
+        s.regenerated = true;
+    } else if (bump) {
+        s.record.count = word16(in.count + 1);
+    }
+    s.changed = !(s.record == in);
+    return s;
+}
+
+std::string serial_text(std::int32_t v) { return std::to_string(v); }
 
 bool needs_important(int edition, int accept) { return edition == 2 && accept != kAccepted; }
 bool restore_refused(int edition, int player) { return edition == 0 && player != 0; }

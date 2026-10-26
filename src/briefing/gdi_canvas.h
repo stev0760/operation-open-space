@@ -30,6 +30,10 @@ public:
     int text_width(const Font& f, const std::string& cp1252) override;
     void clip(bool on, int l, int t, int r, int b) override;
     void icon(int x, int y, int w, int h, int sx, int sy, int sw, int sh) override;
+    // Slot 5, the logo strip of seg10:0x39a8, from the renderer; the other slots are the wave
+    // set-up's (M3) and report false [OPEN].
+    bool has_slot(int slot) override;
+    void slot_blit(int slot, int x, int y, int w, int h, int sx, int sy, int sw, int sh) override;
 
     // The icon cells DGROUP:0x3a02 (an image of the renderer), or none.
     void set_icon_cells(gfx::ImagePtr cells) { cells_ = std::move(cells); }
@@ -40,6 +44,8 @@ private:
 
     gfx::Gfx& gfx_;
     gfx::ImagePtr cells_;
+    gfx::ImagePtr strip_;  // DGROUP:0x39e8[5]
+    bool strip_tried_ = false;
     // The fonts by (height, width, weight): the original creates and deletes one per call; the
     // port keeps them, which draws the same [DESIGN].
     std::map<std::tuple<int, int, int>, HFONT> fonts_;

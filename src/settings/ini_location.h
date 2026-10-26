@@ -30,6 +30,8 @@ struct IniLocation {
 // Portable mode is off when `exe_dir` is the asset directory `asset_dir`: the INSPACE.INI
 // there is the distribution's own file, which the original never writes (its installer copies
 // it to the Windows directory), and ADR 0002 decision 5 keeps the game directory read-only.
+// Portable mode is also off when `exe_dir` holds INSTALL.INI: it is an install set, whose own
+// INSPACE.INI the install step copies and must not write [DESIGN] (ADR 0008 decision 1).
 // That file still reaches the port through the first-run copy only when it is the Windows
 // directory's [DESIGN] (needs an ADR 0004 amendment).
 IniLocation resolve_ini_location(const std::optional<std::filesystem::path>& override_path,

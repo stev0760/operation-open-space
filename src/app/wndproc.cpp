@@ -3,7 +3,8 @@
 // WM_MOVE seg2:0x11c0, WM_TIMER seg2:0x11f8, WM_SYSCOMMAND seg2:0xd78, WM_COMMAND seg2:0x13b2
 // and the double click seg2:0x1046 (shell.md "Start-up", "Exit", "Window geometry").
 // WM_QUERYNEWPALETTE and WM_PALETTECHANGED go to DefWindowProc: the port has no hardware palette
-// (ADR 0007 decision 5). Drawing goes to the surface of src/gfx and WM_PAINT presents it.
+// and emulates the first message's effect at every activation instead (ADR 0007 decision 5,
+// palette_message below). Drawing goes to the surface of src/gfx and WM_PAINT presents it.
 #include <windows.h>
 
 #include <cstdio>
@@ -14,7 +15,9 @@
 #include "app/app.h"
 #include "dialogs/hooks.h"
 #include "formats/bytes.h"
+#include "gfx/palette_message.h"
 #include "help/help.h"
+#include "intro/intro.h"
 #include "nav/nav.h"
 #include "shell/command_table.h"
 
@@ -76,21 +79,43 @@ void add_windowed_bits() {
                  SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
-// The paint routine seg2:0x970. The HUD layout seg11:0xafe (M3) runs while DGROUP:0x8f64 is
-// set; a clear flag is only set [BYTES seg2:0x9a3-0x9b7]. The state's repaint follows. A state
-// that does not draw yet (no repaint hook) shows a black play area, PatBlt BLACKNESS on the
-// surface [DESIGN]; then the surface is presented.
+// The paint routine seg2:0x970 [BYTES seg2:0x97a-0x9b7]. It first forces DGROUP:0x8f64 in
+// state 0 while the intro phase DGROUP:0x95b8 is 4 or 5 and in states 6 and 8. Then, while
+// DGROUP:0x8f64 is set, it runs seg11:0xafe: the HUD layout (M3) and the state's repaint; a
+// clear flag is only set, and nothing is drawn. A state that does not draw yet (no repaint
+// hook) shows a black play area, PatBlt BLACKNESS on the surface [DESIGN]; then the surface is
+// presented.
 void paint_routine() {
-    if (g.hud_dirty) {
-        // TODO M3: seg11:0xafe lays out the HUD children (shell::hud_layout).
-    } else {
-        g.hud_dirty = true;
-    }
     const int s = g.game.state();
+    if (s == shell::kIntro) {  // [BYTES seg2:0x97a-0x98f]
+        if (const intro::Intro* in = intro::Intro::current())
+            if (in->phase() >= 4 && in->phase() < 6) g.hud_dirty = true;
+    }
+    if (s == shell::kAmbulance || s == shell::kJustice) g.hud_dirty = true;  // seg2:0x9a3
+    if (!g.hud_dirty) {  // seg2:0x9b7
+        g.hud_dirty = true;
+        return;
+    }
+    // seg11:0xafe (seg2:0x9b0). TODO M3: it also lays out the HUD children (shell::hud_layout).
     if (s >= 0 && s < shell::kStateCount && !g.game.hooks().repaint[s] && !g.gfx->surface().empty())
         PatBlt(g.gfx->dc(), 0, 0, g.area.w, g.area.h, BLACKNESS);
     g.game.repaint();
     g.gfx->present(g.main, true);
+}
+
+// The palette messages, emulated (ADR 0007 decision 5) [DESIGN]: WM_QUERYNEWPALETTE seg2:0x5cb
+// reached the main window at each of its activations on a 256-colour Windows, the first one
+// and the return from every dialog or child window (the game-start dialogs, the Navigation
+// window, Help, Notepad); start-0001 saw it there 8 times. With a palette (DGROUP:0x920e) its
+// InvalidateRect(NULL, TRUE) + UpdateWindow ran WM_PAINT seg2:0x7ac at once: the paint routine
+// in states 1 and 7, the post of 0x978 elsewhere, and the black erase of the class brush. The
+// port runs that sequence on the surface (src/gfx/palette_message.h) and presents it at once,
+// as UpdateWindow did, so the black is on the screen before the next dialog draws.
+void palette_message() {
+    const bool done = gfx::emulate_query_new_palette(
+        *g.gfx, g.game.state(), g.timer_seen, [] { paint_routine(); },
+        [] { PostMessageW(g.main, kMsgPaint, 0, 0); });
+    if (done && g.main) g.gfx->present(g.main, true);
 }
 
 // seg6:0x19bc: the teardown, once [BYTES seg6:0x19c9-0x1a5a].
@@ -407,6 +432,13 @@ LRESULT handle(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
             }
         }
         break;
+    case WM_ACTIVATE:  // DefWindowProc, then the emulated WM_QUERYNEWPALETTE [DESIGN]
+        // Windows sends WM_QUERYNEWPALETTE to the window being activated, once per activation;
+        // WM_ACTIVATEAPP precedes the WM_ACTIVATE of the same activation, so this one point
+        // covers both (ADR 0007 decision 5).
+        DefWindowProcW(hwnd, msg, wparam, lparam);
+        if (LOWORD(wparam) != WA_INACTIVE) palette_message();
+        return 0;
     case WM_SETFOCUS:  // seg2:0x7fa
         if (!IsIconic(hwnd) && !g.running) resume_game();
         return 0;

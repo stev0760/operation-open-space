@@ -16,6 +16,7 @@
 
 #include "shell/frame_scheduler.h"
 #include "shell/game_state.h"
+#include "shell/shared_rules.h"
 
 namespace is::briefing {
 
@@ -145,7 +146,22 @@ public:
     // seg10:0x9962(0, dc, x, y, w, h, DGROUP:0x3a02, sx, sy, sw, sh, SRCCOPY): a stretched
     // copy from the icon cells.
     virtual void icon(int x, int y, int w, int h, int sx, int sy, int sw, int sh) = 0;
+    // Whether the image slot DGROUP:0x39e8[slot] holds a picture the port can draw.
+    virtual bool has_slot(int /*slot*/) { return false; }
+    // SetStretchBltMode(3) and seg10:0x9962(0, dc, x, y, w, h, DGROUP:0x39e8[slot], sx, sy,
+    // sw, sh, SRCCOPY).
+    virtual void slot_blit(int /*slot*/, int /*x*/, int /*y*/, int /*w*/, int /*h*/, int /*sx*/,
+                           int /*sy*/, int /*sw*/, int /*sh*/) {}
 };
+
+// The image slots the briefing draws from (DGROUP:0x39e8[n], shell.md "Image slots"): slot 5
+// is the logo strip of seg10:0x39a8 (14 cells of 40 x 40 at x 6 + 46k), slot 7 the rocks and
+// slot 0x16 the viruses' slot. kSlotShip stands for the player ship's slot, whose index comes
+// from the roster (word DGROUP:0x70e0 + 0x15a * ship + 0x28, M3) [OPEN].
+constexpr int kSlotStrip = 5, kSlotRocks = 7, kSlotViruses = 0x16, kSlotShip = -1;
+// The colour of the placeholder outline the port draws where a slot's picture is not loaded
+// yet [OPEN: the pools' images come with the wave set-up, M3].
+constexpr Colour kPlaceholder = 0x02808080;
 
 class Host : public Strings {
 public:
@@ -245,8 +261,54 @@ int page_resource(int kind, int meal, int ship_page);
 bool page_wraps(int phase);
 
 // The phases' frame counts of the object slide-in seg17:0x1b3e for kinds 3, 7, 8 and 9
-// (shell.md "Open questions"). Other kinds: 0.
+// [BYTES seg17:0x1b6d seg17:0x1bc2 seg17:0x1bf9 seg17:0x1bd8]. Other kinds: 0.
 int slide_in_frames(int kind);
+// seg17:0x1b3e's constants per kind [BYTES seg17:0x1b68-0x1c10]: the image slot, the frame
+// count, the cells and the base size, plus the source cell and gutter of the pool record
+// DGROUP:0x1df8[kind] + 0x70r (+0x22, +0x24).
+struct SlideKind {
+    int slot = 0, frames = 0, cells = 0, base = 0;
+    int cell = 0, gutter = 0;
+};
+SlideKind slide_kind(int kind);
+
+// The CRT flash seg15:0x84b0(x, y) [BYTES seg15:0x84b0-0x8603]: sound 0x14 (state 3 is never
+// state 0 step 7), a WHITE_PEN cross growing to half-length 19 and its erasure to black.
+void crt_flash(Canvas& c, Host& h, int x, int y);
+
+// ---- the load screen of seg10:0x0 (shell.md "Game-start dialogs" item 13, Greeting)
+
+// seg10:0x9764(0), shared with the desk (shell/shared_rules.h).
+using shell::day_part;
+struct GreetingLine {
+    int x = 0, y = 0;
+    Colour colour = 0;
+    std::string text;  // drawn in bitmap font 0, align 6
+};
+// seg15:0x6640's three lines for W = DGROUP:0x90ea, H = DGROUP:0x10, the local hour, the
+// player DGROUP:0x380c and seg15:0x6558's drive text [BYTES seg15:0x6679-0x6810].
+std::vector<GreetingLine> greeting_lines(Strings& s, int W, int H, int hour,
+                                         const std::string& player, const std::string& drive);
+// The sounds seg15:0x6640 plays: seg10:0x744c(0x6e) is 0x69 then 0x6e, then 0x6f [BYTES
+// seg15:0x664e seg15:0x666f seg10:0x745f seg10:0x7465].
+constexpr int kGreetingSounds[3] = {0x69, 0x6e, 0x6f};
+
+// ---- the ship page (phase 11)
+
+// The values of seg17:0x33ee's 3035 page for the player's ship. The port has no ship records
+// before M3: they stay 0 and the host logs them [OPEN].
+struct ShipStats {
+    long score = 0;      // dword DGROUP:0x1e58
+    int captured = 0;    // word DGROUP:0x7162 + 0x15a * DGROUP:0x9646
+    int destroyed = 0;   // word DGROUP:0x7160 + 0x15a * DGROUP:0x9646
+    long credit = 0;     // dword DGROUP:0x716c + 0x15a * ship, in hundredths
+    int resources = 0;   // word DGROUP:0x715e + 0x15a * ship, in hundredths
+};
+// String 3035 formatted as seg10:0xa332 does for the player's ship [BYTES seg17:0x341c-0x347c].
+// %N is a CR LF [OPEN: the Formatter's %N bytes]; seg6:0xf54 and seg6:0x1010 print hundredths
+// as "1.50" and "0.0" (start-0001) [OPEN: their digit rules].
+std::string ship_page_text(Strings& s, int wave, const std::string& directory,
+                           const ShipStats& st);
 
 // What the entry gets from the program.
 struct Setup {
@@ -258,6 +320,8 @@ struct Setup {
     std::string directory;    // DGROUP:0x38c8
     int icons = 0;            // DGROUP:0x91fe, the icon records
     std::vector<bool> gone;   // word +0x18 of each record != 0 (captured or destroyed)
+    // The label of each record (the 35-byte record DGROUP:0x57b4 + 0x23k, seg17:0xc2e).
+    std::vector<std::string> names;
     WaveFlags flags;
 };
 
@@ -302,6 +366,13 @@ private:
     int routine(shell::GameState& s, int phase, int init);
     int phase1(shell::GameState& s, int init);  // seg17:0x600
     int slide_in(int init, int kind);           // seg17:0x1b3e
+    int race(int init);                         // seg17:0x13ca
+    int defenders(int init);                    // seg17:0x193c
+    int ship(int init);                         // seg17:0x20fa(init, 0, 0)
+    void ship_setup();                          // seg17:0x22b0-0x23ee
+    void ship_labels();                         // seg17:0x4354 and seg17:0x3ba6(0)
+    void icon_label(int k, int x, int y);       // seg17:0xc2e
+    void slide_draw(const SlideKind& k, int x, int y, int s, int sx, int sy, int sw);
     int held(int init, const char* what, const char* address);
     // seg17:0x30b0(kind, hold).
     void load_page(int phase, int kind, Tick hold);
@@ -323,7 +394,36 @@ private:
     Tick t187a_ = 0;
     int i187e_ = 0, i1880_ = 0, i1882_ = 0, i1884_ = 0;
     int pages_ox_ = 0, pages_oy_ = 0;  // DGROUP:0x5000, DGROUP:0x5002
-    int frames_left_ = 0;  // the slide-in's frame count [DESIGN: see slide_in]
+    // seg17:0x1b3e: DGROUP:0x18b6, 0x18ba, 0x18bc, 0x18be and 0x18c0.
+    Tick t18b6_ = 0;
+    int n18ba_ = 0, n18bc_ = 0, n18be_ = 0, a18c0_ = 0;
+    // seg17:0x13ca and seg17:0x193c: DGROUP:0x18a0, DGROUP:0x18b0 and the pulse DGROUP:0x18b4.
+    Tick t18a0_ = 0, t18b0_ = 0;
+    int t18b4_ = 0;
+    // seg17:0x20fa: DGROUP:0x18c2 and the flight words DGROUP:0x18c6-0x1908.
+    struct Flight {
+        Tick end_at = 0;            // DGROUP:0x18c2
+        long pass = 0;              // DGROUP:0x18c6
+        long width0 = 0, width_d = 0;   // DGROUP:0x18ca, DGROUP:0x18ce (%)
+        long px10 = 0, end = 0;     // DGROUP:0x18d2, DGROUP:0x18d6
+        long frame = 0, frames = 0; // DGROUP:0x18da, DGROUP:0x18de
+        long scale0 = 0, scale_d = 0;   // DGROUP:0x18e2, DGROUP:0x18e6 (%)
+        long mid = 0, dy = 0;       // DGROUP:0x18ea, DGROUP:0x18ee
+        long cell0 = 0, cell_d = 0; // DGROUP:0x18f2, DGROUP:0x18f6 (hundredths)
+        long motion = 0;            // DGROUP:0x18fa
+        long out = 0;               // DGROUP:0x18fe
+        int cx = 0, cy = 0;         // DGROUP:0x1902, DGROUP:0x1904
+        int x = 0, y = 0;           // DGROUP:0x1906, DGROUP:0x1908
+        int h = 0;                  // the last drawn height
+    } fl_;
+    int ship_ = 0;  // DGROUP:0x9464
+    // The phase routine's context: the phase DGROUP:0x93aa and its sub-step DGROUP:0x9462.
+    int cur_phase_ = 0;
+    shell::GameState* gs_ = nullptr;
+    int sub() const { return gs_ ? gs_->briefing_skip() : 0; }
+    void set_sub(int v) {
+        if (gs_) gs_->set_briefing_skip(v);
+    }
 };
 
 }  // namespace is::briefing

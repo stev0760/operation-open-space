@@ -9,6 +9,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include <memory>
 #include <set>
 #include <string>
@@ -81,6 +82,16 @@ void todo_once(const std::string& what, const char* address) {
 }
 
 std::wstring widen(const std::string& s) { return app::widen(s); }
+std::string narrow(const std::wstring& w) {
+    if (w.empty()) return {};
+    const int n = WideCharToMultiByte(1252, 0, w.c_str(), static_cast<int>(w.size()), nullptr, 0,
+                                      nullptr, nullptr);
+    std::string out(static_cast<std::size_t>(n > 0 ? n : 0), '\0');
+    if (n > 0)
+        WideCharToMultiByte(1252, 0, w.c_str(), static_cast<int>(w.size()), &out[0], n, nullptr,
+                            nullptr);
+    return out;
+}
 
 // The INI Drive root: the first character of Drive (default "C", 10 bytes) + ":\" [DESIGN:
 // stands for the Navigation window's selection until it exists].
@@ -153,6 +164,12 @@ Setup make_setup() {
     const auto files = icon_files(st.directory);
     st.icons = static_cast<int>(files.size());
     st.gone.assign(files.size(), false);
+    // The labels of seg17:0xc2e: the record's name, here the file name as FindFirstFile spells
+    // it [OPEN: the record DGROUP:0x57b4 + 0x23k is the wave set-up's, M3].
+    for (const auto& f : files) {
+        const auto slash = f.find_last_of(L"\\/");
+        st.names.push_back(narrow(slash == std::wstring::npos ? f : f.substr(slash + 1)));
+    }
     if (g_canvas) g_canvas->set_icon_cells(icon_cells(files, st.size_level));
     todo_once("icon records and cells of the wave set-up", "seg9:0x17d");
     return st;
@@ -195,31 +212,57 @@ void enter_briefing(shell::GameState& s) {
 
 // ---- seg10:0x0 for state 1: the state-1 set-up before the briefing
 
+// seg15:0x6558(DGROUP:0x94ac): 'C' + the INI Drive offset, string 937 and the volume label as
+// the Win16 find-first gives it, "Unknown_HD" when there is none: shell/shared_rules.h
+// label_text and label_as_find_first, as the dialogs use them [BYTES seg15:0x656b-0x6628].
+std::string drive_text() {
+    const char letter = drive_root()[0];
+    const wchar_t root[] = {static_cast<wchar_t>(letter), L':', L'\\', 0};
+    wchar_t label[MAX_PATH + 1] = L"";
+    std::string name;
+    if (GetVolumeInformationW(root, label, MAX_PATH + 1, nullptr, nullptr, nullptr, nullptr, 0))
+        name = narrow(label);
+    return std::string(1, letter) + (g_host ? g_host->lang(937) : ":") +
+           shell::label_text(shell::label_as_find_first(name));
+}
+
 void state1_setup(shell::GameState&) {
-    todo_once("state-1 set-up: palette scheme 8, the wave's resources, ThePlayer",
-              "seg10:0x0");
-    const shell::Tick start = app::now_tick();  // GetCurrentTime [BYTES seg10:0x91]
-    g_loading_drawn = false;             // DGROUP:0x92e6 = 0 [BYTES seg10:0xa9]
-    // seg9:0x22b4: string 899 + "..." (DGROUP:0x111a) in bitmap font 2, align 6, colour
-    // 0x0200FF00 at (W/2, 3H/4 + 20) [BYTES seg9:0x22e9-0x233d].
-    if (!g_loading_drawn && g.gfx && g_host) {
-        std::string text = g_host->lang(899);
-        if (text.size() > 39) text.resize(39);  // LoadString into 0x28 bytes
-        text += "...";
-        const int H = g.area.h;
-        g.gfx->font_text(2, 6, 0x0200FF00, g.area.w / 2, (H * 3) / 4 + 20, text);
-        g_loading_drawn = true;  // seg9:0x27b3
+    todo_once("state-1 set-up: palette scheme 8 and the wave's resources", "seg10:0x0");
+    // DGROUP:0x380c: INI ThePlayer (default "", 12 bytes) outside the demo [BYTES seg10:0x8c];
+    // the port has no demo yet.
+    const std::string player =
+        g.ini ? g.ini->get_string(settings::kGameSection, "ThePlayer", "", 12) : std::string();
+    const shell::Tick start = app::now_tick();  // GetCurrentTime + 2000 [BYTES seg10:0x91]
+    // The greeting seg15:0x6640: seg10:0x744c(0x6e) plays 0x69 and 0x6e, then
+    // seg10:0x754a(0x6f, W/2, H/2 - 240, 4); the sounds are logged until the sound milestone.
+    for (int id : kGreetingSounds)
+        if (g_host) g_host->sound(id);
+    if (g.gfx && g_host) {
+        PatBlt(g.gfx->dc(), 0, 0, g.area.w, g.area.h, BLACKNESS);
+        std::time_t now = std::time(nullptr);
+        std::tm tm{};
+        localtime_s(&tm, &now);
+        for (const GreetingLine& l :
+             greeting_lines(*g_host, g.area.w, g.area.h, tm.tm_hour, player, drive_text()))
+            g.gfx->font_text(0, 6, l.colour, l.x, l.y, l.text);  // seg10:0x94c4, align 6
     }
+    // The load seg9:0x22b4(0) draws LOADING GRAPHICS and the bar and erases both before it
+    // returns (DGROUP:0x92e6 = 1 at its end); no screenshot ever shows them, and the port's
+    // load is the asset store's, so the port draws neither [BYTES seg9:0x22e5-0x27b3]
+    // [ORACLE start-0001] [DESIGN: shell.md "Game-start dialogs" item 13, On screen].
+    g_loading_drawn = true;
     if (g.gfx && g.main) {
         g.gfx->present(g.main, true);
         GdiFlush();
     }
-    app::log(std::string("state 1: LOADING GRAPHICS drawn") +
+    app::log("state 1: greeting drawn at " + std::to_string(start) + " ms" +
              (g.gfx && g.gfx->alphabet() ? "" : " (no ALPHABET)"));
-    // The busy wait to start + 2000 ms [BYTES seg10:0xb7-0xc6]: shown, then the time passes
-    // without dispatching messages, as the original's loop on GetCurrentTime. The wait goes
-    // through MsgWaitForMultipleObjectsEx with an empty wake mask, which removes no message but
-    // lets the display driver show the surface (Wine flushes window surfaces there) [DESIGN].
+    // The busy wait to start + 2000 ms [BYTES seg10:0xb7-0xc6]: the time passes without
+    // dispatching messages, as the original's loop on GetCurrentTime. The wait goes through
+    // MsgWaitForMultipleObjectsEx with an empty wake mask, which removes no message but lets
+    // the display driver show the surface (Wine flushes window surfaces there) [DESIGN]. Both
+    // editions show the greeting: the unregistered oracle's black shots are Wine not refreshing
+    // during the CPU-bound wait (shell.md, item 13) [DESIGN].
     while (app::now_tick() - start < 2000)
         MsgWaitForMultipleObjectsEx(0, nullptr, 10, 0, 0);
 }

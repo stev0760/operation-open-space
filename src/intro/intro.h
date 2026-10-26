@@ -192,6 +192,22 @@ public:
 void set_game_start(GameStart* gs);
 GameStart* game_start();
 
+// The desk and launch scene of phase 6 (shell.md "Game-start dialogs" items 6-9), which
+// src/desk implements and registers with set_desk_scene() [stage 3d]. Without one (the tests'
+// default rig) the ESC flow takes step 9's exit at once, as before.
+class DeskScene {
+public:
+    virtual ~DeskScene() = default;
+    // seg15:0xcb0 after its sound 0x6e and the phase deadline, which the intro applies.
+    virtual void enter(Tick now, const Area& area) = 0;
+    // seg15:0x10be; true when step 9 ran its drawing and palette, before seg15:0x12c3.
+    virtual bool frame(Tick now) = 0;
+    virtual void escape() = 0;            // ESC in phase 6: DGROUP:0x92d4 = 9
+    virtual void space(Tick now) = 0;     // Space in phase 6 [BYTES seg11:0x7b03]
+};
+void set_desk_scene(DeskScene* d);
+DeskScene* desk_scene();
+
 // The display depth the intro tests (DGROUP:0x90ee): the port behaves as a 256-colour display
 // (ADR 0007 decision 1), so every "8 bpp and above" branch applies and the hint never shows.
 constexpr int kDepth = 8;
@@ -274,6 +290,7 @@ private:
     // the game-start flow (shell.md "From ESC to the wave")
     void escape(GameStart& gs);
     void desk_scene(GameStart& gs);  // seg15:0xcb0 and step 9 of seg15:0x10be
+    void desk_frame();               // seg15:0x10be through the registered DeskScene
     void analysing(GameStart& gs);   // seg6:0x1d9a
     void demo_keys(std::uint32_t vk, GameStart& gs);  // S, D and C
     void key_up_logged(std::uint32_t vk, Tick now);   // the keys without a GameStart

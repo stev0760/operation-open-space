@@ -144,6 +144,7 @@ void install_state_hooks();
 void install_dialog_hooks(App& app);
 void install_help_hooks(App& app);
 void install_briefing_hooks(App& app);
+void install_desk_hooks(App& app);  // src/desk/hooks.cpp: the desk scene of phase 6
 
 // ---- access from outside src/app
 

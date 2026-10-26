@@ -10,6 +10,7 @@
 #include <fstream>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -395,11 +396,46 @@ TEST_CASE("dialogs win32: Order's serial, day text and disabled Register") {
     if (!r.ok()) return;
     r.env.x4 = 12087;
     r.env.x5 = 12341;
+    // the shipdisk's IGRAPHIC.DLL #5500 110 is all zero, so seg10:0x492 draws a serial from
+    // GetCurrentTime's low word and the date number; the port keeps it in [Registration]
+    r.ini.remove(is::settings::kRegistrationSection, kSerialKey);
+    r.ini.remove(is::settings::kRegistrationSection, kSerialCountKey);
+    int saved = 0;
+    r.env.ini_changed = [&saved] { ++saved; };
+    r.env.current_time = [] { return std::uint32_t{0x00053378}; };  // low word 13176
+    const std::string serial = serial_text(generate_serial(std::uint16_t{13176}, 12341));
     Order d(r.env);
     HWND h = d.create_modeless();
     REQUIRE(h);
-    // the shipdisk's IGRAPHIC.DLL #5500 110 is all zero: the template text stays [OPEN]
-    CHECK(text_of(h, 700) == "xxxxx");
+    CHECK(text_of(h, 700) == serial);
+    CHECK(GetFocus() == GetDlgItem(h, 701));
+    CHECK(saved == 1);
+    CHECK(r.ini.get(is::settings::kRegistrationSection, kSerialKey) ==
+          std::optional<std::string>(serial));
+    CHECK(r.ini.get_int(is::settings::kRegistrationSection, kSerialCountKey, -1) == 0);
+    {  // a second opening reads the port's record: the same serial, nothing written
+        r.env.current_time = [] { return std::uint32_t{17457}; };
+        Order again(r.env);
+        HWND h2 = again.create_modeless();
+        REQUIRE(h2);
+        CHECK(text_of(h2, 700) == serial);
+        CHECK(saved == 1);
+        DestroyWindow(h2);
+    }
+    {  // a counter above 8 draws a new serial at the opening
+        r.ini.set_int(is::settings::kRegistrationSection, kSerialCountKey, 9);
+        r.env.current_time = [] { return std::uint32_t{17457}; };
+        Order again(r.env);
+        HWND h2 = again.create_modeless();
+        REQUIRE(h2);
+        const std::string fresh = serial_text(generate_serial(std::uint16_t{17457}, 12341));
+        CHECK(text_of(h2, 700) == fresh);
+        CHECK(r.ini.get_int(is::settings::kRegistrationSection, kSerialKey, 0) ==
+              generate_serial(std::uint16_t{17457}, 12341));
+        CHECK(r.ini.get_int(is::settings::kRegistrationSection, kSerialCountKey, -1) == 0);
+        CHECK(saved == 2);
+        DestroyWindow(h2);
+    }
     CHECK(text_of(h, 710) == "You are on day 12087 of your demo trial period.");
     for (int id : {694, 695, 710, 704, 696, 706}) {  // bold [BYTES ISPACE.DLL seg10:0x74]
         CAPTURE(id);

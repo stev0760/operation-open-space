@@ -455,9 +455,12 @@ bool regenerate(IniFile& ini, const fs::path& asset_dir, const fs::path& local_d
 }
 
 void RegistrationSettings::load(const IniFile& ini) {
-    present = false;
-    for (const std::string& name : ini.sections())
-        if (same_name(name, kRegistrationSection)) present = true;
+    // Present when one of the three values is there: the section also holds the Order
+    // dialog's Serial and SerialCount, which must not hide the Windows files [DESIGN ADR 0008
+    // decision 2].
+    present = ini.get(kRegistrationSection, "vidsp").has_value() ||
+              ini.get(kRegistrationSection, "32BitSP").has_value() ||
+              ini.get(kRegistrationSection, "PDev").has_value();
     vidsp = ini.get_int(kRegistrationSection, "vidsp", 0);
     bit32sp = ini.get_int(kRegistrationSection, "32BitSP", 0);
     pdev = ini.get_int(kRegistrationSection, "PDev", 0);

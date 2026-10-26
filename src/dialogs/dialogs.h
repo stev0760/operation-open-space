@@ -68,6 +68,9 @@ struct Env {
         message_box;
     // ShellExecute "open" of a text file (ADR 0008 decision 3: the system's text editor).
     std::function<void(const std::filesystem::path&)> open_text;
+    // GetCurrentTime of the serial generator's srand (ISPACE.DLL seg10:0x4a0); null means
+    // GetTickCount, the milliseconds since boot as GetCurrentTime counts them. The tests fix it.
+    std::function<std::uint32_t()> current_time;
 };
 
 // The INI writes of the dialogs, in order, as they happened (for the logs and the tests).
@@ -252,6 +255,7 @@ protected:
 
 private:
     void cleanup(int result);  // seg10:0x78e's cleanup
+    void show_serial(bool bump);  // seg10:0x5dfe(hDlg, bump)
     HWND logo_ = nullptr;
 };
 

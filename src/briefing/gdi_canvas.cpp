@@ -1,6 +1,7 @@
 #include "briefing/gdi_canvas.h"
 
 #ifdef _WIN32
+#include <exception>
 #include <string>
 
 namespace is::briefing {
@@ -106,6 +107,28 @@ void GdiCanvas::icon(int x, int y, int w, int h, int sx, int sy, int sw, int sh)
     // SetStretchBltMode(3) in seg17:0x600; seg10:0x9962's stretch with SRCCOPY.
     const int old = SetStretchBltMode(dc(), COLORONCOLOR);
     StretchBlt(dc(), x, y, w, h, cells_->hdc(), sx, sy, sw, sh, SRCCOPY);
+    SetStretchBltMode(dc(), old);
+}
+
+bool GdiCanvas::has_slot(int slot) {
+    if (slot != kSlotStrip) return false;
+    if (!strip_tried_) {
+        strip_tried_ = true;
+        try {
+            strip_ = gfx_.logo_strip();
+        } catch (const std::exception&) {
+            strip_.reset();
+        }
+    }
+    return strip_ != nullptr;
+}
+
+void GdiCanvas::slot_blit(int slot, int x, int y, int w, int h, int sx, int sy, int sw, int sh) {
+    if (!has_slot(slot)) return;
+    // SetStretchBltMode(3) and seg10:0x9962's stretch with SRCCOPY [BYTES seg17:0x1c9e
+    // seg17:0x1cde].
+    const int old = SetStretchBltMode(dc(), COLORONCOLOR);
+    StretchBlt(dc(), x, y, w, h, strip_->hdc(), sx, sy, sw, sh, SRCCOPY);
     SetStretchBltMode(dc(), old);
 }
 

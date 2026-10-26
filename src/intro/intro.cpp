@@ -37,6 +37,7 @@ const FontSpec kCreditSmall{22, 13, 0, false, "Arial"};           // seg15:0x823
 const FontSpec kPageFont{18, 10, 0, false, "Arial"};              // seg15:0x69cc
 
 GameStart* g_game_start = nullptr;  // set_game_start
+DeskScene* g_desk = nullptr;         // set_desk_scene [stage 3d]
 Intro* g_current = nullptr;          // Intro::current
 
 // The logo cell's source x in the strip: 6 + 46 cell [BYTES seg15:0x5f2e].
@@ -132,7 +133,8 @@ void Intro::phase_work(bool redraw) {
     case 5:
         if (redraw && deadline_ != now_) keys();
         break;
-    default: break;  // 1: nothing; 6 (the desk scene) is not entered by the port
+    case 6: desk_frame(); break;  // seg15:0x10be [stage 3d]
+    default: break;  // 1: nothing
     }
 }
 
@@ -773,6 +775,8 @@ void Intro::key_up_logged(std::uint32_t vk, Tick now) {
 
 void set_game_start(GameStart* gs) { g_game_start = gs; }
 GameStart* game_start() { return g_game_start; }
+void set_desk_scene(DeskScene* d) { g_desk = d; }
+DeskScene* desk_scene() { return g_desk; }
 
 Intro* Intro::current() { return g_current; }
 
@@ -821,8 +825,9 @@ void Intro::key_up(std::uint32_t vk, Tick now) {
         }
         break;
     case 0x1b: escape(*gs); break;
-    case 0x20:  // Space [BYTES seg11:0x7aea-0x7b13]; the desk scene's typing is stage 3d
+    case 0x20:  // Space [BYTES seg11:0x7aea-0x7b13]
         if (phase_ < 6 && !host_.calibrating()) deadline_ = now;
+        else if (phase_ == 6 && g_desk) g_desk->space(now);  // seg15:0x1584(1) at step 1
         break;
     default: break;
     }
@@ -850,7 +855,10 @@ void Intro::demo_keys(std::uint32_t vk, GameStart& gs) {
 // ESC (shell.md "From ESC to the wave", steps 1 and 5) [BYTES seg11:0x7a02-0x7ad8].
 void Intro::escape(GameStart& gs) {
     sound(0x6e);
-    if (phase_ == 6) return;  // DGROUP:0x92d4 = 9: the port never stays in phase 6
+    if (phase_ == 6) {  // DGROUP:0x92d4 = 9 [BYTES seg11:0x7a11]
+        if (g_desk) g_desk->escape();
+        return;
+    }
     if (edition_ == 2 && gs.accept() != 42) {  // Important Information [BYTES seg11:0x7a43]
         sound(0x13);                             // [BYTES seg11:0x7a39]
         const int r = gs.dialog(11);
@@ -884,9 +892,17 @@ void Intro::escape(GameStart& gs) {
     gs.open_navigation();  // seg6:0x1c72(1) [BYTES seg11:0x7ad8]
 }
 
-// seg15:0xcb0, the desk scene, is stage 3d: the port takes step 9's exit at once
-// (shell.md "Desk scene frame", step 9) [DESIGN].
+// seg15:0xcb0, the desk scene entry: sound 0x6e and the 90 s phase deadline here, the scene in
+// src/desk [BYTES seg15:0xcc7 seg15:0xcda]. Without a registered scene the port takes step 9's
+// exit at once (shell.md "Desk scene frame", step 9) [DESIGN].
 void Intro::desk_scene(GameStart& gs) {
+    if (g_desk) {
+        sound(0x6e);
+        deadline_ = now_ + 90000;
+        area_ = host_.area();
+        g_desk->enter(now_, area_);
+        return;
+    }
     todo_once("desk scene (stage 3d); step 9's exit follows at once", "seg15:0xcb0");
     canvas_.black(0, 0, area_.w, area_.h);  // the full-screen BLACKNESS [BYTES seg15:0x1286]
     host_.present_wait(450);                // [BYTES seg15:0x12aa]
@@ -897,6 +913,17 @@ void Intro::desk_scene(GameStart& gs) {
     gs.clear_wave_if_new();
     analysing(gs);
     gs.open_navigation();  // seg15:0x12dd
+}
+
+// seg15:0x10be through the registered scene; step 9 ends in seg15:0x12c3-0x12dd.
+void Intro::desk_frame() {
+    if (!g_desk || !g_desk->frame(now_)) return;
+    phase_ = 7;  // seg15:0x12c3
+    GameStart* gs = g_game_start;
+    if (!gs) return;
+    gs->clear_wave_if_new();  // DGROUP:0x91f8 = 0 when DGROUP:0x92e4 = 0 [BYTES seg15:0x12c9]
+    analysing(*gs);           // seg6:0x1d9a [BYTES seg15:0x12d6]
+    gs->open_navigation();    // seg6:0x1c72(1) [BYTES seg15:0x12dd]
 }
 
 // seg6:0x1d9a: "Analysing Drive " + the drive text + "..." in bitmap font 0, colour 0x0000FF00,

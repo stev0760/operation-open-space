@@ -309,16 +309,15 @@ TEST_CASE("dialogs: Order's texts and Important Information's rule") {
     CHECK(format_ints("You are on day %d of your demo trial period.", {12087}) ==
           "You are on day 12087 of your demo trial period.");
     CHECK(format_ints("100%%", {}) == "100%");
-    // the serial record: count +4, dword +6
+    // the serial record: count +4, dword +6 (tests/test_dialogs_serial.cpp has the rest)
     std::vector<std::uint8_t> rec(10, 0);
-    CHECK_FALSE(order_serial(rec).has_value());  // the shipdisk's zero record
+    CHECK(serial_record(rec) == std::optional<SerialRecord>(SerialRecord{0, 0}));
     rec[6] = 0x32;  // 10197298 = 0x009B9932, the serial of dialogs-0001
     rec[7] = 0x99;
     rec[8] = 0x9b;
-    CHECK(order_serial(rec) == std::optional<std::string>("10197298"));
-    rec[4] = 9;  // a count above 8
-    CHECK_FALSE(order_serial(rec).has_value());
-    CHECK_FALSE(order_serial(std::vector<std::uint8_t>(9, 1)).has_value());
+    rec[4] = 9;
+    CHECK(serial_record(rec) == std::optional<SerialRecord>(SerialRecord{10197298, 9}));
+    CHECK_FALSE(serial_record(std::vector<std::uint8_t>(9, 1)).has_value());
     CHECK(needs_important(2, 0));
     CHECK(needs_important(2, 1));  // 35-day codes write Accept = 1
     CHECK_FALSE(needs_important(2, 42));

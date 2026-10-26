@@ -192,8 +192,9 @@ struct PortSettings {
 // The port's copy of the registration values (ADR 0008 decision 1): section [Registration],
 // keys vidsp, 32BitSP and PDev, which the original keeps in SYSTEM.INI [386Enh] and WIN.INI
 // [windows] (formats.md "WIN.INI, SYSTEM.INI and other files"). The port reads them and never
-// writes them. `present` is false when the file has no [Registration] section; the caller then
-// reads the Windows files (ADR 0008 decision 2). Absent keys read 0, as GetPrivateProfileInt's
+// writes them. `present` is false when none of the three keys is there (a section holding only
+// the Order dialog's Serial and SerialCount does not count); the caller then reads the Windows
+// files (ADR 0008 decision 2) [DESIGN]. Absent keys read 0, as GetPrivateProfileInt's
 // default in seg10:0x885e [BYTES seg10:0x8a26 seg10:0x8a3f seg10:0x8a52].
 constexpr std::string_view kRegistrationSection = "Registration";
 struct RegistrationSettings {

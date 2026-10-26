@@ -234,6 +234,12 @@ void draw_label(Canvas& c, const Label& l) {
 }
 
 // ---- the typewriter seg9:0x8d18
+//
+// Rate [DESIGN]: both typers run one step on the first frame at or after their gate and re-arm
+// it to now + 50 ms (docs/re/shell.md "Screen states", State 3, Page typer, **Rate**). The port
+// keeps that gate as the only pace, so a step takes max(50 ms, one frame) on every machine: at
+// the port's state-3 cadence of 72 Hz (frame_scheduler.h) a step is the fourth frame after the
+// last, 55.6 ms, against the 64 ms of the Wine oracle's 16-ms frames (newgame-0002).
 
 int Typewriter::step(Tick now, int reset, int instant) {
     // DGROUP:0x9460 (the help window) is 0 in state 3: the briefing frame does not run while it
@@ -241,7 +247,7 @@ int Typewriter::step(Tick now, int reset, int instant) {
     if (reset) {  // seg9:0x8d26
         x_ = left_ + 25;
         y_ = top_ + 55;
-        if (!instant) h_.todo("CRT flash seg15:0x84b0 at the briefing text", "seg15:0x84b0");
+        if (!instant) crt_flash(c_, h_, x_ + 10, y_ + 10);  // [BYTES seg9:0x8d60]
         gate_ = now + 500;
         done_ = 0;
         index_ = 0;
@@ -319,7 +325,7 @@ int PageTyper::step(Tick now, int reset, int instant, int phase) {
         if (now < gate_) return 0;  // seg17:0x2ced
         gate_ = now + 50;
     } else {
-        if (!instant) h_.todo("CRT flash seg15:0x84b0 at a briefing page", "seg15:0x84b0");
+        if (!instant) crt_flash(c_, h_, ox_ + 15, oy_ + 10);  // [BYTES seg17:0x2c87]
         done_ = 0;
         index_ = 0;
         x_ = ox_;
@@ -396,7 +402,7 @@ int PageTyper::step(Tick now, int reset, int instant, int phase) {
 
 int page_resource(int kind, int meal, int ship_page) {
     switch (kind) {
-    case 2: case 8: case 9: case 11: case 12: case 16: case 406: return 0;
+    case 2: case 8: case 9: case 11: case 12: case 16: case 402: return 0;  // [BYTES seg17:0x313a]
     default: break;
     }
     if (kind == 3) {
@@ -435,6 +441,97 @@ int slide_in_frames(int kind) {
     case 9: return 0x66;
     default: return 0;
     }
+}
+
+SlideKind slide_kind(int kind) {
+    // The cells and gutters are the pool records' words +0x22 and +0x24, which the wave set-up
+    // fills (M3). Kind 7's 40 and 6 are the logo strip's (start-0001); the others are the
+    // port's stand-ins for the placeholder [OPEN: seg17:0x1c2e seg17:0x1c54].
+    switch (kind) {
+    case 3: return {kSlotRocks, 0x96, 0x12, 0x2c, 40, 6};
+    case 7: return {kSlotStrip, 0xbe, 0x0a, 0x28, 40, 6};
+    // Kind 8: slot word DGROUP:0x3d6e + 0x34c and base byte DGROUP:0x4d98 + 0x14 * word
+    // DGROUP:0x3d80 + 0x34c, both M3 [OPEN: seg17:0x1be9]; the port uses base 40.
+    case 8: return {kSlotShip, 0x70, 0x10, 40, 40, 6};
+    case 9: return {kSlotViruses, 0x66, 0x09, 0x26, 37, 5};
+    default: return {};
+    }
+}
+
+void crt_flash(Canvas& c, Host& h, int x, int y) {
+    h.sound(0x14);  // seg10:0x754a(0x14, x, y, 4) [BYTES seg15:0x84d5]
+    constexpr Colour kWhitePen = 0x00FFFFFF;
+    // MoveTo/LineTo with the stock WHITE_PEN; LineTo stops before the end point.
+    for (int i = 2; i < 200; ++i) {
+        const int r = i / 10;
+        c.line(kWhitePen, x, y - r, x, y + r);
+        c.line(kWhitePen, x - r, y, x + r, y);
+    }
+    for (int i = 200; i > 0; --i) {
+        const int r = i / 10;
+        c.set_pixel(x, y - r, 0);
+        c.set_pixel(x, y + r, 0);
+        c.set_pixel(x - r, y, 0);
+        c.set_pixel(x + r, y, 0);
+        c.black(x - 1, y - 1, 2, 2);
+    }
+}
+
+std::vector<GreetingLine> greeting_lines(Strings& s, int W, int H, int hour,
+                                         const std::string& player, const std::string& drive) {
+    const int part = day_part(hour);
+    std::string first = part == 3 ? s.lang(590) : s.lang(311) + " ";
+    first += s.lang(639 + part) + ", " + player + "!";
+    return {
+        {W / 2, H / 2 - 90, 0x0000FF80, first},
+        {W / 2, H / 2 - 55, 0x0000FF80, s.lang(645)},
+        {W / 2, H / 2, 0x0000FF00, s.lang(936) + drive},
+    };
+}
+
+namespace {
+// seg6:0xf54 / seg6:0x1010 for (value, 100, digits) as start-0001 shows them [OPEN].
+std::string hundredths(long v, int digits) {
+    const bool neg = v < 0;
+    if (neg) v = -v;
+    std::string t = std::to_string(v / 100) + ".";
+    const long frac = v % 100;
+    char buf[8];
+    std::snprintf(buf, sizeof buf, "%02ld", frac);
+    t += digits >= 2 ? std::string(buf) : std::string(1, buf[0]);
+    return neg ? "-" + t : t;
+}
+}  // namespace
+
+std::string ship_page_text(Strings& s, int wave, const std::string& directory,
+                           const ShipStats& st) {
+    const std::string f = s.lang(3035);
+    // The arguments in order [BYTES seg17:0x341c-0x347c]: max(wave, 1), the directory, the
+    // score, the two counts with 2515, the credit and the resources.
+    std::vector<std::string> args = {std::to_string(std::max(wave, 1)), directory,
+                                     std::to_string(st.score),
+                                     count_text(s, st.captured, 2515),
+                                     count_text(s, st.destroyed, 2515),
+                                     hundredths(st.credit, 2), hundredths(st.resources, 1)};
+    std::string out;
+    std::size_t a = 0;
+    for (std::size_t i = 0; i < f.size(); ++i) {
+        if (f[i] == '%' && i + 1 < f.size()) {
+            const char k = f[i + 1];
+            if (k == 'N') {
+                out += "\r\n";
+                ++i;
+                continue;
+            }
+            if (k == 'd' || k == 's' || k == 'l' || k == '#') {
+                if (a < args.size()) out += args[a++];
+                ++i;
+                continue;
+            }
+        }
+        out.push_back(f[i]);
+    }
+    return out;
 }
 
 // ---- the briefing
@@ -498,16 +595,18 @@ void Briefing::run(shell::GameState& s, int a, int b) {
     if (s.briefing_skip() == -3) {  // only the help window sets -3 and -2
         black_page();
         h_.sound(0x6e);
-        h_.todo("briefing ship page seg17:0x20fa(1, 0, 1)", "seg17:0x20fa");
+        h_.todo("briefing ship page redraw seg17:0x20fa(1, 0, 1)", "seg17:0x20fa");
     }
     if (s.briefing_skip() == -2) advance(s);
     if (s.briefing_skip() == -1) {
         if (s.briefing_phase() == 11) {  // seg17:0x93-0x10b
             black_page();
             h_.sound(0x6e);
-            h_.todo("briefing ship page seg17:0x20fa(1, 1, 0)", "seg17:0x20fa");
-            // [DESIGN] The page's result is open; the port answers 1, so Space leaves the
-            // ship page as at any other phase.
+            // seg17:0x20fa(1, 1, 0): the next ship; past the last ship DGROUP:0x9316 it arms
+            // DGROUP:0x18c2 = now + 100 and returns 1 [BYTES seg17:0x2283-0x22a4]. The port's
+            // roster holds only the player's ship (M3), so that is the result [OPEN].
+            ++ship_;
+            fl_.end_at = now_ + 100;
             const int r = 1;
             if (s.briefing_skip() == -1) s.set_briefing_skip(0);
             if (r != 0) {
@@ -553,7 +652,10 @@ void Briefing::run(shell::GameState& s, int a, int b) {
         // seg17:0x332-0x343: DGROUP:0x5ac = now once, and seg17:0x6036.
         if (s.deadlines().briefing_end == 0) {
             s.deadlines().briefing_end = now_;
-            h_.todo("seg17:0x6036 at the briefing's end", "seg17:0x6036");
+            // seg17:0x6036 only deletes the briefing's GDI objects and windows and sets
+            // DGROUP:0x946c = -1 (shell.md "Clean-up"); the port's clip region and fonts are
+            // released with the frame and the canvas, so nothing is left to do [BYTES
+            // seg17:0x6036].
         }
         c_.clip(false, 0, 0, 0, 0);
         return;
@@ -585,8 +687,8 @@ void Briefing::advance(shell::GameState& s) {
 }
 
 int Briefing::held(int init, const char* what, const char* address) {
-    // A phase whose drawing and duration are open: the port logs it at its init and advances
-    // at the next frame [DESIGN].
+    // A phase whose drawing is open: the port logs it at its init and advances at the next
+    // frame [DESIGN].
     if (init) {
         h_.todo(what, address);
         return 0;
@@ -594,32 +696,343 @@ int Briefing::held(int init, const char* what, const char* address) {
     return 1;
 }
 
+void Briefing::slide_draw(const SlideKind& k, int x, int y, int sz, int sx, int sy, int sw) {
+    if (c_.has_slot(k.slot)) {
+        c_.slot_blit(k.slot, x, y, sz, sz, sx, sy, sw, sw);
+    } else {
+        // The slot's picture comes with the wave set-up (M3): the destination's outline
+        // [OPEN: seg17:0x1cde].
+        c_.black(x, y, sz, sz);
+        if (sz > 1) c_.rectangle(kPlaceholder, false, x, y, x + sz, y + sz);
+    }
+}
+
 int Briefing::slide_in(int init, int kind) {
-    // seg17:0x1b3e: the object slide-in with its frame count (shell.md "Open questions"). Its
-    // drawing is open: the port holds the phase for that many frames on a black page
-    // [DESIGN].
+    // seg17:0x1b3e(init, kind) [BYTES seg17:0x1b3e-0x20f8]. x uses W = DGROUP:0x608c (the
+    // play-area width), y the page DGROUP:0x6086 / DGROUP:0x608a.
+    const SlideKind k = slide_kind(kind);
+    const int W = setup_.W;
+    const int T = box_.pt, Yb = box_.pb;
     if (init) {
-        char buf[64];
-        std::snprintf(buf, sizeof buf, "briefing object slide-in kind %d", kind);
-        h_.todo(buf, "seg17:0x1b3e");
-        frames_left_ = slide_in_frames(kind);
+        h_.sound(0x6e);  // seg10:0x744c(0x6e), (0x13) [BYTES seg17:0x1b84 seg17:0x1b8c]
+        h_.sound(0x13);
+        t18b6_ = 0;
+        n18ba_ = 1;
+        a18c0_ = 1;
+        n18be_ = 0;
+    }
+    if (t18b6_ != 0) return t18b6_ < now_ ? 1 : 0;  // [BYTES seg17:0x1ba4-0x1bb5]
+    const int two = 2 * k.base;
+    auto size_of = [&](int n) { return std::min(two, static_cast<int>(static_cast<std::int16_t>(k.base * n)) / 55); };
+    if (sub() == 0) {
+        // Growth [BYTES seg17:0x1c1e-0x1d4e].
+        const int sz = size_of(n18ba_);
+        if (sz < two) n18be_ = n18ba_;
+        const int x = W / 2 - sz / 2 - n18be_ - 30;
+        const int y = (T - Yb) / 2 - sz / 2 + Yb;
+        slide_draw(k, x, y, sz, k.gutter + (k.gutter + k.cell) * (a18c0_ / 2), k.gutter, k.cell);
+        c_.black(x + sz, y, 2, sz);
+        ++n18ba_;
+        if (2 * k.cells <= ++a18c0_) a18c0_ = 0;
+        if (k.frames < n18ba_) {
+            set_sub(1);
+            pages_ox_ = sz + x + 0x5a;
+            pages_oy_ = y - 10;
+            load_page(cur_phase_, cur_phase_, 5000);
+        }
+    } else if (sub() == 1) {
+        // Page [BYTES seg17:0x1e2c-0x1f74]: kinds 8 and 9 keep turning.
+        if (kind != 3 && kind != 7) {
+            const int sz = size_of(n18ba_);
+            if (sz < two) n18be_ = n18ba_;
+            const int x = W / 2 - sz / 2 - n18be_ - 30;
+            const int y = (T - Yb) / 2 - sz / 2 + Yb;
+            slide_draw(k, x, y, sz, k.gutter + (k.gutter + k.cell) * (a18c0_ / 2), k.gutter,
+                       k.cell);
+            c_.black(x + sz, y, 2, sz);
+            if (2 * k.cells <= ++a18c0_) a18c0_ = 0;
+        }
+        const int r = pages_.step(now_, 0, 0, cur_phase_);
+        if (r == 2) {
+            h_.sound(0x15);  // seg10:0x744c(0x15)
+            n18ba_ = n18bc_ = 110;
+            set_sub(2);
+        }
+        // r == 1 calls seg10:0x565a, the meal slot, which draws nothing [BYTES seg17:0x1f46].
+    } else if (sub() == 2) {
+        // Shrink [BYTES seg17:0x1f77-0x20da].
+        const int sz = std::min(two, static_cast<int>(static_cast<std::int16_t>(k.base * n18bc_)) / 55);
+        if (sz < two) n18be_ = n18ba_;
+        const int x = W / 2 - sz / 2 - n18be_ - 30;
+        const int y = (T - Yb) / 2 - sz / 2 + Yb;
+        slide_draw(k, x, y, sz, k.gutter - 2 + (k.gutter + k.cell) * (a18c0_ / 2), k.gutter - 2,
+                   k.cell + 4);
+        c_.black(x - 4, y, 4, sz);
+        c_.black(x - 10, y - 10, sz + 10, 10);
+        n18bc_ = n18ba_;
+        n18ba_ -= 2;
+        if (--a18c0_ < 0) a18c0_ = 2 * k.cells - 1;
+        if (n18ba_ <= 8) {
+            c_.black(x - 4, y - 4, sz + 8, sz + 8);
+            t18b6_ = now_ + 1000;
+        }
+    }
+    return 0;
+}
+
+int Briefing::race(int init) {
+    // seg17:0x13ca, phase 2 [BYTES seg17:0x13ca seg17:0x144b seg17:0x5008 seg17:0x14fc
+    // seg17:0x14d2].
+    if (init) {
+        t18a0_ = 0;
         return 0;
     }
-    return --frames_left_ <= 0 ? 1 : 0;
+    if (sub() == 0) {
+        set_sub(sub() + 1);
+        // seg17:0x5008: string 0x2e4 + DGROUP:0x9322 (the race, M3: 0) [OPEN].
+        h_.todo("briefing race: DGROUP:0x9322 and the race picture seg10:0x8b1c", "seg17:0x13ca");
+        c_.text(Font{15, 10, 0}, 0x02FFD600, kTaLeft, box_.pr - 0x118, box_.pt + 20,
+                h_.lang(0x2e4));
+        const int side = box_.pb - box_.pt;
+        c_.rectangle(kPlaceholder, false, box_.pl, box_.pt, box_.pl + side, box_.pt + side);
+        pages_ox_ = box_.pr - 0x118;
+        pages_oy_ = box_.pt + 0x36;
+        load_page(cur_phase_, 402, 3000);
+    } else if (sub() == 1) {
+        if (pages_.step(now_, 0, 0, cur_phase_) == 2) set_sub(sub() + 1);
+    } else {
+        if (t18a0_ == 0) t18a0_ = now_ + 1000;
+        else if (t18a0_ < now_) return 1;
+    }
+    return 0;
+}
+
+int Briefing::defenders(int init) {
+    // seg17:0x193c, phase 7 [BYTES seg17:0x194f seg17:0x1991 seg17:0x19b1 seg17:0x19ba
+    // seg17:0x1a37 seg17:0x1a69 seg17:0x1a80 seg17:0x1aa5 seg17:0x1ab1 seg17:0x1b25].
+    if (init) {
+        t18b0_ = 0;
+        return 0;
+    }
+    // seg17:0x55e2(-1): 12530 upper-cased, Arial 15 x 10, 0x020080FF.
+    auto label = [&] {
+        c_.text(Font{15, 10, 0}, 0x020080FF, kTaLeft, box_.pl + 40, box_.pt + 20,
+                upper_name(h_.lang(12530) + " "));
+    };
+    // The pool-2 cell stretched to 13 x 13 with MERGECOPY and brush DGROUP:0x5780[i]: the
+    // port fills the square with a grey of the pulse step [OPEN: the brushes and the cell].
+    auto pulse = [&](int i) {
+        const Colour grey = 0x02000000u | static_cast<Colour>(0x30 + 0x30 * i) * 0x010101u;
+        c_.fill(box_.pr / 2 - 200, pages_oy_ + 50, 13, 13, grey);
+    };
+    if (sub() == 0) {
+        set_sub(1);
+        pages_ox_ = box_.pr - 0x140;
+        pages_oy_ = box_.pt + 0x1e;
+        load_page(cur_phase_, cur_phase_, 4500);
+        label();
+        t18b4_ = 0;
+        h_.todo("briefing defenders: the pool-2 cell and brushes DGROUP:0x5780", "seg17:0x193c");
+        pulse(0);
+    } else if (sub() == 1) {
+        label();
+        t18b4_ = t18b4_ + 1 > 49 ? 0 : t18b4_ + 1;
+        pulse(std::min(t18b4_, 49 - t18b4_) / 5);
+        if (pages_.step(now_, 0, 0, cur_phase_) == 2) set_sub(2);
+    } else {
+        if (t18b0_ == 0) t18b0_ = now_ + 1000;
+        else if (t18b0_ < now_) return 1;
+    }
+    return 0;
+}
+
+// ---- phase 11, seg17:0x20fa
+
+namespace {
+// The player's ship before M3 [OPEN: seg17:0x2404 seg17:0x24d7]: start-0001's TRANSFORMER, a
+// 33-px cell with a 5-px gutter and size 33; m = 3, the value for DGROUP:0x90ee >= 8 (the
+// port's 8-bit surface).
+constexpr int kShipSize = 33, kShipCell = 33, kShipGutter = 5, kShipM = 3;
+constexpr int kLastShip = 0;  // DGROUP:0x9316: the port's roster is the player's ship
+}  // namespace
+
+void Briefing::ship_setup() {
+    // [BYTES seg17:0x22b9-0x23ee]
+    auto& f = fl_;
+    f = Flight{};
+    f.motion = 1;
+    f.width0 = 20;
+    f.width_d = 80;
+    f.scale0 = 25;
+    f.scale_d = 100 * kShipM - 25;
+    f.mid = (box_.pt - box_.pb) / 2 + box_.pb;
+    f.cell0 = 400;
+    f.px10 = (box_.pl + 40) * 10;
+    f.end = (box_.pr - box_.pl) * 11 / 3 + f.px10;
+    f.cx = static_cast<int>(f.px10 / 10);
+    f.cy = static_cast<int>(f.mid);
+    h_.sound(0x13);  // seg10:0x754a(0x13, 100, DGROUP:0x90ec/2, 4)
+    h_.todo("ship records: seg11:0xb09c, the class size and the slot (M3)", "seg11:0xb09c");
+}
+
+int Briefing::ship(int init) {
+    auto& f = fl_;
+    if (init) {
+        // seg17:0x2260: DGROUP:0x91f8 + 1 around seg9:0x6624 (M3), ship 0.
+        ship_ = 0;
+        ship_setup();
+    }
+    if (f.end_at != 0) return f.end_at < now_ ? 1 : 0;  // [BYTES seg17:0x2405-0x241a]
+    // One flight frame at `pos` (px10 for the fly-in, DGROUP:0x18fe for the fly-out).
+    auto fly = [&](long pos, bool out) {
+        const long scale = f.scale0 + (f.end ? f.scale_d * pos / f.end : 0);
+        const long step = (scale / 2) * f.motion;
+        const long width = f.width0 + (f.end ? pos * f.width_d / f.end : 0);
+        const long k = f.frames == 0 ? f.cell0 / 100
+                                     : (f.cell0 + f.cell_d * f.frame / f.frames) / 100;
+        f.cy = static_cast<int>(f.mid + (f.end ? f.dy * pos / f.end : 0));
+        const int h = static_cast<int>(kShipSize * scale / 100);
+        f.y = f.cy - h / 2;
+        const int w = static_cast<int>(h * width / 100);
+        f.x = f.cx - w / 2;
+        f.h = h;
+        const int sx = kShipGutter + (kShipGutter + kShipCell) * static_cast<int>(k);
+        if (c_.has_slot(kSlotShip)) {
+            c_.slot_blit(kSlotShip, f.x, f.y, w, h, sx, kShipGutter, kShipCell, kShipCell);
+        } else if (w > 0 && h > 0) {
+            c_.black(f.x, f.y, w, h);
+            c_.rectangle(kPlaceholder, false, f.x, f.y, f.x + w, f.y + h);
+        }
+        if (!out) {
+            c_.black(f.x - 20, f.y - 20, 20, h + 20);  // [BYTES seg17:0x25a0]
+        } else {
+            c_.black(f.x - 20, f.y - 20, w + 20, 20);
+            c_.black(f.x - 20, f.y + h, w + 20, 20);
+            c_.black(f.x - 20, f.y - 20, 20, h + 20);
+        }
+        f.px10 += step;
+        f.cx = static_cast<int>(f.px10 / 10);
+        ++f.frame;
+        return step;
+    };
+    if (sub() == 0) {
+        // Fly-in and the 10-frame spin [BYTES seg17:0x2450-0x26b8].
+        fly(f.px10, false);
+        if (f.px10 >= f.end && f.frame >= f.frames) {
+            ++f.pass;
+            f.width0 = 100, f.width_d = 0;
+            f.scale0 = 100 * kShipM, f.scale_d = 0;
+            f.mid = f.cy, f.dy = 0;
+            f.cell0 = 400, f.cell_d = -400;
+            f.frame = 0, f.frames = 10;
+            f.motion = 0;
+            if (f.pass > 1) {
+                // The page: the invisible spin's set-up, then seg17:0x30b0(11, hold).
+                f.out = f.end;
+                f.pass = 0;
+                f.scale0 = 0;
+                f.cell0 = 0, f.cell_d = 400;
+                set_sub(1);
+                pages_ox_ = f.h + f.x + 0x27;
+                pages_oy_ = (box_.pt - box_.pb) / 2 + box_.pb - 0x56;
+                const bool player = true;  // DGROUP:0x9464 = DGROUP:0x9646 [OPEN: M3 roster]
+                const Tick hold = (wave_ != 0 && player) ? 3500 : 5000;
+                ShipStats st;
+                h_.todo("ship page: score, counts, credit and resources of the roster (M3)",
+                        "seg17:0x33ee");
+                h_.todo("ship page: seg17:0x4068's sentence and the allies/enemies lines",
+                        "seg17:0x4068");
+                std::string text = ship_page_text(h_, wave_, setup_.directory, st);
+                pages_.set_page(std::move(text), page_wraps(cur_phase_), hold);
+                pages_.set_origin(pages_ox_, pages_oy_, box_.pr);
+                pages_.step(now_, 1, 0, cur_phase_);
+                ship_labels();
+            }
+        }
+    } else if (sub() == 1) {
+        // The page [BYTES seg17:0x27c5-0x2836].
+        const int r = pages_.step(now_, 0, 0, cur_phase_);
+        if (r == 2) {
+            set_sub(sub() + 1);
+            c_.black(pages_ox_, pages_oy_, box_.pr - pages_ox_, box_.pb - pages_oy_);
+            c_.black(box_.pl, pages_oy_, pages_ox_ - 100, box_.pb - pages_oy_);
+        }
+    } else if (sub() == 2) {
+        // The invisible spin and the fly-out [BYTES seg17:0x283e-0x2c38].
+        const long step = fly(f.out, true);
+        f.out += step;
+        if (f.out >= f.end && f.frame >= f.frames) {
+            f.motion = 1;
+            f.width0 = 100, f.width_d = -80;
+            f.scale0 = 100 * kShipM, f.scale_d = 50 - 100 * kShipM;
+            f.mid = f.cy, f.dy = 0;
+            f.cell0 = 400, f.cell_d = 0;
+            f.out = 0;
+            f.end = box_.pr * 10L - f.px10 - 200;
+            f.frames = f.frame = 0;
+            ++f.pass;
+            if (f.pass == 1) {
+                h_.sound(0x15);  // seg10:0x754a(0x15, DGROUP:0x6088/2 + 250, ...)
+            } else {
+                black_page();
+                if (++ship_ > kLastShip) {
+                    f.end_at = now_ + 1000;
+                } else {
+                    set_sub(0);
+                    ship_setup();
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+void Briefing::ship_labels() {
+    // seg17:0x4354 for the player's ship [BYTES seg17:0x4354]: Arial 15 x 10 weight 0.
+    const int x = pages_ox_ - 0x14a;
+    const Font f{15, 10, 0};
+    c_.text(f, 0x02FFD600, kTaLeft, x, pages_oy_, h_.lang(523));
+    // 2522 "(%<this is you%>%<from %? team%>)" with the first group on [OPEN: the line's
+    // colour is the first line's].
+    std::string t = h_.lang(2522);
+    const auto a = t.find("%<"), b = t.find("%>");
+    if (a != std::string::npos && b != std::string::npos && b > a) {
+        const std::string first = t.substr(a + 2, b - a - 2);
+        const auto c = t.find("%<", b), d = t.find("%>", b + 2);
+        std::string rest = c != std::string::npos && d != std::string::npos ? t.substr(d + 2) : t.substr(b + 2);
+        t = t.substr(0, a) + first + rest;
+    }
+    c_.text(f, 0x02FFD600, kTaLeft, x, pages_oy_ + 20, t);
+    // seg17:0x3ba6(0): Arial 13 x 6 in 0x00FFFF00 from DGROUP:0x5002 + 0xa2, 18 px apart. The
+    // choice among 2051-2053 and the allies/enemies bytes are M3: the port draws 2053, as
+    // start-0001 shows for wave 1 [OPEN: seg17:0x3ba6].
+    c_.text(Font{13, 6, 0}, 0x00FFFF00, kTaLeft, x, pages_oy_ + 0xa2, h_.lang(2053));
+}
+
+void Briefing::icon_label(int k, int x, int y) {
+    // seg17:0xc2e(k, x, y): one line, CreateFont(12, 0, ...) "Arial" in 0x0200FF80,
+    // TA_CENTER, at (x + 32, y + 68) [BYTES seg17:0xc3b-0xccc].
+    if (k < 0 || k >= static_cast<int>(setup_.names.size())) return;
+    std::string name = setup_.names[k];
+    if (name.size() > 35) name.resize(35);  // the 35-byte record
+    c_.text(Font{12, 0, 0}, 0x0200FF80, kTaCenter, x + 32, y + 68, name);
 }
 
 int Briefing::routine(shell::GameState& s, int p, int init) {
     // The 19-entry table seg17:0x355 (init 0) and the 17-entry table seg17:0x5d1 (init 1)
     // with DGROUP:0x9460 = 0. A failed condition returns 1 from the frame table (the phase
     // passes in the same frame) and nothing from the init table [BYTES seg17:0x1d5-0x379
-    // seg17:0x3b2 seg17:0x5d1].
+    // seg17:0x3b2 seg17:0x5d1]. In state 3 the wave is at least 1, so phases 3 and 4 always
+    // skip [BYTES seg9:0x5fbf].
     const WaveFlags& f = setup_.flags;
     const int skip = init ? 0 : 1;
+    cur_phase_ = p;
+    gs_ = &s;
     switch (p) {
     case 1: return phase1(s, init);
     case 2:
         if (f.f94e == 0) return skip;
-        return held(init, "briefing phase 2", "seg17:0x13ca");
+        return race(init);
     case 3:
         if (wave_ != 0) return skip;
         return held(init, "briefing phase 3", "seg17:0xd22");
@@ -634,18 +1047,16 @@ int Briefing::routine(shell::GameState& s, int p, int init) {
         return slide_in(init, 9);
     case 7:
         if (wave_ != 1 || f.f92f0 == 0) return skip;
-        return held(init, "briefing phase 7", "seg17:0x193c");
+        return defenders(init);
     case 8:
         if (f.f4ee0 == 0) return skip;
-        if (init) h_.todo("briefing phase 8 ship lookup", "seg17:0x3b2");
+        if (init) h_.todo("briefing phase 8 ship lookup and page seg17:0x7614", "seg17:0x4b9");
         return slide_in(init, 8);
     case 9:
         if (f.f4ee2 == 0) return skip;
-        if (init) h_.todo("briefing phase 9 ship lookup", "seg17:0x3b2");
+        if (init) h_.todo("briefing phase 9 ship lookup and page seg17:0x7614", "seg17:0x4b9");
         return slide_in(init, 8);
-    case 11:
-        // seg17:0x20fa(init, 0, 0): the ship page of DGROUP:0x9464 [OPEN].
-        return held(init, "briefing ship page seg17:0x20fa", "seg17:0x20fa");
+    case 11: return ship(init);
     default:  // 10 and 12-17: the help window's pages only
         return skip;
     }
@@ -705,7 +1116,7 @@ int Briefing::phase1(shell::GameState& s, int init) {
         i1882_ += 3;
         if (i1882_ == 12) h_.sound(0x13);  // seg10:0x754a(0x13, x, y, 4)
         if (i1882_ > 60) {
-            h_.todo("briefing icon label", "seg17:0xc2e");
+            icon_label(i1880_, x, y);  // on the frame that draws size 64 [BYTES seg17:0x880]
             do {
                 ++i1880_;
                 if (total <= i1880_) break;

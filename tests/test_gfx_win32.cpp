@@ -7,10 +7,14 @@
 
 #include <cstdlib>
 #include <filesystem>
+#include <string>
+#include <vector>
 
 #include "assets/asset_store.h"
 #include "doctest.h"
 #include "gfx/gfx.h"
+#include "gfx/palette_message.h"
+#include "shell/game_state.h"
 
 using namespace is::gfx;
 
@@ -283,5 +287,79 @@ TEST_CASE("gfx win32: golden: ALPHABET text and the logo strip") {
     over(5, 4, false);
     for (int k = 0; k < 4; ++k) over(k + 10, k + 5, false);
     CHECK(checked == 2 * (50 + 112 + 164 + 273) + 524 + 699 + 847 + 1014 + 1106);
+}
+
+// ADR 0007 decision 5: the emulated WM_QUERYNEWPALETTE (seg2:0x5cb with WM_PAINT seg2:0x7ac).
+TEST_CASE("gfx win32: the emulated palette message erases to black, after the state-1 repaint") {
+    Gfx g(nullptr);
+    g.set_alphabet(fake_alphabet());
+    g.set_colours_5500(fake5500());
+    g.set_client_size(640, 480, 1);
+    std::vector<std::string> order;
+    const auto fill = [&g](int index) {
+        HBRUSH b = CreateSolidBrush(g.dc_colour(0x01000000u | static_cast<unsigned>(index)));
+        HGDIOBJ old = SelectObject(g.dc(), b);
+        PatBlt(g.dc(), 0, 0, 640, 480, PATCOPY);
+        DeleteObject(SelectObject(g.dc(), old));
+        g.surface().flush();
+    };
+    // the paint routine draws entry 103 over everything; it records what it found first
+    const auto paint = [&] {
+        g.surface().flush();
+        order.push_back("paint " + std::to_string(g.surface().at(5, 5)));
+        fill(103);
+    };
+    const auto post = [&] { order.push_back("post"); };
+
+    // no palette (DGROUP:0x920e = 0): nothing happens
+    fill(249);
+    CHECK_FALSE(emulate_query_new_palette(g, is::shell::kIntro, true, paint, post));
+    CHECK(order.empty());
+    CHECK(g.surface().at(5, 5) == 249);
+
+    g.palette_create();
+    g.palette_scheme(8, 2);
+    // state 0 (the title): 0x978 is posted, the client erased to black
+    fill(249);
+    CHECK(emulate_query_new_palette(g, is::shell::kIntro, true, paint, post));
+    g.surface().flush();
+    CHECK(order == std::vector<std::string>{"post"});
+    CHECK(g.surface().at(0, 0) == 0);
+    CHECK(g.surface().at(639, 479) == 0);
+    CHECK(g.surface().at(320, 240) == 0);
+
+    // state 3 likewise
+    order.clear();
+    fill(249);
+    CHECK(emulate_query_new_palette(g, is::shell::kBriefing, true, paint, post));
+    g.surface().flush();
+    CHECK(order == std::vector<std::string>{"post"});
+    CHECK(g.surface().at(320, 240) == 0);
+
+    // states 1 and 7: the paint routine runs first, on the old picture, then the erase
+    for (int state : {is::shell::kWave, is::shell::kHelp}) {
+        CAPTURE(state);
+        order.clear();
+        fill(249);
+        CHECK(emulate_query_new_palette(g, state, true, paint, post));
+        g.surface().flush();
+        CHECK(order == std::vector<std::string>{"paint 249"});
+        CHECK(g.surface().at(5, 5) == 0);
+        CHECK(g.surface().at(639, 479) == 0);
+    }
+
+    // before the first WM_TIMER (DGROUP:0x1e = 0) WM_PAINT only erases
+    order.clear();
+    fill(249);
+    CHECK(emulate_query_new_palette(g, is::shell::kWave, false, paint, post));
+    g.surface().flush();
+    CHECK(order.empty());
+    CHECK(g.surface().at(5, 5) == 0);
+
+    // presented: the window shows black (index 0 is the static black)
+    Target t(640, 480);
+    REQUIRE(g.present_dc(t.dc, 640, 480, true));
+    CHECK(t.at(5, 5) == 0x000000);
+    CHECK(t.at(639, 479) == 0x000000);
 }
 #endif

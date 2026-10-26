@@ -3,6 +3,7 @@
 // "Message loop and idle step" with the frame scheduler of ADR 0001.
 //
 //   inspace.exe [--game <dir>] [--ini <path>]      (src/shell/options.h, ADR 0004)
+//   inspace.exe --install <source> [--to <dir>]    (src/install, ADR 0008 decision 1)
 #include <windows.h>
 #include <objbase.h>
 #include <shellapi.h>
@@ -22,6 +23,7 @@
 #include "settings/ini_location.h"
 #include "formats/bytes.h"
 #include "formats/res16.h"
+#include "install/install_win32.h"
 #include "intro/gdi_canvas.h"
 #include "intro/intro.h"
 #include "nav/nav.h"
@@ -62,7 +64,9 @@ void fail_box(const std::string& cp1252_text) {
 void usage_box(const std::string& utf8) {
     log(utf8);
     MessageBoxW(nullptr,
-                utf16_of_utf8(utf8 + "\n\nUsage: inspace.exe [--game <dir>] [--ini <path>]").c_str(),
+                utf16_of_utf8(utf8 + "\n\nUsage: inspace.exe [--game <dir>] [--ini <path>]\n"
+                                     "       inspace.exe --install <source> [--to <dir>]")
+                    .c_str(),
                 L"Inner Space", MB_ICONEXCLAMATION);
 }
 
@@ -222,6 +226,43 @@ int message_loop() {
     }
 }
 
+// The install step's Win32 driver with the port's INI location (ADR 0004 decision 2; the new
+// game directory is not the executable's, so portable mode follows the usual rule) [DESIGN].
+std::optional<std::filesystem::path> run_install_step(const std::filesystem::path& source,
+                                                      const std::optional<std::filesystem::path>& to,
+                                                      const std::optional<std::filesystem::path>& ini,
+                                                      bool open_readme) {
+    const settings::IniLocation loc =
+        settings::resolve_ini_location(ini, exe_dir(), roaming_app_data(), {});
+    install::Win32Options o;
+    o.instance = g.instance;
+    o.source = source;
+    o.to = to;
+    o.ini_path = loc.path;
+    o.work_root = loc.path.parent_path() / "INSTALL";
+    o.open_readme = open_readme;
+    o.log = [](const std::string& s) { log(s); };
+    log("install: " + fmt::path_utf8(source) + " -> INI " + fmt::path_utf8(loc.path));
+    return install::run_install_win32(o);
+}
+
+// [Inner Space] Path of the port's INI when it names a directory that holds the game.
+std::optional<std::filesystem::path> ini_named_game(const std::optional<std::filesystem::path>& ini) {
+    try {
+        const settings::IniLocation loc =
+            settings::resolve_ini_location(ini, exe_dir(), roaming_app_data(), {});
+        std::error_code ec;
+        if (!std::filesystem::exists(loc.path, ec)) return std::nullopt;
+        const settings::IniFile f(loc.path);
+        const std::filesystem::path p =
+            settings::path_from_ini(f.get_string(settings::kGameSection, "Path", "", 0x6d));
+        if (p.empty()) return std::nullopt;
+        return shell::choose_asset_dir({}, p, nullptr);
+    } catch (const std::exception&) {
+        return std::nullopt;
+    }
+}
+
 int run(HINSTANCE instance) {
     g.instance = instance;
     init_clock();
@@ -243,8 +284,27 @@ int run(HINSTANCE instance) {
         usage_box(opts.error);
         return 2;
     }
+    // The install step (ADR 0008 decision 1) [DESIGN]: --install runs it and exits.
+    if (opts.options.install) {
+        const std::optional<std::filesystem::path> dir = run_install_step(
+            *opts.options.install, opts.options.to, opts.options.ini, /*open_readme=*/true);
+        return dir ? 0 : 1;
+    }
     std::string why;
-    const auto asset_dir = shell::choose_asset_dir(exe_dir(), opts.options.game_dir, &why);
+    std::optional<std::filesystem::path> asset_dir =
+        shell::choose_asset_dir(exe_dir(), opts.options.game_dir, &why);
+    if (!asset_dir && !opts.options.game_dir) {
+        // ADR 0002 decision 1, second place: the directory the port's INI names (Path), which
+        // the install step writes [DESIGN].
+        asset_dir = ini_named_game(opts.options.ini);
+    }
+    if (!asset_dir && !opts.options.game_dir) {
+        // No game: offer the install step, then continue into the game [DESIGN] (ADR 0008).
+        std::filesystem::path set;
+        if (install::choose_install_set(nullptr, &set))
+            asset_dir = run_install_step(set, std::nullopt, opts.options.ini, /*open_readme=*/false);
+        if (!asset_dir) return 0;
+    }
     if (!asset_dir) {
         usage_box("No game directory found (ADR 0002):\n" + why);
         return 2;
@@ -359,6 +419,7 @@ int run(HINSTANCE instance) {
     install_dialog_hooks(g);
     install_help_hooks(g);
     install_briefing_hooks(g);
+    install_desk_hooks(g);  // src/desk/hooks.cpp (stage 3d)
     // The result is discarded; DGROUP:0x16 comes from WM_CREATE [BYTES seg2:0x390].
     CreateWindowExW(0, kMainClass, title.c_str(), style, x, y, w, h, nullptr,
                     g.keys.menu ? g.menu : nullptr, instance, nullptr);
