@@ -287,7 +287,7 @@ Type I is an integer and S a string with its buffer size. "→" names the DGROUP
 | `Path` | S 0x6d | "" | [BYTES seg6:0x70a] [BYTES ISPACE.DLL seg9:0xde] [BYTES FACTORY.EXE seg4:0x470] | [BYTES seg6:0x814] | program directory → DGROUP:0x8f7a; regenerated when empty |
 | `LocalPath` | S 0x6d | "" | [BYTES seg6:0x725] [BYTES ISPACE.DLL seg9:0x118 seg10:0x4b3e] | [BYTES seg6:0x845] | base of the save directories → DGROUP:0x9078; ISPACE.DLL also finds INSPACE.EXE there |
 | `ShipPath` | S 0x6d | "" | [BYTES seg14:0x3dea seg14:0x3f12] [BYTES ISPACE.DLL seg5:0x1d9b seg10:0x3f97 seg10:0x4095] [BYTES FACTORY.EXE seg4:0x503] | [BYTES seg6:0x86b] | directory of MASTER.BOD and MASTER.SHP |
-| `SndPath` | S 0x6d | "" | [BYTES ISPACE.DLL seg9:0x152] [BYTES FACTORY.EXE seg4:0x4c9] | [BYTES seg6:0x8a0] | sound directory ([ispace.md](ispace.md)) |
+| `SndPath` | S 0x6d | "" | [BYTES ISPACE.DLL seg9:0x152] [BYTES FACTORY.EXE seg4:0x4c9] | [BYTES seg6:0x8a0] | sound directory ([sound.md](sound.md#settings)) |
 | `RacePath` | S 0x6d | "" | [BYTES seg6:0x9c8] | [BYTES seg6:0x8d5] | directory of the `.rac` files → DGROUP:0x900a |
 | `Games` | S 11 | "" | [BYTES seg6:0x9a0] | [BYTES seg6:0x8ff] | subdirectory of `LocalPath` for `.sav` → DGROUP:0x96b8 |
 | `Dead` | S 11 | "" | [BYTES seg6:0x978] | [BYTES seg6:0x8ea] | subdirectory for `.ded` and `.don` → DGROUP:0x96c5 |
@@ -323,7 +323,7 @@ Type I is an integer and S a string with its buffer size. "→" names the DGROUP
 
 - The game reads `IconLeft` with a default of `GetSystemMetrics(SM_CXSCREEN)` − 48, so the oracle at 1024 pixels saw 976. [BYTES seg6:0x205 seg6:0x20a] [ORACLE newgame-0001]
 
-**Settings.** The INSPACE reads are in seg6:0xb3e unless stated. ISPACE.DLL reads these keys in ISPACE.DLL seg9:0x22ca, ISPACE.DLL seg9:0x15cc and ISPACE.DLL seg9:0x2bf8. It writes them in four functions: ISPACE.DLL seg9:0x1fae (`Complex` … `FrameRateSet`), ISPACE.DLL seg9:0x2dc6 (`ShipAnim` … `SavePrompt`), ISPACE.DLL seg9:0x331a (`StereoEffect` … `StereoSwap`) and ISPACE.DLL seg9:0x4712 (`JoyStick` … `JBtn`n). Which dialog control feeds which key is [OPEN]. [BYTES ISPACE.DLL seg9:0x1fae seg9:0x2dc6 seg9:0x331a seg9:0x4712]
+**Settings.** The INSPACE reads are in seg6:0xb3e unless stated. ISPACE.DLL reads these keys in ISPACE.DLL seg9:0x22ca, ISPACE.DLL seg9:0x15cc and ISPACE.DLL seg9:0x2bf8. It writes them in four functions: ISPACE.DLL seg9:0x1fae (`Complex` … `FrameRateSet`), ISPACE.DLL seg9:0x2dc6 (`ShipAnim` … `SavePrompt`), ISPACE.DLL seg9:0x331a (`StereoEffect` … `StereoSwap`) and ISPACE.DLL seg9:0x4712 (`JoyStick` … `JBtn`n). Which dialog control feeds which key is [OPEN], except for the sound keys, whose controls are in [sound.md](sound.md#audio-options-and-options). [BYTES ISPACE.DLL seg9:0x1fae seg9:0x2dc6 seg9:0x331a seg9:0x4712]
 
 | Key | Type | Default | Read | Written | Meaning |
 |---|---|---|---|---|---|
@@ -333,7 +333,7 @@ Type I is an integer and S a string with its buffer size. "→" names the DGROUP
 | `Enhance` | I | 1 | [BYTES seg6:0xc8c] [BYTES ISPACE.DLL seg9:0x257c] | [BYTES ISPACE.DLL seg9:0x20fe] | → DGROUP:0x8fe8 |
 | `Complex` | I | 0 (INSPACE seg6:0x1204); 2 (ISPACE.DLL) | [BYTES seg6:0x1204] [BYTES ISPACE.DLL seg9:0x1766] | [BYTES ISPACE.DLL seg9:0x20b3] | → DGROUP:0x8ff8 |
 | `Braking` | I | 0 | [BYTES seg6:0xcf4] [BYTES ISPACE.DLL seg9:0x16fb] | [BYTES ISPACE.DLL seg9:0x20d8] | → DGROUP:0x8ff6 |
-| `MixChannels` | I | 1 (INSPACE); 4 (ISPACE.DLL) | [BYTES seg6:0xc9c seg6:0xca7] [BYTES ISPACE.DLL seg9:0x55d seg9:0x571] | [BYTES ISPACE.DLL seg9:0x3493] | → DGROUP:0x920a |
+| `MixChannels` | I | 1 (INSPACE); 4 (ISPACE.DLL) | [BYTES seg6:0xc9c seg6:0xca7] [BYTES ISPACE.DLL seg9:0x55d seg9:0x571] | [BYTES ISPACE.DLL seg9:0x3493] | → DGROUP:0x920a; ISPACE.DLL DGROUP:0x219e, the channel count ([sound.md](sound.md#session)) |
 | `BadVideo` | I | 1 | [BYTES seg6:0xcda] [BYTES ISPACE.DLL seg10:0x16ab] | — | → DGROUP:0x742 |
 | `QuickIntro` | I | 0 | [BYTES seg6:0x318 seg6:0xcc4] [BYTES ISPACE.DLL seg9:0x2c77] | [BYTES ISPACE.DLL seg9:0x2e84] | → DGROUP:0x8f70 |
 | `ShipAnim` | I | 1 | [BYTES seg6:0xd0a] [BYTES ISPACE.DLL seg9:0x2d48] | [BYTES ISPACE.DLL seg9:0x2e5f] | → DGROUP:0x131c |
@@ -350,8 +350,8 @@ Type I is an integer and S a string with its buffer size. "→" names the DGROUP
 | `SoundVolume`, `FXMusic` | I | 100, 50 | [BYTES ISPACE.DLL seg9:0x2327 seg9:0x233d] | [BYTES ISPACE.DLL seg9:0x2124 seg9:0x33fc] | → ISPACE.DLL DGROUP:0x69e, 0x6a2 |
 | `StereoEffect`, `PurgeSound`, `StereoSwap` | I | 2, 1, 0 | [BYTES ISPACE.DLL seg9:0x2353 seg9:0x2369 seg9:0x237f] | [BYTES ISPACE.DLL seg9:0x33d6 seg9:0x34b9 seg9:0x34df] | → ISPACE.DLL DGROUP:0x228c, 0x698, 0x69a |
 | `SoundSystem` | I | −1 | [BYTES ISPACE.DLL seg9:0x2538] | [BYTES ISPACE.DLL seg9:0x2569 seg9:0x214a] | → ISPACE.DLL DGROUP:0x2280 |
-| `AllowSound`, `ForceVol` | I | 0 | [BYTES ISPACE.DLL seg9:0x2444 seg9:0xbde] | — | `ForceVol` see [ispace.md](ispace.md) |
-| `SaverVolume` | I | 0 | [BYTES ISPACE.DLL seg9:0x6e] | — | → ISPACE.DLL DGROUP:0x69e ([ispace.md](ispace.md)) |
+| `AllowSound`, `ForceVol` | I | 0 | [BYTES ISPACE.DLL seg9:0x2444 seg9:0xbde] | — | see [sound.md](sound.md#modes-and-device-test) |
+| `SaverVolume` | I | 0 | [BYTES ISPACE.DLL seg9:0x6e] | — | → ISPACE.DLL DGROUP:0x69e in place of `SoundVolume` ([sound.md](sound.md#settings)) |
 | `Breakfast`, `Coffee`, `Lunch`, `Tea` | I | 800, 1000, 1200, 1530 | [BYTES seg10:0x96df seg10:0x970b seg10:0x96b2 seg10:0x9737] | — | special times of day [MANUAL Special Times of Day] |
 
 **Race, duel and demo options**

@@ -1,0 +1,34 @@
+# ADR 0011: Audio
+
+- **Status:** Accepted. [DESIGN]
+- **Scope:** how the port plays the sound effects and the music that ISPACE.DLL plays through WAVEMIX.DLL, `sndPlaySound` and the MCI sequencer. The engine's rules stay in [sound.md](../re/sound.md); the sound catalogue is `re/artifacts/sounds.tsv`. [DESIGN]
+
+## Context
+- **The effects are 78 8-bit, 11 025 Hz, mono PCM WAVs** in `SND_FX.DLL` and `<Language>_FX.DLL`, addressed by slot id (resource `#100` id + 100). ISPACE.DLL plays them through WaveMix 1.70 when `WAVEMIX.DLL` is present and `MixChannels` is above 1, else through `sndPlaySound`. The WaveMix session is mono at the `WAVEMIX.INI` rate; every play clears the channel's queue at high priority; four ids loop 20, 20, 8 and 7 times. [BYTES ISPACE.DLL seg9:0x4e0 seg9:0xc42 seg9:0x11f4] [REF Microsoft WaveMix 1.x documentation]
+- **Loudness and pan never touch the samples.** WaveMix has no per-channel volume, and ISPACE.DLL scales nothing: ordinal 8 computes left, right and overall volumes from the sound's position and the current priority sound sets them with one device-wide `waveOutSetVolume`; the music volume goes to `midiOutSetVolume` on device 1, which fails on modern systems and under Wine, so the music volume formula is never applied there. Focus loss and exit restore the system volumes they saved, and `ForceVol` forces those to maximum. [BYTES ISPACE.DLL seg9:0x76c seg9:0xa9e seg9:0x3906] [ORACLE start-0001]
+- **The music is MIDI through MCI:** twelve tracks that are time sections of `MAIN.MID`, `RACE.MID`, `ANTHEM.MID` and `DEMON.MID`, opened as a `sequencer` device, seeked and played with `MCI_NOTIFY`, looped or chained from `MM_MCINOTIFY`, paused and resumed by the control codes and on focus. Windows 10 and 11 play MIDI through the Microsoft GS synth; Wine's `mciseq` needs a MIDI output that a bare prefix lacks. [BYTES ISPACE.DLL seg9:0x3906 seg9:0x3a48] [REF Win32 SDK, MCI sequencer]
+- **In 1994 the music was FM.** On a Sound Blaster the Windows MIDI mapper sent the game's music to the card's OPL3 synth, so the sound the author heard while writing it is the FM rendering, not a wavetable. [DESIGN]
+- **The user wants the original's sound and a way to hear it on Linux without configuring a synth.** [DESIGN]
+
+## Decision
+1. **One software mixer in the port replaces WaveMix and `sndPlaySound`.** It mixes the effects at their native 11 025 Hz, 8-bit, mono, with WaveMix's channel model: `MixChannels` channels (1 to 8), clear-queue high-priority plays, the loop counts, the busy-until holds, the priority ids, the stop and reset ids, and the single-channel semantics when `MixChannels` is 1 (`sndPlaySound`'s one voice, `SND_LOOP` for the looping ids). The mixed stream goes to `waveOut` (winmm) as 16-bit stereo. WaveMix's own summing and clipping arithmetic is [OPEN] in sound.md; until it is read, the mixer sums and clips. [DESIGN] [BYTES ISPACE.DLL seg9:0x11f4] [OPEN]
+2. **Volume and pan apply in software, to the port's stream only.** The left, right and overall words that the original would hand to `waveOutSetVolume` scale the mixed effects, and the music volume formula scales the music, so the user hears what the author's volume model computes and the port never changes the system or device volume. `ForceVol` and the saved system volumes have nothing to act on and are read and logged. The capability level the port reports to its own settings code is 3 (left and right volume), so the Audio Options list offers every mode. [DESIGN] [BYTES ISPACE.DLL seg9:0x76c seg9:0xa9e seg9:0x22ca]
+3. **Music plays through one of three backends** behind one interface, chosen by the port-only key `[Port] Music` with the values `mci`, `soundfont` and `opl3`:
+   - `mci` (the default on Windows): the original's MCI sequence, command for command, with the port's music volume applied through `midiOutSetVolume` on the MIDI mapper, where the original's device-1 call fails. [DESIGN] [BYTES ISPACE.DLL seg9:0x3906]
+   - `soundfont`: the port's own MIDI file player rendering through TinySoundFont (MIT) with a General MIDI SoundFont the user names in `[Port] SoundFont`; the default under Wine when MCI opens no sequencer. [DESIGN] [REF TinySoundFont]
+   - `opl3`: the same player rendering through an OPL3 emulator with a Windows-era Sound Blaster FM bank, for the sound of the original hardware; libADLMIDI (LGPL, bundling Nuked-OPL3) is the candidate, taken in only when its bank data and licence have been checked, and it is built behind a CMake option. [DESIGN] [REF libADLMIDI] [OPEN]
+   The two synth backends render into the port's mixer, so music and effects share one output stream. The track tables, section seeks, loops, chaining, control codes and the focus pause and resume are the same for every backend. The Midi Mapper question box is shown only by the `mci` backend, when MCI reports a port other than the mapper, as the original does. [DESIGN] [BYTES ISPACE.DLL seg9:0x3a80]
+4. **Implementation order:** the mixer and the effects first, then `mci`, then `soundfont`, then `opl3`. [DESIGN]
+5. **Settings as the original:** the Audio Options and Options dialogs port with their control ids, fills, enable rules and INI writes; the device test reports no PC-speaker driver, so `AllowSound` never matters; `SoundSystem` −1 resolves to 3. Custom WAVs from the `SOUNDS` directory (id −1) are read as any PCM WAV and converted to the mixer's format. [DESIGN] [BYTES ISPACE.DLL seg9:0x2f30 seg9:0x15cc]
+6. **Testing:** the mixer's channel model, holds, loops, variants and volume formulas are pure functions with doctest cases against the tables in sound.md; the catalogue test plays each id through the engine in a headless run and checks the log; music backends are checked by a render-to-file comparison of the first seconds of each track against a reference rendering kept under `work/`. [DESIGN]
+
+## Alternatives
+- **Shipping WAVEMIX.DLL semantics through a Win32 port of WaveMix:** the 1.x source is not available in a usable licence, and its behaviour is small enough to reproduce. [DESIGN]
+- **`waveOutSetVolume` as the original:** on Windows Vista and later it sets the application's session volume, under Wine the device's; either way the user's mixer settings would move while playing. [DESIGN]
+- **MCI only:** faithful and free of dependencies, but silent in a bare Wine prefix. [DESIGN]
+- **A soft synth only:** drops the Windows user's GS synth, which is what the original uses there today. [DESIGN]
+
+## Consequences
+- M7 stage 1 implements decisions 1, 2, 4 (the mixer, the effects and `mci`) and 5; stage 2 adds `soundfont` and `opl3` with their third-party sources under `third_party/` and their licences. [DESIGN]
+- Checklist rows SND-01 to SND-13, WIN-28 and the INI rows for the sound keys describe the behaviour this ADR ports. [DESIGN]
+- The port's sound log lines keep their ids; the catalogue gives each id its meaning and transcript. [DESIGN]

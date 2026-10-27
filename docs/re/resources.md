@@ -113,6 +113,8 @@ ENG_LANG.DLL holds 1,446 strings, ids 110–12,546. [BYTES ENG_LANG.DLL STRING] 
 
 ### #100: WAV files (SND_FX.DLL 46, eng_fx.dll 32)
 - All 78 are RIFF WAVE, PCM, 11,025 Hz, 8-bit, mono. SND_FX ids run 100–178 and eng_fx ids 138–180. [BYTES SND_FX.DLL 100] [BYTES ENG_FX.DLL 100]
+- Sound slot s plays resource s + 100 ([sound.md](sound.md#slots)). Four ids of that range are in neither DLL: 112, 142, 165 and 181, the resources of slots 0x0c, 0x2a, 0x41 and 0x51. [BYTES SND_FX.DLL 100] [BYTES ENG_FX.DLL 100] [BYTES ISPACE.DLL seg9:0x2780]
+- [re/artifacts/sounds.tsv](../../re/artifacts/sounds.tsv) catalogues every slot with its resource, length, transcript and call sites ([sound.md](sound.md#catalogue)). [DESIGN]
 - The samples of 45 SND_FX and 25 eng_fx sounds equal loose THEWORKS `.WAV` files, which gives them names (`same_as`), for example eng_fx #156 = `ATTACK.WAV`. [BYTES ENG_FX.DLL 100 156]
 
 ### #5000: text and binary data

@@ -1,4 +1,5 @@
-"""Mechanical facts of docs/re/{structs,globals,timing,rng,ispace,formats,shell,palette-tables,install}.md.
+"""Mechanical facts of docs/re/{structs,globals,timing,rng,ispace,formats,shell,palette-tables,install,sound}.md
+and of re/artifacts/sounds.tsv.
 
 CLAUDE.md asks for a test behind every count, offset, table value and writer
 list in docs/. These tests read the ``isre asm`` listings and indexes
@@ -2657,3 +2658,319 @@ def test_state1_repaint_dispatch(ins):
     assert _texts(ins, expect) == expect
     assert all(_calls(ins, {"seg11:0x15e0": "seg7:0x11cc", "seg11:0x15e5": "seg7:0x1208",
                             "seg11:0x15f0": "seg7:0x1f38", "seg11:0x15f6": "seg11:0x33cc"}).values())
+
+
+# ------------------------------------------------------------------ sound.md
+
+
+SOUNDS_TSV = REPO_ROOT / "re" / "artifacts" / "sounds.tsv"
+SLOT_FLAGS = {0: [0, 3, 6, 8, 0x11, 0x12, 0x23, 0x24, 0x25, 0x27, 0x45], 1: [0x26],
+              2: [1, 2, 4, 7, *range(0x13, 0x23), 0x29, 0x2B, 0x41, 0x46],
+              3: [0x2A, *range(0x2C, 0x41), 0x44, 0x47, 0x48, 0x49], 4: [0x28],
+              6: [5, *range(9, 0x11), 0x42, 0x4A, 0x4E], 7: [0x43, 0x4B, 0x4C, 0x4D, 0x4F, 0x50, 0x51]}
+HOLDS = {0x26: 900, 0x2C: 730, 0x2D: 900, 0x2E: 1000, 0x2F: 900, 0x30: 600, 0x31: 1300, 0x32: 1100,
+         0x33: 1250, 0x34: 510, 0x35: 300, 0x36: 700, 0x37: 540, 0x38: 300, 0x3D: 350, 0x3E: 640,
+         0x3F: 750, 0x40: 520, 0x47: 660, 0x48: 960, 0x49: 700}
+MISSING_WAVS = {112, 142, 165, 181}
+
+
+def _flag_of(isp: Module) -> dict[int, int]:
+    """Slot id -> flag byte from the 82-entry switch ISPACE.DLL seg9:0x265b."""
+    sw = isp.switches["seg9:0x265b"]
+    assert (sw["table"], sw["count"]) == ("seg9:0x2660", 82)
+    out = {}
+    for sid, t in enumerate(sw["targets"]):
+        if t == "seg9:0x2704":                      # the preset 2 of seg9:0x25fa stays
+            out[sid] = 2
+            continue
+        store = isp.step(isp.at(t), 1)
+        assert store.text.startswith("mov byte ptr [bx + 0x2224], "), store.text
+        out[sid] = int(store.ops[1], 0)
+    return out
+
+
+def test_sound_slot_flag_table(isp):
+    """sound.md Slots: the flag byte of each of the 82 slots, the preset and the bound."""
+    assert isp.at("seg9:0x25fa").text == "mov byte ptr [bx + 0x2224], 2"
+    assert isp.at("seg9:0x2650").text == "cmp ax, 0x51"
+    flags = _flag_of(isp)
+    assert {v: sorted(k for k in flags if flags[k] == v) for v in set(flags.values())} == SLOT_FLAGS
+    assert [s for s, t in enumerate(isp.switches["seg9:0x265b"]["targets"]) if t == "seg9:0x2704"] == [0x21, 0x41]
+
+
+def test_sound_resource_rule_and_purge(isp):
+    """sound.md Slots: FindResource(module[flag & 1], id + 100, 100) on both paths; purge tests."""
+    for call, add in (("seg9:0x2780", "seg9:0x2774"), ("seg9:0x27e3", "seg9:0x27d7")):
+        assert "KERNEL.60 FindResource" in isp.at(call).text
+        assert isp.at(add).text == "add ax, 0x64"
+        assert isp.step(isp.at(call), -2).text == "push 0x64"
+    assert isp.at("seg9:0x276d").text == "push word ptr [bx + 0x68c]"
+
+
+def _wav(data: bytes) -> tuple[int, int, int, int, int]:
+    """(format tag, channels, rate, bits, data bytes) of a RIFF WAVE image."""
+    assert data[:4] == b"RIFF" and data[8:12] == b"WAVE"
+    p, fmt, size = 12, None, None
+    while p + 8 <= len(data):
+        cid, n = data[p:p + 4], struct.unpack_from("<I", data, p + 4)[0]
+        if cid == b"fmt ":
+            tag, ch, rate, _br, _ba, bits = struct.unpack_from("<HHIIHH", data, p + 8)
+            fmt = (tag, ch, rate, bits)
+        elif cid == b"data":
+            size = n
+        p += 8 + n + (n & 1)
+    return (*fmt, size)
+
+
+@functools.lru_cache(maxsize=None)
+def _wavs() -> dict[int, tuple[str, tuple]]:
+    """Resource id -> (module, WAV format) for both FX DLLs."""
+    out = {}
+    for name, label in (("SND_FX.DLL", "SND_FX.DLL"), ("eng_fx.dll", "ENG_FX.DLL")):
+        m = _ne(name)
+        assert {r.type_id for r in m.resources} == {100}
+        for r in m.resources:
+            assert r.id not in out
+            out[r.id] = (label, _wav(m.data[r.file_off:r.file_off + r.length]))
+    return out
+
+
+def test_sound_wav_resources():
+    """sound.md Slots and resources.md #100: 46 + 32 WAVs, all PCM 8-bit mono 11025 Hz, four missing."""
+    w = _wavs()
+    snd = sorted(k for k, (mod, _f) in w.items() if mod == "SND_FX.DLL")
+    eng = sorted(k for k, (mod, _f) in w.items() if mod == "ENG_FX.DLL")
+    assert snd == [*range(100, 112), *range(113, 138), 139, 140, 141, 143, 166, 169, 170, 174, 178]
+    assert eng == [138, *range(144, 165), 167, 168, 171, 172, 173, 175, 176, 177, 179, 180]
+    assert (len(snd), len(eng)) == (46, 32)
+    assert set(range(100, 182)) - set(w) == MISSING_WAVS
+    assert {f[:4] for _m, f in w.values()} == {(1, 1, 11025, 8)}
+
+
+def test_sounds_tsv_matches_the_bytes(isp):
+    """re/artifacts/sounds.tsv: module, resource, flag, length and hold of every slot row."""
+    import csv
+
+    rows = {r["id"]: r for r in csv.DictReader(SOUNDS_TSV.open(newline=""), delimiter="\t")}
+    special = ["-1", *(f"{i:#04x}" for i in range(0x64, 0x77))]
+    assert list(rows) == [f"{i:#04x}" for i in range(0x52)] + special
+    flags, w = _flag_of(isp), _wavs()
+    for sid in range(0x52):
+        r = rows[f"{sid:#04x}"]
+        res = sid + 100
+        mod = "ENG_FX.DLL" if flags[sid] & 1 else "SND_FX.DLL"
+        assert (r["module"], r["resource"], r["flag"]) == (mod, str(res), str(flags[sid])), sid
+        if res in MISSING_WAVS:
+            assert r["ms"] == "absent" and not r["same_as"]
+        else:
+            assert w[res][0] == mod
+            assert r["ms"] == str(w[res][1][4] * 1000 // 11025), sid
+        assert r["hold"] == (str(HOLDS[sid]) if sid in HOLDS else ""), sid
+        assert bool(r["transcript"]) == (mod == "ENG_FX.DLL" and res not in MISSING_WAVS), sid
+    for sid in special:
+        assert not any(rows[sid][k] for k in ("module", "resource", "flag", "ms", "hold"))
+
+
+def test_sound_hold_table(isp):
+    """sound.md Playing: the 36-entry hold switch at ISPACE.DLL seg9:0xf93 (ids 0x26-0x49)."""
+    sw = isp.switches["seg9:0xf93"]
+    assert (sw["table"], sw["count"]) == ("seg9:0xf98", 36)
+    holds = {}
+    for k, t in enumerate(sw["targets"]):
+        if t == "seg9:0xfe0":
+            continue
+        add = isp.step(isp.at(t), 2)
+        assert add.mnem == "add" and add.ops[0] == "ax", add.text
+        holds[0x26 + k] = int(add.ops[1], 0)
+    assert holds == HOLDS
+    assert isp.at("seg9:0xead").text == "cmp word ptr [bp + 0x16], 0"
+
+
+def test_ordinal9_remaps_and_loop_words(isp):
+    """sound.md Playing: the id remaps and the loop words of ordinal 9."""
+    expect = {"seg9:0xdb6": "mov word ptr [bp + 0x1c], 0xb",
+              "seg9:0xd87": "mov word ptr [bp + 0x1c], 0x23",
+              "seg9:0xcd5": "add dx, 0x30",
+              "seg9:0xd45": "mov word ptr [bp + 0x1c], 0x47",
+              "seg9:0xd75": "mov word ptr [bp + 0x1c], 0x2e",
+              "seg9:0xdbe": "mov word ptr [bp - 0x90], 7", "seg9:0xdc4": "mov word ptr [bp + 0x1c], 0x46",
+              "seg9:0xdcc": "mov word ptr [bp - 0x90], 8", "seg9:0xdd2": "mov word ptr [bp + 0x1c], 0x4a",
+              "seg9:0xdda": "mov ax, 0x14",
+              "seg9:0xde7": "mov word ptr [bp - 0x90], 0x14", "seg9:0xded": "mov word ptr [bp + 0x1c], 0x17",
+              "seg9:0xdf5": "mov word ptr [bp + 0x1c], 0x11",
+              "seg9:0xd96": "mov word ptr [0x21a0], 0", "seg9:0xd9c": "mov word ptr [0x21a2], 8",
+              "seg9:0xe63": "cmp word ptr [bp + 0x18], 0xd499",
+              "seg9:0x106d": "add ax, 0x4b0"}
+    assert _texts(isp, expect) == expect
+
+
+def test_sound_play_flags(isp):
+    """sound.md Playing and Session: sndPlaySound flags, MIXPLAYPARAMS, MIXCONFIG, the channel open."""
+    expect = {"seg9:0x1311": "mov word ptr [bp - 0x12], 3", "seg9:0x131e": "mov word ptr [bp - 0x12], 0xf",
+              "seg9:0x1325": "mov word ptr [bp - 0x12], 7",
+              "seg9:0x1383": "mov word ptr [0x2148], 0x12", "seg9:0x1395": "mov word ptr [0x2154], 5",
+              "seg9:0x139b": "mov word ptr [0x2156], 0", "seg9:0x13a4": "mov word ptr [0x2158], ax",
+              "seg9:0x5b9": "mov word ptr [0x171c], 0x14", "seg9:0x5cf": "mov word ptr [0x213e], 0xa",
+              "seg9:0x5d5": "mov word ptr [0x2140], 1", "seg9:0x5db": "mov word ptr [0x2142], 0",
+              "seg9:0x5e1": "mov word ptr [0x2144], 1", "seg9:0x5fd": "push 2",
+              "seg9:0x60e": "push 1", "seg9:0x614": "mov word ptr [0x2222], 1",
+              "seg9:0x11a3": "push 1"}
+    assert _texts(isp, expect) == expect
+    assert all(_calls(isp, {"seg9:0x1333": "sndPlaySound", "seg9:0x11e8": "sndPlaySound"}).values())
+    for site, ptr in (("seg9:0x5c3", 0x17CC), ("seg9:0x5eb", 0x17D0), ("seg9:0x5ff", 0x19D0),
+                      ("seg9:0x610", 0x17D4), ("seg9:0x13be", 0x19D4), ("seg9:0x11a5", 0x19E0)):
+        assert isp.at(site).text == f"lcall [{ptr:#x}]"
+
+
+def _profile_ints(m: Module, func: str) -> list[tuple[str, int, int]]:
+    """(key, default, store) of each GetPrivateProfileInt call in ``func``; store is the DGROUP
+    word the result goes to, or -1 for a local."""
+    dg = unpacked_seg("ispace", 11)
+    out = []
+    for i in m.func_insns(func):
+        if "GetPrivateProfileInt" not in i.text:
+            continue
+        key, dflt, store = m.step(i, -4), m.step(i, -3), m.step(i, 1)
+        target = store.mem.disp if store.mnem == "mov" and store.abs_ds else -1
+        imm = _IMM_RE.fullmatch(dflt.ops[0])
+        value = s16(int(dflt.ops[0], 0) & 0xFFFF) if imm else None      # None: a computed default
+        if not _IMM_RE.fullmatch(key.ops[0]):
+            continue                                    # a computed key (JBtn<n>)
+        out.append((_cstr(dg, int(key.ops[0], 0)).decode(), value, target))
+    return out
+
+
+def test_sound_ini_keys(isp):
+    """sound.md Settings: keys, defaults and DGROUP words of the sound INI reads."""
+    reads = _profile_ints(isp, "seg9:0x22ca")
+    assert reads[:8] == [("SoundFX", 1, 0x694), ("VoiceFX", 1, 0x696), ("Music", 1, 0x221E),
+                         ("SoundVolume", 100, 0x69E), ("FXMusic", 50, 0x6A2), ("StereoEffect", 2, 0x228C),
+                         ("PurgeSound", 1, 0x698), ("StereoSwap", 0, 0x69A)]
+    assert ("AllowSound", 0, -1) in reads and ("SoundSystem", -1, 0x2280) in reads
+    assert ("MixChannels", None, 0x219E) in _profile_ints(isp, "seg9:0x4e0")
+    assert isp.at("seg9:0x55d").text == "mov word ptr [bp - 6], 4"         # its default
+    every = [k for f in isp.funcs for k in _profile_ints(isp, f)]
+    assert ("SaverVolume", 0, 0x69E) in every
+    assert any(k == "ForceVol" and d == 0 for k, d, _s in every)
+    # the device test: SYNC 0x10, VOLUME 4, LRVOLUME 8; MIDI VOLUME 1, LRVOLUME 2
+    expect = {"seg9:0x244c": "test byte ptr [bp - 6], 0x10", "seg9:0x250a": "test al, 4",
+              "seg9:0x250e": "test byte ptr [bp - 6], 8", "seg9:0x24e7": "test al, 1",
+              "seg9:0x24eb": "test byte ptr [bp - 0x36], 2", "seg9:0x2422": "mov word ptr [0x227e], ax",
+              "seg9:0x25b7": "jle seg9:0x25bc"}
+    assert _texts(isp, expect) == expect
+
+
+MCI_SITES = {"seg9:0x381b": ("0x803", "0x2200"), "seg9:0x3851": ("0x814", "0x100"),
+             "seg9:0x38bb": ("0x80d", "0x400"), "seg9:0x3a2f": ("0x804", "2"),
+             "seg9:0x3a80": ("0x809", "0"), "seg9:0x3b2f": ("0x807", "0xa"),
+             "seg9:0x3b4d": ("0x807", "9"), "seg9:0x3bc1": ("0x806", "9")}
+
+
+def test_mci_commands(isp):
+    """sound.md Music: the eight mciSendCommand calls, their messages and flags; no MCI_STOP."""
+    sites = [i.addr for i in isp.insns if "mciSendCommand" in i.text and i.mnem in ("call", "lcall")]
+    assert sites == list(MCI_SITES)
+    for site, (msg, flags) in MCI_SITES.items():
+        window = [isp.step(isp.at(site), -k) for k in range(1, 9)]
+        assert any(w.text == f"push {msg}" for w in window), site
+        if site == "seg9:0x3bc1":
+            assert isp.at("seg9:0x3bb7").text == "mov ax, 9"
+        else:
+            assert any(w.text == f"push {flags}" for w in window), site
+    assert not any(i.text == "push 0x808" for i in isp.insns if i.seg == 9)
+    expect = {"seg9:0x3833": "mov word ptr [bp - 0x22], 0x4003", "seg9:0x37f8": "mov word ptr [bp - 0x12], 0xae4",
+              "seg9:0x3866": "cmp word ptr [bp - 0x26], -1", "seg9:0x3870": "push 0x8ab",
+              "seg9:0x388e": "push 4", "seg9:0x3895": "cmp ax, 7", "seg9:0x38d3": "push 1"}
+    assert _texts(isp, expect) == expect
+
+
+def test_music_tracks_and_files(isp):
+    """sound.md Music: the track tables at ISPACE.DLL DGROUP:0xaa8/0xac0/0xad8 and the file names."""
+    dg = unpacked_seg("ispace", 11)
+    start = struct.unpack_from("<12h", dg, 0xAA8)
+    length = struct.unpack_from("<12h", dg, 0xAC0)
+    files = dg[0xAD8:0xAD8 + 12]
+    assert start == (0, 45, 1700, 0, 340, 2000, 190, 2870, 2920, 0, 89, 1810)
+    assert length == (1810, 1495, 1170, 290, 2550, 166, 2030, 50, 90, 89, 101, 190)
+    assert list(files) == [2, 0, 0, 1, 1, 2, 3, 0, 0, 3, 3, 2]
+    assert [_cstr(dg, o).decode() for o in (0xAEF, 0xAF4, 0xAF9, 0xB00, 0xB06, 0xAE4)] == \
+        ["main", "race", "anthem", "demon", ".mid", "sequencer"]
+    assert dg[0xAEE] == 0
+
+
+def test_midi_files():
+    """sound.md Music: sizes, SMF format, division and track counts of the four MIDI files."""
+    from isre import szdd
+
+    d = require(ORIGINAL / "shipdisk")
+    got = {}
+    for name in ("MAIN", "RACE", "ANTHEM", "DEMON"):
+        data = szdd.expand(require(d / f"{name}.MI1").read_bytes())
+        assert data[:4] == b"MThd"
+        got[name] = (len(data), *struct.unpack_from(">HHH", data, 8))
+    assert got == {"MAIN": (97465, 1, 15, 480), "RACE": (55863, 1, 13, 480),
+                   "ANTHEM": (33595, 1, 14, 480), "DEMON": (57931, 1, 13, 480)}
+
+
+def test_wavemix_ini_rate():
+    """sound.md Session: the shipped WAVEMIX.INI [default] rate and blocks."""
+    import configparser
+
+    from isre import szdd
+
+    text = szdd.expand(require(ORIGINAL / "shipdisk" / "WAVEMIX.IN1").read_bytes()).decode("latin-1")
+    cp = configparser.ConfigParser(strict=False, inline_comment_prefixes=(";",))
+    cp.optionxform = str
+    cp.read_string(text)
+    assert (cp["default"]["SamplesPerSec"], cp["default"]["WaveBlocks"]) == ("11", "3")
+    assert cp["SB16 Wave Out"]["SamplesPerSec"] == "22"
+
+
+MUSIC_CALLS = ["seg2:0x4cf", "seg2:0x8df", "seg6:0x1dac", "seg6:0x5e25", "seg9:0x65de", "seg9:0x6bd4",
+               "seg10:0x148", "seg10:0x7f34", "seg10:0x7f7e", "seg10:0x82bb", "seg10:0x841d",
+               "seg10:0x857f", "seg10:0x8679", "seg11:0x476e", "seg11:0x7aa2", "seg13:0xae4e",
+               "seg13:0xbb72", "seg15:0x10dc", "seg15:0x3058", "seg15:0x57b5", "seg15:0x58ec",
+               "seg15:0x5bf5", "seg16:0x1e4b", "seg16:0x663c", "seg17:0x6018", "seg18:0x54",
+               "seg18:0x129", "seg18:0x1e0", "seg18:0x490", "seg18:0x8d9", "seg18:0xacb",
+               "seg18:0x4154", "seg18:0x532c", "seg18:0x5f41", "seg18:0x5f4d", "seg18:0x632b"]
+
+
+def test_music_wrapper_call_sites(ins):
+    """sound.md Music: the 36 calls of seg10:0x7480 and its rewrites."""
+    assert ins.call_sites("seg10:0x7480") == sorted(MUSIC_CALLS, key=A)
+    expect = {"seg10:0x74b7": "mov word ptr [bp + 6], 9", "seg10:0x74c9": "mov byte ptr [bx + 0x7e0], al",
+              "seg10:0x74cd": "mov word ptr [0x9222], 0xfffe", "seg10:0x74d5": "mov word ptr [0x9222], 0xfffd",
+              "seg10:0x74f0": "mov word ptr [bp + 6], ax", "seg10:0x7504": "mov word ptr [bp + 6], 2",
+              "seg10:0x7524": "add ax, 0x2328", "seg10:0x753c": "push 0xb"}
+    assert _texts(ins, expect) == expect
+    # the in-wave selectors pass flag 0, the others 1 (seg2:0x4cf and seg2:0x8df push no flag)
+    assert ins.at("seg13:0xae49").text == ins.at("seg13:0xbb6d").text == "push 0"
+
+
+def test_sound_wrapper_sequences(ins):
+    """sound.md INSPACE wrappers: the 13-entry follow-up switch of seg10:0x754a and the call counts."""
+    sw = ins.switches["seg10:0x7658"]
+    assert (sw["table"], sw["count"]) == ("seg10:0x765d", 13)
+    assert [k for k, t in enumerate(sw["targets"]) if t == "seg10:0x7642"] == [4, 5, 6, 11]
+    expect = {"seg10:0x7582": "mov word ptr [bp + 6], 0x20", "seg10:0x7587": "mov word ptr [0x9292], 0x21",
+              "seg10:0x7594": "add ax, 0x3e8", "seg10:0x75b6": "add ax, 0x1a4", "seg10:0x75cd": "add ax, 0x181",
+              "seg10:0x75eb": "add ax, 0x294", "seg10:0x7600": "add ax, 0xc8", "seg10:0x7617": "add ax, 0x2bc",
+              "seg10:0x762f": "add ax, 0x190", "seg10:0x7622": "mov word ptr [0x9292], 0x66",
+              "seg10:0x755e": "mov word ptr [bp + 0xc], 0", "seg10:0x7563": "cmp word ptr [0x920c], 3",
+              "seg10:0x775c": "mov ax, 0xd499"}
+    assert _texts(ins, expect) == expect
+    counts = {t: len(ins.call_sites(t)) for t in ("seg10:0x744c", "seg10:0x754a", "seg10:0x7944")}
+    assert counts == {"seg10:0x744c": 152, "seg10:0x754a": 114, "seg10:0x7944": 4}
+
+
+def test_sound_dialog_controls():
+    """sound.md Audio Options and Options: the control ids of ENG_LANG.DLL DIALOG 999 and 100."""
+    d999 = _dialog("ENG_LANG.dl1", 999)
+    assert (d999["caption"], d999["x"], d999["y"], d999["cx"], d999["cy"]) == ("Audio Options", 73, 31, 171, 158)
+    assert [c["id"] for c in d999["controls"]] == [102, 103, 101, 1001, 128, 1008, 1003, 1004, 129, 112,
+                                                   113, 1000, 1, 2, 106, 1007]
+    d100 = {c["id"]: c for c in _dialog("ENG_LANG.dl1", 100)["controls"]}
+    assert {i: (d100[i]["class"], d100[i]["text"]) for i in (139, 111, 118, 104, 140, 143, 144, 145, 146)} == {
+        139: ("BUTTON", "&Audio.."), 111: ("SCROLLBAR", ""), 118: ("COMBOBOX", ""), 104: ("BUTTON", "SOUND"),
+        140: ("STATIC", "Master Volume"), 143: ("STATIC", "Sound FX:"), 144: ("STATIC", "Normal"),
+        145: ("STATIC", "Voice FX:"), 146: ("STATIC", "Normal")}

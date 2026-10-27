@@ -291,3 +291,4 @@ This page covers the DGROUP globals that drive the game, the code that reads the
 | DGROUP:0x9ea2 | 2 | int | race flags per lap [BYTES seg4:0x2161 seg4:0x8bc4] | — | seg4:0x2161, seg4:0x8bc4 |
 
 - A "—" in the writer column means that no writer is listed here, not that none exists. [DESIGN]
+- The sound and music words of the INSPACE wrappers (DGROUP:0x2384, DGROUP:0x3c88, DGROUP:0x9220, DGROUP:0x9222, DGROUP:0x9292 and the last-play record DGROUP:0x921c–0x9290) are in [sound.md](sound.md#inspace-wrappers). [BYTES seg10:0x7512 seg10:0x752a seg10:0x759a seg10:0x7587 seg10:0x74cd]

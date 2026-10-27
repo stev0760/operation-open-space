@@ -1,0 +1,103 @@
+id	module	resource	flag	same_as	ms	transcript	hold	meaning	call_sites
+0x00	SND_FX.DLL	100	0		0			8-sample silent stub; preloaded by command 0; no constant call site	
+0x01	SND_FX.DLL	101	2	PUFF.WAV	264			PUFF; seg7:0x5b68 (mode 1)	P:seg7:0x5c6e in seg7:0x5b68(lo([bp + 6]),hi([bp + 6]),1)
+0x02	SND_FX.DLL	102	2	ZOOM.WAV	359			ZOOM; race routines seg4:0x144c and seg4:0x277a; seg12:0x0	P:seg4:0x1f40 in seg4:0x144c(8,ax,1) C:seg4:0x2ad5 in seg4:0x277a P:seg12:0x73 in seg12:0x0(6,[bp - 4],1)
+0x03	SND_FX.DLL	103	0	ONE_SHOT.WAV	219			ONE_SHOT; mode 2 with a = 0x1e in seg11:0x4e0a and seg13:0x1fc2; seg8:0x90fa passes a = 2, b = DX, mode = AX	P:seg8:0x9220 in seg8:0x90fa(2,dx,ax) P:seg11:0x53a9 in seg11:0x4e0a(0x1e,[bp - 4],2) P:seg11:0x55b2 in seg11:0x4e0a(0x1e,[bp - 4],2) P:seg13:0x214a in seg13:0x1fc2(0x1e,[bp - 4],2)
+0x04	SND_FX.DLL	104	2	LASER.WAV	448			LASER; no constant call site; reachable only through the data-driven hit-sound ids	
+0x05	SND_FX.DLL	105	6	SHIELD.WAV	410			SHIELD; desk scene seg15:0x4c76; seg11:0x4b00; preloaded by seg14:0x1b84 (mode 5)	P:seg11:0x4c5e in seg11:0x4b00([0x9324],[bp + 6],1) P:seg14:0x1fb9 in seg14:0x1b84(0,0,5) C:seg15:0x4dbf in seg15:0x4c76
+0x06	SND_FX.DLL	106	0	CLUNK.WAV	294			CLUNK; seg12:0x3498	P:seg12:0x35cd in seg12:0x3498(0xa,[bp + 0xa],1)
+0x07	SND_FX.DLL	107	2	BOUNCE.WAV	413			BOUNCE; player-damage handler seg8:0x45e0; seg12:0x3e98	P:seg8:0x4960 in seg8:0x45e0([0x9324],[bp + 8],1) P:seg12:0x46a1 in seg12:0x3e98([bp - 0xa],[bp - 6],1)
+0x08	SND_FX.DLL	108	0	SHORT.WAV	510			SHORT; seg8:0x0 and seg18:0x591c (mode 4); seg16:0xa2	P:seg8:0x273 in seg8:0x0(dx) P:seg16:0x84c in seg16:0xa2(7,0,1) P:seg18:0x5949 in seg18:0x591c(dx)
+0x09	SND_FX.DLL	109	6	SMASH.WAV	234			SMASH; seg15:0x3590	C:seg15:0x36d9 in seg15:0x3590
+0x0a	SND_FX.DLL	110	6	DOLPH.WAV	530			DOLPH; no constant call site	
+0x0b	SND_FX.DLL	111	6	ELPHANT.WAV	808			ELPHANT; the exit request (SC_CLOSE, seg2:0xd78) plays 0x0b + rand()%3 after 0x6e	C:seg2:0xdcf in seg2:0xd78
+0x0c	SND_FX.DLL	112	6		absent			resource absent; ordinal 9 plays slot 0x0b instead (ISPACE.DLL seg9:0xdb6), so the SC_CLOSE draw gives ELPHANT 2 times in 3	C:seg2:0xdcf in seg2:0xd78
+0x0d	SND_FX.DLL	113	6	SCREECH.WAV	534			SCREECH; the SC_CLOSE draw 0x0b + rand()%3	C:seg2:0xdcf in seg2:0xd78
+0x0e	SND_FX.DLL	114	6	ORCA.WAV	812			ORCA; no constant call site	
+0x0f	SND_FX.DLL	115	6	DUCK.WAV	429			DUCK; no constant call site	
+0x10	SND_FX.DLL	116	6	TIGER.WAV	719			TIGER; seg18:0x3f02 (mode 4)	P:seg18:0x3f18 in seg18:0x3f02(lo([bp + 6]),hi([bp + 6]),4)
+0x11	SND_FX.DLL	117	0	RICOCHET.WAV	631			RICOCHET; mode 2 with a = 0x1e in seg8:0x3688, seg8:0x3aec, seg8:0x6f3c, seg18:0x2c1e; ordinal 9 books id -1 (a WAV file) under slot 0x11	P:seg8:0x3a0e in seg8:0x3688(0x1e,[bp + 6],2) P:seg8:0x3c38 in seg8:0x3aec(0x1e,[bp + 8],2) P:seg8:0x7546 in seg8:0x6f3c(0x1e,[bp + 8],2) P:seg18:0x2ebd in seg18:0x2c1e(0x1e,[bp + 8],2)
+0x12	SND_FX.DLL	118	0	CRACK.WAV	238			CRACK; seg7:0x233c	P:seg7:0x24c0 in seg7:0x233c(0,[bp + 8],1)
+0x13	SND_FX.DLL	119	2	SHOW.WAV	401			SHOW; dialog and page open click (17 sites)	C:seg2:0x540 in seg2:0x224 C:seg2:0x10ac in seg2:0x1046 C:seg2:0x1143 in seg2:0x1046 C:seg10:0x8438 in seg10:0x82a2 C:seg10:0x85ee in seg10:0x8568 C:seg11:0x7963 in seg11:0x7902 C:seg11:0x7a3b in seg11:0x7902 C:seg11:0x7a74 in seg11:0x7902 P:seg15:0x7b7d in seg15:0x7b34(0,0,0) C:seg16:0x12e9 in seg16:0xcfe C:seg16:0x41f8 in seg16:0x4104 P:seg17:0x88f in seg17:0x600(lo([bp - 0x70]),hi([bp - 0x70]),4) C:seg17:0xd37 in seg17:0xd22 C:seg17:0x1b8c in seg17:0x1b3e P:seg17:0x23e6 in seg17:0x20fa(0x64,ax,4) P:seg17:0x2c20 in seg17:0x20fa(0x64,ax,4) C:seg17:0x858a in seg17:0x8572
+0x14	SND_FX.DLL	120	2	STATIC.WAV	460			STATIC; credits/logo typer seg15:0x7cda, briefing typewriter reset seg15:0x84b0, race and wave routines; slot of id 0x68	C:seg4:0x26c7 in seg4:0x144c C:seg4:0x2f09 in seg4:0x2da2 P:seg8:0x20c8 in seg8:0x1e32([bp + 8],[bp + 6],1) C:seg11:0x4656 in seg11:0x41bc C:seg11:0x6bb9 in seg11:0x6b64 P:seg15:0x7e67 in seg15:0x7cda(lo([0x3b98]),hi([0x3b98]),4) P:seg15:0x84d5 in seg15:0x84b0(lo([bp + 6]),hi([bp + 6]),4) C:seg17:0x5ac0 in seg17:0x5782
+0x15	SND_FX.DLL	121	2	AWAY.WAV	313			AWAY; seg11:0x6b64, seg13:0x9a18, seg13:0x9ae8, desk scene seg15:0x0, seg17	P:seg11:0x710e in seg11:0x6b64(2,[bp - 0x16],1) P:seg13:0x9ad7 in seg13:0x9a18(2,[bp - 8],1) P:seg13:0x9ba7 in seg13:0x9ae8(2,[bp - 6],1) C:seg15:0x620 in seg15:0x0 P:seg17:0xab7 in seg17:0x600(lo([bp - 0x70]),hi([bp - 0x70]),4) C:seg17:0xb8c in seg17:0x600 P:seg17:0xb9c in seg17:0x600(lo([bp - 0x70]),hi([bp - 0x70]),4) C:seg17:0xf3a in seg17:0xd22 C:seg17:0x1f61 in seg17:0x1b3e
+0x16	SND_FX.DLL	122	2	DEFBOOM.WAV	374			DEFBOOM; seg8:0x92a0, seg18:0x4dc4	P:seg8:0x92c5 in seg8:0x92a0(2,[bp + 8],1) C:seg18:0x4f8a in seg18:0x4dc4
+0x17	SND_FX.DLL	123	2	BUBBLE.WAV	1285			BUBBLE; seg8:0x9564; slot of id 0x6f	P:seg8:0x95ad in seg8:0x9564(0,[bp - 4],1)
+0x18	SND_FX.DLL	124	2	NEW_DEF.WAV	180			NEW_DEF; seg8:0x9464	P:seg8:0x94b3 in seg8:0x9464(0,[bp - 4],1)
+0x19	SND_FX.DLL	125	2	FIRE1.WAV	439			FIRE1; seg12:0x2db6	P:seg12:0x3111 in seg12:0x2db6([0x9328],[bp - 8],1)
+0x1a	SND_FX.DLL	126	2	FLANGE.WAV	712			FLANGE; sequence 0x72 (twice, 200 ms apart)	
+0x1b	SND_FX.DLL	127	2	FIREBALL.WAV	1223			FIREBALL; seg6:0x84fc when rand()%3 = 0 (else 0x4e); seg13:0x1318	P:seg13:0x1676 in seg13:0x1318(5,[bp - 4],1)
+0x1c	SND_FX.DLL	128	2	MISSILE.WAV	1305			MISSILE; desk scene seg15:0x0, seg15:0x3caa, seg13:0x3748, seg18:0x66e0; with one channel ordinal 9 then sets ISPACE.DLL DGROUP:0xcf6 = now + 1200	P:seg13:0x3b77 in seg13:0x3748(7,0,1) C:seg15:0x185 in seg15:0x0 C:seg15:0x3cf9 in seg15:0x3caa P:seg18:0x6c56 in seg18:0x66e0([0x934a],[bp - 0xc],ax)
+0x1d	SND_FX.DLL	129	2	SLING.WAV	304			SLING; seg11:0x947a	P:seg11:0x95a3 in seg11:0x947a(lo([bp + 6]),hi([bp + 6]),1)
+0x1e	SND_FX.DLL	130	2	FUEL.WAV	581			FUEL; no constant call site	
+0x1f	SND_FX.DLL	131	2	SHATTER.WAV	722			SHATTER; seg7:0x26c4, seg7:0x2e02, race place routine seg11:0x41bc	P:seg7:0x2705 in seg7:0x26c4(0,[bp + 8],1) P:seg7:0x2ec2 in seg7:0x2e02(lo([bp + 6]),hi([bp + 6]),1) C:seg11:0x4778 in seg11:0x41bc
+0x20	SND_FX.DLL	132	2	IGNITE.WAV	901			IGNITE; desk scene seg15:0x0 and seg15:0x374c; seg11:0x72e0; first of sequence 0x6a	P:seg11:0x730b in seg11:0x72e0([0x9324],[0x9646],1) C:seg15:0x58 in seg15:0x0 C:seg15:0x399a in seg15:0x374c
+0x21	SND_FX.DLL	133	2	SIZZLE.WAV	2137			SIZZLE; second of sequence 0x6a (1000 ms after 0x20)	
+0x22	SND_FX.DLL	134	2	BOLT.WAV	919			BOLT; intro logo seg15:0x7cda, seg11:0xa234, seg11:0xa9ea, seg16:0xcfe, seg18:0x0	P:seg11:0xa286 in seg11:0xa234([0x951e],[0x9520],1) P:seg11:0xaa39 in seg11:0xa9ea([0x951e],[0x9520],1) P:seg15:0x7eee in seg15:0x7cda(lo([0x3b98]),hi([0x3b98]),4) P:seg15:0x800d in seg15:0x7cda(lo([0x3b98]),hi([0x3b98]),4) C:seg16:0x188e in seg16:0xcfe C:seg18:0x38 in seg18:0x0
+0x23	SND_FX.DLL	135	0	CAPTURED.WAV	700			CAPTURED; seg15:0x5e22, seg16:0xa2, seg13:0x3748, seg18:0xd94; first of sequence 0x76; the Master Volume test sound; plays for 0x26 while VoiceFX = 0; the only slot command 0 loads in reduced mode	P:seg13:0x38cd in seg13:0x3748(7,ax,1) P:seg13:0x3a46 in seg13:0x3748(7,0,1) P:seg15:0x5ee7 in seg15:0x5e22(ax,ax,ax) C:seg15:0x637e in seg15:0x5e22 P:seg16:0x46a in seg16:0xa2(7,0,1) C:seg18:0x1579 in seg18:0xd94 C:seg18:0x16e5 in seg18:0xd94
+0x24	SND_FX.DLL	136	0	SLURP.WAV	459			SLURP; seg18:0x2c1e (mode 2); first of sequence 0x71	P:seg18:0x2e62 in seg18:0x2c1e(0x1e,[bp + 8],2)
+0x25	SND_FX.DLL	137	0	SATISFY.WAV	827			SATISFY; seg11:0x72e0, seg18:0x5220; second of sequences 0x71 and 0x76	C:seg11:0x7388 in seg11:0x72e0 C:seg18:0x5268 in seg18:0x5220
+0x26	ENG_FX.DLL	138	1	C_NOTBAD.WAV	724	Not bad.	900	voice; no constant call site; ordinal 9 plays 0x23 instead while VoiceFX = 0	
+0x27	SND_FX.DLL	139	0	HYPER.WAV	504			HYPER; 12 sites in seg6:0x78ea, seg7:0x13b2, seg7:0x1d0c, seg12:0x1776, seg12:0x2288, seg13:0xae68, seg15:0x3caa, seg18:0x3d6, seg18:0x5cec	P:seg6:0x79b3 in seg6:0x78ea([0x88c8],[0x88ca],4) P:seg7:0x13f2 in seg7:0x13b2(lo([bp + 8]),hi([bp + 8]),1) P:seg7:0x1e62 in seg7:0x1d0c(0xe,[bp - 4],1) P:seg12:0x1ebd in seg12:0x1776(di,si,1) P:seg12:0x22c3 in seg12:0x2288([bp + 6],[bp + 8],1) P:seg12:0x23f5 in seg12:0x2288([bp + 6],[bp + 8],1) P:seg13:0xb174 in seg13:0xae68(0xe,[bp - 6],ax) P:seg13:0xb3c5 in seg13:0xae68(0xe,[bp - 6],1) P:seg13:0xb5ce in seg13:0xae68(0xe,[0x9316],1) C:seg15:0x3f3d in seg15:0x3caa P:seg18:0x46f in seg18:0x3d6(lo([0x88c8]),hi([0x88c8]),4) P:seg18:0x5f24 in seg18:0x5cec(lo([0x88c8]),hi([0x88c8]),4)
+0x28	SND_FX.DLL	140	4	NSCREECH.WAV	549			NSCREECH; seg11:0x63b4; preloaded at wave set-up seg9:0x6624 (mode 5); command 2 never purges it (flags 4)	P:seg9:0x6924 in seg9:0x6624(0,0,5) P:seg11:0x6834 in seg11:0x63b4(0xe,[bp + 8],1)
+0x29	SND_FX.DLL	141	2	TURBO.WAV	445			TURBO; seg11:0x63b4	P:seg11:0x64c5 in seg11:0x63b4([0x9324],[bp + 8],1)
+0x2a	ENG_FX.DLL	142	3		absent			resource absent: plays nothing; no call site	
+0x2b	SND_FX.DLL	143	2	POP.WAV	11			POP; desk-scene and briefing character tick (seg15:0x1584, seg9:0x8d18, seg16:0x2e3c, seg17:0x2c5a)	P:seg9:0x8ff6 in seg9:0x8d18(lo([0x1834]),hi([0x1834]),4) P:seg15:0x1846 in seg15:0x1584(0,0,0) P:seg16:0x3197 in seg16:0x2e3c(0,0,0) C:seg17:0x2f25 in seg17:0x2c5a
+0x2c	ENG_FX.DLL	144	3	WARNING.WAV	634	Warning!	730	voice; message dispatcher seg3:0x6ec (codes 8, 9, 10, 132 and others); seg10:0xa96c	C:seg3:0xcd0 in seg3:0x6ec C:seg3:0xce0 in seg3:0x6ec C:seg3:0xcf0 in seg3:0x6ec C:seg3:0xd41 in seg3:0x6ec C:seg3:0x1129 in seg3:0x6ec C:seg3:0x1149 in seg3:0x6ec C:seg3:0x1181 in seg3:0x6ec C:seg10:0xa99c in seg10:0xa96c
+0x2d	ENG_FX.DLL	145	3	SYSTEM.WAV	1052	System critical.	900	voice; no constant call site	
+0x2e	ENG_FX.DLL	146	3	WHAT.WAV	952	What are you doing?	1000	voice; through 0x67 when ISPACE.DLL DGROUP:0xcfa is non-zero	
+0x2f	ENG_FX.DLL	147	3	LET_ME.WAV	1370	Let me guide you in.	900	voice; seg16:0xa2	P:seg16:0x4c5 in seg16:0xa2(7,0,1)
+0x30	ENG_FX.DLL	148	3	CAUTION.WAV	1184	Use caution.	600	voice; message dispatcher (code 164 and others); seg18:0x8bc; one of the three of 0x65	C:seg3:0x1161 in seg3:0x6ec C:seg3:0x1171 in seg3:0x6ec C:seg3:0x129b in seg3:0x6ec C:seg18:0xb0a in seg18:0x8bc
+0x31	ENG_FX.DLL	149	3	DOTRY.WAV	2086	Do try to come back in one piece.	1300	voice; only through 0x65	
+0x32	ENG_FX.DLL	150	3	MERCY.WAV	1300	Show no mercy.	1100	voice; only through 0x65	
+0x33	ENG_FX.DLL	151	3	RESCUE.WAV	1642	Rescue unit dispatched.	1250	voice; message code 7	C:seg3:0xcbd in seg3:0x6ec
+0x34	ENG_FX.DLL	152	3	TROUBLE.WAV	724	I'm in trouble.	510	voice; message dispatcher with string 303	C:seg3:0xa70 in seg3:0x6ec C:seg3:0xa87 in seg3:0x6ec C:seg3:0x11ba in seg3:0x6ec
+0x35	ENG_FX.DLL	153	3		451	Defending.	300	voice; first of sequence 0x6d	
+0x36	ENG_FX.DLL	154	3	OUTTA.WAV	706	I'm outta here.	700	voice; message dispatcher with strings 683 and 426	C:seg3:0x105a in seg3:0x6ec C:seg3:0x131d in seg3:0x6ec
+0x37	ENG_FX.DLL	155	3	COMING.WAV	905	I'm on my way.	540	voice; message codes 1 and 106	C:seg3:0x861 in seg3:0x6ec C:seg3:0x1139 in seg3:0x6ec
+0x38	ENG_FX.DLL	156	3	ATTACK.WAV	457	Attacking.	300	voice; first of sequence 0x6c	
+0x39	ENG_FX.DLL	157	3		339	Target.		voice; first of sequence 0x6b, second of 0x6c and 0x6d	
+0x3a	ENG_FX.DLL	158	3	DISABLE.WAV	463	Disabled.		voice; second of sequence 0x6b	
+0x3b	ENG_FX.DLL	159	3		659	Thanks for the help.		voice; message codes 3, 81 and 117-119	C:seg3:0xba5 in seg3:0x6ec C:seg3:0xbc5 in seg3:0x6ec C:seg3:0x102b in seg3:0x6ec C:seg3:0x11d2 in seg3:0x6ec C:seg3:0x11e2 in seg3:0x6ec C:seg3:0x11f2 in seg3:0x6ec
+0x3c	ENG_FX.DLL	160	3	NOCANDO.WAV	811	No can do.		voice; refusals (strings 340, 371, 398-404, 685; code 141)	C:seg3:0xc0b in seg3:0x6ec C:seg3:0xc66 in seg3:0x6ec C:seg3:0xe85 in seg3:0x6ec C:seg3:0xe9d in seg3:0x6ec C:seg3:0xeb5 in seg3:0x6ec C:seg3:0xed5 in seg3:0x6ec C:seg3:0x106a in seg3:0x6ec C:seg3:0x1257 in seg3:0x6ec
+0x3d	ENG_FX.DLL	161	3	WATCHIT.WAV	341	Watch it.	350	voice; one in four of message codes 59-63, 65-68, 87, 88 (seg3:0xf61); seg4:0x5e8e	C:seg3:0xf7c in seg3:0x6ec C:seg4:0x61b8 in seg4:0x5e8e P:seg4:0x6276 in seg4:0x5e8e(0,0,0)
+0x3e	ENG_FX.DLL	162	3		1012	Are you looking for trouble?	640	voice; one in four of message codes 59-63, 65-68, 87, 88 (seg3:0xf61); seg4:0x5e8e	C:seg3:0xf7c in seg3:0x6ec P:seg4:0x657b in seg4:0x5e8e(0,0,0)
+0x3f	ENG_FX.DLL	163	3	GETYOU.WAV	1046	I'm gonna get you.	750	voice; hostile replies (strings 356, 358, 373, 379, 695, 1416; code 80); one in four of message codes 59-63, 65-68, 87, 88 (seg3:0xf61); seg13:0x6900	C:seg3:0xc88 in seg3:0x6ec C:seg3:0xc98 in seg3:0x6ec C:seg3:0xdab in seg3:0x6ec C:seg3:0xdd3 in seg3:0x6ec C:seg3:0xf7c in seg3:0x6ec C:seg3:0x103f in seg3:0x6ec C:seg3:0x1111 in seg3:0x6ec C:seg3:0x1217 in seg3:0x6ec P:seg13:0x6ce4 in seg13:0x6900(0,0,0)
+0x40	ENG_FX.DLL	164	3		862	I could use some help.	520	voice; message dispatcher with string 3019	C:seg3:0xa38 in seg3:0x6ec
+0x41	SND_FX.DLL	165	2		absent			resource absent: plays nothing; no call site	
+0x42	SND_FX.DLL	166	6	CROWD.WAV	1669			CROWD; race routines seg4:0x144c and seg4:0x2da2; preloaded at wave set-up; first of sequences 0x73 and 0x74	C:seg4:0x2638 in seg4:0x144c P:seg4:0x265f in seg4:0x144c(0xe,[bp + 6],1) C:seg4:0x2e4e in seg4:0x2da2 P:seg9:0x6934 in seg9:0x6624(0,0,5)
+0x43	ENG_FX.DLL	167	7		982	He shoots, he scores!		voice; second of sequence 0x73 (700 ms after 0x42)	
+0x44	ENG_FX.DLL	168	3	ENOUGH.WAV	778	Enough already.		voice; message codes 1, 19 and 138	C:seg3:0x98a in seg3:0x6ec C:seg3:0xaed in seg3:0x6ec C:seg3:0xafd in seg3:0x6ec C:seg3:0xb15 in seg3:0x6ec C:seg3:0x1247 in seg3:0x6ec
+0x45	SND_FX.DLL	169	0	KABOOM.WAV	805			KABOOM; seg12:0x274a, seg12:0x2b20, seg12:0xa26, seg16:0x8e4, seg8:0x3fbe (mode 3), seg7:0x5090, seg6:0x78ea	P:seg6:0x7938 in seg6:0x78ea([bp + 8],[bp + 0xa],4) P:seg7:0x5209 in seg7:0x5090([0x934a],[bp + 8],1) P:seg8:0x4037 in seg8:0x3fbe(0,0,3) P:seg12:0xac7 in seg12:0xa26(6,[bp + 6],1) P:seg12:0x2b0d in seg12:0x274a([bp + 6],[bp + 8],1) P:seg12:0x2da5 in seg12:0x2b20([bp + 6],[bp + 8],1) P:seg16:0xaac in seg16:0x8e4([0x9324],[bp + 8],1)
+0x46	SND_FX.DLL	170	2	BEEP.WAV	29			BEEP; only as id 0x75	
+0x47	ENG_FX.DLL	171	3	YORE_HOT.WAV	942	You're hot.	660	voice; one of the 0x66 draw	
+0x48	ENG_FX.DLL	172	3	PERFORM.WAV	1300	You perform well.	960	voice; one of the 0x66 draw; seg18:0x5f74	C:seg18:0x5f84 in seg18:0x5f74
+0x49	ENG_FX.DLL	173	3	SLICK.WAV	920	That was slick.	700	voice; one of the 0x66 draw; one side of the 0x67 alternation; seg11:0x6b64	C:seg11:0x6f0e in seg11:0x6b64
+0x4a	SND_FX.DLL	174	6	SIRENS.WAV	511			SIRENS; only as id 0x70	
+0x4b	ENG_FX.DLL	175	7	ENGAGE.WAV	1633	Commencing launch sequence.		voice; desk scene entry seg15:0xcb0 and desk/launch scene frame seg15:0x10be	C:seg15:0xeed in seg15:0xcb0 C:seg15:0x110a in seg15:0x10be
+0x4c	ENG_FX.DLL	176	7	PENETRAT.WAV	1486	Penetrating inner space.		voice; seg15:0x0, which the desk scene calls in phases 5-7	P:seg15:0x613 in seg15:0x0(0,0,0)
+0x4d	ENG_FX.DLL	177	7	SELECT.WAV	1236	Select destination.		voice; Navigation/destination dialog seg6:0x23d4	C:seg6:0x2daa in seg6:0x23d4
+0x4e	SND_FX.DLL	178	6	WHISTLE.WAV	919			WHISTLE; seg6:0x84fc when rand()%3 != 0	
+0x4f	ENG_FX.DLL	179	7		689	Final lap.		voice; race routine seg4:0x277a; preloaded at wave set-up	C:seg4:0x2d66 in seg4:0x277a P:seg9:0x6914 in seg9:0x6624(0,0,5)
+0x50	ENG_FX.DLL	180	7	STAY.WAV	966	Please stay.		voice; the exit request (SC_CLOSE, seg2:0xd78), 450 ms after the animal sound	P:seg2:0xdff in seg2:0xd78(0,0,0)
+0x51	ENG_FX.DLL	181	7		absent			resource absent: plays nothing; called before the Order dialog (seg11:0x79e5)	C:seg11:0x79e5 in seg11:0x7902
+-1								ordinal 9 plays SndPath + name + .WAV, booked as slot 0x11	
+0x64								ordinal 9 returns 0	
+0x65								ordinal 9 plays 0x30 + rand()%3	P:seg7:0x1ab2 in seg7:0x158e(0,0,0)
+0x66								ordinal 9 plays 0x47, 0x48 or 0x49, never its last pick twice (ISPACE.DLL DGROUP:0xcfc)	C:seg3:0xbd8 in seg3:0x6ec P:seg13:0x1c06 in seg13:0x16ac([bp - 8],[bp - 0xa],1) C:seg16:0x7290 in seg16:0x7210 C:seg18:0x607a in seg18:0x6046
+0x67								ordinal 9 plays 0x49 and 0x2e alternately (ISPACE.DLL DGROUP:0xcfa)	C:seg3:0xd1b in seg3:0x6ec C:seg3:0xfdf in seg3:0x6ec
+0x68								ordinal 9 plays slot 0x14 with loop word 0x14, skipping the volume and busy checks	P:seg15:0x60a4 in seg15:0x5e22(0,0,0)
+0x69								ordinal 9: MixChannels > 1 resets the priority, one channel stops all; clears busy-until; returns 1; seg10:0x744c sends it before every id	C:seg4:0x2650 in seg4:0x144c C:seg6:0x790c in seg6:0x78ea C:seg8:0x253 in seg8:0x0 C:seg8:0x20b8 in seg8:0x1e32 P:seg10:0x745f in seg10:0x744c(0,0,0) P:seg10:0x7c05 in seg10:0x7b48([0x928c],[0x928e],[0x9290]) C:seg11:0x539a in seg11:0x4e0a C:seg11:0x5585 in seg11:0x4e0a C:seg11:0x89e4 in seg11:0x7c12 C:seg13:0x1661 in seg13:0x1318 C:seg13:0x1bb4 in seg13:0x16ac
+0x6a								INSPACE sequence: 0x20 now, 0x21 after 1000 ms	P:seg7:0x4796 in seg7:0x477e(0,[bp + 6],1) P:seg7:0x4cef in seg7:0x4a38(0,[bp + 0xa],1) P:seg8:0x33cd in seg8:0x2cd8([0x9324],[bp + 6],1) P:seg8:0x4120 in seg8:0x3fbe(ax,cx,1) P:seg13:0x472a in seg13:0x4710([0x9324],[bp + 6],1)
+0x6b								INSPACE sequence: 0x39 now, 0x3a after 420 ms	C:seg3:0xb2d in seg3:0x6ec
+0x6c								INSPACE sequence: 0x38 now, 0x39 after 385 ms	C:seg3:0x8a7 in seg3:0x6ec C:seg3:0x926 in seg3:0x6ec
+0x6d								INSPACE sequence: 0x35 now, 0x39 after 385 ms	C:seg3:0x870 in seg3:0x6ec
+0x6e								ordinal 9 stops all and clears busy-until; seg10:0x754a forces mode 0; 31 sites	C:seg2:0x538 in seg2:0x224 C:seg2:0xdba in seg2:0xd78 C:seg2:0x10a4 in seg2:0x1046 C:seg2:0x113b in seg2:0x1046 C:seg3:0xd2f in seg3:0x6ec C:seg6:0x2da2 in seg6:0x23d4 C:seg6:0x5d7c in seg6:0x5d58 C:seg9:0x276a in seg9:0x22b4 C:seg10:0x7f2b in seg10:0x7f18 C:seg10:0x85e7 in seg10:0x8568 C:seg11:0x468f in seg11:0x41bc C:seg11:0x795b in seg11:0x7902 C:seg11:0x7a04 in seg11:0x7902 C:seg13:0x3b69 in seg13:0x3748 C:seg15:0xcc7 in seg15:0xcb0 C:seg15:0x3073 in seg15:0x302e C:seg15:0x33e2 in seg15:0x302e C:seg15:0x58e2 in seg15:0x5786 C:seg15:0x5a23 in seg15:0x5962 C:seg15:0x62e7 in seg15:0x5e22 C:seg15:0x6438 in seg15:0x5e22 C:seg15:0x6650 in seg15:0x6640 C:seg15:0x77c1 in seg15:0x6cdc C:seg16:0x1172 in seg16:0xcfe C:seg17:0x72 in seg17:0x0 C:seg17:0xc8 in seg17:0x0 C:seg17:0x3c1 in seg17:0x3b2 C:seg17:0xb7d in seg17:0x600 C:seg17:0x1b84 in seg17:0x1b3e C:seg18:0x5072 in seg18:0x4faa C:seg18:0x6072 in seg18:0x6046
+0x6f								ordinal 9 plays slot 0x17 with loop word 0x14, skipping the volume and busy checks	P:seg15:0x666f in seg15:0x6640(ax,ax,4)
+0x70								ordinal 9 plays slot 0x4a with loop word 8, skipping the volume and busy checks	C:seg13:0xb0d2 in seg13:0xae68 C:seg13:0xb40f in seg13:0xae68 P:seg13:0xb420 in seg13:0xae68(0xe,[bp + 6],1)
+0x71								INSPACE sequence: 0x24 now, 0x25 after 660 ms	P:seg13:0x1cb7 in seg13:0x16ac([0x9324],[bp + 6],1) P:seg13:0x1f32 in seg13:0x16ac([0x9324],[bp + 6],1)
+0x72								INSPACE sequence: 0x1a now, 0x1a again after 200 ms	P:seg4:0x2530 in seg4:0x144c(0xe,[bp + 6],1) C:seg4:0x2ce3 in seg4:0x277a
+0x73								INSPACE sequence: 0x42 now, 0x43 after 700 ms	P:seg7:0x1950 in seg7:0x158e(lo([si + 0x226c]),hi([si + 0x226c]),1)
+0x74								INSPACE sequence: 0x42 now, 0x66 after 400 ms	C:seg4:0x2e26 in seg4:0x2da2
+0x75								ordinal 9 plays slot 0x46 with loop word 7, skipping the volume and busy checks	P:seg11:0x472e in seg11:0x41bc(-0x50,ax,4) P:seg11:0x47a0 in seg11:0x41bc(ax,ax,4) P:seg11:0x47ca in seg11:0x41bc(ax,ax,4)
+0x76								INSPACE sequence: 0x23 now, 0x25 after 400 ms	P:seg7:0x4aed in seg7:0x4a38(0,[bp + 0xa],1) P:seg7:0x4c15 in seg7:0x4a38(0,[bp + 0xa],1)
