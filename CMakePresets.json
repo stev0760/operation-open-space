@@ -6,7 +6,7 @@
       "hidden": true,
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/${presetName}",
-      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "IS_OPL3": "ON" }
     },
     { "name": "mingw-x64", "inherits": "base", "displayName": "MinGW-w64 x86_64 (tests under Wine)",
       "toolchainFile": "${sourceDir}/cmake/mingw-x86_64.cmake" },

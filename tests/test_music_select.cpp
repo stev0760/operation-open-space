@@ -49,6 +49,8 @@ struct Env {
     bool mci_ok = true;
     bool synth_ok = true;      // soundfont
     bool opl3_built = false;
+    bool opl3_ok = true;       // a built-in opl3 synth opens
+    std::vector<m::Kind> asked;  // make_synth's kinds, in order
     bool default_sf2 = true;   // Z:\usr\share\soundfonts\default.sf2 exists
     fs::path last_sf2;
     m::SelectEnv make(bool wine) {
@@ -60,7 +62,8 @@ struct Env {
         };
         e.make_synth = [this](m::Kind k, const fs::path& sf2) -> std::unique_ptr<m::Backend> {
             last_sf2 = sf2;
-            if (k == m::Kind::kOpl3 && !opl3_built) return nullptr;
+            asked.push_back(k);
+            if (k == m::Kind::kOpl3 && (!opl3_built || !opl3_ok)) return nullptr;
             if (k == m::Kind::kSoundFont && (!synth_ok || sf2.empty())) return nullptr;
             ++calls.synth_made;
             return std::make_unique<FakeBackend>(m::kind_name(k), &calls, true);
@@ -128,6 +131,64 @@ TEST_CASE("music select: under Wine an empty key with a SoundFont takes soundfon
     CHECK(c->open("x.mid"));
     CHECK(bad.calls.synth_made == 0);
     CHECK(bad.calls.log == std::vector<std::string>{"mci open"});
+}
+
+TEST_CASE("music select: under Wine an empty key takes opl3 first when it is built in") {
+    Env env;
+    env.opl3_built = true;
+    auto b = m::select_backend("", "", env.make(true));
+    REQUIRE(b);
+    CHECK(b->open("x.mid"));
+    CHECK(env.calls.log == std::vector<std::string>{"opl3 open"});
+    CHECK(env.asked == std::vector<m::Kind>{m::Kind::kOpl3});
+    CHECK(env.calls.mci_made == 0);
+    REQUIRE_FALSE(env.calls.lines.empty());
+    CHECK(env.calls.lines.back() == "music: backend opl3, the Wine default");
+
+    // opl3 built in but not opening: soundfont, then mci.
+    Env sf;
+    sf.opl3_built = true;
+    sf.opl3_ok = false;
+    auto c = m::select_backend("", "", sf.make(true));
+    REQUIRE(c);  // M7 s2b fixer
+    CHECK(c->open("x.mid"));
+    CHECK(sf.calls.log == std::vector<std::string>{"soundfont open"});
+    CHECK(sf.asked == std::vector<m::Kind>{m::Kind::kOpl3, m::Kind::kSoundFont});
+
+    Env none;  // opl3 not built in, no SoundFont: mci without asking for soundfont
+    none.default_sf2 = false;
+    auto d = m::select_backend("", "", none.make(true));
+    REQUIRE(d);  // M7 s2b fixer
+    CHECK(d->open("x.mid"));
+    CHECK(none.calls.log == std::vector<std::string>{"mci open"});
+    CHECK(none.asked == std::vector<m::Kind>{m::Kind::kOpl3});
+    CHECK(none.calls.lines.back() == "music: backend mci");
+
+    // Off Wine the empty key stays mci, built in or not; an explicit soundfont under Wine stays
+    // soundfont, and an explicit mci stays mci.
+    Env win;
+    win.opl3_built = true;
+    auto e = m::select_backend("", "", win.make(false));
+    REQUIRE(e);  // M7 s2b fixer
+    CHECK(e->open("x.mid"));
+    CHECK(win.calls.log == std::vector<std::string>{"mci open"});
+    CHECK(win.asked.empty());
+
+    Env named;
+    named.opl3_built = true;
+    auto f = m::select_backend("soundfont", "", named.make(true));
+    REQUIRE(f);  // M7 s2b fixer
+    CHECK(f->open("x.mid"));
+    CHECK(named.calls.log == std::vector<std::string>{"soundfont open"});
+    CHECK(named.asked == std::vector<m::Kind>{m::Kind::kSoundFont});
+
+    Env mci;
+    mci.opl3_built = true;
+    auto g = m::select_backend("mci", "", mci.make(true));
+    REQUIRE(g);  // M7 s2b fixer
+    CHECK(g->open("x.mid"));
+    CHECK(mci.calls.log == std::vector<std::string>{"mci open"});
+    CHECK(mci.asked.empty());
 }
 
 TEST_CASE("music select: under Wine an explicit mci is mci, and no SoundFont means mci") {

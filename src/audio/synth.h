@@ -24,5 +24,5 @@ struct Synth {
 };
 // Factories: nullptr when the synth is not built in (opl3 behind the CMake option IS_OPL3).
 std::unique_ptr<Synth> make_soundfont();   // music_soundfont.cpp (TinySoundFont)
-std::unique_ptr<Synth> make_opl3();        // music_opl3.cpp (libADLMIDI) or a stub
+std::unique_ptr<Synth> make_opl3();        // music_opl3.cpp (Nuked OPL3) or a stub
 }  // namespace is::audio::music

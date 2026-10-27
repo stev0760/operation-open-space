@@ -121,6 +121,8 @@ bool MidiFile::parse(const std::uint8_t* data, std::size_t size, std::string* wh
                     tempos.push_back({tick, static_cast<std::uint32_t>(d[0] << 16 | d[1] << 8 | d[2])});
                 else if (type == 0x2f)
                     ended = true;
+                else if (type == 0x7f && len == 3 && d[0] == 0x00 && d[1] == 0x00 && d[2] == 0x41)
+                    microsoft_authored_ = true;  // Microsoft's id (M7 s2b fixer)
                 running = 0;  // meta events cancel running status [REF Standard MIDI Files 1.0]
                 continue;
             }

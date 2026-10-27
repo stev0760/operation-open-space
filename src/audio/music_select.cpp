@@ -77,10 +77,11 @@ std::unique_ptr<Backend> select_backend(const std::string& music_key,
     if (!known) log("music: [Port] Music=" + music_key + " is not mci, soundfont or opl3; using the default");
     const std::filesystem::path sf2 = resolve_soundfont(soundfont_key, env.wine, env.exists);
 
-    // The default rule [DESIGN] (ADR 0011 decision 3): mci, except under Wine with a resolved
-    // SoundFont and an empty key, where the session takes soundfont outright, because Wine's MCI
-    // opens a sequencer whose port ("Midi Through") has no synth behind it. An explicit mci is
-    // always mci.
+    // The default rule [DESIGN] (ADR 0011 decision 3 as amended for stage 2b): mci, except under
+    // Wine with an empty key, where Wine's MCI opens a sequencer whose port ("Midi Through") has
+    // no synth behind it. There the session takes opl3 when it is built in and opens (the FM
+    // rendering is what the game was written on), then soundfont when a SoundFont resolves and
+    // opens, then mci. An explicit mci is always mci.
     if (kind != Kind::kMci) {
         std::unique_ptr<Backend> b = env.make_synth ? env.make_synth(kind, sf2) : nullptr;
         if (b) {
@@ -89,13 +90,19 @@ std::unique_ptr<Backend> select_backend(const std::string& music_key,
             return b;
         }
         log(std::string("music: backend ") + kind_name(kind) + " unavailable; using the default");
-    } else if (known && lower_trimmed(music_key).empty() && env.wine && !sf2.empty() && env.make_synth) {
-        std::unique_ptr<Backend> b = env.make_synth(Kind::kSoundFont, sf2);
-        if (b) {
-            log("music: backend soundfont (" + sf2.string() + "), the Wine default");
+    } else if (known && lower_trimmed(music_key).empty() && env.wine && env.make_synth) {
+        if (std::unique_ptr<Backend> b = env.make_synth(Kind::kOpl3, sf2)) {
+            log("music: backend opl3, the Wine default");
             return b;
         }
-        log("music: soundfont " + sf2.string() + " did not open; using mci");
+        log("music: opl3 not built in or did not open");
+        if (!sf2.empty()) {
+            if (std::unique_ptr<Backend> b = env.make_synth(Kind::kSoundFont, sf2)) {
+                log("music: backend soundfont (" + sf2.string() + "), the Wine default");
+                return b;
+            }
+            log("music: soundfont " + sf2.string() + " did not open; using mci");
+        }
     }
     log("music: backend mci");
     return env.make_mci ? env.make_mci() : nullptr;

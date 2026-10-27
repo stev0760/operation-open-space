@@ -11,9 +11,12 @@ namespace is::audio::music {
 // docs/re/sound.md "Music"). Played end to end through GeneralUser GS 2.0.3 at 22,050 Hz and
 // 0 dB, their sample peaks are MAIN +15.5, RACE +9.7, ANTHEM +20.7 and DEMON +13.7 dBFS (RMS
 // -3.4, -6.1, -7.5 and -8.7 dBFS). -22 dB puts the loudest peak (ANTHEM at 174 s) at -1.3 dBFS,
-// so the full mix never clips, and leaves the RMS of the mix between -25 and -31 dBFS. A gain
-// that only fit channels 1-10 would be 6 dB higher; the choice of channels is the player's
-// [OPEN] in sound.md. tests/test_music_soundfont.cpp re-measures the peaks.
+// so the full mix never clips, and leaves the RMS of the mix between -25 and -31 dBFS. The
+// player now plays channels 1-10 of these files only (midi_file.h dual_mode_skipped, M7 s2b
+// fixer): at -22 dB their peaks are MAIN -10.7, RACE -17.3, ANTHEM -7.9 and DEMON -14.3 dBFS
+// (RMS -31.0, -34.2, -34.3 and -35.6 dBFS), so about 6 dB more gain would still fit; whether
+// to raise it is [OPEN] with the music level. tests/test_music_soundfont.cpp re-measures the
+// peaks.
 inline constexpr float kSoundfontGainDb = -22.0f;
 
 // Voices preallocated at open(), so no note-on allocates on the output thread [DESIGN]. The

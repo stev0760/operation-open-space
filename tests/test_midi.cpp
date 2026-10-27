@@ -172,6 +172,51 @@ TEST_CASE("midi: the SMF parser merges the tracks and keeps the tempo map") {
     CHECK(f.ms_to_tick(1125) == 240);
 }
 
+// A dual-mode file (M7 s2b fixer): Microsoft's FF 7F 03 00 00 41 in track 0, notes on MIDI
+// channels 1, 10, 13 and 16. The player plays channels 1-10 only; without the marker, all.
+Bytes dual_smf(bool marked) {
+    Bytes f;
+    chunk(f, "MThd", {0, 1, 0, 2, 0, 96});
+    Bytes t0 = {0x00, 0xff, 0x51, 3, 0x07, 0xa1, 0x20};
+    if (marked) t0.insert(t0.end(), {0x00, 0xff, 0x7f, 0x03, 0x00, 0x00, 0x41});
+    t0.insert(t0.end(), {0x00, 0xff, 0x2f, 0x00});
+    chunk(f, "MTrk", t0);
+    chunk(f, "MTrk", {0x00, 0x90, 60, 100, 0x00, 0x99, 36, 100, 0x00, 0x9c, 60, 100,
+                      0x00, 0x9f, 36, 100, 0x00, 0xbf, 7, 100, 0x60, 0x80, 60, 0,
+                      0x00, 0x89, 36, 0, 0x00, 0x8c, 60, 0, 0x00, 0x8f, 36, 0,
+                      0x60, 0xff, 0x2f, 0x00});  // the end at 1000 ms, after the note offs
+    return f;
+}
+
+TEST_CASE("midi: a Microsoft-authored dual-mode file plays channels 1-10 only (M7 s2b fixer)") {
+    for (bool marked : {true, false}) {
+        CAPTURE(marked);
+        const Bytes b = dual_smf(marked);
+        m::MidiFile f;
+        REQUIRE(f.parse(b.data(), b.size()));
+        CHECK(f.microsoft_authored() == marked);
+        int skipped = 0;
+        for (const auto& e : f.events()) skipped += m::dual_mode_skipped(f, e);
+        CHECK(skipped == (marked ? 5 : 0));
+
+        Rig r;
+        const fs::path p = scratch_file("is_test_midi_dual_" + std::to_string(std::random_device{}()) +
+                                            "_" + std::to_string(marked) + ".mid",
+                                        b);
+        REQUIRE(r.p->open(p));
+        REQUIRE(r.p->seek_ms(0, true));
+        REQUIRE(r.p->play_to_ms(1000));
+        r.run(1100);
+        std::error_code ec;
+        fs::remove(p, ec);
+        int high = 0;
+        for (const auto& x : r.msgs)
+            if ((x[0] & 0xf0) != 0xb0 || x[1] != 123) high += (x[0] & 0x0f) >= 10;  // not the all notes off
+        CHECK(r.note_ons() == (marked ? 2 : 4));
+        CHECK(high == (marked ? 0 : 5));
+    }
+}
+
 TEST_CASE("midi: malformed files are refused") {
     Bytes b = tiny_smf();
     m::MidiFile f;
@@ -375,6 +420,7 @@ TEST_CASE("midi: the ship disk's four files and the twelve track sections (IS_OR
         int sysex = 0;
         for (const auto& e : files[i].events()) sysex += e.kind == m::MidiEvent::kSysEx;
         CHECK(sysex == 0);  // sound.md: no SysEx
+        CHECK(files[i].microsoft_authored());  // FF 7F 03 00 00 41 (M7 s2b fixer)
     }
     for (int t = 0; t < m::kTrackCount; ++t) {
         INFO("track " << t);

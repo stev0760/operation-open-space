@@ -60,6 +60,13 @@ public:
     };
     const std::vector<Tempo>& tempo_map() const { return tempo_; }
 
+    // The file carries the sequencer-specific meta FF 7F 03 00 00 41 (Microsoft's manufacturer
+    // id: authored for Windows, the dual-mode MPC layout of channels 1-10 extended level and
+    // 13-16 base level) [REF Microsoft MPC authoring guidelines]. The four ship-disk files carry
+    // it once, in track 0 at file offset 23 [BYTES MAIN.MID] [BYTES RACE.MID] [BYTES ANTHEM.MID]
+    // [BYTES DEMON.MID] (M7 s2b fixer).
+    bool microsoft_authored() const { return microsoft_authored_; }
+
 private:
     int format_ = 0, tracks_ = 0, division_ = 0;
     std::vector<MidiEvent> events_;
@@ -67,6 +74,18 @@ private:
     std::vector<Tempo> tempo_;
     std::uint32_t length_ticks_ = 0;
     double ms_per_tick_smpte_ = 0;  // > 0 for an SMPTE division
+    bool microsoft_authored_ = false;
 };
+
+// Whether the port's MIDI player leaves `e` out (M7 s2b fixer): in a Microsoft-authored
+// (dual-mode) file, the channel messages of MIDI channels 11-16, so the synth plays the
+// extended level (channels 1-10, drums on 10) once instead of both levels on top of each other
+// with channel 16's drums as melodic notes. [DESIGN] The extended level fits the Windows 9x Fat
+// Man bank of the opl3 synth and the General MIDI SoundFont. Which level the original's 1994
+// MIDI Mapper set-up sounded (a Windows 3.1 base-level set-up plays 13-16) is [OPEN]
+// (docs/re/sound.md "Music"). SysEx always plays.
+inline bool dual_mode_skipped(const MidiFile& f, const MidiEvent& e) {
+    return f.microsoft_authored() && e.kind == MidiEvent::kChannel && (e.bytes[0] & 0x0f) >= 10;
+}
 
 }  // namespace is::audio::music

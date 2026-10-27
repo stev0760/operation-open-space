@@ -87,9 +87,10 @@ bool MidiPlayer::open(const std::filesystem::path& midi) {
         return false;
     }
     char buf[160];
-    std::snprintf(buf, sizeof buf, "open %s: SMF %d, %d tracks, division %d, %.2f s through %s",
+    std::snprintf(buf, sizeof buf, "open %s: SMF %d, %d tracks, division %d, %.2f s through %s%s",
                   midi.filename().string().c_str(), f->format(), f->tracks(), f->division(),
-                  f->length_ms() / 1000.0, synth_name().c_str());
+                  f->length_ms() / 1000.0, synth_name().c_str(),
+                  f->microsoft_authored() ? ", dual-mode: channels 1-10" : "");  // M7 s2b fixer
     log(buf);
     msg_file_ = f;
     Command c(Op::kOpen);
@@ -169,6 +170,7 @@ void MidiPlayer::all_notes_off() {
 
 void MidiPlayer::send(const MidiEvent& e) {
     if (!synth_) return;
+    if (dual_mode_skipped(*file_, e)) return;  // one level of a dual-mode file (M7 s2b fixer)
     if (e.kind == MidiEvent::kSysEx)
         synth_->midi(file_->sysex(e), e.size);
     else

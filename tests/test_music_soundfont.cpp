@@ -484,8 +484,10 @@ TEST_CASE("soundfont synth: the ship disk's music does not clip at the gain") {
             }
             frames = target;
         };
+        CHECK(f.microsoft_authored());
         for (const auto& e : f.events()) {
             advance_to(e.ms);
+            if (m::dual_mode_skipped(f, e)) continue;  // as the player plays it (M7 s2b fixer)
             if (e.kind == m::MidiEvent::kChannel)
                 s->midi(e.bytes, e.len);
             else

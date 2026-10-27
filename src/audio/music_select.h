@@ -2,9 +2,9 @@
 // [Port] SoundFont = <path to a .sf2>. Portable except under_wine(), which is false off Windows.
 //
 // The rule [DESIGN]:
-// - an empty value: mci, except under Wine when a SoundFont resolves, where it is soundfont
-//   (Wine's MCI sequencer opens a "Midi Through" port with no synth behind it); when that synth
-//   does not open, mci.
+// - an empty value: mci, except under Wine (Wine's MCI sequencer opens a "Midi Through" port
+//   with no synth behind it), where it is opl3 when that synth is built in and opens, else
+//   soundfont when a SoundFont resolves and opens, else mci.
 // - mci: the MCI sequencer, always.
 // - soundfont / opl3: the port's MIDI player over that synth; when the synth is not built in or
 //   does not open, a log line and mci.

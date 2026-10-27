@@ -499,7 +499,7 @@ The special ids are handled by ordinal 9 or by seg10:0x754a, not by a slot. [BYT
 - Whether the sequencer sounds notes that are held across an `MCI_SEEK` target: tracks 4 (RACE.MID from 34 000 ms), 11 (ANTHEM.MID from 181 000 ms) and 5 (ANTHEM.MID from 200 000 ms) start inside held notes, with the next note-on 764 ms, 1797 ms and never after the seek. [OPEN]
 - No oracle run shows `MCI_NOTIFY_SUCCESSFUL`, so the loops and the 7/8 → 2 chaining rest on the bytes alone. [OPEN]
 - Which device MIDI device 1 is to the original's volume calls, and what the port does for music volume ([DESIGN] ADR 0011). [OPEN]
-- Whether the port's GM synth should get channels 13–16: the Windows 3.x MIDI Mapper set-up chose which level sounded, and playing all 16 channels doubles the parts. [OPEN]
+- Which level of the dual-mode files the author's Windows 3.x MIDI Mapper set-up sounded, the extended channels 1–10 or the base-level 13–16; playing all 16 doubles the parts (the port's synth backends play 1–10, [DESIGN] ADR 0011). [OPEN]
 - The acceptance test of seg13:0xae68 and the event kinds 3, 4 and 0x13–0x16 of seg13:0xadbe; what DGROUP:0x186a = 0x11 (seg11:0x476e), the DGROUP:0x13a0 countdown (seg18:0x49) and DGROUP:0x9660 (seg18:0xac0) mean. [OPEN]
 - The effect of the uninitialised [bp − 0x34] read on Options Cancel (ISPACE.DLL seg9:0x221f). [OPEN]
 - The sender of the private message 0x84c to the `NotifyClass` window. [OPEN]
