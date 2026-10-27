@@ -323,11 +323,12 @@ Cheaper models handle refactors, tests and lint. I merge, update the checklist a
 3. **Verify:** independent review; verifiers for the [BYTES] claims the stage 1 fixer made (below); an oracle capture of Audio Options at capability 3; the orchestrator updates the SND, WIN-28 and sound INI rows and commits.
 
 **Stage 2b open items** (each tagged at its site in the code or in ADR 0011):
-- The music levels: `opl3` at unity is about 8.6 dB louder than `soundfont` at −22 dB, and the title mix with the 0x22 bursts peaks within 0.1 dB of full scale; the SoundFont gain could rise about 6 dB now that only channels 1–10 play. To be judged by ear from `work/audio/s2b/listen/title-opl3.wav` and `track-00-opl3-vs-soundfont.wav`, then set in ADR 0011.
+- The title mix with the 0x22 bursts over the OPL3 music peaks within 0.1 dB of full scale; a louder burst would clip in the mixer's sum (ADR 0011 decision 1). The levels themselves are set (OPL3 at unity, SoundFont at −16 dB, judged by ear).
 - Which level of the dual-mode files the author's 1994 set-up sounded ([OPEN] in sound.md); the synths play channels 1–10, `mci` plays whatever the system sequencer does.
 - The Windows 9x volume model (bank volume model 4) is not followed; the driver's 40·log10 law is a GM convention.
 - Release packaging for the statically linked LGPL Nuked OPL3 (the LGPL text and source access with every binary).
 - Nuked OPL3 resamples with linear interpolation and no low-pass filter, so 11025 Hz output carries aliasing; not measured.
+- A port-own master volume for the whole output stream (the original left the device volume to Windows' mixer; the port scales music and effects in software, so the Audio Options volume and FX/Music balance are the only controls under Wine): a modernisation for a later stage, with an ADR first (user request, 2026-10-27).
 
 **Stage 2 open items** (each tagged at its site in the code or in ADR 0011):
 - Sections that start inside held notes open on silence (tracks 4, 11 and 5); whether the MCI sequencer sounds held notes after a seek is [OPEN] in sound.md.

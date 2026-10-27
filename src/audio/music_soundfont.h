@@ -14,10 +14,11 @@ namespace is::audio::music {
 // so the full mix never clips, and leaves the RMS of the mix between -25 and -31 dBFS. The
 // player now plays channels 1-10 of these files only (midi_file.h dual_mode_skipped, M7 s2b
 // fixer): at -22 dB their peaks are MAIN -10.7, RACE -17.3, ANTHEM -7.9 and DEMON -14.3 dBFS
-// (RMS -31.0, -34.2, -34.3 and -35.6 dBFS), so about 6 dB more gain would still fit; whether
-// to raise it is [OPEN] with the music level. tests/test_music_soundfont.cpp re-measures the
-// peaks.
-inline constexpr float kSoundfontGainDb = -22.0f;
+// (RMS -31.0, -34.2, -34.3 and -35.6 dBFS), so 6 dB more fits: the gain is -16 dB, which puts
+// ANTHEM's peak at -1.9 dBFS. The user judged the -22 dB rendering good but quiet next to the
+// opl3 one, and the opl3 synth stays at unity (M7 s2b). tests/test_music_soundfont.cpp
+// re-measures the peaks.
+inline constexpr float kSoundfontGainDb = -16.0f;
 
 // Voices preallocated at open(), so no note-on allocates on the output thread [DESIGN]. The
 // output thread still allocates at a reset (each seek, loop, open and close): tsf_reset frees
