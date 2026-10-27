@@ -431,13 +431,15 @@ int Desk::launch(int arg) {
     if (10 * end_y_ > pos10_) {
         // The oracle shows the ship at the top for 1.43 s before the second restore; how that time
         // splits among the first restore, the ordinal-9 sound call and the flash is [OPEN]
-        // (shell.md item 9, End of the rise). The port, whose sound call returns at once and
-        // whose flash takes no time to speak of, holds the shown frame for that time before the
-        // exit path [OPEN seg15:0x5cb seg15:0x613 seg15:0x6db] [ORACLE start-0001 main].
+        // (shell.md item 9, End of the rise). The oracle's 0x4c starts that time (sound-0001:
+        // 0x4c, then 3.3 s to 0x4d) [ORACLE sound-0001 main], so the port plays it first and
+        // then holds the shown frame (with the ship, as the oracle's screen keeps it) before the
+        // first restore, the flash and the second restore [OPEN seg15:0x5cb
+        // seg15:0x613 seg15:0x6db] [ORACLE start-0001 main] (M7 fixer).
+        host_.sound_at(0x4c, 0, 0, 0);
         host_.busy_until(host_.now() + kLaunchEndHold);
         const int x = monitor_.l + 29, y = monitor_.t + 29, w = monitor_.w() - 58, h = screen_h_ - 58;
         canvas_.scene_to_screen(x, y, w, h);
-        host_.sound_at(0x4c, 0, 0, 0);
         // seg15:0x84b0 silent at step 7 [BYTES seg15:0x84bf]
         canvas_.flash(ship_rect_.l + (ship_rect_.r - ship_rect_.l) / 2, ship_rect_.t + 12);
         canvas_.scene_to_screen(x, y, w, h);

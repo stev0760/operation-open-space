@@ -6,6 +6,7 @@
 // and emulates the first message's effect at every activation instead (ADR 0007 decision 5,
 // palette_message below). Drawing goes to the surface of src/gfx and WM_PAINT presents it.
 #include <windows.h>
+#include <mmsystem.h>
 
 #include <cstdio>
 #include <cwchar>
@@ -13,6 +14,8 @@
 #include <string>
 
 #include "app/app.h"
+#include "audio/audio.h"  // M7 audio rewiring (implementer C)
+#include "dialogs/audio_options.h"
 #include "dialogs/hooks.h"
 #include "formats/bytes.h"
 #include "gfx/palette_message.h"
@@ -124,7 +127,8 @@ void teardown() {
     g.torn_down = true;
     nav::close();  // 1: the Navigation window and its keys (seg6:0x2ebc)
     g.game.teardown();  // 2: the current state (seg2:0x1d58)
-    // 3: ISPACE ordinal 7 command 1 (M7); 4: the clip region (the port keeps a rectangle).
+    audio::shutdown();  // 3: ISPACE ordinal 7 command 1 [BYTES seg10:0x22e] (M7 rewiring)
+    // 4: the clip region (the port keeps a rectangle).
     if (g.main) SetMenu(g.main, nullptr);  // 5
     if (g.menu) {
         DestroyMenu(g.menu);
@@ -207,7 +211,7 @@ void command(WORD id) {
     }
     char what[80];
     switch (a.call) {
-    case shell::Call::kOptions: log_todo("Options dialog", "seg10:0x7f18"); return;
+    case shell::Call::kOptions: dialogs::options_command(); return;  // seg10:0x7f18 (M7 rewiring)
     case shell::Call::kSave: {
         const int arg = shell::save_argument(g.game.state());
         if (arg < 0) return;
@@ -272,11 +276,13 @@ void timer() {
     if (!own_task) {
         if (g.focus_own) {  // seg2:0x12e7: seg10:0x8686, ISPACE ordinal 7 command 3 (M7)
             g.focus_own = false;
-            log_todo("focus lost: ISPACE 7:3", "seg10:0x8686");
+            audio::focus(false);  // M7 rewiring: ISPACE 7:3
+            log("focus lost: ISPACE 7:3 (seg10:0x8686)");
         }
     } else if (!g.focus_own && !IsIconic(g.main)) {  // seg2:0x1302: 7:4 (M7)
         g.focus_own = true;
-        log_todo("focus back: ISPACE 7:4", "seg10:0x86a8");
+        audio::focus(true);  // M7 rewiring: ISPACE 7:4
+        log("focus back: ISPACE 7:4 (seg10:0x86a8)");
     }
     // DGROUP:0x934c and the Navigation window DGROUP:0xd1e also count as the game's own.
     if (active != g.main && active != nav::window()) {
@@ -426,6 +432,7 @@ LRESULT handle(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
                     logical(g.screen_cy));
             }
             g.area.hud_top = g.area.h - 85;  // seg2:0xb51, on both paths
+            audio::set_area(g.area.w, g.area.play_h);  // DGROUP:0x90ea, 0x90ec (M7 fixer)
             g.clip = shell::clip_rect(g.area, g.keys.border != 0, g.play_mode != 0);  // seg2:0xca4
             if (g.timer_seen) g.hud_dirty = true;  // seg2:0xb61
             if (!g.keys.full) {                    // seg2:0xb67-0xb7c
@@ -555,7 +562,14 @@ LRESULT handle(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     case kMsgAllShips: log_todo("All Ships toggle", "seg2:0x513"); return 0;
     case kMsgDemo:
     case kMsgPlay: log_todo("DEMO and PLAY", "seg2:0x86a"); return 0;  // [OPEN] (M3)
-    case kMsgMusic: log_todo("music selector seg10:0x7480", "seg2:0x4cc"); return 0;
+    // seg2:0x4cf pushes only wParam; seg10:0x7480 reads a stale stack word as the flag
+    // (sound.md "Wait or notify"); the port passes 1 [OPEN seg2:0x4cc] (M7 rewiring).
+    case kMsgMusic: is::sound::music(static_cast<int>(static_cast<short>(wparam)), 1); return 0;
+    case MM_MCINOTIFY:  // the MCI sequencer's notifications (ADR 0011 decision 3) (M7 rewiring)
+        // Logged for the oracle comparison (sound-0001 lists every MM_MCINOTIFY) (M7 fixer).
+        log("MM_MCINOTIFY wParam " + std::to_string(static_cast<unsigned>(wparam)));
+        audio::on_mci_notify(static_cast<unsigned>(wparam), static_cast<unsigned long>(lparam));
+        return 0;
     default: break;
     }
     return DefWindowProcW(hwnd, msg, wparam, lparam);

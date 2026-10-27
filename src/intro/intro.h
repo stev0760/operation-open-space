@@ -120,10 +120,21 @@ public:
     virtual ~Host() = default;
     virtual Tick now() = 0;  // GetCurrentTime
     virtual Area area() = 0;
-    // seg10:0x744c / seg10:0x754a (sound), seg10:0x7480 (music), and the actions later stages
-    // port: none of them is ported yet.
+    // seg10:0x744c(id) (sound), seg10:0x7480(code, 1) (music), and the actions later stages
+    // port.
     virtual void sound(int id) = 0;
     virtual void music(int code) = 0;
+    // seg10:0x754a(id, x, y, mode). The default stands for hosts without positions (the tests).
+    virtual void sound_at(int id, int x, int y, int mode) {
+        (void)x, (void)y, (void)mode;
+        sound(id);
+    }
+    // seg10:0x754a(id, lo(DGROUP:0x3b98), hi(DGROUP:0x3b98), 4): mode 4 at the p of the last
+    // play, which the wrapper keeps [BYTES seg15:0x7e67 seg15:0x7eee seg15:0x800d].
+    virtual void sound_here(int id) { sound_at(id, 0, 0, 4); }
+    // seg10:0x73e2: ordinal 7 command 0 while DGROUP:0x9228 is 0 (shell.md "Intro and title
+    // screen" item 6).
+    virtual void sound_start() { todo("sound start (ISPACE ordinal 7 command 0)", "seg10:0x73e2"); }
     virtual void todo(const std::string& what, const char* address) = 0;
     virtual void show_window() = 0;  // ShowWindow(main, SW_SHOW) [BYTES seg15:0x5840]
     // Calibrate (timing.md "Calibrate", ADR 0001 decision 9).
@@ -299,7 +310,8 @@ private:
     void text_page();  // seg15:0x6890
     void keys();       // seg15:0x6b52
 
-    void sound(int id) { host_.sound(id); }
+    void sound(int id) { host_.sound(id); }                      // seg10:0x744c
+    void sound0(int id) { host_.sound_at(id, 0, 0, 0); }         // seg10:0x754a(id, 0, 0, 0)
     void todo_once(const std::string& what, const char* address);
 
     Canvas& canvas_;

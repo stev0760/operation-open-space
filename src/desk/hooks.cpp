@@ -16,6 +16,7 @@
 #include "app/app.h"
 #include "assets/asset_store.h"
 #include "desk/desk.h"
+#include "dialogs/audio_options.h"  // is::sound (M7 audio rewiring)
 #include "desk/gdi_desk.h"
 #include "formats/ne.h"
 #include "formats/records.h"
@@ -33,13 +34,10 @@ using app::g;
 class DeskHost final : public Host {
 public:
     Tick now() override { return app::now_tick(); }
-    // The sound wrappers wait for the sound milestone: one line per id [DESIGN].
-    void sound(int id) override { log_sound(id, "seg10:0x744c"); }
-    void sound_at(int id, int, int, int) override { log_sound(id, "seg10:0x754a"); }
-    void music(int code) override {
-        if (!music_.insert(code).second) return;
-        app::log_todo("music seg10:0x7480(" + std::to_string(code) + ", 1)", "seg10:0x7480");
-    }
+    // The sound wrappers seg10:0x744c and seg10:0x754a and the music selector seg10:0x7480.
+    void sound(int id) override { is::sound::play(id); }
+    void sound_at(int id, int x, int y, int mode) override { is::sound::play_at(id, x, y, mode); }
+    void music(int code) override { is::sound::music(code, 1); }
     // seg10:0x740c pumps messages; the port shows the surface and lets the time pass without
     // dispatching, so no key reaches the intro inside its own frame (as present_wait in
     // src/app/main.cpp) [DESIGN].
@@ -121,19 +119,12 @@ public:
     }
 
 private:
-    void log_sound(int id, const char* where) {
-        if (!sounds_.insert(id).second) return;
-        char buf[48];
-        std::snprintf(buf, sizeof buf, "sound 0x%x", id);
-        app::log_todo(buf, where);
-    }
     static void wait_until(Tick t) {
         if (g.gfx && g.main) g.gfx->present(g.main, true);
         GdiFlush();
         for (Tick n = app::now_tick(); static_cast<std::int32_t>(t - n) > 0; n = app::now_tick())
             MsgWaitForMultipleObjectsEx(0, nullptr, static_cast<DWORD>(t - n), 0, 0);
     }
-    std::set<int> sounds_, music_;
     std::set<std::string> todos_;
 };
 

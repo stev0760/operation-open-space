@@ -21,6 +21,8 @@
 
 #include "app/app.h"
 #include "app/startup.h"
+#include "audio/audio.h"
+#include "dialogs/audio_options.h"  // M7 audio rewiring (implementer C)
 #include "settings/ini_location.h"
 #include "formats/bytes.h"
 #include "formats/res16.h"
@@ -569,17 +571,33 @@ class IntroHost final : public intro::Host {
 public:
     Tick now() override { return now_tick(); }
     intro::Area area() override { return {g.area.w, g.area.h, g.area.play_h}; }
-    // The sound wrappers seg10:0x744c and seg10:0x754a and the music selector seg10:0x7480 wait
-    // for the sound milestone: one line per id [DESIGN].
+    // The sound wrappers seg10:0x744c and seg10:0x754a and the music selector seg10:0x7480
+    // (src/dialogs/audio_options.h is::sound). The intro plays modes 0 and 4 only, so the host
+    // keeps the wrapper's last p DGROUP:0x3b98 itself for the mode-4 sounds at it: (-6000,
+    // -6000) after mode 0, (x, y) after mode 4 [DESIGN] [BYTES seg10:0x786f seg10:0x7b22]; the
+    // wrapper stores it only on a successful play [OPEN seg10:0x786f: whether a refused play
+    // leaves the previous p].
     void sound(int id) override {
-        if (!sounds_.insert(id).second) return;
-        char buf[48];
-        std::snprintf(buf, sizeof buf, "sound 0x%x", id);
-        log_todo(buf, "seg10:0x754a");
+        is::sound::play(id);
+        last_p_ = {-6000, -6000};
     }
-    void music(int code) override {
-        if (!music_.insert(code).second) return;
-        log_todo("music seg10:0x7480(" + std::to_string(code) + ", 1)", "seg10:0x7480");
+    void sound_at(int id, int x, int y, int mode) override {
+        is::sound::play_at(id, x, y, mode);
+        last_p_ = mode == 4 ? POINT{x, y} : POINT{-6000, -6000};
+    }
+    void sound_here(int id) override { sound_at(id, last_p_.x, last_p_.y, 4); }
+    // seg10:0x73e2: ordinal 7 command 0 once (DGROUP:0x9228) with the INI's sound keys.
+    void sound_start() override {
+        if (sound_started_ || !g.store || !g.ini) return;
+        sound_started_ = true;
+        dialogs::load_live_settings(*g.ini);
+        const bool ok = audio::init(dialogs::live_settings(), *g.store, g.main);
+        log(std::string("sound start: ISPACE ordinal 7 command 0 ") + (ok ? "ok" : "failed"));
+    }
+    void music(int code) override { is::sound::music(code, 1); }
+    void set_mix_channels(int n) {  // seg6:0xc9c, from seg10:0x7f18
+        mix_channels_ = n;
+        audio::set_inspace_mix_channels(n);  // DGROUP:0x920a for seg10:0x7b48 (M7 fixer)
     }
     void todo(const std::string& what, const char* address) override { log_todo(what, address); }
     void show_window() override { ShowWindow(g.main, SW_SHOW); }
@@ -653,7 +671,8 @@ public:
     }
 
 private:
-    std::set<int> sounds_, music_;
+    POINT last_p_{-6000, -6000};  // DGROUP:0x3b98 as far as the intro moves it
+    bool sound_started_ = false;  // DGROUP:0x9228
     int mix_channels_ = 1;  // DGROUP:0x920a before seg6:0xb3e reads MixChannels (default 1)
 };
 
@@ -668,7 +687,7 @@ bool IntroHost::calibrate_step(Tick now) {
     try {
         read_rate_settings(now);
         // seg6:0xc9c reads MixChannels (default 1 in INSPACE) into DGROUP:0x920a.
-        mix_channels_ = g.ini->get_int(settings::kGameSection, "MixChannels", 1);
+        set_mix_channels(g.ini->get_int(settings::kGameSection, "MixChannels", 1));
         g.ini->set_int(settings::kGameSection, "Calibrate", shell::kCalibrate);
         g.ini->save();
     } catch (const std::exception& x) {
@@ -720,6 +739,17 @@ void release_intro() {
 void install_state_hooks() {
     auto& h = g.game.hooks();
     g_intro_host = std::make_unique<IntroHost>();
+    // seg6:0xb3e after the Options dialog (seg10:0x7f18 in src/dialogs) (M7 rewiring).
+    dialogs::set_rate_settings_reader([] {
+        try {
+            read_rate_settings(now_tick());
+            // seg6:0xc9c: MixChannels (default 1 in INSPACE) into DGROUP:0x920a.
+            if (g_intro_host && g.ini)
+                g_intro_host->set_mix_channels(g.ini->get_int(settings::kGameSection, "MixChannels", 1));
+        } catch (const std::exception& x) {
+            log(std::string("INSPACE.INI: ") + x.what());
+        }
+    });
     g_intro_canvas = std::make_unique<intro::GdiCanvas>(*g.gfx, [](const std::string& s) { log(s); });
     g_intro = std::make_unique<intro::Intro>(*g_intro_canvas, *g_intro_host, shell::game_rng());
     // State 0: the intro of src/intro (shell.md "Intro and title screen"). The entry seg15:0x5786
@@ -747,6 +777,7 @@ void install_state_hooks() {
         g.area = shell::play_area_from_client(logical(rc.right), logical(rc.bottom),
                                               logical(g.screen_cx), logical(g.screen_cy));
         g.clip.play = {0, 0, g.area.w, g.area.play_h};  // seg2:0x1b5d
+        audio::set_area(g.area.w, g.area.play_h);  // DGROUP:0x90ea, 0x90ec (M7 fixer)
         // srand(GetCurrentTime()) [BYTES seg2:0x1b6b]: the low word of the port's tick, which
         // counts from start-up (ADR 0001 decision 5) [DESIGN].
         shell::game_rng().srand(static_cast<std::uint16_t>(now_tick() & 0xffff));

@@ -16,6 +16,8 @@
 #include <vector>
 
 #include "app/app.h"
+#include "audio/audio.h"
+#include "dialogs/audio_options.h"  // is::sound (M7 audio rewiring)
 #include "shell/geometry.h"
 #include "briefing/briefing.h"
 #include "briefing/gdi_canvas.h"
@@ -40,13 +42,9 @@ public:
         }
         return {};
     }
-    // The sound wrappers wait for the sound milestone: one line per id [DESIGN].
-    void sound(int id) override {
-        if (!sounds_.insert(id).second) return;
-        char buf[48];
-        std::snprintf(buf, sizeof buf, "sound 0x%x", id);
-        app::log_todo(buf, "seg10:0x754a");
-    }
+    // seg10:0x744c(id); the positional calls go through sound_at (briefing.h).
+    void sound(int id) override { is::sound::play(id); }
+    void sound_at(int id, int x, int y, int mode) override { is::sound::play_at(id, x, y, mode); }
     void todo(const std::string& what, const char* address) override {
         if (todos_.insert(what + address).second) app::log_todo(what, address);
     }
@@ -65,7 +63,6 @@ public:
     }
 
 private:
-    std::set<int> sounds_;
     std::set<std::string> todos_;
 };
 
@@ -200,6 +197,9 @@ void enter_briefing(shell::GameState& s) {
     if (s.hooks().play_area) s.hooks().play_area(s);  // seg2:0xba4
     // seg9:0x22b4(1) draws nothing here: seg10:0x0's call has set DGROUP:0x92e6 = 1.
     todo_once("seg9:0x22b4(1) graphics and the wave resets of seg9:0x5cca", "seg9:0x5cca");
+    // Its sound part runs whatever DGROUP:0x92e6 holds: seg10:0x744c(0x6e) [BYTES seg9:0x2768
+    // seg9:0x276a] (M7 fixer).
+    if (g_host) g_host->sound(0x6e);
     g_logged_phase = -1;
     const Setup setup = make_setup();
     const int id = g_briefing->enter(s, setup);
@@ -235,9 +235,11 @@ void state1_setup(shell::GameState&) {
         g.ini ? g.ini->get_string(settings::kGameSection, "ThePlayer", "", 12) : std::string();
     const shell::Tick start = app::now_tick();  // GetCurrentTime + 2000 [BYTES seg10:0x91]
     // The greeting seg15:0x6640: seg10:0x744c(0x6e) plays 0x69 and 0x6e, then
-    // seg10:0x754a(0x6f, W/2, H/2 - 240, 4); the sounds are logged until the sound milestone.
-    for (int id : kGreetingSounds)
-        if (g_host) g_host->sound(id);
+    // seg10:0x754a(0x6f, W/2, H/2 - 240, 4) [BYTES seg15:0x6650 seg15:0x666f].
+    if (g_host) {
+        g_host->sound(0x6e);
+        g_host->sound_at(0x6f, g.area.w / 2, g.area.h / 2 - 240, 4);
+    }
     if (g.gfx && g_host) {
         PatBlt(g.gfx->dc(), 0, 0, g.area.w, g.area.h, BLACKNESS);
         std::time_t now = std::time(nullptr);
@@ -256,6 +258,10 @@ void state1_setup(shell::GameState&) {
         g.gfx->present(g.main, true);
         GdiFlush();
     }
+    // The load's sound part: seg10:0x744c(0x6e) near its end stops the greeting's 0x6f
+    // [BYTES seg10:0xad seg9:0x2768 seg9:0x276a] [ORACLE sound-0001 main: two stops 20 ms
+    // after 0x6f] (M7 fixer).
+    if (g_host) g_host->sound(0x6e);
     app::log("state 1: greeting drawn at " + std::to_string(start) + " ms" +
              (g.gfx && g.gfx->alphabet() ? "" : " (no ALPHABET)"));
     // The busy wait to start + 2000 ms [BYTES seg10:0xb7-0xc6]: the time passes without
@@ -358,6 +364,10 @@ void install_briefing_hooks(App& app) {
     // State 1 before M3: a black play area under the HUD.
     // The first frame lays out the HUD as the state-1 repaint does; the wave itself is M3.
     h.frame[shell::kWave] = [](shell::GameState&) {
+        // seg10:0x7b48 once per wave frame from seg7:0xcaf: the pending second sound and the
+        // ordinal 8 update. The shell has no wave frame before M3; the port calls it from the
+        // state-1 frame with the play-area centre [OPEN M3 seg7:0xcaf].
+        audio::frame(g.area.w / 2, g.area.play_h / 2, app::now_tick());
         if (g_wave_frames++ == 0) {
             lay_out_hud();
             todo_once("wave frame and the HUD panels (IS_INFO 210, 220)", "seg11:0xafe");

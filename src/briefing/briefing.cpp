@@ -304,7 +304,7 @@ int Typewriter::step(Tick now, int reset, int instant) {
             cy_ = y_;
         }
         ++index_;
-        if (!instant) h_.sound(0x2b);  // seg10:0x754a(0x2b, DGROUP:0x1834, DGROUP:0x1836, 4)
+        if (!instant) h_.sound_at(0x2b, cx_, cy_, 4);  // seg10:0x754a(0x2b, DGROUP:0x1834, DGROUP:0x1836, 4) (M7)
         if (at(index_) == '\r' && at(index_ - 1) == '\n') {
             gate_ = now + 2000;
             break;
@@ -459,7 +459,7 @@ SlideKind slide_kind(int kind) {
 }
 
 void crt_flash(Canvas& c, Host& h, int x, int y) {
-    h.sound(0x14);  // seg10:0x754a(0x14, x, y, 4) [BYTES seg15:0x84d5]
+    h.sound_at(0x14, x, y, 4);  // seg10:0x754a(0x14, x, y, 4) [BYTES seg15:0x84d5] (M7)
     constexpr Colour kWhitePen = 0x00FFFFFF;
     // MoveTo/LineTo with the stock WHITE_PEN; LineTo stops before the end point.
     for (int i = 2; i < 200; ++i) {
@@ -871,7 +871,7 @@ void Briefing::ship_setup() {
     f.end = (box_.pr - box_.pl) * 11 / 3 + f.px10;
     f.cx = static_cast<int>(f.px10 / 10);
     f.cy = static_cast<int>(f.mid);
-    h_.sound(0x13);  // seg10:0x754a(0x13, 100, DGROUP:0x90ec/2, 4)
+    h_.sound(0x13);  // seg10:0x754a(0x13, 100, DGROUP:0x90ec/2, 4): played as seg10:0x744c until the briefing has DGROUP:0x90ec [OPEN] (M7)
     h_.todo("ship records: seg11:0xb09c, the class size and the slot (M3)", "seg11:0xb09c");
 }
 
@@ -972,7 +972,7 @@ int Briefing::ship(int init) {
             f.frames = f.frame = 0;
             ++f.pass;
             if (f.pass == 1) {
-                h_.sound(0x15);  // seg10:0x754a(0x15, DGROUP:0x6088/2 + 250, ...)
+                h_.sound(0x15);  // seg10:0x754a(0x15, DGROUP:0x6088/2 + 250, ...): played as seg10:0x744c, the y is unread [OPEN] (M7)
             } else {
                 black_page();
                 if (++ship_ > kLastShip) {
@@ -1114,7 +1114,7 @@ int Briefing::phase1(shell::GameState& s, int init) {
         const int y = ((T - Yb) / 2 - size / 2) + Yb + 52;
         c_.icon(x, y, size, size, (sz + o) * i1880_ + o, o, sz, sz);
         i1882_ += 3;
-        if (i1882_ == 12) h_.sound(0x13);  // seg10:0x754a(0x13, x, y, 4)
+        if (i1882_ == 12) h_.sound_at(0x13, x, y, 4);  // seg10:0x754a(0x13, x, y, 4) (M7)
         if (i1882_ > 60) {
             icon_label(i1880_, x, y);  // on the frame that draws size 64 [BYTES seg17:0x880]
             do {
@@ -1140,7 +1140,7 @@ int Briefing::phase1(shell::GameState& s, int init) {
             s.set_briefing_skip(sub + 1);
             i1884_ = 60;
             i1882_ = 60;
-            h_.sound(0x13);  // seg10:0x754a [OPEN: its arguments]
+            h_.sound(0x13);  // seg10:0x754a [OPEN: its arguments]; played as seg10:0x744c (M7)
         }
     } else if (sub == 2) {
         // Shrink: by 4 px per frame, x from the previous size, y from the current one.

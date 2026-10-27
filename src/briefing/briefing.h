@@ -167,6 +167,12 @@ class Host : public Strings {
 public:
     // seg10:0x744c (id) and seg10:0x754a (id, x, y, 4).
     virtual void sound(int id) = 0;
+    // seg10:0x754a(id, x, y, mode); the default stands for hosts without positions (M7 audio
+    // rewiring, implementer C).
+    virtual void sound_at(int id, int x, int y, int mode) {
+        (void)x, (void)y, (void)mode;
+        sound(id);
+    }
     // An unimplemented path, once per address is the host's choice.
     virtual void todo(const std::string& what, const char* address) = 0;
     // ENG_LANG.DLL #5000 id; empty when absent.

@@ -16,7 +16,9 @@
 
 #include "app/app.h"
 #include "briefing/hooks.h"
+#include "dialogs/audio_options.h"
 #include "dialogs/dialogs.h"
+#include "help/help.h"
 #include "formats/res16.h"
 #include "intro/intro.h"
 #include "nav/nav.h"
@@ -31,28 +33,17 @@ using app::g;
 
 Session g_session;
 std::set<std::string> g_logged;
-std::set<int> g_sounds;
 int g_cache = -1;  // ISPACE.DLL DGROUP:0x1ac
 
 void todo_once(const std::string& what, const char* address) {
     if (g_logged.insert(what).second) app::log_todo(what, address);
 }
 
-// seg10:0x744c / seg10:0x754a: one line per id until the sound milestone [DESIGN].
-void sound(int id) {
-    if (!g_sounds.insert(id).second) return;
-    char buf[48];
-    std::snprintf(buf, sizeof buf, "sound 0x%x", id);
-    app::log_todo(buf, "seg10:0x754a");
-}
+// seg10:0x744c(id): the program's sound wrapper (audio_options.h is::sound).
+void sound(int id) { is::sound::play(id); }
 
-// seg10:0x7480(-2, 1) before and (-3, 1) after the dialogs: the music pause and resume wait
-// for the sound milestone.
-void music(int code) {
-    todo_once("music pause and resume around the dialogs, seg10:0x7480(-2) and (-3)",
-              "seg10:0x7480");
-    (void)code;
-}
+// seg10:0x7480(code, 1): the music pause (-2) before and resume (-3) after the dialogs.
+void music(int code) { is::sound::music(code, 1); }
 
 std::string lang(int id) {
     try {
@@ -165,7 +156,8 @@ Env make_env(int x4, int x5) {
     e.availability_cache = availability();
     e.lang = lang;
     e.exe_string = exe_string;
-    e.sound = sound;
+    // The ISPACE.DLL dialogs play through seg9:0x298c (Benefits seg10:0x3af6 ...).
+    e.sound = [](int id) { is::sound::play_ispace(id); };
     e.todo = [](const std::string& what, const char* address) { todo_once(what, address); };
     e.ini_changed = save_ini;
     e.open_text = [](const std::filesystem::path& file) {
@@ -390,14 +382,70 @@ int save_step(int arg) {  // seg10:0x8568
     return r;
 }
 
+// seg10:0x7f18: the menu commands 0x68 and 0xc0 (audio_options.h).
+namespace {
+std::function<void()> g_rate_settings;
+}  // namespace
+
+void set_rate_settings_reader(std::function<void()> reader) { g_rate_settings = std::move(reader); }
+
+void options_command() {
+    // DGROUP:0x592 = 2 holds the adaptive thresholds, which the port does not have (ADR 0001
+    // decision 7) [BYTES seg10:0x7f22].
+    sound(0x6e);  // [BYTES seg10:0x7f2b]
+    music(-2);    // [BYTES seg10:0x7f34]
+    OptionsEnv env;
+    env.instance = g.instance;
+    env.owner = g.main;
+    env.store = g.store.get();
+    env.ini = g.ini.get();
+    env.game_icon = g.icon;
+    env.lang = lang;
+    env.exe_string = exe_string;
+    env.module_kind = [](bool voice) {
+        try {
+            if (g.store) {
+                const std::string name = voice ? g.store->fx_module() : std::string(assets::kSoundDll);
+                // LoadString(module, 2314) succeeds: ENG_LANG's 2314; fails: no SetWindowText.
+                if (fmt::load_string(g.store->sound_module(name), 2314)) return lang(2314);
+                return std::string();
+            }
+        } catch (const std::exception&) {
+        }
+        return lang(1148);  // the module is not loaded [BYTES ISPACE.DLL seg9:0x1b3d]
+    };
+    env.ini_changed = save_ini;
+    env.reread = [](const audio::Settings& s) { audio::reread_settings(s); };
+    env.sound = [](int id) { is::sound::play_ispace(id); };
+    // seg9:0x3906(DGROUP:0xaa4, 1) plays the track ISPACE.DLL stored while the music was off,
+    // outside INSPACE's wrapper [BYTES ISPACE.DLL seg9:0x220a seg9:0x2225] (M7 fixer).
+    env.music_restart = [] {
+        app::log("Options: music restart seg9:0x3906(DGROUP:0xaa4, 1)");
+        audio::music_restart_stored();
+    };
+    // DGROUP:0x227e as command 0 found it: 3 with a waveOut device, 0 without [DESIGN ADR 0011
+    // decision 2] (M7 fixer).
+    env.capability = audio::capability();
+    // WinHelp(<Path><Language>_HELP.HLP, HELP_CONTEXT, 15): the port's manual window [DESIGN].
+    env.help = [] { help::open_manual(15); };
+    env.todo = [](const std::string& what, const char* address) { todo_once(what, address); };
+    const int r = options_ordinal10(env);  // ordinal 10 command 0 [BYTES seg10:0x7f4e]
+    write_log(kCmdOptions, r);
+    if (g_rate_settings) g_rate_settings();  // seg6:0xb3e [BYTES seg10:0x7f52]
+    size_reread();                           // seg10:0x7f88
+    const shell::Tick now = app::now_tick();  // DGROUP:0x1e50 = now [BYTES seg10:0x7f60]
+    g_session.key_hold = now + 500;           // DGROUP:0x3b94
+    music(-3);  // [BYTES seg10:0x7f7e]
+}
+
 void exit_sequence() {  // seg2:0xd78, SC_CLOSE
     app::log_window("at SC_CLOSE");
     // 1: sounds 0x6e and 11 + rand() % 3, a 450 ms busy wait and sound 0x50 [BYTES seg2:0xdb8
     // seg2:0xdc0 seg2:0xdcf seg2:0xdda seg2:0xde6 seg2:0xdff]. The port sleeps [DESIGN].
-    sound(0x6e);
-    sound(11 + shell::game_rng().rand() % 3);
+    sound(0x6e);                               // seg10:0x744c [BYTES seg2:0xdba]
+    sound(11 + shell::game_rng().rand() % 3);  // seg10:0x744c [BYTES seg2:0xdcf]
     Sleep(450);
-    sound(0x50);
+    is::sound::play_at(0x50, 0, 0, 0);  // seg10:0x754a(0x50, 0, 0, 0) [BYTES seg2:0xdff]
     g.game.set_suspended(true);  // 2: DGROUP:0x1a = 1 [BYTES seg2:0xe07]
     const int r = dialog(kCmdExit);
     switch (r) {
@@ -451,7 +499,7 @@ void install_dialog_hooks(App& app) {
     h.ini = app.ini.get();
     h.ini_changed = save_ini;
     h.lang = lang;
-    h.sound = sound;
+    h.sound = is::dialogs::sound;  // seg10:0x744c (nav: 0x6e, 0x4d)
     h.todo = [](const std::string& what, const char* address) { todo_once(what, address); };
     h.log = [](const std::string& s) { log(s); };
     h.state = [] { return g.game.state(); };

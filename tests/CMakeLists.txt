@@ -2,7 +2,7 @@
 file(GLOB IS_TEST_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/test_*.cpp)
 add_executable(is_tests ${IS_TEST_SOURCES})
 target_link_libraries(is_tests PRIVATE isformats)
-foreach(_dep isassets issettings isshell isgfx isintro isdialogs ishelp isbriefing isnav isinstall isdesk)
+foreach(_dep isassets issettings isshell isgfx isintro isdialogs ishelp isbriefing isnav isinstall isdesk isaudio)
   if(TARGET ${_dep})
     target_link_libraries(is_tests PRIVATE ${_dep})
   endif()

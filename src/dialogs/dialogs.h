@@ -57,7 +57,7 @@ struct Env {
     // Strings, cp1252: ENG_LANG.DLL and INSPACE.EXE; empty when missing.
     std::function<std::string(int)> lang;
     std::function<std::string(int)> exe_string;
-    // seg10:0x744c, the sound wrapper (the port logs it until the sound milestone).
+    // seg10:0x744c, the sound wrapper (is::sound::play).
     std::function<void(int)> sound;
     // log_todo: an action that a later stage ports.
     std::function<void(const std::string&, const char*)> todo;

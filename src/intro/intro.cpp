@@ -79,7 +79,7 @@ void Intro::enter(Tick now) {
     // port builds the unscaled strip whenever it has none, which is what both paths leave.
     canvas_.build_strip();
     frame(now, true);  // 6: seg15:0x58c3
-    todo_once("sound start (ISPACE ordinal 7 command 0)", "seg10:0x73e2");
+    host_.sound_start();  // seg10:0x73e2
     sound(0x6e);                // 7 [BYTES seg15:0x58e2]
     host_.music(-5);            // seg10:0x7480(-5, 1) [BYTES seg15:0x58ec]
     host_.calibrate_start(now);  // seg15:0x58fb
@@ -214,7 +214,7 @@ void Intro::logo(bool redraw) {
         if (host_.calibrated() && !host_.calibrating() && speed_ != 0 && speed_ < 160 && f == 5) {
             spin_ = 0;  // seg15:0x5ee7
             speed_ = 0;
-            sound(0x23);
+            sound0(0x23);  // seg10:0x754a(0x23, 0, 0, 0) [BYTES seg15:0x5ee7]
             ++step_;
         }
         logo_cell(f);
@@ -235,7 +235,7 @@ void Intro::logo(bool redraw) {
         logo_cell(spin_ / 1000 + 10);
         spin_ += 45;
         if (spin_ > 3939) {
-            sound(0x68);
+            sound0(0x68);  // seg10:0x754a(0x68, 0, 0, 0) [BYTES seg15:0x60a4]
             spin_ = 620;
             ++step_;
         }
@@ -469,7 +469,7 @@ void Intro::credits_enter() {  // seg15:0x7b34
     // seg10:0x58ce(0) loads #4000 340 with mode 3 when Enhance is set, else 0; at 8 bpp mode 3
     // is mode 0 (ispace.md ordinal 1).
     canvas_.build_credit_cells(0);
-    sound(0x13);
+    sound0(0x13);  // seg10:0x754a(0x13, 0, 0, 0) [BYTES seg15:0x7b7d]
     speed_ = 50;
     entry_ = 0;
     timer2_ = 0;
@@ -510,7 +510,7 @@ void Intro::credits() {  // seg15:0x7cda
         if (type_line(which_, typed_) == 0) {
             typed_ += calibrate < 0x385 || host_.mix_channels() < 2 ? 4 : 2;
             // an odd count skips the sound [BYTES seg15:0x7e55 seg15:0x7e5a]; at DGROUP:0x3b98
-            if ((typed_ & 1) == 0) sound(0x14);
+            if ((typed_ & 1) == 0) host_.sound_here(0x14);  // [BYTES seg15:0x7e67]
         } else {
             if (which_ == 0) {
                 finish_bolt();
@@ -535,7 +535,7 @@ void Intro::erase(int s) {
     for (int i = 0; i < k; ++i) {
         const int x = rng_.rand() % 300 + w2 - 150;
         aim_bolt(w2, y1, x, h2 - 150);
-        sound(0x22);
+        host_.sound_here(0x22);  // [BYTES seg15:0x7eee seg15:0x800d]
         host_.present_wait(40);
     }
     finish_bolt();
@@ -545,7 +545,7 @@ void Intro::erase(int s) {
     for (int i = 0; i < k; ++i) {
         const int x = rng_.rand() % 300 + w2 - 150;
         aim_bolt(w2, y1, x, h2 + 100);
-        sound(0x22);
+        host_.sound_here(0x22);  // [BYTES seg15:0x7eee seg15:0x800d]
         host_.present_wait(40);
     }
     finish_bolt();
