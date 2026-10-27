@@ -7,6 +7,15 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(IS_WERROR "Treat warnings as errors" ON)
+# The opl3 music synth (ADR 0011 decision 3). OFF: libADLMIDI, the candidate, is GPL-3.0-or-later
+# in its core (src/adlmidi*.cpp, include/adlmidi.h at tag v1.6.2.1), outside the port's
+# third-party licences (MIT, BSD, zlib, public domain, LGPL), and its Windows 3.x AdLib bank is
+# unlicensed (grey zone). No OPL3 synth is vendored, so the option cannot be turned on yet;
+# src/audio/music_opl3.cpp's make_opl3 returns nullptr.
+option(IS_OPL3 "Build the opl3 music synth (needs a vendored OPL3 synth; none yet)" OFF)
+if(IS_OPL3)
+  message(FATAL_ERROR "IS_OPL3: no OPL3 synth is vendored (see the comment above the option)")
+endif()
 set(IS_ORIGINAL_DIR "${CMAKE_SOURCE_DIR}/work/extracted/shipdisk" CACHE PATH
     "Expanded original game files, read by the golden tests (skipped when absent)")
 set(IS_ASSETS_DIR "${CMAKE_SOURCE_DIR}/work/assets" CACHE PATH

@@ -184,8 +184,13 @@ struct GameSettings {
 // it; shell::scale_factor owns that range and counts any other value as 0 [DESIGN]. load()
 // keeps the key as written. formats.md documents only the original's keys.
 constexpr std::string_view kPortSection = "Port";
+// Music and SoundFont choose the music backend and its SoundFont (ADR 0011 decision 3): both
+// kept as written; src/audio/music_select.h owns their values, the default rule and the
+// SoundFont resolution [DESIGN].
 struct PortSettings {
     int scale = 0;
+    std::string music;      // [Port] Music: mci | soundfont | opl3; empty: the default
+    std::string soundfont;  // [Port] SoundFont: the .sf2 path; empty: the default
     void load(const IniFile& ini);
 };
 

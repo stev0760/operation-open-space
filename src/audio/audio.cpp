@@ -93,7 +93,7 @@ bool init(const Settings& s, assets::AssetStore& store, void* hwnd_notify) {
 
     const auto question = store.find_string(2219);  // [BYTES ENG_LANG.DLL STRING 139] id 2219
     glue::music_init(s, g->engine.sound_system(), hwnd_notify,
-                     question ? question->c_str() : nullptr);
+                     question ? question->c_str() : nullptr, &g->mixer, g->out.rate());
     return ok;
 }
 
@@ -170,8 +170,8 @@ void music(int track, int wait) {
     glue::music_request(code, wait);
 }
 
-void on_mci_notify(unsigned wparam, unsigned long /*lparam*/) {
-    if (g) glue::music_notify(wparam);
+void on_mci_notify(unsigned wparam, unsigned long lparam) {
+    if (g) glue::music_notify(wparam, lparam);
 }
 
 void dump_to(const std::filesystem::path& wav) {

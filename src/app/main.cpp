@@ -591,7 +591,15 @@ public:
         if (sound_started_ || !g.store || !g.ini) return;
         sound_started_ = true;
         dialogs::load_live_settings(*g.ini);
-        const bool ok = audio::init(dialogs::live_settings(), *g.store, g.main);
+        // The port's [Port] Music and SoundFont pick the music backend (ADR 0011 decision 3).
+        audio::Settings s = dialogs::live_settings();
+        settings::PortSettings port;
+        port.load(*g.ini);
+        s.port_music = port.music;
+        // cp1252 as every INI path; a narrow std::filesystem::path would throw on a non-UTF-8
+        // byte under MinGW (M7 s2 fixer).
+        s.port_soundfont = settings::path_from_ini(port.soundfont);
+        const bool ok = audio::init(s, *g.store, g.main);
         log(std::string("sound start: ISPACE ordinal 7 command 0 ") + (ok ? "ok" : "failed"));
     }
     void music(int code) override { is::sound::music(code, 1); }

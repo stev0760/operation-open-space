@@ -5,6 +5,13 @@
 
 namespace is::audio {
 
+MusicSource::~MusicSource() = default;
+
+void Mixer::set_music(std::shared_ptr<MusicSource> source) {
+    std::lock_guard<std::mutex> lock(music_mu_);
+    music_ = std::move(source);
+}
+
 void Mixer::configure(int channels) {
     std::lock_guard<std::mutex> lock(mu_);
     channels = std::clamp(channels, 1, kMaxChannels);
@@ -88,6 +95,21 @@ int Mixer::mix_one_locked() {
 }
 
 void Mixer::render(std::int16_t* out, std::size_t frames, std::uint32_t rate) {
+    render_effects(out, frames, rate);
+    std::shared_ptr<MusicSource> music;
+    {
+        std::lock_guard<std::mutex> lock(music_mu_);
+        music = music_;
+    }
+    if (!music) return;
+    // The synth renders with no mixer lock held [DESIGN] (mixer.h).
+    music_buf_.resize(frames * 2);
+    music->render_music(music_buf_.data(), frames, rate);
+    for (std::size_t i = 0; i < frames * 2; ++i)
+        out[i] = static_cast<std::int16_t>(std::clamp(out[i] + music_buf_[i], -32768, 32767));
+}
+
+void Mixer::render_effects(std::int16_t* out, std::size_t frames, std::uint32_t rate) {
     std::lock_guard<std::mutex> lock(mu_);
     const int step = std::max<int>(1, static_cast<int>(rate / kEffectRate));
     for (std::size_t f = 0; f < frames; ++f) {

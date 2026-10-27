@@ -6,6 +6,7 @@
 #include <cstdio>
 
 #include "settings/settings.h"
+#include "formats/bytes.h"
 
 namespace is::dialogs {
 
@@ -169,7 +170,9 @@ audio::Settings audio_settings(const settings::IniFile& ini) {
     s.force_vol = i("ForceVol", 0);
     s.allow_sound = i("AllowSound", 0);
     // SndPath: cp1252 with backslashes; the audio module resolves it (ADR 0003) [DESIGN].
-    s.snd_path = std::filesystem::path(ini.get_string(kGameSection, "SndPath", "", 0x6d));
+    // Decoded as cp1252, backslashes kept: a narrow std::filesystem::path throws on a non-UTF-8
+    // byte under MinGW (M7 s2 fixer).
+    s.snd_path = std::filesystem::path(fmt::cp1252_to_utf16(ini.get_string(kGameSection, "SndPath", "", 0x6d)));
     s.language = ini.get_string(kGameSection, "Language", "", 5);
     return s;
 }

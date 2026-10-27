@@ -125,4 +125,8 @@ TEST_CASE("audio options: the sound keys with ISPACE.DLL's defaults") {
     CHECK(s.mix_channels == 6);
     CHECK(s.snd_path == std::filesystem::path("C:\\INSPACE\\SOUNDS\\"));
     CHECK(s.language == "ENGL");  // 5 bytes with the NUL
+    // A cp1252 byte that is not UTF-8 decodes instead of throwing (M7 s2 fixer).
+    ini.set(is::settings::kGameSection, "SndPath", "C:\\B\xf6se\\");
+    s = audio_settings(ini);
+    CHECK(s.snd_path == std::filesystem::path(u"C:\\B\u00f6se\\"));
 }

@@ -478,6 +478,8 @@ void RegistrationSettings::load(const IniFile& ini) {
 
 void PortSettings::load(const IniFile& ini) {
     scale = ini.get_int(kPortSection, "Scale", 0);  // range: shell::scale_factor
+    music = ini.get_string(kPortSection, "Music", "");          // values: audio/music_select.h
+    soundfont = ini.get_string(kPortSection, "SoundFont", "");
 }
 
 }  // namespace is::settings

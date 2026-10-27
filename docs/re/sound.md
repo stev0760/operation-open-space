@@ -496,6 +496,7 @@ The special ids are handled by ordinal 9 or by seg10:0x754a, not by a slot. [BYT
 - The callers of ordinal 7 command 9 (`WaveMixPump`) in INSPACE are not listed. [OPEN]
 - What ISPACE.DLL DGROUP:0xcf6 = now + 1200 after slot 0x1c is for; no reader is known. [OPEN]
 - Whether `MCI_PLAY` past the file end (tracks 5 and 8) fails and closes the device or plays to the end, on Windows mciseq and on Wine's. [OPEN]
+- Whether the sequencer sounds notes that are held across an `MCI_SEEK` target: tracks 4 (RACE.MID from 34 000 ms), 11 (ANTHEM.MID from 181 000 ms) and 5 (ANTHEM.MID from 200 000 ms) start inside held notes, with the next note-on 764 ms, 1797 ms and never after the seek. [OPEN]
 - No oracle run shows `MCI_NOTIFY_SUCCESSFUL`, so the loops and the 7/8 → 2 chaining rest on the bytes alone. [OPEN]
 - Which device MIDI device 1 is to the original's volume calls, and what the port does for music volume ([DESIGN] ADR 0011). [OPEN]
 - Whether the port's GM synth should get channels 13–16: the Windows 3.x MIDI Mapper set-up chose which level sounded, and playing all 16 channels doubles the parts. [OPEN]

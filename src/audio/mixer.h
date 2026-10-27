@@ -22,6 +22,14 @@ inline constexpr std::uint32_t kEffectRate = 11025;
 using Pcm = std::vector<std::uint8_t>;
 using PcmPtr = std::shared_ptr<const Pcm>;
 
+// The music stream of a synth backend (ADR 0011 decision 3): the output thread asks it for
+// `frames` frames of 16-bit interleaved stereo at `rate`, which it writes into `out`
+// (replacing), already scaled by the music volume. Called from the output thread only.
+struct MusicSource {
+    virtual ~MusicSource();
+    virtual void render_music(std::int16_t* out, std::size_t frames, std::uint32_t rate) = 0;
+};
+
 // The most channels the records hold: the dialog offers 1 to 8 [BYTES ISPACE.DLL seg9:0x2fa1].
 inline constexpr int kMaxChannels = 8;
 
@@ -54,8 +62,19 @@ public:
     std::vector<int> take_completed();
 
     // Mixes `frames` frames of 16-bit interleaved stereo at `rate` (an integer multiple of
-    // kEffectRate; each effect sample is held rate / kEffectRate frames) into `out`.
+    // kEffectRate; each effect sample is held rate / kEffectRate frames) into `out`: the
+    // effects under their volume words, then the music source's frames added and clipped.
+    //
+    // Locking [DESIGN]: mu_ guards the channels and is held only while the effects mix; the
+    // music source is taken under music_mu_ as a shared_ptr copy and rendered with no mixer
+    // lock held, so a play, stop or set_music from the message thread never waits for a synth's
+    // render. The source keeps its own locking (midi_player.h).
     void render(std::int16_t* out, std::size_t frames, std::uint32_t rate = kEffectRate);
+
+    // The music stream added after the effects; nullptr removes it. The output thread may still
+    // be rendering the previous source when this returns; its shared_ptr keeps it alive until
+    // that block ends.
+    void set_music(std::shared_ptr<MusicSource> source);
 
     // One mono effect frame before the volume: the clipped sum of every channel's sample,
     // centred on 0 (-128..127). Advances the channels. Exposed for the tests.
@@ -69,8 +88,12 @@ private:
         bool notify = true;
     };
     int mix_one_locked();
+    void render_effects(std::int16_t* out, std::size_t frames, std::uint32_t rate);
 
     mutable std::mutex mu_;
+    std::mutex music_mu_;                  // guards music_ only
+    std::shared_ptr<MusicSource> music_;
+    std::vector<std::int16_t> music_buf_;  // output thread only
     std::vector<Channel> ch_ = std::vector<Channel>(1);
     std::vector<int> done_;
     std::uint16_t left_ = 0xFFFF, right_ = 0xFFFF;

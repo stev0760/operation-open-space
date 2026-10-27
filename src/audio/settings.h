@@ -15,6 +15,10 @@ struct Settings {
         stereo_swap, sound_system, mix_channels, saver_volume, force_vol, allow_sound;
     std::filesystem::path snd_path;
     std::string language;
+    // [Port] Music and [Port] SoundFont as written (settings::PortSettings), read at init only
+    // (ADR 0011 decision 3) [DESIGN].
+    std::string port_music;
+    std::filesystem::path port_soundfont;
 };
 
 }  // namespace is::audio

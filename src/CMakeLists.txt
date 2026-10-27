@@ -70,6 +70,11 @@ foreach(_part audio dialogs help briefing nav install desk)
     list(APPEND IS_PART_LIBS is${_part})
   endif()
 endforeach()
+# The soundfont music synth (ADR 0011 decision 3) includes TinySoundFont (third_party/tsf, MIT);
+# src/audio/music_soundfont.cpp holds its implementation.
+if(TARGET isaudio)
+  target_include_directories(isaudio PRIVATE ${CMAKE_SOURCE_DIR}/third_party/tsf)
+endif()
 # The game-start flow hands Navigation Enter's directory to the briefing (src/dialogs/hooks.cpp).
 if(TARGET isdialogs AND TARGET isnav AND TARGET isbriefing)
   target_link_libraries(isdialogs PUBLIC isnav isbriefing)
