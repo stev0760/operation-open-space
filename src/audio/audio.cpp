@@ -52,10 +52,14 @@ int g_mix_920a = 1;                  // DGROUP:0x920a, default 1 [BYTES seg6:0xc
 // ISPACE.DLL seg9:0xba opens SndPath + the module name (with a `\` appended, seg9:0x162)
 // [BYTES ISPACE.DLL seg9:0x152 seg9:0x162 seg9:0x1fe]: the asset store's sound directory.
 // An empty SndPath, which the original resolves at the root of the current drive, keeps the
-// game directory [OPEN ISPACE.DLL seg9:0x162] (M7 fixer).
-void use_snd_path(assets::AssetStore& store, const std::filesystem::path& snd_path) {
-    if (snd_path.empty() || store.sound_dir() == snd_path) return;
-    store.set_sound_dir(snd_path);
+// game directory for the modules, the custom WAVs and the MIDI files alike [DESIGN] ADR 0011
+// decision 5. A SndPath that becomes empty on a reread goes back to the game directory. The
+// result carries the directory the music opens its files in (M7 s3 fixer).
+Settings use_snd_path(assets::AssetStore& store, const Settings& in) {
+    if (store.sound_dir() != in.snd_path) store.set_sound_dir(in.snd_path);
+    Settings s = in;
+    if (s.snd_path.empty()) s.snd_path = store.files().dir();
+    return s;
 }
 
 std::filesystem::path env_path(const char* name) {
@@ -70,9 +74,9 @@ std::filesystem::path env_path(const char* name) {
 
 }  // namespace
 
-bool init(const Settings& s, assets::AssetStore& store, void* hwnd_notify) {
+bool init(const Settings& in, assets::AssetStore& store, void* hwnd_notify) {
     if (g) return true;
-    use_snd_path(store, s.snd_path);
+    const Settings s = use_snd_path(store, in);
     g = std::make_unique<System>(store);
     const std::filesystem::path dump = env_path("IS_AUDIO_DUMP");
     const bool device = g->out.open();
@@ -117,14 +121,22 @@ void focus(bool gained) {
         g->engine.command3();
 }
 
-void reread_settings(const Settings& s) {
+namespace {
+void reread(const Settings& in, bool audio_ok) {
     if (!g) return;
-    use_snd_path(g->store, s.snd_path);  // seg9:0xba re-reads SndPath at each load
-    g->engine.reread(s);
+    const Settings s = use_snd_path(g->store, in);  // seg9:0xba re-reads SndPath at each load
+    g->engine.reread(s, audio_ok);
     // A plain reconfigure: the music restart of seg9:0x220a runs once, from Options' close,
     // through music_restart_stored() (M7 fixer).
     glue::music_reconfigure(s, g->engine.sound_system(), false);
 }
+}  // namespace
+
+void reread_settings(const Settings& s) { reread(s, false); }
+
+void audio_ok(const Settings& s) { reread(s, true); }
+
+int channels() { return g ? g->engine.channels() : 0; }
 
 void set_area(int w, int play_h) {
     g_area_w = w;

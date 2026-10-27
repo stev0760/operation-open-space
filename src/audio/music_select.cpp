@@ -1,5 +1,6 @@
 // The music backend choice (music_select.h), ADR 0011 decision 3 [DESIGN].
 #include "audio/music_select.h"
+#include "formats/bytes.h"  // path_utf8 for the log lines (M7 s3 fixer)
 
 #include "audio/music_tracks.h"
 
@@ -86,7 +87,7 @@ std::unique_ptr<Backend> select_backend(const std::string& music_key,
         std::unique_ptr<Backend> b = env.make_synth ? env.make_synth(kind, sf2) : nullptr;
         if (b) {
             log(std::string("music: backend ") + kind_name(kind) +
-                (kind == Kind::kSoundFont ? " (" + sf2.string() + ")" : std::string()));
+                (kind == Kind::kSoundFont ? " (" + fmt::path_utf8(sf2) + ")" : std::string()));
             return b;
         }
         log(std::string("music: backend ") + kind_name(kind) + " unavailable; using the default");
@@ -98,10 +99,10 @@ std::unique_ptr<Backend> select_backend(const std::string& music_key,
         log("music: opl3 not built in or did not open");
         if (!sf2.empty()) {
             if (std::unique_ptr<Backend> b = env.make_synth(Kind::kSoundFont, sf2)) {
-                log("music: backend soundfont (" + sf2.string() + "), the Wine default");
+                log("music: backend soundfont (" + fmt::path_utf8(sf2) + "), the Wine default");
                 return b;
             }
-            log("music: soundfont " + sf2.string() + " did not open; using mci");
+            log("music: soundfont " + fmt::path_utf8(sf2) + " did not open; using mci");
         }
     }
     log("music: backend mci");

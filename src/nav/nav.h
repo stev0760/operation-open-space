@@ -49,6 +49,9 @@ struct Host {
     std::function<void()> help;
     // DGROUP:0x49e: the teardown has run.
     std::function<bool()> torn_down;
+    // seg10:0x7db8: ISPACE ordinal 7 command 2, the purge of the deferred sound slots
+    // [BYTES seg10:0x7dc7 seg10:0x7dc9] (M7 s3 fixer).
+    std::function<void()> reset_sounds;
 };
 
 // Registers the class IS_NAV with the procedure (CS_VREDRAW | CS_HREDRAW | CS_DBLCLKS, the

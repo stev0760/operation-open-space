@@ -127,7 +127,12 @@ void teardown() {
     g.torn_down = true;
     nav::close();  // 1: the Navigation window and its keys (seg6:0x2ebc)
     g.game.teardown();  // 2: the current state (seg2:0x1d58)
-    audio::shutdown();  // 3: ISPACE ordinal 7 command 1 [BYTES seg10:0x22e] (M7 rewiring)
+    // 3: seg10:0x22e(1) -> seg10:0x136, whose first act is the music wrapper seg10:0x7480(-1, 1)
+    // (the MCI_PAUSE the oracle shows at game end), then ISPACE ordinal 7 command 1 [BYTES
+    // seg6:0x19e4 seg10:0x252 seg10:0x148 seg10:0x22e] (M7 s3 fixer).
+    audio::music(-1, 1);
+    log("music seg10:0x7480(-1, 1) at exit (seg10:0x148)");
+    audio::shutdown();
     // 4: the clip region (the port keeps a rectangle).
     if (g.main) SetMenu(g.main, nullptr);  // 5
     if (g.menu) {

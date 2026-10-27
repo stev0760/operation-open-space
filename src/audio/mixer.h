@@ -96,6 +96,9 @@ private:
     std::vector<std::int16_t> music_buf_;  // output thread only
     std::vector<Channel> ch_ = std::vector<Channel>(1);
     std::vector<int> done_;
+    // The volume words start at unity: the original's STANDARD-mode wave volume DGROUP:0x6a4 is
+    // BSS 0 [OPEN], and at sound system 1 ordinal 8 never sets them, so the effects keep the
+    // device's level [DESIGN] ADR 0011 decision 2 (M7 s3 fixer).
     std::uint16_t left_ = 0xFFFF, right_ = 0xFFFF;
     int hold_ = 0;      // frames left of the held effect sample at the output rate
     int held_ = 0;      // the held mono value

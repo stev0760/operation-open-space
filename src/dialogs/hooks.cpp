@@ -416,6 +416,8 @@ void options_command() {
     };
     env.ini_changed = save_ini;
     env.reread = [](const audio::Settings& s) { audio::reread_settings(s); };
+    env.audio_ok = [](const audio::Settings& s) { audio::audio_ok(s); };  // (M7 s3 fixer)
+    env.channels = [] { return audio::channels(); };                     // DGROUP:0x219e
     env.sound = [](int id) { is::sound::play_ispace(id); };
     // seg9:0x3906(DGROUP:0xaa4, 1) plays the track ISPACE.DLL stored while the music was off,
     // outside INSPACE's wrapper [BYTES ISPACE.DLL seg9:0x220a seg9:0x2225] (M7 fixer).
@@ -526,6 +528,10 @@ void install_dialog_hooks(App& app) {
     // seg2:0x190a(5, 0): the main window's command 0xcb runs it (shell::command_table) [DESIGN].
     h.help = [] { post(WM_COMMAND, 0xcb, 0); };
     h.torn_down = [] { return g.torn_down; };
+    h.reset_sounds = [] {  // seg10:0x7db8 (M7 s3 fixer)
+        audio::reset_slots();
+        app::log("sound reset: ISPACE ordinal 7 command 2 (seg10:0x7db8)");
+    };
     if (!nav::install(h)) log("IS_NAV: RegisterClass failed");
     // seg6:0x1c72(1) from the debriefing's deadline (seg7:0x3ac) and the other callers.
     g.game.hooks().open_navigation = [](shell::GameState&) {

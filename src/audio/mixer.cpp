@@ -31,6 +31,9 @@ bool Mixer::play(int channel, PcmPtr wave, int plays, bool notify) {
     // WMIX_CLEARQUEUE: the channel's current wave goes without a completion [OPEN] whether
     // WaveMix posts MM_WOM_DONE for a wave it clears from the queue (sound.md open questions).
     ch_[static_cast<std::size_t>(channel)] = Channel{std::move(wave), 0, std::max(plays, 0), notify};
+    // A completion of the replaced wave that the engine has not taken yet would clear the new
+    // wave's record; the replaced wave's completion goes with it [DESIGN] (M7 s3 fixer).
+    done_.erase(std::remove(done_.begin(), done_.end(), channel), done_.end());
     return true;
 }
 

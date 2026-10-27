@@ -64,11 +64,14 @@ std::vector<int> audio_disabled(int capability);
 // seg9:0x2fa1 seg9:0x2fc8]. The port's mixer stands for WaveMix (ADR 0011 decision 1), so its
 // dialog passes true [DESIGN].
 std::vector<std::string> mix_channel_entries(bool wavemix);
-// MixChannels from the combo index: index + 1 [BYTES ISPACE.DLL seg9:0x3493]; the port clamps
-// to its mixer's 1-8 (a CB_ERR index gives 1) [DESIGN ADR 0011 decision 1].
+// MixChannels from the combo index: index + 1 [BYTES ISPACE.DLL seg9:0x3367 seg9:0x3493], so
+// a combo with no selection (CB_ERR) writes 0, as the original does after a start at sound
+// system 0 [ORACLE sound-0002] (M7 s3 fixer).
 int mix_channels_of_index(int index);
-// The combo selection for a channel count: count - 1 [BYTES ISPACE.DLL seg9:0x2fdf], clamped
-// to the list (an INI value outside 1-n selects the nearest entry) [DESIGN].
+// The combo selection for the session's channel count DGROUP:0x219e (not the INI's
+// MixChannels): count - 1 [BYTES ISPACE.DLL seg9:0x2fdf] [ORACLE sound-0002], so a count of 0
+// (no session: a start at sound system 0) selects nothing (-1) (M7 s3 fixer). A count above
+// the list selects its last entry [DESIGN].
 int mix_channel_index(int channels, bool wavemix);
 
 // The scroll arithmetic of the two sound bars (Master Volume 111, Effects vs. Music 1001):
@@ -167,6 +170,11 @@ struct OptionsEnv {
     std::function<void()> ini_changed;
     // ISPACE.DLL seg9:0xa9e and the INI reader seg9:0x22ca: the sound settings in memory changed.
     std::function<void(const audio::Settings&)> reread;
+    // Audio OK's steps 2-4 (audio::audio_ok); null: reread (M7 s3 fixer).
+    std::function<void(const audio::Settings&)> audio_ok;
+    // ISPACE.DLL DGROUP:0x219e, the session's channel count (audio::channels); null: the INI's
+    // MixChannels, for a dialog without a sound system (M7 s3 fixer).
+    std::function<int()> channels;
     // ISPACE.DLL seg9:0x298c(id): ordinal 9 directly, the test sound.
     std::function<void(int)> sound;
     // ISPACE.DLL seg9:0x3906(DGROUP:0xaa4, 1): the stored track again.

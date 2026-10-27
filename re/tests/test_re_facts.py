@@ -2974,3 +2974,68 @@ def test_sound_dialog_controls():
         139: ("BUTTON", "&Audio.."), 111: ("SCROLLBAR", ""), 118: ("COMBOBOX", ""), 104: ("BUTTON", "SOUND"),
         140: ("STATIC", "Master Volume"), 143: ("STATIC", "Sound FX:"), 144: ("STATIC", "Normal"),
         145: ("STATIC", "Voice FX:"), 146: ("STATIC", "Normal")}
+
+
+def test_sound_stage3_bytes(isp, ins):
+    """sound.md Session, Playing, Music and Options; shell.md Load and Exit: the M7 stage 3 facts."""
+    expect = {"seg9:0x585": "cmp word ptr [bp + 6], 0", "seg9:0x58e": "call seg9:0x624",
+              "seg9:0x592": "cmp word ptr [0x219c], 0", "seg9:0x599": "mov word ptr [0x219c], 1",
+              "seg9:0x5a2": "inc word ptr [0x219c]", "seg9:0x5a6": "cmp word ptr [0x219c], 1",
+              "seg9:0xe31": "cmp word ptr [bp - 6], 0", "seg9:0xe35": "jne seg9:0xe6a",
+              "seg9:0xe41": "or ax, word ptr [bx + 0x187c]", "seg9:0xe4d": "call seg9:0x25c6",
+              "seg9:0xe50": "add sp, 4", "seg9:0xe61": "je seg9:0xe81",
+              "seg9:0x2999": "mov ax, 0xe890", "seg9:0x29a1": "push 1", "seg9:0x29a3": "push 0",
+              "seg9:0x29a5": "push 0", "seg9:0x29b1": "push 0x9a9", "seg9:0x29b5": "call seg9:0xc42",
+              "seg9:0x3aa8": "mov ax, word ptr [0xaac]", "seg9:0x3ab3": "mov word ptr [0x2292], 4",
+              "seg9:0x3ad5": "push 0x64", "seg9:0x3ae2": "mov word ptr [0x1a28], ax",
+              "seg9:0x3ae5": "mov word ptr [0x1a2a], 0", "seg9:0x3bad": "mov word ptr [0xaa6], ax",
+              "seg9:0x3dc8": "sub dx, dx", "seg9:0x3dcc": "mul word ptr [0x2288]", "seg9:0x3dd0": "sub dx, dx",
+              "seg9:0x3dd9": "jbe seg9:0x3ddd", "seg9:0x3ddd": "mov bx, 0xffff",
+              "seg9:0x168e": "add ax, 0x8ad", "seg9:0x16c7": "mov ax, 3",
+              "seg9:0x1a34": "cmp ax, 0x4b0", "seg9:0x1a4a": "cmp word ptr [bp - 0x1c], 0x24",
+              "seg9:0x1a3d": "mov word ptr [bp - 0x20], 0x3e8", "seg9:0x1aad": "mov word ptr [0xd00], ax",
+              "seg9:0x1d19": "cmp ax, 0x3e8", "seg9:0x1d2d": "cmp ax, word ptr [0xd00]",
+              "seg9:0x1e62": "mov ax, 0x1f4", "seg9:0x1e74": "push 0x6b",
+              "seg9:0x1ffd": "sub ax, 3", "seg9:0x2002": "mov word ptr [0x228a], ax",
+              "seg9:0x2225": "push word ptr [0xaa4]"}
+    assert _texts(isp, expect) == expect
+    assert isp.at("seg9:0x3bad").off < isp.at("seg9:0x3bc1").off
+    assert "seg9:0x3906" in isp.at("seg9:0x222b").text
+    assert "seg3:0x1d6" in isp.at("seg9:0x3de4").text
+    sw = isp.switches["seg9:0x1d01"]                      # Play Speed WM_HSCROLL codes 0-7
+    assert (sw["table"], sw["count"]) == ("seg9:0x1d06", 8)
+    t = sw["targets"]
+    assert t[0] == t[2] and t[1] == t[3] and t[4] == t[5] and len({t[0], t[1], t[4], t[6], t[7]}) == 5
+    dg = unpacked_seg("ispace", 11)
+    assert dg[0xAA2:0xAA8] == b"\xff" * 6
+    assert struct.unpack_from("<h", dg, 0xAAC) == (1700,)
+    assert len(dg) <= 0xD06 or dg[0xD06:0xD0A] == bytes(4)
+    assert [_cstr(dg, o).decode() for o in (0x85D, 0x866, 0x874, 0x883)] == \
+        ["Full Out", "%d frames/sec", "Play Speed  %s", "V0.00.00"]
+    # INSPACE: the load's 0x6e precedes the DGROUP:0x92e6 retest; the briefing page clicks
+    iexp = {"seg9:0x22e9": "cmp word ptr [0x92e6], 0", "seg9:0x2768": "push 0x6e",
+            "seg9:0x2770": "cmp word ptr [0x92e6], 0", "seg9:0x2775": "jne seg9:0x27b3",
+            "seg10:0xa9": "mov word ptr [0x92e6], ax",
+            "seg17:0x23d7": "push 4", "seg17:0x23e2": "push 0x64", "seg17:0x23e4": "push 0x13",
+            "seg17:0x2c11": "push 4", "seg17:0x2c1c": "push 0x64", "seg17:0x2c1e": "push 0x13",
+            "seg17:0x2aec": "add ax, 0xfa", "seg17:0x2af0": "push 0x15", "seg17:0x2af2": "jmp seg17:0x2c20",
+            "seg10:0x150": "push 1"}
+    assert _texts(ins, iexp) == iexp
+    for site, target in (("seg9:0x276a", "seg10:0x744c"), ("seg17:0x23e6", "seg10:0x754a"),
+                         ("seg17:0x2c20", "seg10:0x754a"), ("seg10:0xa2", "seg15:0x6640"),
+                         ("seg10:0xad", "seg9:0x22b4"), ("seg10:0x148", "seg10:0x7480"),
+                         ("seg10:0x152", "seg15:0x1328"), ("seg10:0x252", "seg10:0x136")):
+        assert target in ins.at(site).text, site
+
+
+def test_midi_microsoft_meta():
+    """sound.md Music: each MIDI file carries FF 7F 03 00 00 41 once, in track 0 at offset 23."""
+    from isre import szdd
+
+    d = require(ORIGINAL / "shipdisk")
+    for name in ("MAIN", "RACE", "ANTHEM", "DEMON"):
+        data = szdd.expand(require(d / f"{name}.MI1").read_bytes())
+        meta = bytes.fromhex("ff7f0300 0041")
+        assert data.count(meta) == 1 and data.find(meta) == 23, name
+        assert data[14:18] == b"MTrk" and data[22] == 0
+        assert 23 < 22 + struct.unpack_from(">I", data, 18)[0]

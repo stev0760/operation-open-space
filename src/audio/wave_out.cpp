@@ -161,26 +161,33 @@ void WaveOut::run() {
         std::vector<std::vector<std::int16_t>> data(kBlocks,
                                                     std::vector<std::int16_t>(kBlockFrames * 2));
         std::vector<WAVEHDR> hdr(kBlocks);
+        // A failed prepare or write (device removed, driver error) leaves the device: the
+        // block would never come back DONE, the mixer would stop and no channel would
+        // complete, so the thread goes on in the device-less real-time loop below [DESIGN]
+        // (M7 s3 fixer).
+        bool ok = true;
         for (int i = 0; i < kBlocks; ++i) {
             hdr[i] = WAVEHDR{};
             hdr[i].lpData = reinterpret_cast<LPSTR>(data[i].data());
             hdr[i].dwBufferLength = static_cast<DWORD>(kBlockFrames * 4);
-            waveOutPrepareHeader(h, &hdr[i], sizeof(WAVEHDR));
+            if (waveOutPrepareHeader(h, &hdr[i], sizeof(WAVEHDR)) != MMSYSERR_NOERROR) ok = false;
             hdr[i].dwFlags |= WHDR_DONE;
         }
-        while (!stop_) {
-            for (int i = 0; i < kBlocks; ++i) {
+        while (ok && !stop_) {
+            for (int i = 0; i < kBlocks && ok; ++i) {
                 if (!(hdr[i].dwFlags & WHDR_DONE)) continue;
                 mixer_.render(data[i].data(), kBlockFrames, rate_);
                 deliver(data[i].data(), kBlockFrames);
                 hdr[i].dwFlags &= ~static_cast<DWORD>(WHDR_DONE);
-                waveOutWrite(h, &hdr[i], sizeof(WAVEHDR));
+                if (waveOutWrite(h, &hdr[i], sizeof(WAVEHDR)) != MMSYSERR_NOERROR) ok = false;
             }
-            WaitForSingleObject(static_cast<HANDLE>(event_), 100);
+            if (ok) WaitForSingleObject(static_cast<HANDLE>(event_), 100);
         }
         waveOutReset(h);
-        for (int i = 0; i < kBlocks; ++i) waveOutUnprepareHeader(h, &hdr[i], sizeof(WAVEHDR));
-        return;
+        for (int i = 0; i < kBlocks; ++i)
+            if (hdr[i].dwFlags & WHDR_PREPARED) waveOutUnprepareHeader(h, &hdr[i], sizeof(WAVEHDR));
+        if (stop_) return;
+        failed_ = true;
     }
 #endif
     // No device: the mixer still advances in real time, for the dump and the completions.

@@ -1,6 +1,7 @@
 // The music player behind audio.cpp (music_glue.h): one Player per session, driven as
 // music_tracks.h describes, over the backend music_select.h picks.
 #include "audio/music_glue.h"
+#include "formats/bytes.h"  // path_utf8 for the log lines (M7 s3 fixer)
 
 #include <cstdio>
 #include <memory>
@@ -53,7 +54,7 @@ std::unique_ptr<music::Backend> make_synth_backend(music::Kind kind, const std::
     cfg.rate = rate;
     if (!synth->open(cfg)) {
         log(std::string("music: synth ") + music::kind_name(kind) + " did not open" +
-            (sf2.empty() ? std::string(" (no SoundFont)") : " (" + sf2.string() + ")"));
+            (sf2.empty() ? std::string(" (no SoundFont)") : " (" + fmt::path_utf8(sf2) + ")"));
         return nullptr;
     }
     auto player = std::make_shared<music::MidiPlayer>(

@@ -2,6 +2,7 @@
 // close for the synth backends (ADR 0011 decision 3), command for command as ISPACE.DLL sends
 // them (docs/re/sound.md "MCI sequence").
 #include "audio/midi_player.h"
+#include "formats/bytes.h"  // path_utf8 for the log lines (M7 s3 fixer)
 
 #include <algorithm>
 #include <cmath>
@@ -24,8 +25,11 @@ void log(const std::string& s) {
 // stand as they would at the target [DESIGN]. A note struck before the target and still held
 // there is not struck again, so a section that starts inside held notes opens on silence until
 // its next note-on: track 4 (RACE at 34 s) 764 ms, track 11 (ANTHEM at 181 s) 1797 ms, and
-// track 5 (ANTHEM at 200 s) none at all. Whether the Windows or Wine sequencer sounds held
-// notes after MCI_SEEK is [OPEN] (M7 s2 fixer).
+// track 5 (ANTHEM at 200 s) none at all (M7 s2 fixer). Wine's mciseq does the same: while it
+// skips to the target it sends only controllers and program changes, and held notes stay
+// silent until struck again [ORACLE sound-0002]. Wine also skips the silence before the first
+// note-on after the target, which the port does not: it plays on in real time [DESIGN]. What
+// Windows' own sequencer does is [OPEN] (M7 s3 fixer).
 bool chased(const MidiEvent& e) {
     if (e.kind == MidiEvent::kSysEx) return true;
     const std::uint8_t hi = e.bytes[0] & 0xf0;
@@ -62,11 +66,13 @@ MidiPlayer::~MidiPlayer() = default;
 // ---------------------------------------------------------------- message thread
 
 void MidiPlayer::queue(Command c) {
+    // The epoch bump and cancel_upto_ under cmd_mu_, as post()'s test and publish, so a notify
+    // is either posted before this command (and cancelled) or refused (M7 s3 fixer).
+    std::lock_guard<std::mutex> lock(cmd_mu_);
     c.epoch = ++epoch_;
     // Every notify posted before this command is superseded (MCI_NOTIFY_SUPERSEDED or
     // MCI_NOTIFY_ABORTED in MCI's terms).
     cancel_upto_ = posted_.load();
-    std::lock_guard<std::mutex> lock(cmd_mu_);
     cmds_.push_back(std::move(c));
 }
 
@@ -83,12 +89,12 @@ bool MidiPlayer::open(const std::filesystem::path& midi) {
     auto f = std::make_shared<MidiFile>();
     std::string why;
     if (!f->load(midi, &why)) {
-        log("open " + midi.string() + " failed: " + why);
+        log("open " + fmt::path_utf8(midi) + " failed: " + why);
         return false;
     }
     char buf[160];
     std::snprintf(buf, sizeof buf, "open %s: SMF %d, %d tracks, division %d, %.2f s through %s%s",
-                  midi.filename().string().c_str(), f->format(), f->tracks(), f->division(),
+                  fmt::path_utf8(midi.filename()).c_str(), f->format(), f->tracks(), f->division(),
                   f->length_ms() / 1000.0, synth_name().c_str(),
                   f->microsoft_authored() ? ", dual-mode: channels 1-10" : "");  // M7 s2b fixer
     log(buf);
@@ -111,8 +117,10 @@ bool MidiPlayer::seek_ms(unsigned ms, bool wait) {
 }
 
 // MCI_PLAY with MCI_TO and MCI_NOTIFY from the current position (seg9:0x3b5c). An end past
-// the file's end plays to the file's end and then notifies: tracks 5 and 8 ask for one, and
-// what the sequencer does with it is [OPEN] (docs/re/sound.md "Music").
+// the file's end plays to the file's end and then notifies success: tracks 5 and 8 ask for
+// one. Wine's mciseq accepts such a play and notifies MCI_NOTIFY_SUCCESSFUL, so the close
+// path ISPACE.DLL seg9:0x3bd1 is not taken [ORACLE sound-0002]; Windows' sequencer is [OPEN]
+// (M7 s3 fixer).
 bool MidiPlayer::play_to_ms(unsigned ms) {
     if (!msg_file_) return false;
     Command c(Op::kPlay);
@@ -152,11 +160,16 @@ double MidiPlayer::position_ms() const { return pub_pos_ms_.load(); }
 bool MidiPlayer::playing() const { return pub_playing_.load(); }
 
 void MidiPlayer::post(std::uint64_t epoch) {
-    // A command queued after the one this notify ends has replaced it.
-    if (epoch != epoch_.load()) return;
-    std::uint32_t seq = (posted_.load() + 1) & 0x7fffffffu;
-    if (seq == 0) seq = 1;
-    posted_ = seq;
+    std::uint32_t seq;
+    {
+        // The test and the publish under cmd_mu_, against queue() (M7 s3 fixer).
+        std::lock_guard<std::mutex> lock(cmd_mu_);
+        // A command queued after the one this notify ends has replaced it.
+        if (epoch != epoch_.load()) return;
+        seq = (posted_.load() + 1) & 0x7fffffffu;
+        if (seq == 0) seq = 1;
+        posted_ = seq;
+    }
     if (notify_) notify_(1, seq);  // MCI_NOTIFY_SUCCESSFUL
 }
 

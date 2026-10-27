@@ -261,6 +261,10 @@ void close() {  // seg6:0x2ebc
         }
     }
     const bool torn = g_host.torn_down && g_host.torn_down();
+    // Outside the teardown, seg10:0x7db8 (ordinal 7 command 2) purges the deferred sound slots
+    // before the main window is enabled [BYTES seg6:0x2fca seg6:0x2fd1 seg6:0x2fdc] (M7 s3
+    // fixer).
+    if (!torn && g_host.reset_sounds) g_host.reset_sounds();
     if (!torn && g_host.main) EnableWindow(g_host.main, TRUE);
     HWND h = g_nav;
     g_nav = nullptr;  // [BYTES seg6:0x2ff1]

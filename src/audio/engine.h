@@ -54,7 +54,8 @@ struct World {
     std::function<bool(int mode, int a, int b, Point& p)> source;
     // seg8:0x29ea; identity by default.
     std::function<Point(Point)> to_view;
-    // seg8:0x285a(ship, p): signed distance; Chebyshev-free default is the larger axis [OPEN].
+    // seg8:0x285a(ship, p): signed distance; the default is the Chebyshev distance (the
+    // larger axis) [OPEN].
     std::function<int(Point, Point)> distance;
 };
 
@@ -67,8 +68,9 @@ struct MusicWrapper {
     std::int8_t saved[2] = {0, 0};  // DGROUP:0x7e0[DGROUP:0x73e]
     int saved_index = 0;      // DGROUP:0x73e
     std::uint32_t hold = 0;   // DGROUP:0x2384, the adaptive music's hold
-    // The code that goes to ISPACE.DLL (the code before 7 is stored as 2), or false when the
-    // call does nothing.
+    // Leaves in `code` what goes to ISPACE.DLL (a -3 becomes the saved track when it differs
+    // from the current one) and stores a track 7 as current 2; false when the call does
+    // nothing.
     bool filter(int& code, std::uint32_t now);
 };
 
@@ -87,9 +89,9 @@ public:
     void command3();  // seg9:0xaf2, focus lost
     void command4();  // seg9:0xba6, focus gained
     void command10(int saver_volume);  // seg9:0x6e: SaverVolume in place of SoundVolume
-    // The INI reader seg9:0x22ca again, with Audio OK's module and channel changes
+    // The INI reader seg9:0x22ca again; `audio_ok` adds Audio OK's module and channel changes
     // (seg9:0x331a steps 2-4).
-    void reread(const Settings& s);
+    void reread(const Settings& s, bool audio_ok = false);
 
     // ---- ordinal 9 and ordinal 8
     int ordinal9(int id, Point p, int q, int r, int s, int w, int h, std::uint32_t now,

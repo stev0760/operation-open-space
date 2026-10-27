@@ -49,10 +49,11 @@ std::vector<std::string> mix_channel_entries(bool wavemix) {
     return out;
 }
 
-int mix_channels_of_index(int index) { return std::clamp(index + 1, 1, 8); }
+int mix_channels_of_index(int index) { return std::clamp(index + 1, 0, 8); }
 
 int mix_channel_index(int channels, bool wavemix) {
-    return std::clamp(channels - 1, 0, wavemix ? 7 : 0);
+    if (channels <= 0) return -1;
+    return std::min(channels - 1, wavemix ? 7 : 0);
 }
 
 int sound_bar_step(int value, int code, int pos) {
@@ -338,7 +339,8 @@ void AudioDialog::init() {  // ISPACE.DLL seg9:0x2f30 WM_INITDIALOG
     const audio::Settings& s = g_live;
     // The centre position it computes is never applied [BYTES ISPACE.DLL seg9:0x2f4d].
     for (const std::string& e : mix_channel_entries(env_.wavemix)) add(aud::kMixChannels, e);
-    select(aud::kMixChannels, mix_channel_index(s.mix_channels, env_.wavemix));
+    const int count = env_.channels ? env_.channels() : s.mix_channels;  // DGROUP:0x219e
+    select(aud::kMixChannels, mix_channel_index(count, env_.wavemix));
     for (int id = 2413; id <= 2416; ++id) add(aud::kStereoEffect, lang(id));
     select(aud::kStereoEffect, s.stereo_effect);
     for (int id : audio_disabled(env_.capability)) enable(id, false);
@@ -395,7 +397,10 @@ void AudioDialog::ok() {  // ISPACE.DLL seg9:0x331a
     // audio module, which applies them from the settings it is handed [BYTES ISPACE.DLL
     // seg9:0x34e4-0x35ae] [DESIGN ADR 0011].
     g_live.mix_channels = mix_channels_of_index(v.mix_index);
-    if (env_.reread) env_.reread(g_live);
+    if (env_.audio_ok)
+        env_.audio_ok(g_live);
+    else if (env_.reread)
+        env_.reread(g_live);
     end(1);
 }
 

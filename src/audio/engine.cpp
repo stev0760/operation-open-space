@@ -168,11 +168,13 @@ void Engine::command10(int saver_volume) {
     volumes();
 }
 
-// The INI reader again, with Audio OK's module and channel steps [BYTES ISPACE.DLL seg9:0x2207
-// seg9:0x34e4 seg9:0x350a seg9:0x3524 seg9:0x353e seg9:0x3547 seg9:0x3582 seg9:0x3599].
-void Engine::reread(const Settings& s) {
-    const int old_channels = s_.mix_channels;
+// The INI reader again [BYTES ISPACE.DLL seg9:0x2207], and with `audio_ok` Audio OK's module
+// and channel steps [BYTES ISPACE.DLL seg9:0x34e4 seg9:0x350a seg9:0x3524 seg9:0x353e
+// seg9:0x3547 seg9:0x3582 seg9:0x3599]; the bars and Options OK change no module or session
+// (M7 s3 fixer).
+void Engine::reread(const Settings& s, bool audio_ok) {
     read_ini(s);
+    if (!audio_ok) return;
     bool loaded_any = false;
     for (int k = 0; k < 2; ++k) {
         const int on = k == 0 ? s.sound_fx : s.voice_fx;
@@ -186,10 +188,12 @@ void Engine::reread(const Settings& s) {
             loaded_any = true;
         }
     }
-    // seg9:0x4e0(1, 0) always rebuilds the session, whatever the reference count [BYTES
-    // ISPACE.DLL seg9:0x3547 seg9:0x3582 seg9:0x558]; whether the reopen counts a reference is
-    // [OPEN ISPACE.DLL seg9:0x558] (M7 fixer).
-    if (s.mix_channels != old_channels && sound_system_ != 0) {
+    // The new count (combo index + 1) against the session's count DGROUP:0x219e, not the INI's
+    // [BYTES ISPACE.DLL seg9:0x3547 seg9:0x354a]: after a start at sound system 0 the count is 0,
+    // so an Audio OK with no selection (0) reopens nothing [ORACLE sound-0002] (M7 s3 fixer).
+    // seg9:0x4e0(1, 0) rebuilds the session; it sets the reference count to 1 only when it is
+    // 0 and never increments it [BYTES ISPACE.DLL seg9:0x592 seg9:0x599 seg9:0x5a2 seg9:0x5ab].
+    if (s.mix_channels != channels_ && sound_system_ != 0) {
         if (refcount_ == 0) refcount_ = 1;
         stop_all();
         for (int id = 0; id < kSlots; ++id) purge_slot(id, true);
@@ -217,7 +221,10 @@ int Engine::load_slot(int id, int now) {
     if (slots_[static_cast<std::size_t>(id)] || !module_[k]) return -3;
     if ((now == 0 && (flag & 2)) || (k && !s_.voice_fx) || (!k && !s_.sound_fx)) return -4;
     // With one channel the resource is kept for sndPlaySound; otherwise WaveMixOpenWave needs
-    // an open, active session (DGROUP:0x219e of 0 also takes this branch).
+    // an open, active session (DGROUP:0x219e of 0 also takes this branch). So after Options
+    // switches the sound system from 0 to non-zero no session exists and every effect stays
+    // silent until a restart or an Audio OK with a channel count [ORACLE sound-0002] (M7 s3
+    // fixer).
     if (channels_ != 1 && !(session_ && active_session_)) return 0;
     PcmPtr wave = src_.slot(k, slot_resource(id));
     if (!wave) return 0;
@@ -411,6 +418,10 @@ int Engine::ordinal9(int id, Point p, int q, int r, int s, int w, int h, std::ui
     if (g == -1) return 0;
     if (g != 0) ordinal8(w, h, s, r, p);
     busy_until_ = now + static_cast<std::uint32_t>(q != 0 ? hold_ms(slot) : 0);
+    // A custom WAV that cannot be read fails in the player: sndPlaySound with SND_NODEFAULT, or
+    // WaveMixOpenWave, opens SndPath + name + .WAV and never plays slot 0x11, which only books
+    // it [BYTES ISPACE.DLL seg9:0x1333 seg9:0x1367] (M7 s3 fixer).
+    if (file && !file_wave) return 0;
     if (player(slot, file_wave, q, loop, g) == 0) return 0;
 
     if (id == 0x66) last_66_ = pick66;
@@ -515,12 +526,10 @@ bool MusicWrapper::filter(int& code, std::uint32_t now) {
         last_control = -3;
         if (code == -3 && saved[saved_index & 1] != current) code = saved[saved_index & 1];
     }
-    const int sent = code;
     if (code >= 0) {
         current = code == 7 ? 2 : code;
         if (hold < now) hold = now + 9000;
     }
-    code = sent;
     return true;
 }
 
@@ -630,7 +639,6 @@ void Engine::wrap_7b48(std::uint32_t now) {
             const int follow = seq_follow_;
             wrap_754a(0x69, last_a_, last_b_, last_mode_, now);
             wrap_754a(follow, last_a_, last_b_, last_mode_, now);
-            seq_first_ = 0;
         }
         seq_deadline_ = 0;
         seq_follow_ = 0;

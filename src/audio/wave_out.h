@@ -41,6 +41,9 @@ public:
     bool open();
     void close();
     bool device_open() const { return device_; }
+    // A waveOutPrepareHeader or waveOutWrite failed and the thread went on without the device
+    // (M7 s3 fixer).
+    bool device_failed() const { return failed_.load(); }
     std::uint32_t rate() const { return rate_; }
     void dump_to(const std::filesystem::path& wav);
 
@@ -58,6 +61,7 @@ private:
     void* event_ = nullptr;   // HANDLE
     std::thread thread_;
     std::atomic<bool> stop_{false};
+    std::atomic<bool> failed_{false};
     std::mutex dump_mu_;
     WavWriter dump_;
 };

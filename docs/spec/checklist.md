@@ -161,7 +161,7 @@ One row per binding. MAINACCEL and FACTACCEL are the accelerator tables in ENG_L
 | WIN-25 | Save Game dialog (#00a7): GAME name | [MANUAL High Scores] [BYTES ENG_LANG.DLL DIALOG 167] [BYTES ISPACE.DLL seg10:0xdc0] | manual | located | wip | registered |
 | WIN-26 | Exit dialog (#00f4): Save & Exit, Exit, Cancel | [MANUAL High Scores] [BYTES ENG_LANG.DLL DIALOG 244] [BYTES ISPACE.DLL seg10:0x103c] [BYTES seg2:0xd85] [ORACLE start-0001] [ORACLE m2-accept-0001] | oracle | understood | verified | unknown |
 | WIN-27 | Game Settings dialog "Inner Space Options/Setup" (#0064) | [MANUAL Game Settings] [BYTES ENG_LANG.DLL DIALOG 100] [BYTES ISPACE.DLL seg9:0x15cc] | manual | located | done | unknown |
-| WIN-28 | Audio Options dialog (#03e7) | [MANUAL Game Settings] [BYTES ENG_LANG.DLL DIALOG 999] [BYTES ISPACE.DLL seg9:0x2f30 seg9:0x331a] | manual | verified | done | unknown |
+| WIN-28 | Audio Options dialog (#03e7) | [MANUAL Game Settings] [BYTES ENG_LANG.DLL DIALOG 999] [BYTES ISPACE.DLL seg9:0x2f30 seg9:0x331a] [ORACLE sound-0002] | manual | verified | verified | demo |
 | WIN-29 | Display Options dialog (#029a) | [MANUAL Display Options] [BYTES ENG_LANG.DLL DIALOG 666] | manual | none | todo | unknown |
 | WIN-30 | Joystick Configuration dialog (#03cf) | [MANUAL Joystick Settings] [BYTES ENG_LANG.DLL DIALOG 975] [BYTES ISPACE.DLL seg9:0x40da] | manual | located | todo | unknown |
 | WIN-31 | "Loading ship graphics....please hold on." box (#0065) | [BYTES ENG_LANG.DLL DIALOG 101] | strings | none | todo | unknown |
@@ -505,7 +505,7 @@ Keys are in `INSPACE.INI` `[Inner Space]` unless the row names another file or s
 | INI-01 | `Path`: install directory; regenerated from the module path when missing | [ORACLE smoke-0001] [ORACLE newgame-0001] [BYTES seg6:0x70a] | oracle | understood | done | demo |
 | INI-02 | `LocalPath`: regenerated with Path | [ORACLE smoke-0001] [ORACLE newgame-0001] [BYTES seg6:0x725] | oracle | understood | done | demo |
 | INI-03 | `ShipPath`: ships directory (MASTER.BOD, MASTER.SHP) | [ORACLE smoke-0001] [ORACLE newgame-0001] [BYTES seg14:0x3dea] | oracle | understood | todo | demo |
-| INI-04 | `SndPath`: sounds directory | [ORACLE smoke-0001] [ORACLE newgame-0001] [BYTES ISPACE.DLL seg9:0x152] | oracle | located | todo | demo |
+| INI-04 | `SndPath`: sounds directory | [ORACLE smoke-0001] [ORACLE newgame-0001] [BYTES ISPACE.DLL seg9:0x152 seg9:0xba seg9:0x162] | oracle | understood | done | demo |
 | INI-05 | `RacePath`: directory of the race records (.rac) | [MANUAL Race Records] [ORACLE smoke-0001] [ORACLE newgame-0001] [BYTES seg6:0x9c8] | oracle | understood | todo | demo |
 | INI-06 | `Dead`: regenerated as RETIRED | [ORACLE smoke-0001] [ORACLE newgame-0001] [BYTES seg6:0x978] | oracle | understood | todo | demo |
 | INI-07 | `Games`: regenerated as GAMES | [ORACLE smoke-0001] [ORACLE newgame-0001] [BYTES seg6:0x9a0] | oracle | understood | todo | demo |
@@ -555,14 +555,14 @@ Keys are in `INSPACE.INI` `[Inner Space]` unless the row names another file or s
 | INI-51 | `JBtn1`: (Button 2 function), default 1 | [ORACLE newgame-0001] [BYTES seg6:0xbeb] | oracle | located | todo | demo |
 | INI-52 | `JBtn2`: (Button 3 function), default 2 | [ORACLE newgame-0001] [BYTES seg6:0xbeb] | oracle | located | todo | demo |
 | INI-53 | `JBtn3`: (Button 4 function), default 3 | [ORACLE newgame-0001] [BYTES seg6:0xbeb] | oracle | located | todo | demo |
-| INI-54 | `SoundSystem`: (sound system), default -1; regenerated as 0 | [ORACLE smoke-0001] [ORACLE newgame-0001] [BYTES ISPACE.DLL seg9:0x2538] [BYTES ISPACE.DLL seg9:0x22ca] | oracle | understood | done | demo |
+| INI-54 | `SoundSystem`: (sound system), default -1; regenerated as 0 | [ORACLE smoke-0001] [ORACLE newgame-0001] [ORACLE sound-0002] [BYTES ISPACE.DLL seg9:0x2538 seg9:0x2569] [BYTES ISPACE.DLL seg9:0x22ca] | oracle | understood | done | demo |
 | INI-55 | `Enhance`: (Enhanced Graphics), default 1 | [ORACLE newgame-0001] [BYTES seg6:0xc8c] | oracle | located | todo | demo |
 | INI-56 | `Detail`: (Play Detail), default 3 | [ORACLE newgame-0001] [BYTES seg6:0xc76] [BYTES INSTALL.EXE seg2:0x2b53] | oracle | understood | done | demo |
 | INI-57 | `Quick`: (Quickload), default 0 (INSPACE, Factory), 1 (ISPACE.DLL) | [ORACLE newgame-0001] [BYTES seg6:0xc60] | oracle | located | todo | demo |
 | INI-58 | `Calibrate`: speed measure rewritten 1.5 s after each launch; guides the detail level | [MANUAL Optimizing for Your Computer] [ORACLE newgame-0001] [ORACLE smoke-0001] [BYTES seg6:0xa6c] | oracle | understood | done | demo |
 | INI-59 | `GameSpeed`: default 20000 | [ORACLE newgame-0001] [BYTES seg6:0xb5c] | oracle | located | todo | demo |
 | INI-60 | `FrameRateSet`: (Play Speed), default 36 | [ORACLE newgame-0001] [BYTES seg6:0xb7d] | oracle | understood | done | demo |
-| INI-61 | `MixChannels`: (Mix Channels), default 1 (INSPACE), 4 (ISPACE.DLL) | [ORACLE newgame-0001] [BYTES seg6:0xc9c] [BYTES ISPACE.DLL seg9:0x22ca] | oracle | understood | done | demo |
+| INI-61 | `MixChannels`: (Mix Channels), default 1 (INSPACE), 4 (ISPACE.DLL) | [ORACLE newgame-0001] [ORACLE sound-0002] [BYTES seg6:0xc9c] [BYTES ISPACE.DLL seg9:0x22ca seg9:0x2fdf] | oracle | understood | verified | demo |
 | INI-62 | `BadVideo`: default 1 | [ORACLE newgame-0001] [BYTES seg6:0xcda] | oracle | located | todo | demo |
 | INI-63 | `Complex`: default 0 (INSPACE), 2 (ISPACE.DLL) | [ORACLE newgame-0001] [BYTES seg6:0x1204] [BYTES INSTALL.EXE seg2:0x34a6] | oracle | understood | done | demo |
 | INI-64 | `Braking`: (Ship Auto Braking), default 0 | [ORACLE newgame-0001] [BYTES seg6:0xcf4] [BYTES INSTALL.EXE seg2:0x34a6] | oracle | understood | done | demo |
@@ -657,7 +657,7 @@ Keys are in `INSPACE.INI` `[Inner Space]` unless the row names another file or s
 | SND-05 | 3D Dynamic sound: left/right placement | [MANUAL Game Settings] [BYTES ISPACE.DLL seg9:0x76c] | manual | verified | done | unknown |
 | SND-06 | MIDI music main, race, anthem, demon (.mid) through the MCI sequencer | [MANUAL Game Settings] [BYTES ISPACE.DLL DGROUP:0xae4] [BYTES ISPACE.DLL DGROUP:0xaef] [BYTES ISPACE.DLL seg9:0x3906] [BYTES ISPACE.DLL seg9:0x3906 seg9:0x37ea] | manual | verified | verified | demo |
 | SND-07 | "Midi Mapper is not available. Continue?" | [BYTES ENG_LANG.DLL STRING 139] id 2219 [BYTES ISPACE.DLL seg9:0x3890] | strings | verified | done | unknown |
-| SND-08 | No sound card: silent; PC-speaker drivers refused | [MANUAL Game Settings] [MANUAL Troubleshooting] [BYTES ISPACE.DLL seg9:0x22ca] | manual | verified | done | unknown |
+| SND-08 | No sound card: silent; PC-speaker drivers refused | [MANUAL Game Settings] [MANUAL Troubleshooting] [BYTES ISPACE.DLL seg9:0x22ca] [ORACLE sound-0002] | manual | verified | done | demo |
 | SND-09 | Compressed and uncompressed sound sets | [MANUAL Troubleshooting] [BYTES ENG_LANG.DLL STRING 145] id 2314 [BYTES ISPACE.DLL seg9:0x2f30] | code | verified | done | unknown |
 | SND-10 | Ship hit sounds CLUNK .. SHATTER; custom WAVs from the SOUNDS directory | [MANUAL Customizing Ships] [BYTES ENG_LANG.DLL STRING 39] ids 610–623 [BYTES ENG_LANG.DLL STRING 40] id 624 [BYTES ISPACE.DLL seg9:0xc42] | manual | understood | wip | registered |
 | SND-11 | Focus change: while sound is on, when another task's window becomes active the effects stop, music pauses and the system MIDI and wave volumes are restored; back in the game's task (not iconic) the game volumes and music return (ISPACE ordinal 7 commands 3 and 4) | [BYTES ISPACE.DLL seg9:0xaf2] [BYTES seg2:0x12e7] | code | verified | done | unknown |

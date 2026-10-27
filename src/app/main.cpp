@@ -601,6 +601,19 @@ public:
         s.port_soundfont = settings::path_from_ini(port.soundfont);
         const bool ok = audio::init(s, *g.store, g.main);
         log(std::string("sound start: ISPACE ordinal 7 command 0 ") + (ok ? "ok" : "failed"));
+        // The INI reader replaces a SoundSystem of -1 with the capability level and writes it
+        // back [BYTES ISPACE.DLL seg9:0x2540 seg9:0x254d seg9:0x2569]: 3 with a waveOut device,
+        // 0 without [ORACLE sound-0002] (M7 s3 fixer).
+        if (s.sound_system == -1) {
+            const int level = audio::capability();
+            dialogs::live_settings().sound_system = level;
+            g.ini->set(settings::kGameSection, "SoundSystem", std::to_string(level));
+            try {
+                g.ini->save();
+            } catch (const std::exception& x) {
+                log(std::string("INSPACE.INI: ") + x.what());
+            }
+        }
     }
     void music(int code) override { is::sound::music(code, 1); }
     void set_mix_channels(int n) {  // seg6:0xc9c, from seg10:0x7f18

@@ -35,10 +35,10 @@ TEST_CASE("audio options: MixChannels 1-8") {
     CHECK(e.back() == "8");
     CHECK(mix_channel_entries(false) == std::vector<std::string>{"1"});
     for (int i = 0; i < 8; ++i) CHECK(mix_channels_of_index(i) == i + 1);
-    CHECK(mix_channels_of_index(-1) == 1);  // CB_ERR
+    CHECK(mix_channels_of_index(-1) == 0);  // CB_ERR writes 0 [ORACLE sound-0002]
     CHECK(mix_channels_of_index(12) == 8);
     CHECK(mix_channel_index(4, true) == 3);
-    CHECK(mix_channel_index(0, true) == 0);
+    CHECK(mix_channel_index(0, true) == -1);  // no session: no selection [ORACLE sound-0002]
     CHECK(mix_channel_index(20, true) == 7);
     CHECK(mix_channel_index(4, false) == 0);
 }

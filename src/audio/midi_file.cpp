@@ -1,5 +1,6 @@
 // Standard MIDI File reader (midi_file.h) [REF Standard MIDI Files 1.0].
 #include "audio/midi_file.h"
+#include "formats/bytes.h"  // path_utf8 for the log lines (M7 s3 fixer)
 
 #include <algorithm>
 #include <cmath>
@@ -70,7 +71,7 @@ struct RawTempo {
 
 bool MidiFile::load(const std::filesystem::path& path, std::string* why) {
     std::ifstream in(path, std::ios::binary);
-    if (!in) return fail(why, "cannot open " + path.string());
+    if (!in) return fail(why, "cannot open " + fmt::path_utf8(path));
     std::vector<std::uint8_t> b((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
     return parse(b.data(), b.size(), why);
 }

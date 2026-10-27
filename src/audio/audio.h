@@ -50,4 +50,13 @@ void music_restart_stored();
 // ISPACE.DLL DGROUP:0x227e, the capability level command 0 found (0 before command 0).
 int capability();
 
+// ---- M7 stage 3 fixer additions to the contract.
+// Audio OK (ISPACE.DLL seg9:0x331a steps 2-4): the settings re-read, the module loads and
+// unloads, and the session reopen when the channel count differs from the session's
+// DGROUP:0x219e [BYTES ISPACE.DLL seg9:0x34e4 seg9:0x3547 seg9:0x3582 seg9:0x3599].
+void audio_ok(const Settings&);
+// ISPACE.DLL DGROUP:0x219e, the session's channel count: 0 when command 0 opened no session
+// (sound system 0), which Audio init selects as count - 1 [BYTES ISPACE.DLL seg9:0x2fdf].
+int channels();
+
 }  // namespace is::audio

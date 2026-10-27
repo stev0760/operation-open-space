@@ -128,7 +128,7 @@ The template gives only the controls and their template texts. In the original t
 - How far the port should match the original's fonts is [OPEN].
 
 ## Not covered
-- #999 Audio Options: Audio.. and the sound combo stay disabled with `SoundSystem=0` and with `SoundSystem=-1` (`orig-3`), so the dialog did not open. [ORACLE dialogs-0001] What enables them is [OPEN].
+- #999 Audio Options: Audio.. and the sound combo stay disabled with `SoundSystem=0` and with `SoundSystem=-1` (`orig-3`), so the dialog did not open. [ORACLE dialogs-0001] The capability level from the device test enables them, not `SoundSystem`: this host had no wave device (`sound-0002`).
 - #101: orig-1's trace has no `CREATEDIALOG` call, and no window with its caption and size appeared. [ORACLE dialogs-0001]
 - #139, #169, #286 and #300 share their captions with items of the Factory menu (MENU 110) [BYTES ENG_LANG.DLL MENU 110]. FACTORY.EXE was not run. [OPEN]
 - #589, #988 and #1872: their triggers were not reached. [OPEN]

@@ -601,8 +601,64 @@ TEST_CASE("audio: Audio OK opens a session after a start with SoundSystem 0") {
     a::Settings s1 = defaults();
     s1.sound_system = 3;
     s1.mix_channels = 2;
-    rig.eng.reread(s1);
+    rig.eng.reread(s1, true);
     CHECK(rig.eng.sound_system() == 3);
     CHECK(rig.eng.channels() == 2);
     CHECK(rig.eng.ordinal9(0x13, {-6000, -6000}, 0, 1, 1, 640, 480, 100) == 1);
+}
+
+// M7 s3 fixer: Options OK's 0 -> 3 re-runs the INI reader only; no session opens and the
+// effects stay silent [ORACLE sound-0002]. Audio OK with no selection writes MixChannels 0,
+// which equals the session count 0 and reopens nothing [BYTES ISPACE.DLL seg9:0x3547].
+TEST_CASE("audio: a 0 -> 3 switch in Options leaves the effects silent") {
+    a::Settings s0 = defaults();
+    s0.sound_system = 0;
+    Rig rig(s0);
+    a::Settings s1 = s0;
+    s1.sound_system = 3;
+    rig.eng.reread(s1);  // Options OK: the INI reader again
+    CHECK(rig.eng.sound_system() == 3);
+    CHECK(rig.eng.channels() == 0);
+    CHECK(rig.eng.ordinal9(0x13, {-6000, -6000}, 0, 1, 1, 640, 480, 100) == 0);
+    a::Settings s2 = s1;
+    s2.mix_channels = 0;
+    rig.eng.reread(s2, true);  // Audio OK, combo 128 without a selection
+    CHECK(rig.eng.channels() == 0);
+    CHECK(rig.eng.ordinal9(0x13, {-6000, -6000}, 0, 1, 1, 640, 480, 200) == 0);
+}
+
+// M7 s3 fixer: the channel step compares with the session's count, not the INI's value, and
+// only Audio OK runs it [BYTES ISPACE.DLL seg9:0x3547 seg9:0x354a].
+TEST_CASE("audio: only Audio OK reopens the session, against the session count") {
+    Rig rig;  // MixChannels 4
+    CHECK(rig.eng.channels() == 4);
+    a::Settings s = defaults();
+    s.mix_channels = 2;
+    rig.eng.reread(s);  // a bar move or Options OK: no reopen
+    CHECK(rig.eng.channels() == 4);
+    rig.eng.reread(s, true);  // Audio OK
+    CHECK(rig.eng.channels() == 2);
+    rig.eng.reread(s, true);  // the same count again: nothing to do
+    CHECK(rig.eng.channels() == 2);
+}
+
+// M7 s3 fixer: a custom WAV (id -1) that cannot be read plays nothing, not slot 0x11, which
+// only books it [BYTES ISPACE.DLL seg9:0xc72 seg9:0x1333 seg9:0x1367].
+TEST_CASE("audio: a missing custom WAV plays nothing") {
+    Rig rig;
+    CHECK(rig.eng.ordinal9(-1, {-6000, -6000}, 0, 1, 1, 640, 480, 100, "NOPE") == 0);
+    for (int c = 0; c < 4; ++c) CHECK(rig.eng.record(c).id == 0);
+    CHECK_FALSE(rig.mixer.busy(0));
+}
+
+// M7 s3 fixer: a completion still waiting for the engine does not clear the record of the
+// wave that replaced it on the same channel.
+TEST_CASE("audio: a stale completion does not clear the next wave's record") {
+    a::Mixer m;
+    m.configure(2);
+    auto w = std::make_shared<a::Pcm>(4, std::uint8_t{200});
+    REQUIRE(m.play(0, w, 1, true));
+    for (int i = 0; i < 8; ++i) m.mix_one();  // the wave ends: a completion for channel 0
+    REQUIRE(m.play(0, w, 1, true));           // a new wave before the engine took it
+    CHECK(m.take_completed().empty());
 }

@@ -138,6 +138,35 @@ TEST_CASE("audio options win32: Audio Options #999 fills and OK") {
     CHECK(r.rereads.back().music == 1);
 }
 
+// M7 s3 fixer: the selection is the session's count - 1, so with no session (a start at sound
+// system 0) combo 128 shows nothing and OK writes MixChannels 0 through Audio OK's path
+// [BYTES ISPACE.DLL seg9:0x2fdf seg9:0x3367] [ORACLE sound-0002].
+TEST_CASE("audio options win32: Mix Channels follows the session count") {
+    Rig r;
+    if (!r.ok()) return;
+    std::vector<is::audio::Settings> oks;
+    r.env.audio_ok = [&](const is::audio::Settings& s) { oks.push_back(s); };
+    {
+        r.env.channels = [] { return 2; };
+        AudioDialog d(r.env);
+        HWND h = d.create_modeless();
+        REQUIRE(h != nullptr);
+        CHECK(sel(h, aud::kMixChannels) == 1);  // the session's 2, not the INI's 6
+    }
+    r.env.channels = [] { return 0; };
+    AudioDialog d(r.env);
+    HWND h = d.create_modeless();
+    REQUIRE(h != nullptr);
+    CHECK(sel(h, aud::kMixChannels) == CB_ERR);
+    const std::size_t before = r.rereads.size();
+    SendMessageW(h, WM_COMMAND, MAKEWPARAM(aud::kOk, BN_CLICKED), 0);
+    CHECK(d.ended());
+    CHECK(r.ini.get_int(is::settings::kGameSection, "MixChannels", -5) == 0);
+    REQUIRE(oks.size() == 1);
+    CHECK(oks.back().mix_channels == 0);
+    CHECK(r.rereads.size() == before);  // Audio OK goes through audio_ok, not reread
+}
+
 TEST_CASE("audio options win32: Options #100 fills, bars and OK") {
     Rig r;
     if (!r.ok()) return;
