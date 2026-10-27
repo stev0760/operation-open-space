@@ -258,10 +258,6 @@ void state1_setup(shell::GameState&) {
         g.gfx->present(g.main, true);
         GdiFlush();
     }
-    // The load's sound part: seg10:0x744c(0x6e) near its end stops the greeting's 0x6f
-    // [BYTES seg10:0xad seg9:0x2768 seg9:0x276a] [ORACLE sound-0001 main: two stops 20 ms
-    // after 0x6f] (M7 fixer).
-    if (g_host) g_host->sound(0x6e);
     app::log("state 1: greeting drawn at " + std::to_string(start) + " ms" +
              (g.gfx && g.gfx->alphabet() ? "" : " (no ALPHABET)"));
     // The busy wait to start + 2000 ms [BYTES seg10:0xb7-0xc6]: the time passes without
@@ -272,6 +268,12 @@ void state1_setup(shell::GameState&) {
     // during the CPU-bound wait (shell.md, item 13) [DESIGN].
     while (app::now_tick() - start < 2000)
         MsgWaitForMultipleObjectsEx(0, nullptr, 10, 0, 0);
+    // The load's sound part: seg10:0x744c(0x6e) near the end of seg9:0x22b4 stops the
+    // greeting's looping bubbles 0x6f [BYTES seg10:0xad seg9:0x2768 seg9:0x276a]. In the
+    // original the bubbles run for as long as the disk load takes; on a modern disk and in
+    // the oracle that is 20 ms [ORACLE sound-0001 main], so the port plays the stop after
+    // the 2000 ms window instead, and the bubbles last the load screen [DESIGN ADR 0009].
+    if (g_host) g_host->sound(0x6e);
 }
 
 // ---- the wave HUD of the state-1 repaint seg11:0xafe (shell.md "Window geometry", HUD)
