@@ -223,7 +223,9 @@ bool Gfx::present(HWND hwnd, bool force) {
     if (!hwnd || surface_.empty() || IsIconic(hwnd)) return false;
     RECT rc;
     GetClientRect(hwnd, &rc);
-    HDC dc = GetDC(hwnd);
+    // The child controls (the HUD scrollbar) are clipped out: they paint themselves over the
+    // presented surface (ADR 0013 decision 5 and Consequences) [DESIGN].
+    HDC dc = GetDCEx(hwnd, nullptr, DCX_CACHE | DCX_CLIPCHILDREN);
     if (!dc) return false;
     const bool drew = present_dc(dc, rc.right, rc.bottom, force);
     ReleaseDC(hwnd, dc);

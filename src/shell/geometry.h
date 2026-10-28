@@ -73,8 +73,7 @@ Clip clip_rect(const PlayArea& a, bool border, bool play_mode);
 int border_inset(int w);
 
 // seg11:0xafe's HUD children and fill (shell.md "HUD"). The panel origins and widths
-// (DGROUP:0x93ba, DGROUP:0x5024, DGROUP:0x93c4, DGROUP:0x5026) come from the HUD drawing,
-// which M3 ports; they are inputs here.
+// (DGROUP:0x93ba, DGROUP:0x5024, DGROUP:0x93c4, DGROUP:0x5026) are hud_values()' (below).
 struct HudInputs {
     int panel1_x = 0;  // DGROUP:0x93ba
     int panel1_w = 0;  // DGROUP:0x5024
@@ -88,6 +87,33 @@ struct HudLayout {
     Box fill;       // the PATCOPY fill of the strip
 };
 HudLayout hud_layout(const PlayArea& a, const HudInputs& in);
+
+// seg11:0xafe's layout table (world.md "Layout"), computed for any play width W with W/2 a
+// signed halving toward zero [BYTES seg11:0xb77-0xc58]. 16-bit words, as the original's.
+struct HudValues {
+    int left = 0;      // DGROUP:0x93b8 L: the SCORE box's x
+    int left_w = 0;    // DGROUP:0x93dc Lw: the SCORE box's width
+    int target_w = 0;  // DGROUP:0x5024: the target display's frame width
+    int target_x = 0;  // DGROUP:0x93ba: the target display's frame x
+    int radar_x = 0;   // DGROUP:0x93be: the radar frame's x
+    int fuel_x = 0;    // DGROUP:0x93bc: the fuel gauge's x
+    int damage_x = 0;  // DGROUP:0x93c0: the damage panel's x (and the red button's)
+    int clock_x = 0;   // DGROUP:0x93c2: the clock box's x
+    int weapon_x = 0;  // DGROUP:0x93c4: the weapon display's frame x
+    int weapon_w = 0;  // DGROUP:0x5026: the weapon display's frame width
+    bool operator==(const HudValues& o) const {
+        return left == o.left && left_w == o.left_w && target_w == o.target_w &&
+               target_x == o.target_x && radar_x == o.radar_x && fuel_x == o.fuel_x &&
+               damage_x == o.damage_x && clock_x == o.clock_x && weapon_x == o.weapon_x &&
+               weapon_w == o.weapon_w;
+    }
+};
+// `race` is DGROUP:0x94e != 0.
+HudValues hud_values(int w, bool race);
+// The panel inputs of hud_layout from the table.
+inline HudInputs hud_inputs(const HudValues& v) {
+    return {v.target_x, v.target_w, v.weapon_x, v.weapon_w};
+}
 
 // ---- logical pixels (ADR 0006 decisions 2 and 3)
 // The game draws into a surface of the logical size, the client size divided by an integer

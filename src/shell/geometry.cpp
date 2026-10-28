@@ -89,6 +89,37 @@ HudLayout hud_layout(const PlayArea& a, const HudInputs& in) {
     return h;
 }
 
+HudValues hud_values(int w, bool race) {
+    HudValues v;
+    w = w16(w);
+    const int half_w = w16(half(w));  // cwd; sub ax, dx; sar ax, 1
+    if (w < 0x294) {                  // seg11:0xb77: jge on 660
+        v.left = 1;
+        v.left_w = 0x49;
+    } else if (w < 0x2f8) {  // seg11:0xb8d: 760
+        v.left = 1;
+        v.left_w = 0x5a;
+    } else {  // seg11:0xba3
+        v.left = 4;
+        v.left_w = 0x86;
+    }
+    v.target_w = w16(half_w - v.left_w - 0x60);           // seg11:0xbb7-0xbbe
+    if (w < 0x2bc) v.target_w = w16(v.target_w + 9);      // seg11:0xbc1-0xbcc: 700
+    v.target_x = w16(v.left_w + v.left + 4);              // seg11:0xbcf-0xbd9
+    if (w < 0x2bc) v.target_x = w16(v.target_x - 2);      // seg11:0xbdc-0xbe6
+    v.radar_x = w16(half_w - 0x32);                       // seg11:0xbf1-0xbf4
+    v.fuel_x = w16(v.radar_x - 0x1e);                     // seg11:0xbf7-0xbfa
+    if (w >= 0x2bc) v.fuel_x = w16(v.fuel_x - 4);         // seg11:0xbfd-0xc08 (jl skips)
+    v.damage_x = w16(half_w + 0x44);                      // seg11:0xc13-0xc16
+    if (race) v.damage_x = w16(v.damage_x - 0xe);         // seg11:0xc19-0xc23
+    v.clock_x = w16(v.damage_x + 0x1c);                   // seg11:0xc26-0xc29
+    v.weapon_x = w16(v.damage_x + 0x58);                  // seg11:0xc2c-0xc32
+    v.weapon_w = w16(half_w - 0xa0);                      // seg11:0xc35-0xc40
+    if (w < 0x2bc) v.weapon_w = w16(v.weapon_w + 4);      // seg11:0xc43-0xc4e
+    if (race) v.weapon_w = w16(v.weapon_w + 0xe);         // seg11:0xc51-0xc58
+    return v;
+}
+
 int scale_factor(int key, int client_w, int client_h) {
     int f;
     if (key >= 1 && key <= kMaxScale)

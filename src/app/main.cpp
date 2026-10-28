@@ -33,6 +33,9 @@
 #include "shell/command_table.h"
 #include "shell/options.h"
 #include "shell/rng.h"
+#include "world/flight_hooks.h"  // install_flight_hooks (M3 stage 2, flight)
+#include "world/hooks.h"
+#include "hud/hooks.h"  // install_hud_hooks (M3 stage 2, the HUD)
 
 namespace is::app {
 
@@ -437,6 +440,9 @@ int run(HINSTANCE instance) {
     install_help_hooks(g);
     install_briefing_hooks(g);
     install_desk_hooks(g);  // src/desk/hooks.cpp
+    install_world_hooks(g);   // src/world/hooks.cpp (the wave set-up)
+    install_flight_hooks(g);  // src/world/flight_hooks.cpp
+    install_hud_hooks(g);     // src/hud/hooks.cpp (after the world and flight hooks)
     // The result is discarded; DGROUP:0x16 comes from WM_CREATE [BYTES seg2:0x390].
     CreateWindowExW(0, kMainClass, title.c_str(), style, x, y, w, h, nullptr,
                     g.keys.menu ? g.menu : nullptr, instance, nullptr);

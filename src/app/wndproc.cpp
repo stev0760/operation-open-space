@@ -20,9 +20,11 @@
 #include "formats/bytes.h"
 #include "gfx/palette_message.h"
 #include "help/help.h"
+#include "hud/program.h"  // the HUD scrollbar (M3 stage 2, the HUD)
 #include "intro/intro.h"
 #include "nav/nav.h"
 #include "shell/command_table.h"
+#include "world/flight_hooks.h"  // the wave's key latch (M3 stage 2, flight)
 
 namespace is::app {
 
@@ -299,6 +301,15 @@ void timer() {
 
 // The input path of globals.md "Input path".
 void input(UINT msg, WPARAM wparam, LPARAM lparam) {
+    // The wave's key latch sees every key-down and key-up, Alt's included, before any gate:
+    // GetAsyncKeyState reads the keyboard, not the game's input path [DESIGN ADR 0013 decision 6]
+    // (src/world/flight_hooks.cpp).
+    if (msg == WM_KEYDOWN || msg == WM_KEYUP || msg == WM_SYSKEYDOWN || msg == WM_SYSKEYUP)
+        world::feed_key(msg, wparam, lparam);
+    // The latch only; DefWindowProc follows. How Alt+I, Alt+R and Alt+plus/minus reach seg11:0x6b64
+    // in the original (WM_SYSKEYDOWN in seg2's WndProc, the 0x99b post or MainAccel) is [OPEN]:
+    // until it is read, the port's Alt keys act only through the latch and 0x99b (M3 s2 fixer).
+    if (msg == WM_SYSKEYDOWN || msg == WM_SYSKEYUP) return;
     // DEMO mode (DGROUP:0x90f8 and DGROUP:0x8e5e) quits on input after 4000 ms; the port has
     // no DEMO command line [OPEN] (M3, shell.md "DEMO and PLAY"). Otherwise input needs DGROUP:0x1212, DGROUP:0x8f68 and
     // DGROUP:0x3b94 <= DGROUP:0x1e50; DGROUP:0x3b94 belongs to the wave (M3) and is 0 here.
@@ -511,6 +522,8 @@ LRESULT handle(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     }
     case WM_KEYDOWN:
     case WM_KEYUP:
+    case WM_SYSKEYDOWN:  // the wave's key latch only (input), then DefWindowProc
+    case WM_SYSKEYUP:
         input(msg, wparam, lparam);
         break;
     case kMsgAltKey:
@@ -530,7 +543,8 @@ LRESULT handle(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     case WM_TIMER:  // seg2:0x814
         timer();
         return 0;
-    case WM_VSCROLL:  // seg11:0x7798, the HUD scrollbar (M3)
+    case WM_VSCROLL:  // seg2:0x6a7: seg11:0x7798(code, pos), the HUD scrollbar
+        hud::vscroll(LOWORD(wparam), HIWORD(wparam));
         return 0;
     case WM_LBUTTONDOWN:  // seg16:0x638a, the ambulance screen's buttons (M4)
         return 0;

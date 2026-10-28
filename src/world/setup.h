@@ -1,0 +1,120 @@
+// The wave set-up (docs/re/world.md "Wave set-up"): the load seg9:0x22b4 with the generator
+// seg9:0x3202, the pool counts and the record templates seg10:0xb94; the briefing entry's part
+// seg9:0x5cca with the icon fill seg9:0xb2a / seg9:0x0 and the placement seg9:0x6624 (rocks,
+// pool 9, pool 4, gates and hazards); and the ships at the wave start seg9:0x60bc. Portable: the
+// filesystem through nav::Walker, the icons through IconReader, rand() through shell::Rng.
+//
+// Call order of the original (world.md "Order"), which the hooks (hooks.cpp) follow:
+//   state change to 1: srand (seg2:0x1b6b, the shell's play_area hook), state1_load()
+//   (seg10:0x0 -> seg9:0x22b4), then new_game() when no game was restored (seg9:0xc06) and
+//   enter_briefing() (seg9:0x5cca); at the briefing's end start_wave() (seg9:0x60bc).
+#pragma once
+
+#include <cstdint>
+#include <functional>
+#include <optional>
+#include <string>
+
+#include "formats/icon_source.h"
+#include "nav/fs.h"
+#include "shell/rng.h"
+#include "world/world.h"
+
+namespace is::world {
+
+// What SHELL.ExtractIcon gives the original for a program file (ADR 0012 decision 5): the
+// port's own reader. count() is ExtractIcon(path, -1), cell() ExtractIcon(path, k) drawn over
+// black (nullopt where ExtractIcon returns no icon).
+class IconReader {
+public:
+    virtual ~IconReader() = default;
+    virtual int count(const std::string& dos_path) = 0;
+    virtual std::optional<fmt::IconCell> cell(const std::string& dos_path, int index) = 0;
+};
+
+// What the set-up needs from the program.
+struct SetupHost {
+    SetupHost(shell::Rng& r, nav::Walker& w, IconReader& i) : rng(r), walker(w), icons(i) {}
+    shell::Rng& rng;          // INSPACE's rand() (DGROUP:0x144c)
+    nav::Walker& walker;      // the find calls of seg9:0x0, logged as nav.md's table
+    IconReader& icons;        // the ExtractIcon calls of seg9:0x156, logged through the walker
+    std::function<std::uint32_t()> now;          // GetCurrentTime (0 when unset)
+    std::function<void(const std::string&)> log;  // the set-up's log lines
+    // seg14:0x3eda, seg14:0x0(-1) and seg14:0x4074 at the placement (the ship records from
+    // MASTER.SHP and the opponents). Unset: the player's ship alone (ship_setup_minimal).
+    std::function<void(World&)> ship_setup;
+    // seg8:0x0, the view recentred on the player at the wave start (flight role).
+    std::function<void(World&)> recentre;
+};
+
+// The DGROUP words the set-up reads before anything writes them: DGROUP:0x986 ... 0x990 from the
+// initialised data (1, 1, 1, 1, 1, 2) and the uninitialised DGROUP:0x9346, 0x9432 and 0x992 (0)
+// [BYTES DGROUP:0x986 DGROUP:0x990].
+void power_on(World& w);
+
+// ---- difficulty inputs
+// seg6:0x11ec: the budget DGROUP:0x932a and DGROUP:0x9000 from `Complex` (w.complex) and the
+// easy first waves [BYTES seg6:0x1204-0x1256 seg6:0x1258-0x1284].
+void read_budget(World& w);
+// seg9:0x484c: DGROUP:0x9334 = the number of score thresholds DGROUP:0x9bc + 4k (k < 12) below
+// the score dword DGROUP:0x5078 [BYTES seg9:0x484c].
+void level_from_score(World& w);
+// seg9:0xc06's resets of a new game (DGROUP:0x92e4 = 0): DGROUP:0x992, the score, DGROUP:0x9346
+// = -1, the wave, DGROUP:0x9432 = 100, the wave kinds DGROUP:0x986 ... 0x990 [BYTES seg9:0xc06
+// seg9:0xc56].
+void new_game(World& w);
+
+// ---- the load seg9:0x22b4
+// seg9:0x3202, the wave generator: wave kind, target, category counts, pool-4 count, gate count,
+// pool-2 units and the opponents [BYTES seg9:0x3202] [OPEN: world.md "Generator draw loop";
+// the port follows the routine's 61 rand() sites in address order, see setup.cpp].
+void generate(World& w, shell::Rng& rng);
+// seg9:0x22b4 without its drawing: roles, seg9:0x2828 for wave 0, the generator, DGROUP:0x9432,
+// the pool counts, the reallocation of pools 0-14 and the templates [BYTES seg9:0x22b4
+// seg9:0x24b5-0x2510 seg9:0x2513-0x257e seg9:0x2590 seg9:0x25a3].
+void load(World& w, SetupHost& h);
+// seg10:0xb94: the per-pool constants [BYTES seg10:0xb94].
+void apply_templates(World& w);
+
+// ---- programs and icons
+// seg9:0xb2a: resets pools 0 and 1 and runs seg9:0x0(8), the enumeration of DGROUP:0x38c8 +
+// "*.exe" then "*.dll" (attribute 1) with seg9:0x156 per file [BYTES seg9:0xb2a seg9:0x0
+// seg9:0x156 seg9:0x94c seg9:0x9b0 seg9:0xac4 seg9:0x278].
+void fill_icons(World& w, SetupHost& h);
+// seg9:0x8da: a cell is blank when every pixel equals strip pixel (0, 0), black [BYTES seg9:0x8da].
+bool blank_cell(const StripCell& c);
+
+// ---- the placement seg9:0x6624 and its placers
+void place(World& w, SetupHost& h);
+void place_rock(World& w, shell::Rng& rng, int i);   // seg10:0x864
+void place_pool9(World& w, shell::Rng& rng, int i);  // seg10:0xa26
+void place_pool4(World& w, shell::Rng& rng, int i);  // seg9:0xdf6
+void place_icon(World& w, shell::Rng& rng, int i);   // seg10:0x736
+void place_gates(World& w, SetupHost& h);            // seg9:0x10d4 (gates and hazards)
+// The centre exclusion of the four placers: ((1600 - W/2) << s, ...) in 16 bits [BYTES
+// seg10:0x998 seg10:0x99d].
+Rect16 centre_exclusion(const World& w);
+// The player's ship alone (DGROUP:0x9316 = 0, pool 14 one record, heading +0x28 = 0) for
+// set-ups without the ship set-up of seg14 [DESIGN] [OPEN: seg14:0x0 is M5].
+void ship_setup_minimal(World& w);
+
+// ---- the entries
+// seg10:0x0 -> seg9:0x22b4(0): the state-1 load before the briefing.
+void state1_load(World& w, SetupHost& h);
+// seg9:0x5cca's world part: the load again, pool 6, the icon fill, seg9:0x94ba, the counts, the
+// placement between the wave increments, the pool-2 rewrite and the wave increment seg9:0x5fbf
+// [BYTES seg9:0x5cca seg9:0x5d3c seg9:0x5d66 seg9:0x5e58 seg9:0x5e5d seg9:0x5e60 seg9:0x5e9c
+// seg9:0x5ecd seg9:0x5fbf].
+void enter_briefing(World& w, SetupHost& h);
+// seg9:0x60bc's world part: the ships at the wave start (world.md "Ships at wave start").
+void start_wave(World& w, SetupHost& h);
+// The seed of the wave start: seg9:0x60bc -> seg11:0x3cc2 -> seg11:0xafe, srand(GetCurrentTime)
+// [BYTES seg11:0xb22 seg11:0xb28].
+inline void seed_wave(shell::Rng& rng, std::uint32_t tick) {
+    rng.srand(static_cast<std::uint16_t>(tick & 0xffff));
+}
+
+// One line naming the pool counts (allocated/in use) and the generator's outputs.
+std::string describe_counts(const World& w);
+
+}  // namespace is::world

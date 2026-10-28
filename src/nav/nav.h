@@ -150,6 +150,16 @@ void expand_or_collapse();
 // DGROUP:0xd1c = DGROUP:0x94b4, hands `label` (DGROUP:0x38c8) to Host::entered, requests state 1
 // or arms the debriefing, closes the window and returns 1 [BYTES seg6:0x3686-0x37bd].
 int accept(const std::string& label);
+// What the last accept() wrote for the wave set-up: DGROUP:0x94a2 (the record) and DGROUP:0x94b0
+// (the record was added) [BYTES seg6:0x36b6 seg6:0x3775]; `serial` counts the accepted Enters, so
+// the set-up reads each Enter's values once (M3 s2 fixer).
+struct Accepted {
+    int serial = 0;
+    int record = -1;
+    bool added = false;
+    std::string dir;  // DGROUP:0x6990 at the acceptance
+};
+const Accepted& last_accepted();
 // Whether accept() finds or can add the record of directory(): false at Records::kMax records,
 // where accept() refuses Enter (M3 s1 fixer) [OPEN: ADR 0012 line owed].
 bool record_room();

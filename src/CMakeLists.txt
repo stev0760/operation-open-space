@@ -54,7 +54,7 @@ endif()
 # window and the briefing. Each directory is a library of its *.cpp, so parallel work never
 # edits this file; src/app/app.h declares their hook points (install_*_hooks).
 set(IS_PART_LIBS)
-foreach(_part audio dialogs help briefing nav install desk)
+foreach(_part audio dialogs help briefing nav install desk world hud)
   file(GLOB _part_sources CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${_part}/*.cpp)
   if(_part_sources AND TARGET isgfx)
     add_library(is${_part} STATIC ${_part_sources})
@@ -111,6 +111,21 @@ endif()
 # The game-start flow hands Navigation Enter's directory to the briefing (src/dialogs/hooks.cpp).
 if(TARGET isdialogs AND TARGET isnav AND TARGET isbriefing)
   target_link_libraries(isdialogs PUBLIC isnav isbriefing)
+endif()
+# M3 stage 2: the world (src/world) walks the directory through the Walker and draws the icon
+# placeholder (isnav); the HUD (src/hud) draws the world; the briefing reads the World's icon
+# records (ADR 0012 consequences, ADR 0013).
+if(TARGET isworld AND TARGET isnav)
+  target_link_libraries(isworld PUBLIC isnav)
+endif()
+if(TARGET ishud AND TARGET isworld)
+  target_link_libraries(ishud PUBLIC isworld)
+endif()
+if(TARGET isbriefing AND TARGET isworld)
+  target_link_libraries(isbriefing PUBLIC isworld)
+  # The world's hooks read the briefing's wave number DGROUP:0x91f8 (briefing::wave); CMake
+  # repeats the static libraries of a cycle on the link line.
+  target_link_libraries(isworld PUBLIC isbriefing)
 endif()
 if(WIN32)
   file(GLOB IS_APP_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/app/*.cpp)

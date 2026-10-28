@@ -52,6 +52,7 @@ std::string g_status;          // DGROUP:0x6a24
 bool g_demo_named = false;     // DGROUP:0x94be
 RECT g_rect{kDefaultLeft, kDefaultTop, kDefaultLeft + kDefaultRight, kDefaultTop + kDefaultBottom};  // DGROUP:0x6af0
 bool g_logged_glyphs = false;
+Accepted g_last_accepted;      // DGROUP:0x94a2 and DGROUP:0x94b0 of the last Enter (M3 s2 fixer)
 
 constexpr const wchar_t* kClass = L"IS_NAV";
 
@@ -795,6 +796,10 @@ int accept(const std::string& label) {  // seg6:0x3686
         return 0;
     }
     log("navigation Enter: record " + std::to_string(r) + (added ? " added for " : " found for ") + g_dir);
+    ++g_last_accepted.serial;  // (M3 s2 fixer)
+    g_last_accepted.record = r;
+    g_last_accepted.added = added;
+    g_last_accepted.dir = g_dir;
     g_accepted = g_sel;  // DGROUP:0xd1c = DGROUP:0x94b4
     if (g_host.entered) g_host.entered(label);
     if (a == EnterAction::kRequestWave) {
@@ -806,6 +811,8 @@ int accept(const std::string& label) {  // seg6:0x3686
     close();
     return 1;
 }
+
+const Accepted& last_accepted() { return g_last_accepted; }
 
 bool record_room() {
     return recs().find(g_dir) >= 0 || static_cast<int>(recs().list.size()) < Records::kMax;

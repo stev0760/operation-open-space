@@ -25,6 +25,7 @@
 #include "briefing/briefing.h"
 #include "briefing/gdi_canvas.h"
 #include "formats/ne.h"
+#include "world/hooks.h"
 
 namespace is::briefing {
 
@@ -83,7 +84,6 @@ void todo_once(const std::string& what, const char* address) {
     if (g_host) g_host->todo(what, address);
 }
 
-std::wstring widen(const std::string& s) { return app::widen(s); }
 std::string narrow(const std::wstring& w) {
     if (w.empty()) return {};
     const int n = WideCharToMultiByte(1252, 0, w.c_str(), static_cast<int>(w.size()), nullptr, 0,
@@ -104,56 +104,24 @@ std::string drive_root() {
     return std::string(1, c) + ":\\";
 }
 
-// The icon files of the directory: *.exe, then *.dll, files only (FINDFIRST attribute 0x01),
-// as newgame-0002 records [ORACLE newgame-0002]. The wave set-up's icon records and cells are
-// M3 (seg9:0x17d, seg9:0x256): the port lists the files for the count DGROUP:0x91fe and draws
-// each file's first icon into its cell of DGROUP:0x3a02 [DESIGN].
-constexpr int kMaxIcons = 100;  // [DESIGN] bounds the cell image; the original's limit is [OPEN]
-std::vector<std::wstring> icon_files(const std::string& dir) {
-    std::vector<std::wstring> out;
-    std::wstring base = widen(dir);
-    if (!base.empty() && base.back() != L'\\' && base.back() != L'/') base += L'\\';
-    for (const wchar_t* pat : {L"*.exe", L"*.dll"}) {
-        WIN32_FIND_DATAW fd;
-        HANDLE h = FindFirstFileW((base + pat).c_str(), &fd);
-        if (h == INVALID_HANDLE_VALUE) continue;
-        do {
-            if (fd.dwFileAttributes &
-                (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM))
-                continue;
-            if (static_cast<int>(out.size()) < kMaxIcons) out.push_back(base + fd.cFileName);
-        } while (FindNextFileW(h, &fd));
-        FindClose(h);
-    }
-    return out;
-}
-
-gfx::ImagePtr icon_cells(const std::vector<std::wstring>& files, int b) {
+// The briefing's icon cells: the wave set-up's strip DGROUP:0x3a02 (src/world/hooks.h, built from
+// the icon records of seg9:0x0 through the Walker, ADR 0012), each 32 x 32 cell drawn at the
+// briefing's (32 << Size) / 2 with (6 << Size) / 2 gaps [OPEN: world.md "Icon strip scale"].
+gfx::ImagePtr icon_cells(int slots, int b) {
     const int o = (6 << b) >> 1, s = (32 << b) >> 1;
-    if (files.empty() || !g.gfx) return {};
+    const gfx::ImagePtr strip = world::icon_strip();
+    if (slots <= 0 || !g.gfx || !strip) return {};
     gfx::ImagePtr img;
     try {
-        img = g.gfx->create_image((s + o) * static_cast<int>(files.size()) + o, s + 2 * o);
+        img = g.gfx->create_image((s + o) * slots + o, s + 2 * o);
     } catch (const std::exception& x) {
         app::log(std::string("icon cells: ") + x.what());
         return {};
     }
-    // The port's own icon reader, never the shell's ExtractIcon on a user file: the first
-    // group's 32x32 cell over black, scaled to the cell size (M3 s1 fixer) [DESIGN ADR 0012
-    // decision 5].
-    BITMAPINFO bi{};
-    bi.bmiHeader.biSize = sizeof bi.bmiHeader;
-    bi.bmiHeader.biWidth = fmt::kIconCell;
-    bi.bmiHeader.biHeight = -fmt::kIconCell;
-    bi.bmiHeader.biPlanes = 1;
-    bi.bmiHeader.biBitCount = 32;
-    bi.bmiHeader.biCompression = BI_RGB;
-    for (std::size_t k = 0; k < files.size(); ++k) {
-        const std::optional<fmt::IconCell> c = fmt::IconSource::load(std::filesystem::path(files[k])).cell(0);
-        if (c)
-            StretchDIBits(img->hdc(), (s + o) * static_cast<int>(k) + o, o, s, s, 0, 0, fmt::kIconCell,
-                          fmt::kIconCell, c->bgra.data(), &bi, DIB_RGB_COLORS, SRCCOPY);
-    }
+    PatBlt(img->hdc(), 0, 0, (s + o) * slots + o, s + 2 * o, BLACKNESS);
+    for (int k = 0; k < slots; ++k)
+        StretchBlt(img->hdc(), (s + o) * k + o, o, s, s, strip->hdc(), world::strip_x(k), 6, 32, 32,
+                   SRCCOPY);
     GdiFlush();
     return img;
 }
@@ -174,20 +142,16 @@ Setup make_setup() {
     st.flags.f92e8 = g_handover.f92e8;  // Navigation's Enter (src/nav/enter.h)
     st.flags.f94e = g_handover.f94e;
     st.flags.f950 = g_handover.f950;
-    // A built-in level's DGROUP:0x38c8 is its name ("Lazy Loop"), not a path: the port lists no
-    // files for it [DESIGN] (the wave set-up of races, duels and Demon's Gate is M3).
-    const bool path = st.directory.size() >= 3 && st.directory[1] == ':';
-    const auto files = path ? icon_files(st.directory) : std::vector<std::wstring>{};
-    st.icons = static_cast<int>(files.size());
-    st.gone.assign(files.size(), false);
-    // The labels of seg17:0xc2e: the record's name, here the file name as FindFirstFile spells
-    // it [OPEN: the record DGROUP:0x57b4 + 0x23k is the wave set-up's, M3].
-    for (const auto& f : files) {
-        const auto slash = f.find_last_of(L"\\/");
-        st.names.push_back(narrow(slash == std::wstring::npos ? f : f.substr(slash + 1)));
+    // The icon records DGROUP:0x57b4 + 0x23k of the wave set-up (src/world/setup.h) that ran
+    // just before: DGROUP:0x91fe records, word +0x18 of each pool-0 record, the found names.
+    const world::World& w = world::current();
+    st.icons = w.icons_c;
+    for (int k = 0; k < st.icons && k < world::kIconRecords; ++k) {
+        st.gone.push_back(w.pools.records(world::kPoolIcons) > k &&
+                          w.pools.rec(world::kPoolIcons, k).state != 0);
+        st.names.push_back(w.icons[static_cast<std::size_t>(k)].name);
     }
-    if (g_canvas) g_canvas->set_icon_cells(icon_cells(files, st.size_level));
-    todo_once("icon records and cells of the wave set-up", "seg9:0x17d");
+    if (g_canvas) g_canvas->set_icon_cells(icon_cells(st.icons, st.size_level));
     return st;
 }
 
@@ -297,40 +261,8 @@ void state1_setup(shell::GameState&) {
     if (g_host) g_host->sound(0x6e);
 }
 
-// ---- the wave HUD of the state-1 repaint seg11:0xafe (shell.md "Window geometry", HUD)
-
-HWND g_hud_scroll = nullptr;  // DGROUP:0xa7a
-
-// seg11:0x2f0: the HUD child windows destroyed and zeroed [BYTES seg11:0x2f0].
-void close_hud() {
-    if (g_hud_scroll && IsWindow(g_hud_scroll)) DestroyWindow(g_hud_scroll);
-    g_hud_scroll = nullptr;
-}
-
-// seg11:0xafe's HUD layout before its state dispatch, as far as it is documented: the PATCOPY
-// fill of (0, DGROUP:0x8e5a, W, 85) with DGROUP:0x8e5a = H - 85, and the scrollbar (class
-// "scrollbar", style 0x50000001, id 200) at (W/2 + 50, DGROUP:0x8e5a, 14, 85) while DGROUP:0x94e
-// is 0 (a player game) [BYTES seg11:0xca2 seg11:0xcb1 seg11:0xcbe seg11:0xcc2 seg11:0xcd9
-// seg11:0xd28 seg2:0x1b29]. The fill's brush is [OPEN]: the oracle's band is black. The IS_INFO
-// panels 210 and 220 (DGROUP:0x93ba, DGROUP:0x5024) and what the panels draw are [OPEN] (shell.md
-// "Open questions", the HUD drawing seg11:0xafe-0x15b0 and seg11:0x1774); the port leaves them
-// out until M3 [OPEN]. Case 1 of the dispatch then draws the wave (seg7:0x11cc ...), M3.
-void lay_out_hud() {
-    if (!g.gfx || g.area.w <= 0 || g.area.h <= 0) return;
-    const shell::HudLayout l = shell::hud_layout(g.area, {});
-    PatBlt(g.gfx->dc(), l.fill.x, l.fill.y, l.fill.cx, l.fill.cy, BLACKNESS);
-    if (g_hud_scroll && IsWindow(g_hud_scroll)) return;
-    const int f = g.gfx->factor();
-    g_hud_scroll = CreateWindowExW(0, L"scrollbar", nullptr, 0x50000001, l.scrollbar.x * f,
-                                   l.scrollbar.y * f, l.scrollbar.cx * f, l.scrollbar.cy * f, g.main,
-                                   reinterpret_cast<HMENU>(static_cast<INT_PTR>(200)),
-                                   GetModuleHandleW(nullptr), nullptr);
-    if (!g_hud_scroll) return;
-    // The range 100-500 (shell.md "Open questions"); the start of DGROUP:0xa6c is [OPEN]: the
-    // oracle's thumb sits at the bottom, 600 - 100 [OPEN seg11:0xafe].
-    SetScrollRange(g_hud_scroll, SB_CTL, 100, 500, FALSE);
-    SetScrollPos(g_hud_scroll, SB_CTL, 600 - 100, TRUE);
-}
+// The wave HUD of the state-1 repaint seg11:0xafe, its scrollbar and seg11:0x2f0 are src/hud's
+// (ADR 0013 decisions 1 and 5): the briefing's stand-ins are gone (M3 s2 fixer).
 
 // ---- seg9:0x60bc: state 3 -> 1
 
@@ -339,8 +271,9 @@ void enter_wave(shell::GameState&) {
     todo_once("seg9:0x699e at the wave start", "seg9:0x699e");
     if (g.main) ShowWindow(g.main, SW_SHOW);
     PatBlt(g.gfx->dc(), 0, 0, g.area.w, g.area.h, BLACKNESS);  // seg9:0x60bc
-    // DGROUP:0xa76 = 2, DGROUP:0x9e49 = 10, DGROUP:0x93a4 = 0 and the wave set-up are M3.
-    todo_once("wave set-up (seg8:0x190e, seg13:0x2dcc, seg5:0xdc ...)", "seg9:0x60bc");
+    // The ships of seg9:0x60bc are src/world's start_wave and its HUD repaint src/hud's (M3 s2
+    // fixer); the stars seg8:0x190e and the radar brushes seg13:0x2dcc are not ported [OPEN].
+    todo_once("wave start: the stars seg8:0x190e and the radar brushes seg13:0x2dcc", "seg9:0x60bc");
     g_wave_frames = 0;
     app::log("briefing: wave " + std::to_string(g_briefing->wave()) + " starts at " +
              std::to_string(app::now_tick()) + " ms");
@@ -389,40 +322,19 @@ void install_briefing_hooks(App& app) {
         else
             state1_setup(s);
     };
-    // State 1 before M3: a black play area under the HUD.
-    // The first frame lays out the HUD as the state-1 repaint does; the wave itself is M3.
+    // The state-1 frame hook: seg10:0x7b48 alone, which the wave frame (src/world/flight_hooks.cpp)
+    // calls at seg7:0xcaf as UpdateHost::sound_frame, with the play-area centre [OPEN seg7:0xcaf].
+    // The HUD and its scrollbar are src/hud's repaint and seg11:0x2f0 (M3 s2 fixer, ADR 0013
+    // decisions 1 and 5).
     h.frame[shell::kWave] = [](shell::GameState&) {
-        // seg10:0x7b48 once per wave frame from seg7:0xcaf: the pending second sound and the
-        // ordinal 8 update. The shell has no wave frame before M3; the port calls it from the
-        // state-1 frame with the play-area centre [OPEN M3 seg7:0xcaf].
         audio::frame(g.area.w / 2, g.area.play_h / 2, app::now_tick());
-        if (g_wave_frames++ == 0) {
-            lay_out_hud();
-            todo_once("wave frame and the HUD panels (IS_INFO 210, 220)", "seg11:0xafe");
-        }
-    };
-    // The repaint: the black play area of the port before M3 (the wave of case 1 is M3), then
-    // the HUD [BYTES seg11:0x15b3 seg11:0x15b9].
-    h.repaint[shell::kWave] = [](shell::GameState&) {
-        if (g.gfx && !g.gfx->surface().empty()) PatBlt(g.gfx->dc(), 0, 0, g.area.w, g.area.h, BLACKNESS);
-        lay_out_hud();
+        ++g_wave_frames;
     };
     auto prev_teardown = h.teardown;
     h.teardown = [prev_teardown](shell::GameState& s) {
         if (prev_teardown) prev_teardown(s);
         g_handoff = false;
-        close_hud();
     };
-    // Every other state's entry closes the HUD, as seg11:0x2f0's callers do on the state changes
-    // out of the wave (shell.md "Closing the HUD") [BYTES seg11:0x2f0].
-    for (int st = 0; st < shell::kStateCount; ++st) {
-        if (st == shell::kWave) continue;
-        auto prev = h.enter[static_cast<std::size_t>(st)];
-        h.enter[static_cast<std::size_t>(st)] = [prev](shell::GameState& s) {
-            close_hud();
-            if (prev) prev(s);
-        };
-    }
     // ESC in a player game posts 0x991 (seg11:0x6c54) once DGROUP:0x934e > 2. DGROUP:0x934e
     // comes with the wave (M3); the port counts state-1 frames in its place [OPEN].
     auto prev_route = h.route_input;
