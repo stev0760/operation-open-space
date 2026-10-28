@@ -30,6 +30,9 @@ class AssetStore;
 namespace is::settings {
 class IniFile;
 }
+namespace is::nav {
+class Fs;
+}
 
 namespace is::dialogs {
 
@@ -186,6 +189,8 @@ public:
     // (GetLogicalDrives, SetCurrentDirectory("X:") and GetVolumeInformation in place of
     // _chdrive and the find-first of attribute 8) [DESIGN].
     static std::vector<Drive> system_drives();
+    // The list from a filesystem (system_drives() passes Win32Fs; tests pass a MemFs).
+    static std::vector<Drive> drives_from(nav::Fs& fs, const std::function<void(const std::string&)>& log);
     bool demo() const { return demo_; }
 
 protected:

@@ -8,6 +8,7 @@
 
 #include "assets/asset_store.h"
 #include "dialogs/preview.h"
+#include "nav/fs.h"
 #include "gfx/win16_edit.h"
 #include "settings/settings.h"
 
@@ -594,37 +595,28 @@ NewGame::NewGame(Env& env, bool demo, std::vector<Drive> drives)
 std::vector<NewGame::Drive> NewGame::system_drives() {
     // SetErrorMode(1) without a restore [BYTES ISPACE.DLL seg10:0x2087].
     SetErrorMode(SEM_FAILCRITICALERRORS);
+    nav::Win32Fs fs;
+    return drives_from(fs, {});
+}
+
+std::vector<NewGame::Drive> NewGame::drives_from(nav::Fs& fs,
+                                                 const std::function<void(const std::string&)>& log) {
+    // C: to Z: [BYTES ISPACE.DLL seg10:0x20b1] under ADR 0012 decision 2 (M3 s1 fixer): the
+    // original's _chdrive and its save and restore of the current drive [BYTES ISPACE.DLL
+    // seg10:0x207d seg10:0x2110 seg10:0x223c] are not reproduced; a rootless drive is skipped as
+    // a failed _chdrive is. Fixed, removable, CD-ROM and RAM drives get the volume-label
+    // find-first on "X:\*.*" with attribute 8 [BYTES ISPACE.DLL seg10:0x211f-0x2138] as
+    // GetVolumeInformation's label in its 8.3 form; a failed call or an empty label (DOS has no
+    // label entry to find) is the failed search, null, which the list shows as "Unknown_HD"
+    // [DESIGN]. Network and unknown drives are listed as "Unknown_HD" untouched [DESIGN ADR 0012
+    // decision 2].
     std::vector<Drive> out;
-    // _getdrive() is saved and restored around the loop [BYTES ISPACE.DLL seg10:0x207d
-    // seg10:0x223c]; the port saves the whole current directory, of any length.
-    std::wstring cwd(GetCurrentDirectoryW(0, nullptr), L'\0');
-    if (!cwd.empty()) {
-        const DWORD n = GetCurrentDirectoryW(static_cast<DWORD>(cwd.size()), cwd.data());
-        cwd.resize(n < cwd.size() ? n : 0);
-    }
-    const DWORD mask = GetLogicalDrives();
-    for (int d = 3; d <= 26; ++d) {  // C: to Z: [BYTES ISPACE.DLL seg10:0x20b1]
-        if (!(mask & (1u << (d - 1)))) continue;
+    for (const nav::ListedDrive& l : nav::list_drives(fs, log)) {
         Drive dr;
-        dr.letter = static_cast<char>('A' + d - 1);
-        // _chdrive(d) fails: the drive is skipped, and only then [BYTES ISPACE.DLL
-        // seg10:0x2110 seg10:0x2118]. The Win32 counterpart is SetCurrentDirectory("X:")
-        // [DESIGN]. It also fails on a drive without media, which the original's DOS
-        // select-disk call lists as "X: Unknown_HD" on Windows 9x (shell.md: the oracle skipped
-        // E: because its prefix maps no E: directory) [OPEN ISPACE.DLL seg10:0x2110].
-        const wchar_t drive_only[] = {static_cast<wchar_t>(dr.letter), L':', 0};
-        if (!SetCurrentDirectoryW(drive_only)) continue;
-        const wchar_t root[] = {static_cast<wchar_t>(dr.letter), L':', L'\\', 0};
-        // The volume-label find-first on "X:\*.*" with attribute 8 [BYTES ISPACE.DLL
-        // seg10:0x211f-0x2138]: GetVolumeInformation's label in its 8.3 form; a failed call or
-        // an empty label (DOS has no label entry to find) is the failed search, null, which
-        // the list shows as "Unknown_HD" [DESIGN].
-        wchar_t label[MAX_PATH + 1] = L"";
-        if (GetVolumeInformationW(root, label, MAX_PATH + 1, nullptr, nullptr, nullptr, nullptr, 0))
-            dr.label = label_as_find_first(narrow(label));
+        dr.letter = l.letter;
+        if (l.has_label) dr.label = label_as_find_first(l.label);
         out.push_back(dr);
     }
-    if (!cwd.empty()) SetCurrentDirectoryW(cwd.c_str());
     return out;
 }
 

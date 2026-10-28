@@ -10,12 +10,15 @@
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
+#include <filesystem>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
 
 #include "app/app.h"
+#include "formats/icon_source.h"
 #include "audio/audio.h"
 #include "dialogs/audio_options.h"  // is::sound (M7 audio rewiring)
 #include "shell/geometry.h"
@@ -70,6 +73,7 @@ std::unique_ptr<BriefingHost> g_host;
 std::unique_ptr<GdiCanvas> g_canvas;
 std::unique_ptr<Briefing> g_briefing;
 std::string g_selection;        // DGROUP:0x38c8 as the game-start flow set it
+WaveFlags g_handover;           // DGROUP:0x92e8, 0x94e, 0x950 as Navigation's Enter set them
 bool g_handoff = false;         // state 3 is live: the next state-1 entry is seg9:0x60bc
 bool g_loading_drawn = false;   // DGROUP:0x92e6 [BYTES seg10:0xa9 seg9:0x27b3]
 unsigned long g_wave_frames = 0;  // state-1 frames since seg9:0x60bc
@@ -134,13 +138,21 @@ gfx::ImagePtr icon_cells(const std::vector<std::wstring>& files, int b) {
         app::log(std::string("icon cells: ") + x.what());
         return {};
     }
+    // The port's own icon reader, never the shell's ExtractIcon on a user file: the first
+    // group's 32x32 cell over black, scaled to the cell size (M3 s1 fixer) [DESIGN ADR 0012
+    // decision 5].
+    BITMAPINFO bi{};
+    bi.bmiHeader.biSize = sizeof bi.bmiHeader;
+    bi.bmiHeader.biWidth = fmt::kIconCell;
+    bi.bmiHeader.biHeight = -fmt::kIconCell;
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    bi.bmiHeader.biCompression = BI_RGB;
     for (std::size_t k = 0; k < files.size(); ++k) {
-        HICON ic = ExtractIconW(g.instance, files[k].c_str(), 0);
-        if (reinterpret_cast<UINT_PTR>(ic) > 1) {
-            DrawIconEx(img->hdc(), (s + o) * static_cast<int>(k) + o, o, ic, s, s, 0, nullptr,
-                       DI_NORMAL);
-            DestroyIcon(ic);
-        }
+        const std::optional<fmt::IconCell> c = fmt::IconSource::load(std::filesystem::path(files[k])).cell(0);
+        if (c)
+            StretchDIBits(img->hdc(), (s + o) * static_cast<int>(k) + o, o, s, s, 0, 0, fmt::kIconCell,
+                          fmt::kIconCell, c->bgra.data(), &bi, DIB_RGB_COLORS, SRCCOPY);
     }
     GdiFlush();
     return img;
@@ -159,7 +171,13 @@ Setup make_setup() {
     st.command_line = 0;
     st.play_mode = g.play_mode;  // DGROUP:0x9134
     st.directory = g_selection.empty() ? drive_root() : g_selection;
-    const auto files = icon_files(st.directory);
+    st.flags.f92e8 = g_handover.f92e8;  // Navigation's Enter (src/nav/enter.h)
+    st.flags.f94e = g_handover.f94e;
+    st.flags.f950 = g_handover.f950;
+    // A built-in level's DGROUP:0x38c8 is its name ("Lazy Loop"), not a path: the port lists no
+    // files for it [DESIGN] (the wave set-up of races, duels and Demon's Gate is M3).
+    const bool path = st.directory.size() >= 3 && st.directory[1] == ':';
+    const auto files = path ? icon_files(st.directory) : std::vector<std::wstring>{};
     st.icons = static_cast<int>(files.size());
     st.gone.assign(files.size(), false);
     // The labels of seg17:0xc2e: the record's name, here the file name as FindFirstFile spells
@@ -223,8 +241,11 @@ std::string drive_text() {
     std::string name;
     if (GetVolumeInformationW(root, label, MAX_PATH + 1, nullptr, nullptr, nullptr, nullptr, 0))
         name = narrow(label);
-    return std::string(1, letter) + (g_host ? g_host->lang(937) : ":") +
-           shell::label_text(shell::label_as_find_first(name));
+    const std::optional<std::string> found = shell::label_as_find_first(name);
+    // The volume-label find-first's line, in the form of the Navigation walk's (M3 s1 fixer).
+    app::log(std::string("drive fs seg15:0x6558 findfirst \"") + letter + ":\\*.*\" 0x08 -> " +
+             (found ? "\"" + *found + "\"" : std::string("end")));
+    return std::string(1, letter) + (g_host ? g_host->lang(937) : ":") + shell::label_text(found);
 }
 
 void state1_setup(shell::GameState&) {
@@ -328,6 +349,11 @@ void enter_wave(shell::GameState&) {
 }  // namespace
 
 void set_selection(const std::string& dos_path) { g_selection = dos_path; }
+void set_handover(int demons_gate, int race, int duel) {
+    g_handover.f92e8 = demons_gate;
+    g_handover.f94e = race;
+    g_handover.f950 = duel;
+}
 void set_wave(int wave) {
     if (g_briefing) g_briefing->set_wave(wave);
 }

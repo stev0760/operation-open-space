@@ -9,9 +9,13 @@ std::vector<std::pair<std::string, int>> close_writes(int left, int top, int rig
 Box enter_box(int cw, int) { return {cw - 105, 5, 90, 26}; }
 Box help_box(int cw, int) { return {cw - 105, 40, 90, 26}; }
 Box dir_list_box(int, int ch) { return {0, 0, 160, ch - 26}; }
+Box file_list_box(int cw, int ch) { return {164, 0, cw - 284, ch - 26}; }
+Box enter_create_box(int cw, int) { return {cw - 90, 15, 90, 26}; }
+Box help_create_box(int cw, int) { return {cw - 90, 51, 90, 26}; }
+Box file_list_create_box(int cw, int ch) { return {164, 0, cw - 264, ch - 26}; }
 
 std::string drive_root(int drive_offset) {
-    return std::string(1, static_cast<char>('c' + drive_offset)) + ":\\";
+    return std::string(1, static_cast<char>('C' + drive_offset)) + ":\\";
 }
 
 EnterAction enter_action(bool armed, int wave, int restored) {

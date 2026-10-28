@@ -21,7 +21,9 @@
 #include "help/help.h"
 #include "formats/res16.h"
 #include "intro/intro.h"
+#include "nav/enter.h"
 #include "nav/nav.h"
+#include "nav/pilot.h"
 #include "shell/edition.h"
 #include "shell/rng.h"
 
@@ -279,6 +281,9 @@ public:
         std::optional<std::string> name;
         if (GetVolumeInformationW(root, label, MAX_PATH + 1, nullptr, nullptr, nullptr, nullptr, 0))
             name = label_as_find_first(narrow(label));
+        // The volume-label find-first's line, in the form of the Navigation walk's (M3 s1 fixer).
+        app::log(std::string("drive fs seg15:0x6558 findfirst \"") + letter + ":\\*.*\" 0x08 -> " +
+            (name ? "\"" + *name + "\"" : std::string("end")));
         return dialogs::drive_text(g_session.drive, lang(937), name);
     }
     void open_navigation() override {
@@ -491,6 +496,13 @@ void abort_sequence() {  // seg2:0x536
 
 namespace is::app {
 
+namespace {
+// DGROUP:0x90f8: the DEMO and PLAY command lines are not ported yet (shell.md "Start-up"), so 0.
+int nav_command_line() { return 0; }
+// DGROUP:0x95ba, INI DemoType (default 519).
+int nav_demo_type() { return is::dialogs::ini_int("DemoType", 519); }
+}  // namespace
+
 void install_dialog_hooks(App& app) {
     using namespace is::dialogs;
     g_session.size = app.ini ? app.ini->get_int(settings::kGameSection, "Size", 1) : 1;  // seg6:0xaf8
@@ -532,7 +544,43 @@ void install_dialog_hooks(App& app) {
         audio::reset_slots();
         app::log("sound reset: ISPACE ordinal 7 command 2 (seg10:0x7db8)");
     };
+    // M3 s1 fixer: the edition DGROUP:0x920c (shell.md "Editions"), the asset store (FLDR, FILES,
+    // GROUP_ICON 105-107) and the DEMO/PLAY command line and DemoType, from one source shared with
+    // EnterHost below [BYTES seg6:0x3c43 seg6:0x3c4c].
+    h.edition = [] { return g.edition.edition; };
+    h.store = [] { return static_cast<const assets::AssetStore*>(g.store.get()); };
+    h.command_line = [] { return nav_command_line() != 0; };
+    h.demo_type = [] { return nav_demo_type(); };
     if (!nav::install(h)) log("IS_NAV: RegisterClass failed");
+    // The race and duel boxes, Enter's checks and hand-over and the demo pilot (src/nav/enter.h).
+    nav::EnterHost eh;
+    eh.lang = lang;
+    eh.ini = app.ini.get();
+    eh.ini_changed = save_ini;
+    eh.log = [](const std::string& s) { log(s); };
+    // DGROUP:0x90f8 and DGROUP:0x8e5e: the DEMO and PLAY command lines are not ported yet
+    // (shell.md "Start-up"), so both are 0.
+    eh.command_line = [] { return nav_command_line(); };
+    eh.demo = [] { return 0; };
+    eh.demo_type = [] { return nav_demo_type(); };  // DGROUP:0x95ba
+    eh.rand = [] { return shell::game_rng().rand(); };       // seg5:0xdc
+    eh.now = [] { return static_cast<std::uint32_t>(now_tick()); };
+    eh.tick = [] { return static_cast<std::uint32_t>(g.game.now()); };  // DGROUP:0x1e50
+    // Enter's values for the wave set-up: the briefing picks its text by DGROUP:0x92e8, 0x94e
+    // and 0x950 (seg9:0x5ee7-0x5f46).
+    eh.handover = [](const nav::Handover& v) {
+        briefing::set_handover(v.demons_gate, v.race, v.duel);
+    };
+    nav::install_parts(eh);
+    // seg7:0x233: while the Navigation window exists in the demo with PlayMode set, the state-0
+    // frame is the demo pilot seg6:0x1e68 instead of the intro [BYTES seg7:0x233 seg7:0x248].
+    auto intro_frame = g.game.hooks().frame[shell::kIntro];
+    g.game.hooks().frame[shell::kIntro] = [intro_frame](shell::GameState& s) {
+        if (nav::window() && g.play_mode != 0 && player() == 0 &&
+            nav::pilot_frame(static_cast<std::uint32_t>(s.now())))
+            return;
+        if (intro_frame) intro_frame(s);
+    };
     // seg6:0x1c72(1) from the debriefing's deadline (seg7:0x3ac) and the other callers.
     g.game.hooks().open_navigation = [](shell::GameState&) {
         nav::attach(g.main, g.font);
