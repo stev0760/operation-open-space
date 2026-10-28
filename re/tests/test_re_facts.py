@@ -1,4 +1,5 @@
-"""Mechanical facts of docs/re/{structs,globals,timing,rng,ispace,formats,shell,palette-tables,install,sound}.md
+"""Mechanical facts of docs/re/{structs,globals,timing,rng,ispace,formats,shell,palette-tables,install,sound,
+nav,world}.md
 and of re/artifacts/sounds.tsv.
 
 CLAUDE.md asks for a test behind every count, offset, table value and writer
@@ -3039,3 +3040,834 @@ def test_midi_microsoft_meta():
         assert data.count(meta) == 1 and data.find(meta) == 23, name
         assert data[14:18] == b"MTrk" and data[22] == 0
         assert 23 < 22 + struct.unpack_from(">I", data, 18)[0]
+
+
+# ------------------------------------------------------------------ M3 world: Navigation, wave set-up, flight, HUD, radar
+
+
+def _eng(sid: int) -> str:
+    """ENG_LANG.DLL string ``sid`` from its STRING block (sid >> 4) + 1."""
+    from isre.res_formats import decode_string_block
+
+    block = (sid >> 4) + 1
+    return dict(decode_string_block(block, _resource("ENG_LANG.dl1", 6, block)))[sid]
+
+
+def _pool_of(m: Module, site: str) -> int:
+    """The pool whose far pointer ``les bx, ptr [0x1df8 + 4k]`` the store at ``site`` uses."""
+    i = m.at(site)
+    for _ in range(8):
+        i = m.step(i, -1)
+        if i.mnem == "les" and i.abs_ds and 0x1DF8 <= i.mem.disp < 0x1E4C:
+            return (i.mem.disp - 0x1DF8) // 4
+    raise AssertionError(f"no pool pointer before {site}")
+
+
+def test_m3_strings():
+    """nav.md, world.md: the ENG_LANG.DLL strings the Navigation window and the HUD load."""
+    assert {s: _eng(s) for s in (736, 739, 740, 741, 742, 750, 760, 765, 938, 939, 941, 942, 943,
+                                 2055, 2056, 2063, 2323, 2515, 3028, 3029)} == {
+        736: " - DUEL", 739: " - RACE", 740: "Lazy Loop", 741: "SDi Speedway", 742: "Grand Prix",
+        750: "Dodge City", 760: "DEMON'S GATE", 765: "This directory is complete",
+        938: "No apps", 939: "Select another directory to enter.", 941: "FILE",
+        942: " IN THIS DIRECTORY", 943: "YOU HAVE NOT BEEN HERE BEFORE", 2055: "THERE IS",
+        2056: "THERE ARE", 2063: "SCORE", 2323: "To enter, you must pay for the full game version.",
+        2515: "ICON", 3028: "%? %# IN %#.", 3029: "%# CAPTURED AND %# DESTROYED."}
+    assert {s: _eng(s) for s in range(927, 936)} == {
+        927: " frames/ second", 928: "GAME STATUS", 929: "MESSAGE from", 930: "CURRENT ",
+        931: "TARGET  (", 932: "AUTO", 933: "MANUAL", 934: "WEAPON SYSTEM", 935: "FUEL - "}
+    assert (_eng(152), _eng(2191), _eng(2192), _eng(2193)) == ("Icon ^N", "FULL OUT", " SET", " ACTUAL")
+
+
+def test_navigation_tree_suffix(ins, dgroup):
+    """N01, N02: seg6:0x4118 appends three '0' digits and adds depth, sub and state."""
+    expect = {"seg6:0x412b": "push 0xeb2", "seg6:0x4141": "mov al, byte ptr [bp + 0xa]",
+              "seg6:0x4144": "add byte ptr es:[bx + si - 1], al", "seg6:0x414b": "push 0xeb4",
+              "seg6:0x4161": "mov al, byte ptr [bp + 0xc]", "seg6:0x416b": "push 0xeb6",
+              "seg6:0x4181": "mov al, byte ptr [bp + 0xe]", "seg6:0x418f": "retf",
+              "seg6:0x38cd": "push 1", "seg6:0x39e8": "push 1"}
+    assert _texts(ins, expect) == expect
+    assert dgroup[0xEB2:0xEB8] == b"0\x000\x000\x00"
+    assert {"seg6:0x38d5", "seg6:0x39f0", "seg6:0x3a58", "seg6:0x3b04", "seg6:0x3ba5",
+            "seg6:0x50c7"} <= set(ins.call_sites("seg6:0x4118"))
+
+
+def test_navigation_glyphs_and_icons(ins):
+    """N14, N27, N42: the FLDR and FILES bitmaps of IGRAPHIC.DLL and ISPACE.DLL GROUP_ICON 105-107."""
+    expect = {"seg6:0x2401": "push 0xd56", "seg6:0x4bc9": "add word ptr [bp - 0x7c], 0x3c",
+              "seg6:0x4bd0": "add word ptr [bp - 0x7c], 0x69"}
+    assert _texts(ins, expect) == expect
+    assert "seg10:0x6d38" in ins.at("seg6:0x2404").text
+    assert _cstr(unpacked_seg("inspace", 19), 0xD56) == b"FLDR"
+    assert _dib(_resource("IGRAPHIC.DL1", 2, "FLDR"))[:3] == (135, 11, 4)
+    assert 135 == 9 * 15
+    assert _dib(_resource("IGRAPHIC.DL1", 2, "FILES"))[:3] == (33, 12, 1)
+    assert 33 == 3 * 11
+    icons = {r.id for r in _ne("ISPACE.dll").resources if r.type_id == 14}
+    assert {105, 106, 107} <= icons
+
+
+def test_navigation_path_buffers(ins):
+    """N41: the INI Track read passes 0x6d = 109 bytes into the 100-byte DGROUP:0x6990."""
+    expect = {"seg6:0x3c79": "push 0xe99", "seg6:0x3c81": "push 0x6990", "seg6:0x3c84": "push 0x6d",
+              "seg6:0x37d4": "sub sp, 0xf2"}
+    assert _texts(ins, expect) == expect
+    assert 0x69F4 - 0x6990 == 100 and 0x6D == 109
+    assert _cstr(unpacked_seg("inspace", 19), 0xE99) == b"Track"
+    body = " ".join(i.text for i in ins.func_insns("seg6:0x37ca"))
+    assert "[bp - 0x80]" in body and "[bp - 0xee]" in body
+    assert 0x1C0 - 0x152 == 110
+
+
+def test_wave_budget(ins, dgroup):
+    """W01, W02: seg6:0x11ec reads Complex and sets the budget DGROUP:0x932a and DGROUP:0x9000."""
+    expect = {"seg6:0x11fb": "push 0x495", "seg6:0x11fe": "push 0",
+              "seg6:0x1209": "mov word ptr [0x8ff8], ax",
+              "seg6:0x120e": "mov word ptr [0x932a], 0x82", "seg6:0x1214": "mov word ptr [0x9000], 0",
+              "seg6:0x121c": "mov word ptr [0x932a], 0xdc", "seg6:0x1222": "jmp seg6:0x1214",
+              "seg6:0x1224": "mov word ptr [0x932a], 0x136", "seg6:0x122a": "mov word ptr [0x9000], 1",
+              "seg6:0x1232": "mov word ptr [0x932a], 0x1a4", "seg6:0x1238": "mov word ptr [0x9000], 2",
+              "seg6:0x1240": "mov word ptr [0x932a], 0x7d0", "seg6:0x1246": "jmp seg6:0x1238",
+              "seg6:0x1258": "cmp word ptr [0x91f8], 0xa", "seg6:0x125d": "jge seg6:0x1288",
+              "seg6:0x1265": "sar ax, 1", "seg6:0x126c": "imul word ptr [0x932a]",
+              "seg6:0x1270": "mov dx, 0x14", "seg6:0x1276": "idiv bx",
+              "seg6:0x127a": "cmp cx, word ptr [0x932a]"}
+    assert _texts(ins, expect) == expect
+    assert ins.at("seg6:0x1275").raw == b"\x99"           # cwd: the product's high word is dropped
+    assert (0x82, 0xDC, 0x136, 0x1A4, 0x7D0) == (130, 220, 310, 420, 2000)
+    assert _cstr(dgroup, 0x495) == b"Complex"
+
+
+def test_wave_pool_counts(ins):
+    """W05, W06, W07, W44: the pool counts seg9:0x22b4 sets after the generator."""
+    expect = {
+        "seg9:0x2495": "call seg9:0x3202", "seg9:0x2498": "cmp word ptr [0x9432], 0xfa",
+        "seg9:0x249e": "jle seg9:0x24a7", "seg9:0x24a0": "imul ax, word ptr [0x9432], 7",
+        "seg9:0x24a7": "imul ax, word ptr [0x9432], 9", "seg9:0x24ac": "mov cx, 0xa",
+        "seg9:0x24b0": "idiv cx", "seg9:0x24b2": "mov word ptr [0x9432], ax",
+        "seg9:0x24b5": "mov word ptr [0x9406], 8", "seg9:0x24bd": "mov word ptr [0x9408], ax",
+        "seg9:0x24c0": "mov word ptr [0x940a], ax", "seg9:0x24c3": "mov bx, word ptr [0x9328]",
+        "seg9:0x24c9": "mov word ptr [bx - 0x6bfa], ax", "seg9:0x24cd": "mov word ptr [0x92ea], 0xe",
+        "seg9:0x24d3": "mov dword ptr [0x92ec], 0x20008", "seg9:0x24e0": "shl cx, 3",
+        "seg9:0x24e3": "mov word ptr [0x92f0], cx", "seg9:0x24e7": "mov word ptr [0x9412], ax",
+        "seg9:0x24ea": "mov word ptr [0x9414], ax", "seg9:0x24ed": "mov word ptr [0x941a], ax",
+        "seg9:0x24f0": "mov word ptr [0x941c], ax", "seg9:0x24f3": "mov word ptr [0x9420], ax",
+        "seg9:0x24f6": "mov word ptr [bx - 0x6d14], ax", "seg9:0x24fa": "mov cx, 1",
+        "seg9:0x24fd": "mov word ptr [0x92f8], cx", "seg9:0x2501": "mov word ptr [0x92fa], cx",
+        "seg9:0x2505": "mov cx, 3", "seg9:0x2508": "mov word ptr [0x9300], cx",
+        "seg9:0x250c": "mov word ptr [0x9302], cx", "seg9:0x2510": "mov word ptr [0x9306], ax",
+        # pool 3: rocks
+        "seg9:0x2513": "mov ax, word ptr [0x933c]", "seg9:0x2516": "add ax, word ptr [0x933a]",
+        "seg9:0x251a": "mov word ptr [0x940c], ax", "seg9:0x251d": "mov word ptr [0x92f2], ax",
+        "seg9:0x2540": "mov word ptr [0x92ea], cx", "seg9:0x2544": "cmp ax, 0x7f",
+        "seg9:0x2549": "mov word ptr [0x940c], 0x78", "seg9:0x254f": "mov word ptr [0x92f2], 0x398",
+        "seg9:0x2555": "mov ax, 0x3c", "seg9:0x2558": "mov word ptr [0x933a], ax",
+        "seg9:0x255b": "mov word ptr [0x933c], ax",
+        # pools 8, 9 and 12
+        "seg9:0x2520": "mov cx, word ptr [0x933e]", "seg9:0x2524": "add cx, word ptr [0x9342]",
+        "seg9:0x2528": "mov word ptr [0x9416], cx", "seg9:0x252c": "mov word ptr [0x92fc], cx",
+        "seg9:0x2534": "mov word ptr [0x9418], cx", "seg9:0x2538": "mov word ptr [0x92fe], cx",
+        "seg9:0x255e": "mov ax, word ptr [0x9318]", "seg9:0x2561": "add ax, ax",
+        "seg9:0x2563": "add word ptr [0x9416], ax", "seg9:0x2567": "mov word ptr [0x941e], ax",
+        "seg9:0x256a": "mov word ptr [0x9304], ax", "seg9:0x256d": "add word ptr [0x92fc], ax",
+        "seg9:0x2571": "cmp word ptr [0x92fc], 0x50", "seg9:0x257b": "mov word ptr [0x9416], ax",
+        # Demon's Gate and race
+        "seg9:0x2581": "cmp word ptr [0x92e8], 0", "seg9:0x2588": "mov word ptr [0x9326], 1",
+        "seg9:0x2590": "mov word ptr [0x940c], ax", "seg9:0x2599": "cmp word ptr [0x9320], 6",
+        "seg9:0x25a3": "mov dword ptr [0x940a], eax"}
+    assert _texts(ins, expect) == expect
+    # word arrays: allocated DGROUP:0x92ec + 2p, in use DGROUP:0x9406 + 2p
+    assert ((0x92F8 - 0x92EC) // 2, (0x9300 - 0x92EC) // 2, (0x9306 - 0x92EC) // 2) == (6, 10, 13)
+    assert ((0x9412 - 0x9406) // 2, (0x941A - 0x9406) // 2, (0x9420 - 0x9406) // 2) == (6, 10, 13)
+    assert ((0x940C - 0x9406) // 2, (0x9416 - 0x9406) // 2, (0x941E - 0x9406) // 2) == (3, 8, 12)
+    assert (0x6BFA, 0x6D14) == (0x10000 - 0x9406, 0x10000 - 0x92EC)
+    assert (0x78, 0x398, 0x3C) == (120, 920, 60)
+
+
+def test_wave_generator_counts(ins):
+    """W08, W09, W10: the gate count, the pool-4 count and DGROUP:0x932e in seg9:0x3202."""
+    expect = {
+        # gates
+        "seg9:0x4496": "mov word ptr [0x9318], 1", "seg9:0x449c": "cmp word ptr [0x91f8], 1",
+        "seg9:0x44a1": "jle seg9:0x4683", "seg9:0x44aa": "test al, 1",
+        "seg9:0x44ae": "cmp word ptr [0x92e8], 0", "seg9:0x44b5": "cmp word ptr [0x9320], 6",
+        "seg9:0x44bc": "cmp word ptr [0x9320], 7", "seg9:0x44c3": "inc word ptr [0x9318]",
+        "seg9:0x44c7": "cmp word ptr [0x91f8], 3", "seg9:0x44d3": "mov cx, 0xa", "seg9:0x44d9": "dec dx",
+        "seg9:0x44dc": "inc word ptr [0x9318]", "seg9:0x44e0": "cmp word ptr [0x91f8], 7",
+        "seg9:0x44ec": "mov cx, 5", "seg9:0x44f8": "inc word ptr [0x9318]",
+        "seg9:0x4663": "imul bx, word ptr [0x94a2], 0x297", "seg9:0x4669": "add bx, word ptr [0x69f4]",
+        "seg9:0x467a": "mov al, byte ptr es:[bx + 0xad]", "seg9:0x467f": "cwde",
+        "seg9:0x4680": "mov word ptr [0x9318], ax",
+        # pool 4
+        "seg9:0x3e2b": "mov cx, word ptr [0x9338]", "seg9:0x3e2f": "inc cx", "seg9:0x3e30": "shl cx, 2",
+        "seg9:0x3e36": "mov word ptr [0x940e], dx", "seg9:0x3e3a": "cmp dx, 3",
+        "seg9:0x3e3f": "mov word ptr [0x940e], 3", "seg9:0x3e45": "cmp word ptr [0x9320], 4",
+        "seg9:0x3e51": "mov cx, 0xf", "seg9:0x3e57": "add dx, 9", "seg9:0x3e5a": "add word ptr [0x940e], dx",
+        "seg9:0x3e63": "mov cx, 0x19", "seg9:0x3e69": "cmp dx, 4",
+        "seg9:0x3e6e": "cmp word ptr [0x9208], 1", "seg9:0x3e75": "mov ax, 0x11",
+        "seg9:0x3e80": "mov word ptr [0x92f4], ax", "seg9:0x3e83": "cmp word ptr [0x92e8], 0",
+        "seg9:0x3e8a": "mov ax, 1", "seg9:0x3e8f": "cmp word ptr [0x9320], 6",
+        "seg9:0x3e9a": "mov al, byte ptr [bx - 0x6141]", "seg9:0x3e9f": "mov word ptr [0x940e], ax",
+        # DGROUP:0x932e
+        "seg9:0x46ef": "cmp word ptr [0x91f8], 1", "seg9:0x46f6": "mov word ptr [0x932e], 0",
+        "seg9:0x4703": "mov cx, 3", "seg9:0x4709": "mov ax, word ptr [0x9334]", "seg9:0x4711": "sar ax, 1",
+        "seg9:0x4715": "dec cx", "seg9:0x4716": "mov word ptr [0x932e], cx",
+        "seg9:0x4721": "mov word ptr [0x932e], 0", "seg9:0x4727": "cmp word ptr [0x9208], 2",
+        "seg9:0x4735": "mov word ptr [0x932e], 4", "seg9:0x474b": "mov word ptr [0x932e], 3",
+        "seg9:0x4753": "cmp word ptr [0x9208], 1", "seg9:0x4761": "mov word ptr [0x932e], 2",
+        "seg9:0x4767": "cmp word ptr [0x92e8], 0", "seg9:0x476e": "cmp word ptr [0x9320], 6",
+        "seg9:0x4775": "mov word ptr [0x932e], 0"}
+    assert _texts(ins, expect) == expect
+    assert (0x10000 - 0x6141) == 0x9EBF
+    for s in ("seg9:0x44a5", "seg9:0x44ce", "seg9:0x44e7", "seg9:0x3e26", "seg9:0x3e4c",
+              "seg9:0x3e5e", "seg9:0x46fe"):
+        assert "seg5:0xdc" in ins.at(s).text, s                 # rand()
+    assert all(ins.in_func(ins.at(s), "seg9:0x3202") for s in expect)
+
+
+def test_object_templates(ins):
+    """W12, W13, R21, R22: the per-pool record fields seg10:0xb94 writes."""
+    stores = {   # site: (pool, text)
+        # pool 0, icons
+        "seg10:0xbbd": (0, "mov word ptr es:[bx + si + 0x22], ax"),
+        "seg10:0xbc5": (0, "mov word ptr es:[bx + si + 0x20], 0x100"),
+        "seg10:0xbda": (0, "mov word ptr es:[bx + si + 0x24], ax"),
+        "seg10:0xbe5": (0, "mov word ptr es:[bx + si + 0x28], ax"),
+        "seg10:0xbed": (0, "mov word ptr es:[bx + si + 0x44], 0xa0"),
+        "seg10:0xbf7": (0, "mov word ptr es:[bx + si + 0x42], 0x12"),
+        "seg10:0xc01": (0, "mov word ptr es:[bx + si + 0x46], 2"),
+        "seg10:0xc0b": (0, "mov word ptr es:[bx + si + 0x62], 0x39d8"),
+        "seg10:0xc1b": (0, "mov word ptr es:[bx + si + 0x5e], 0x233c"),
+        "seg10:0xc2b": (0, "mov byte ptr es:[bx + si + 0x53], 1"),
+        # pools 1 and 2
+        "seg10:0xc9a": (1, "mov word ptr es:[bx + si + 0x4c], 0x8000"),
+        "seg10:0xca0": (1, "mov word ptr es:[bx + si + 0x4e], 0x80"),
+        "seg10:0xcec": (1, "mov word ptr es:[bx + si + 0x62], 0x3914"),
+        "seg10:0xd90": (2, "mov word ptr es:[bx + si + 0x4c], 0xffff"),
+        "seg10:0xd96": (2, "mov word ptr es:[bx + si + 0x4e], 0"),
+        "seg10:0xda0": (2, "mov word ptr es:[bx + si + 0x62], 0x3914"),
+        # pool 3, small rocks, then the shared tail
+        "seg10:0xdee": (3, "mov word ptr es:[bx + si + 0x22], ax"),
+        "seg10:0xdf6": (3, "mov word ptr es:[bx + si + 0x20], 0xa8"),
+        "seg10:0xe00": (3, "mov word ptr es:[bx + si + 0x44], 0x15e"),
+        "seg10:0xe0a": (3, "mov word ptr es:[bx + si + 0x62], 0x3914"),
+        "seg10:0xe1a": (3, "mov word ptr es:[bx + si + 0x2c], 0xc8"),
+        "seg10:0xe2f": (3, "mov word ptr es:[bx + si + 0x24], ax"),
+        "seg10:0xe3e": (3, "mov word ptr es:[bx + si + 0x24], 4"),
+        "seg10:0xe5a": (3, "mov word ptr es:[bx + si + 0x24], 2"),
+        "seg10:0xe76": (3, "mov word ptr es:[bx + si + 0x24], 1"),
+        "seg10:0xe84": (3, "mov word ptr es:[bx + si + 0x48], 9"),
+        "seg10:0xe8e": (3, "mov word ptr es:[bx + si + 0x42], 8"),
+        "seg10:0xe98": (3, "mov word ptr es:[bx + si + 0x46], 4"),
+        "seg10:0xea2": (3, "mov word ptr es:[bx + si + 0x4c], 0xc0c0"),
+        "seg10:0xea8": (3, "mov word ptr es:[bx + si + 0x4e], 0xc0"),
+        "seg10:0xeb2": (3, "mov word ptr es:[bx + si + 0x5e], 0x5090"),
+        # pool 3, big rocks
+        "seg10:0xefa": (3, "mov word ptr es:[bx + si + 0x22], ax"),
+        "seg10:0xf02": (3, "mov word ptr es:[bx + si + 0x20], 0x158"),
+        "seg10:0xf0c": (3, "mov word ptr es:[bx + si + 0x44], 0x578"),
+        "seg10:0xf16": (3, "mov word ptr es:[bx + si + 0x62], 0x3bae"),
+        "seg10:0xf26": (3, "mov word ptr es:[bx + si + 0x2c], 0x3c"),
+        # pools 4 to 11
+        "seg10:0xfb7": (4, "mov word ptr es:[bx + si + 0x4c], 0xff"),
+        "seg10:0xfd1": (4, "mov word ptr es:[bx + si + 0x46], 5"),
+        "seg10:0xfdb": (4, "mov word ptr es:[bx + si + 0x62], 0x3bae"),
+        "seg10:0x103a": (5, "mov word ptr es:[bx + si + 0x4c], 0xff"),
+        "seg10:0x104a": (5, "mov word ptr es:[bx + si + 0x62], 0x3914"),
+        "seg10:0x10a6": (6, "mov word ptr es:[bx + si + 0x4c], 0x7f00"),
+        "seg10:0x10ca": (6, "mov word ptr es:[bx + si + 0x62], 0x3914"),
+        "seg10:0x115f": (7, "mov word ptr es:[bx + 0x46], 1"),
+        "seg10:0x1183": (7, "mov word ptr es:[bx + 0x62], 0x37a0"),
+        "seg10:0x1207": (9, "mov word ptr es:[bx + si + 0x20], 0x128"),
+        "seg10:0x1242": (9, "mov word ptr es:[bx + si + 0x46], 6"),
+        "seg10:0x1260": (9, "mov word ptr es:[bx + si + 0x62], 0x39d8"),
+        "seg10:0x1327": (10, "mov word ptr es:[bx + si + 0x46], 4"),
+        "seg10:0x1331": (10, "mov word ptr es:[bx + si + 0x4c], 0x7f7f"),
+        "seg10:0x1337": (10, "mov word ptr es:[bx + si + 0x4e], 0x7f"),
+        "seg10:0x1365": (10, "mov word ptr es:[bx + si + 0x62], 0x3914"),
+        "seg10:0x13e2": (11, "mov word ptr es:[bx + si + 0x46], 2"),
+        "seg10:0x1400": (11, "mov word ptr es:[bx + si + 0x62], 0x39d8")}
+    assert {s: (_pool_of(ins, s), ins.at(s).text) for s in stores} == stores
+    sizes = {"seg10:0xbae": "mov ax, 0x20", "seg10:0xbd3": "mov ax, 6", "seg10:0xddf": "mov ax, 0x16",
+             "seg10:0xe28": "mov ax, 4", "seg10:0xeeb": "mov ax, 0x2c", "seg10:0xf30": "mov ax, 4",
+             "seg10:0x11f0": "mov ax, 0x26", "seg10:0xbb1": "shl ax, cl", "seg10:0xbb3": "sar ax, 1",
+             "seg10:0xe33": "cmp word ptr [0x9156], 2", "seg10:0xe4b": "cmp word ptr [0x740], 0",
+             "seg10:0xed3": "mov ax, word ptr [0x92f2]", "seg10:0xedb": "sub ax, word ptr [0x92ea]",
+             "seg10:0xedf": "cmp ax, word ptr [bp - 4]", "seg10:0xee2": "jg seg10:0xee7"}
+    assert _texts(ins, sizes) == sizes
+    # segment selectors of the far pointers
+    for site, seg in (("seg10:0xc11", 11), ("seg10:0xc21", 7), ("seg10:0xeb8", 7), ("seg10:0xf1c", 11),
+                      ("seg10:0xfe1", 11), ("seg10:0x1189", 11)):
+        assert ins.at(site).text.startswith("mov word ptr es:[bx") and f"selector of seg{seg}" in \
+            (WORK / "asm" / "inspace" / "seg10.asm").read_text().split(site + " ", 1)[1].split("\n", 1)[0]
+    assert (0x100, 0x158, 0x578, 0xA8, 0x15E, 0x128) == (256, 344, 1400, 168, 350, 296)
+
+
+def test_world_size_and_integrator(ins):
+    """W15, W16, W17, F12: DGROUP:0x5a0/0x5a2 have no writer, and seg8:0x1b54.
+
+    Their initial value 3200 is test_initialised_timing_and_sound_data's."""
+    assert ins.writers(0x5A0, 0x5A3) == [] and 3200 * 8 == 25600
+    expect = {
+        "seg8:0x1b72": "cmp ax, 0xe", "seg8:0x1b7e": "cmp byte ptr es:[bx + si + 0x54], ah",
+        "seg8:0x1b84": "cmp word ptr [0x92e8], 0", "seg8:0x1b8b": "cmp word ptr [0x9e49], 0xa",
+        "seg8:0x1b90": "je seg8:0x1cb3", "seg8:0x1ba0": "cmp word ptr es:[bx + si + 0x32], -1",
+        "seg8:0x1ba7": "cmp ax, 0xa", "seg8:0x1baf": "call seg8:0x1e32",
+        "seg8:0x1bb2": "mov ax, word ptr [0x9328]", "seg8:0x1bc0": "mov word ptr [0x9006], 0xa",
+        "seg8:0x1bc6": "cmp word ptr [bp + 6], 1", "seg8:0x1be0": "add word ptr es:[si + 4], cx",
+        "seg8:0x1c06": "imul word ptr [bp + 6]", "seg8:0x1c1a": "add word ptr es:[bx + 6], ax",
+        "seg8:0x1c1e": "cmp word ptr [0x9130], 0", "seg8:0x1c23": "jne seg8:0x1cb3",
+        "seg8:0x1c2a": "shl ax, 3", "seg8:0x1c3b": "cmp word ptr es:[bx + si + 4], ax",
+        "seg8:0x1c3f": "jle seg8:0x1c47", "seg8:0x1c41": "mov word ptr es:[bx + si + 4], 0",
+        "seg8:0x1c55": "cmp word ptr es:[bx + si + 4], 0", "seg8:0x1c5a": "jge seg8:0x1c66",
+        "seg8:0x1c62": "mov word ptr es:[bx + si + 4], ax",
+        "seg8:0x1c80": "mov word ptr es:[bx + si + 6], 0",
+        "seg8:0x1ca1": "mov word ptr es:[bx + si + 6], ax", "seg8:0x1cb0": "mov word ptr [0x9006], ax",
+        "seg8:0x1cba": "retf 4"}
+    assert _texts(ins, expect) == expect
+
+
+def test_random_placement(ins):
+    """W20, W31: seg10:0x864 (rocks) and seg10:0x736 (icons) place in rand() order."""
+    expect = {
+        "seg10:0x88e": "sub cx, 0x96", "seg10:0x895": "add dx, 0x96", "seg10:0x899": "shl dx, 3",
+        "seg10:0x8a0": "mov word ptr es:[bx + si + 4], dx", "seg10:0x8ad": "sub cx, 0x96",
+        "seg10:0x8bf": "mov word ptr es:[bx + si + 6], dx",
+        "seg10:0x8c7": "mov word ptr es:[bx + si + 8], 0xfc18",
+        "seg10:0x8e4": "mov word ptr es:[bx + si + 0xa], 0xfc18", "seg10:0x901": "mov cx, 0x32",
+        "seg10:0x907": "sub dx, 0x19", "seg10:0x90a": "neg dx",
+        "seg10:0x90c": "mov word ptr es:[bx + si + 0xc], dx",
+        "seg10:0x924": "mov word ptr es:[bx + si + 0xe], dx", "seg10:0x936": "cmp ax, 0xa",
+        "seg10:0x949": "cmp ax, 0xa", "seg10:0x952": "add word ptr es:[bx + si + 0xc], 0x14",
+        "seg10:0x95f": "mov word ptr es:[bx + si + 0x18], 0", "seg10:0x969": "mov byte ptr es:[bx + si + 0x2f], 0",
+        "seg10:0x972": "mov byte ptr es:[bx + si + 0x2e], 0", "seg10:0x98a": "mov cx, 0x6a4",
+        "seg10:0x994": "mov word ptr es:[bx + si + 0x26], dx",
+        "seg10:0x752": "mov byte ptr es:[bx + si + 0x54], 0", "seg10:0x760": "sub cx, 0x96",
+        "seg10:0x799": "mov word ptr es:[bx + si + 8], 0xfc18",
+        "seg10:0x7d0": "mov byte ptr es:[bx + di + 0x2f], 0", "seg10:0x7f7": "mov cl, byte ptr [0x9150]"}
+    assert _texts(ins, expect) == expect
+    assert all(_calls(ins, {"seg10:0x930": "seg9:0x88ba", "seg10:0x943": "seg9:0x88ba",
+                            "seg10:0x82e": "SetRect", "seg10:0x844": "PtInRect"}).values())
+    assert (0x96, 0x6A4, s16(0xFC18), 3200 - 150) == (150, 1700, -1000, 3050)
+    assert _pool_of(ins, "seg10:0x8a0") == 3 and _pool_of(ins, "seg10:0x772") == 0
+
+
+def test_heading_and_ring_tables(ins, dgroup):
+    """F01, W22, F43: the heading table DGROUP:0x1050, the pool-4 ring, the joystick map."""
+    heads = [struct.unpack_from("<hh", dgroup, 0x1050 + 4 * i) for i in range(16)]
+    assert heads == [(0, -16), (6, -15), (11, -11), (15, -6), (16, 0), (15, 6), (11, 11), (6, 15),
+                     (0, 16), (-6, 16), (-11, 11), (-15, 6), (-16, 0), (-15, -6), (-11, -11), (-6, -15)]
+    # the ring of seg9:0xdf6 reads word DGROUP:0x104c + 4k (y) and DGROUP:0x104e + 4k (x), k = 1..16
+    expect = {"seg9:0xfe1": "cmp word ptr [0x940e], 0x11",
+              "seg9:0x1018": "imul ax, word ptr [bx + 0x104c], 0xd0",
+              "seg9:0x103e": "imul ax, word ptr [si + 0x104e], 0xd0"}
+    assert _texts(ins, expect) == expect
+    assert struct.unpack_from("<hh", dgroup, 0x104C + 4) == (0, -16)
+    assert struct.unpack_from("<hh", dgroup, 0x104C + 8) == (6, -15)
+    joy = [b - 256 if b > 127 else b for b in dgroup[0x1018:0x1018 + 25]]
+    assert joy == [14, 15, 0, 1, 2, 13, -1, -1, -1, 3, 12, -1, -1, -1, 4, 11, -1, -1, -1, 5,
+                   10, 9, 8, 7, 6]
+    assert struct.unpack_from("<h", dgroup, 0x1034) == (1,)
+
+
+def _sin128(tab: bytes, a: int) -> int:
+    a = (a + 360) % 360 if a + 360 >= 0 else -((-(a + 360)) % 360)
+    if a < 90:
+        return tab[a]
+    if a < 180:
+        return tab[180 - a]
+    if a < 270:
+        return -tab[a - 180]
+    return -tab[360 - a]
+
+
+def test_sine_table(ins, dgroup):
+    """F29: the 91 sine bytes at DGROUP:0xf00 and the quadrant folding of seg6:0x71b2."""
+    import math
+
+    tab = dgroup[0xF00:0xF5B]
+    assert list(tab[:5]) == [0, 2, 4, 6, 9] and list(tab[-4:]) == [127, 128, 128, 128]
+    assert tab[25] == 55 and round(math.sin(math.radians(25)) * 128) == 54
+    assert sum(tab[i] != round(math.sin(math.radians(i)) * 128) for i in range(91)) == 57
+    expect = {"seg6:0x71c2": "mov cx, 0x168", "seg6:0x71c8": "idiv cx", "seg6:0x71cc": "cmp dx, 0x5a",
+              "seg6:0x71d3": "mov al, byte ptr [bx + 0xf00]", "seg6:0x71db": "cmp dx, 0xb4",
+              "seg6:0x71e1": "mov bx, 0xfb4", "seg6:0x71ea": "cmp dx, 0x10e",
+              "seg6:0x71f2": "mov al, byte ptr [bx + 0xe4c]", "seg6:0x71f8": "neg ax",
+              "seg6:0x71fc": "mov bx, 0x1068", "seg6:0x721c": "mov cx, 0x168"}
+    assert _texts(ins, expect) == expect
+    assert (0xFB4 - 0xF00, 0xF00 - 0xE4C, 0x1068 - 0xF00) == (180, 180, 360)
+    assert [_sin128(tab, a) for a in (0, 90, 180, 270, -90, 30)] == [0, 128, 0, -128, -128, tab[30]]
+
+
+def test_flight_helpers(ins):
+    """F30, F31: seg8:0x35d0 (one Newton step) and seg8:0x19b0 (direction of vy over vx)."""
+    expect = {"seg8:0x35e3": "call far seg9:0x88dc", "seg8:0x360f": "sar dx, 1",
+              "seg8:0x361f": "sar eax, 1", "seg8:0x3646": "call far seg5:0x314",
+              "seg8:0x3668": "idiv ecx", "seg8:0x366b": "add eax, dword ptr [bp - 0xe]",
+              "seg8:0x366f": "sar eax, 1", "seg8:0x367b": "mov ax, 1", "seg8:0x3686": "retf",
+              "seg8:0x19bf": "movsx eax, word ptr [bp + 6]", "seg8:0x19c8": "mov ax, word ptr [bp + 8]",
+              "seg8:0x19f2": "mov dword ptr [bp - 6], 1", "seg8:0x19fe": "mov ecx, 0x64",
+              "seg8:0x1a09": "idiv dword ptr [bp - 6]", "seg8:0x1a14": "cmp eax, 0x1f4",
+              "seg8:0x1a23": "cmp ax, 0xfe0c", "seg8:0x1b51": "retf 4"}
+    assert _texts(ins, expect) == expect
+    # (upper bound exclusive, lower bound exclusive, value when num > 0, otherwise)
+    ranges = [("seg8:0x1a3b", 0x1F5, "seg8:0x1a45", 0x9A, 7, 15),
+              ("seg8:0x1a66", 0x9B, "seg8:0x1a70", 0x41, 6, 14),
+              ("seg8:0x1a8e", 0x42, "seg8:0x1a95", 0x13, 5, 13),
+              ("seg8:0x1ab3", 0x14, "seg8:0x1aba", -0x14, 4, 12),
+              ("seg8:0x1ad6", -0x13, "seg8:0x1add", -0x41, 11, 3),
+              ("seg8:0x1af9", -0x40, "seg8:0x1b00", -0x9A, 10, 2),
+              ("seg8:0x1b1f", -0x99, "seg8:0x1b29", -0x1F5, 9, 1)]
+    for hi, hv, lo, lv, pos, neg in ranges:
+        assert s16(int(ins.at(hi).ops[1], 0) & 0xFFFF) == hv, hi
+        assert s16(int(ins.at(lo).ops[1], 0) & 0xFFFF) == lv, lo
+        a = ins.step(ins.at(lo), 4)
+        b = ins.step(a, 2)
+        assert (int(a.ops[1], 0), int(b.ops[1], 0)) == (pos, neg), lo
+    # the -19..19 band tests the denominator, the others the numerator
+    assert ins.at("seg8:0x1ac1").text == "cmp dword ptr [bp - 0xe], 0"
+    assert ins.at("seg8:0x1a4f").text == "cmp dword ptr [bp - 0x12], 0"
+    assert (155, 66, 20, -19, -64, -153, -500) == (0x9A + 1, 0x41 + 1, 0x13 + 1, -0x14 + 1,
+                                                    -0x41 + 1, -0x9A + 1, -0x1F5 + 1)
+
+
+def _hud_layout(w: int, race: bool) -> dict[int, int]:
+    half = _trunc(w, 2)
+    l, lw = (1, 0x49) if w < 660 else (1, 0x5A) if w < 760 else (4, 0x86)
+    g = {0x93B8: l, 0x93DC: lw}
+    g[0x5024] = half - lw - 96 + (9 if w < 700 else 0)
+    g[0x93BA] = lw + l + 4 - (2 if w < 700 else 0)
+    g[0x93BE] = half - 50
+    g[0x93BC] = g[0x93BE] - 30 - (4 if w >= 700 else 0)
+    g[0x93C0] = half + 68 - (14 if race else 0)
+    g[0x93C2] = g[0x93C0] + 28
+    g[0x93C4] = g[0x93C0] + 88
+    g[0x5026] = half - 160 + (4 if w < 700 else 0) + (14 if race else 0)
+    return g
+
+
+def test_hud_layout(ins):
+    """D03, D04: the HUD layout of seg11:0xafe and its values at 1024 x 768."""
+    expect = {"seg11:0xb77": "cmp word ptr [0x90ea], 0x294", "seg11:0xb85": "mov word ptr [0x93dc], 0x49",
+              "seg11:0xb8d": "cmp word ptr [0x90ea], 0x2f8", "seg11:0xb9b": "mov word ptr [0x93dc], 0x5a",
+              "seg11:0xba3": "mov word ptr [0x93b8], 4", "seg11:0xba9": "mov word ptr [0x93dc], 0x86",
+              "seg11:0xbb7": "sub ax, word ptr [0x93dc]", "seg11:0xbbb": "sub ax, 0x60",
+              "seg11:0xbc1": "cmp word ptr [0x90ea], 0x2bc", "seg11:0xbc9": "add ax, 9",
+              "seg11:0xbd6": "add ax, 4", "seg11:0xbf1": "sub ax, 0x32", "seg11:0xbf7": "sub ax, 0x1e",
+              "seg11:0xc03": "jl seg11:0xc0b", "seg11:0xc05": "sub ax, 4", "seg11:0xc13": "add ax, 0x44",
+              "seg11:0xc19": "cmp word ptr [0x94e], 0", "seg11:0xc20": "sub ax, 0xe",
+              "seg11:0xc26": "add ax, 0x1c", "seg11:0xc2f": "add ax, 0x58", "seg11:0xc3d": "sub ax, 0xa0",
+              "seg11:0xc4b": "add ax, 4", "seg11:0xc58": "add word ptr [0x5026], 0xe",
+              "seg2:0xc4b": "sub ax, 0x55", "seg2:0xc4e": "mov word ptr [0x8e5a], ax"}
+    assert _texts(ins, expect) == expect
+    assert (0x294, 0x2F8, 0x2BC) == (660, 760, 700)
+    g = _hud_layout(1024, False)
+    assert {k: g[k] for k in (0x93BA, 0x5024, 0x93BC, 0x93BE, 0x93C0, 0x93C2, 0x93C4, 0x5026)} == {
+        0x93BA: 142, 0x5024: 282, 0x93BC: 428, 0x93BE: 462, 0x93C0: 580, 0x93C2: 608, 0x93C4: 668,
+        0x5026: 352}
+    h = 768 - 85
+    # the oracle's child windows: scrollbar (W/2 + 50, H'), the two IS_INFO windows (+5, +5)
+    assert (512 + 50, h) == (562, 683)
+    assert (g[0x93BA] + 5, h + 5, g[0x5024] - 9) == (147, 688, 273)
+    assert (g[0x93C4] + 5, g[0x5026] - 9) == (673, 343)
+
+
+def test_hud_children(ins):
+    """D05: the scrollbar and the two IS_INFO windows of each HUD repaint."""
+    expect = {"seg11:0xcaa": "push 0xaab", "seg11:0xcb1": "push 0x5000", "seg11:0xcb4": "push 1",
+              "seg11:0xcbe": "add ax, 0x32", "seg11:0xcc6": "push 0xe", "seg11:0xcc8": "push 0x55",
+              "seg11:0xcce": "push 0xc8", "seg11:0xce2": "push 2", "seg11:0xce4": "push 0x64",
+              "seg11:0xce6": "push 0x1f4", "seg11:0xcf6": "mov ax, 0x258",
+              "seg11:0xcf9": "sub ax, word ptr [0xa6c]", "seg11:0xd1c": "push 0xab6",
+              "seg11:0xd23": "push 0x5000", "seg11:0xd26": "push 0"}
+    assert _texts(ins, expect) == expect
+    assert all(_calls(ins, {"seg11:0xcd9": "CreateWindow", "seg11:0xceb": "SetScrollRange",
+                            "seg11:0xd00": "SetScrollPos", "seg11:0xc97": "DestroyWindow"}).values())
+    dg = unpacked_seg("inspace", 19)
+    assert (_cstr(dg, 0xAAB), _cstr(dg, 0xAB6)) == (b"scrollbar", b"IS_INFO")
+
+
+def _tile_classes(ins: Module, n: int) -> list[int]:
+    """Emulate seg11:0x170a: the reset call, then ``n`` tile picks."""
+    sw = ins.switches["seg11:0x1756"]
+    value = {t: int(ins.at(t).ops[1], 0) for t in set(sw["targets"])}
+    table = [value[t] for t in sw["targets"]]
+    counter, out = -1, []
+    for k in range(n + 1):
+        counter += 1
+        if counter > 6:
+            counter = 0
+        if k:
+            out.append(table[counter])
+    return out
+
+
+def test_hud_border_and_bevel(ins):
+    """D07, D08, D09, D10, D11, D12: strip fill, border tiles, bevel bands and the top line."""
+    expect = {
+        "seg11:0xdab": "push word ptr [0x500a]", "seg11:0xdc5": "push 0x55", "seg11:0xdc7": "push 0xf0",
+        "seg11:0xdca": "push 0x21", "seg11:0xddd": "cmp word ptr [0xa78], 0",
+        "seg11:0xde2": "je seg11:0x11a6", "seg11:0xdef": "mov cx, 0x3a", "seg11:0xdfc": "sar ax, 1",
+        "seg11:0xe12": "inc ax", "seg11:0xe16": "push 1", "seg11:0xe1c": "pop bx",
+        "seg11:0xe2a": "push word ptr [0x5044]", "seg11:0xe4b": "imul ax, word ptr [bp - 0xe], 0x3a",
+        "seg11:0xe5c": "imul ax, word ptr [bp - 0x48], 0x3a", "seg11:0xe63": "push 0xcc",
+        "seg11:0xe73": "inc ax", "seg11:0xe77": "jg seg11:0xe3d",
+        "seg11:0xe8e": "mov word ptr [bp - 0xe], 1", "seg11:0xea6": "neg ax",
+        "seg11:0xeec": "push word ptr [bp - 0x46]", "seg11:0xf1f": "sub ax, 0x3a",
+        # bevel: PALETTERGB(v, v, v), v = (14 - i) * 10, then (12 - i) * 20
+        "seg11:0xf9e": "mov al, 0xe", "seg11:0xfa3": "mov cl, 0xa", "seg11:0xfab": "mov ah, 2",
+        "seg11:0xfb3": "imul dx, dx, 0xa00", "seg11:0x1126": "mov al, 0xc", "seg11:0x112b": "mov cl, 0x14",
+        "seg11:0x113b": "imul dx, dx, 0x1400", "seg11:0x1117": "cmp word ptr [bp - 0xe], 0xa",
+        "seg11:0x1155": "mov ax, 0xffe2", "seg11:0x1168": "add ax, 0x1d", "seg11:0x117b": "sub ax, 0x3a",
+        # top line of the strip
+        "seg11:0x11ae": "push 0xc0c0c0", "seg11:0x11ac": "push 1"}
+    assert _texts(ins, expect) == expect
+    assert all(_calls(ins, {"seg11:0xdcc": "PatBlt", "seg11:0xe19": "seg11:0x170a",
+                            "seg11:0xe68": "BitBlt", "seg11:0x10fd": "PatBlt",
+                            "seg11:0x1184": "PatBlt", "seg11:0x11b4": "CreatePen",
+                            "seg11:0x11cc": "MoveTo", "seg11:0x11dd": "LineTo"}).values())
+    sw = ins.switches["seg11:0x1756"]
+    assert sw["count"] == 7
+    assert _tile_classes(ins, 14) == [1, 2, 1, 0, 2, 1, 0, 1, 2, 1, 0, 2, 1, 0]
+    assert ins.at("seg11:0x171d").text == "mov word ptr [0x1852], 0xffff"
+    assert ins.at("seg11:0x1727").text == "cmp word ptr [0x1852], 6"
+    off = _trunc(58 - 1024 % 58, 2)
+    assert (off, 1024 // 58 + 1) == (10, 18)
+    # bevel at 1024 x 768: the play area is 68..956 x 78..663, half-open
+    h = 768 - 85
+    assert (2 * 9 + 58 - off + 2, 2 * 9 + 58 + 2) == (68, 78)
+    assert (1024 + off - 60 - 2 * 9, h - 2 - 2 * 9) == (956, 663)
+
+
+def test_hud_panels(ins):
+    """D14, D15, D16, D17, D18, D21: the SCORE box, the panel frames, fuel, damage and clock."""
+    expect = {
+        "seg11:0x11f8": "push 0x80f", "seg11:0x1200": "push 6", "seg11:0x1224": "add ax, 0xc",
+        "seg11:0x122c": "mov ax, 0x2d", "seg11:0x1235": "push 0x42", "seg11:0x127c": "imul ax, si, 0xe",
+        "seg11:0x1283": "add ax, 6", "seg11:0x1289": "push 0xff", "seg11:0x12b2": "mov ax, 0x3c",
+        "seg11:0x12e9": "imul ax, si, 0x12", "seg11:0x1341": "imul ax, si, 0x16",
+        "seg11:0x1348": "add ax, 0x19", "seg11:0x134e": "push 0xff",
+        "seg11:0x1366": "mov dword ptr [0x5018], 0xffffffff", "seg11:0x1370": "call seg11:0x4ea",
+        "seg11:0x137b": "push 0xc0c0c0",
+        "seg11:0x13f0": "add ax, 0x54", "seg11:0x1404": "push 2", "seg11:0x1407": "call seg11:0x1774",
+        "seg11:0x1432": "push 0x1e", "seg11:0x1434": "push 0x55", "seg11:0x145a": "mov word ptr [0x93d4], 0xffff",
+        "seg11:0x1461": "call seg11:0x978", "seg11:0x146e": "add ax, 0x63", "seg11:0x147a": "push 4",
+        "seg11:0x147d": "call seg11:0x1774", "seg11:0x14a7": "add ax, 0x18", "seg11:0x14ab": "push 0x54",
+        "seg11:0x14ad": "push 0x3d", "seg11:0x14d3": "push 1", "seg11:0x14d6": "call seg11:0x5fe",
+        "seg11:0x14da": "mov eax, dword ptr [0x1e50]", "seg11:0x14de": "mov dword ptr [0x5028], eax",
+        "seg11:0x14e2": "cmp word ptr [0x93d8], 1", "seg11:0x14ef": "call seg11:0x894",
+        "seg11:0x14f2": "push 0", "seg11:0x14f4": "push 0x11", "seg11:0x14f6": "push 0x37",
+        "seg11:0x151f": "push 0xff00", "seg11:0x1533": "push word ptr [0x5038]",
+        "seg11:0x1546": "add ax, 0x17", "seg11:0x158f": "call seg11:0x1ef6"}
+    assert _texts(ins, expect) == expect
+    assert 0x80F == 2063
+    assert all(_calls(ins, {"seg11:0x1202": "LoadString", "seg11:0x1237": "PatBlt",
+                            "seg11:0x128f": "seg11:0x2154", "seg11:0x12fa": "seg10:0x94c4",
+                            "seg11:0x1355": "seg10:0x94c4", "seg11:0x1442": "BitBlt",
+                            "seg11:0x14bb": "BitBlt", "seg11:0x1505": "seg10:0x949c",
+                            "seg11:0x1522": "CreateSolidBrush", "seg11:0x1562": "BitBlt",
+                            "seg11:0x15ad": "seg11:0x1774"}).values())
+    weapon = {"seg11:0x1596": "add ax, 0x54", "seg11:0x159a": "mov ax, word ptr [0x5026]",
+              "seg11:0x159d": "add ax, word ptr [0x93c4]", "seg11:0x15a6": "push word ptr [0x93c4]",
+              "seg11:0x15aa": "push 2", "seg11:0x154d": "add ax, 4", "seg11:0x1551": "push 0xa",
+              "seg11:0x1553": "push 0xa", "seg11:0x1558": "push 0x64", "seg11:0x155a": "push 0",
+              "seg11:0x155c": "push 0xc000ca"}
+    assert _texts(ins, weapon) == weapon
+
+
+def test_damage_lamps(ins):
+    """D19: seg11:0x3cc2 composes four 32 x 11 lamps into DGROUP:0x503c from DGROUP:0x5030."""
+    expect = {"seg11:0x3cdd": "push word ptr [0x5030]", "seg11:0x3cf5": "push word ptr [0x503c]",
+              "seg11:0x3d0e": "cmp byte ptr [bx + 0x7177], 0", "seg11:0x3d15": "mov word ptr [bp - 0x10], 4",
+              "seg11:0x3d21": "imul si, word ptr [bx + 0x70de], 0xad",
+              "seg11:0x3d2c": "mov ax, word ptr [bx + si - 0x690c]", "seg11:0x3d33": "cmp word ptr [bp - 0x10], -1",
+              "seg11:0x3d3c": "push 1", "seg11:0x3d4f": "push 0x29", "seg11:0x3d51": "imul ax, word ptr [bp - 0xe], 0xe",
+              "seg11:0x3d55": "add ax, 5", "seg11:0x3d59": "push 0x20", "seg11:0x3d5b": "push 0xb",
+              "seg11:0x3d5d": "push 0xf0", "seg11:0x3d8d": "inc ax", "seg11:0x3d8e": "imul ax, ax, 0xb",
+              "seg11:0x3d92": "push 0xcc", "seg11:0x3d9f": "cmp word ptr [bp - 0xe], 4",
+              "seg11:0x3da5": "cmp word ptr [bp - 0xe], 3", "seg11:0x3da9": "jne seg11:0x3d1c",
+              "seg11:0x3db2": "cmp byte ptr [bx + 0x7179], 0", "seg11:0x3db7": "je seg11:0x3d09",
+              "seg11:0x3dbb": "mov word ptr [bp - 0x10], 5"}
+    assert _texts(ins, expect) == expect
+    assert 0x10000 - 0x690C == 0x96F4
+    assert all(_calls(ins, {"seg11:0x3d3e": "GetStockObject", "seg11:0x3d62": "PatBlt",
+                            "seg11:0x3d97": "BitBlt"}).values())
+
+
+def test_player_sprite_draw(ins):
+    """D25: seg7:0x1208's gates, cell inset and the call of seg8:0xb76."""
+    expect = {"seg7:0x1216": "cmp word ptr [0x90f4], 1", "seg7:0x1226": "cmp word ptr es:[bx + si + 0x18], 0",
+              "seg7:0x122d": "cmp word ptr [0x951a], 0", "seg7:0x1234": "cmp word ptr [0x9130], 0",
+              "seg7:0x123e": "cmp word ptr [0x9e49], 3", "seg7:0x1245": "cmp word ptr [0x9e49], 6",
+              "seg7:0x124c": "mov ax, word ptr [0x952e]", "seg7:0x1257": "cmp word ptr [0x3a38], 0",
+              "seg7:0x1266": "cmp byte ptr [bx + 0x717c], 0", "seg7:0x1277": "mov ax, word ptr [0x9434]",
+              "seg7:0x127f": "imul bx, word ptr [bp - 0xc], 0x14", "seg7:0x1283": "cmp word ptr [bx + 0x1e96], 0xe",
+              "seg7:0x128d": "cmp word ptr [bx + 0x1e98], ax", "seg7:0x1293": "cmp word ptr [bx + 0x1e90], 0",
+              "seg7:0x129a": "cmp word ptr [bx + 0x1e90], 9", "seg7:0x12c4": "push 0x1e5c",
+              "seg7:0x12cc": "inc cx", "seg7:0x12dc": "dec ax",
+              "seg7:0x12ee": "mov ax, word ptr [bx + 0x70a0]", "seg7:0x12fa": "cmp byte ptr [bx + 0x7174], 0",
+              "seg7:0x130b": "mov ax, word ptr [bx + 0x70e0]", "seg7:0x130f": "add ax, 0x28",
+              "seg7:0x1315": "cmp word ptr [bp - 0x12], 0", "seg7:0x131b": "cmp word ptr [bp - 0x12], 7",
+              "seg7:0x132e": "mov ax, word ptr es:[bx + 0x28]", "seg7:0x1338": "imul cx",
+              "seg7:0x133d": "mov word ptr es:[bx + 0x10], ax", "seg7:0x1346": "shl ax, 4",
+              "seg7:0x1349": "imul cx, word ptr [bp - 0x10], 0x11", "seg7:0x135c": "cmp word ptr [bp - 0x12], 3",
+              "seg7:0x1365": "add ax, ax", "seg7:0x1371": "cmp byte ptr [bx + 0x7179], 0",
+              "seg7:0x1378": "mov ax, word ptr [bp - 0x10]", "seg7:0x1384": "mov word ptr es:[bx + si + 0x12], ax",
+              "seg7:0x138c": "or ah, 0xe", "seg7:0x1390": "push 1",
+              "seg7:0x1397": "push word ptr [bx + 0x39e8]", "seg7:0x139b": "push 0",
+              "seg7:0x13a2": "mov word ptr [0x58a], 0"}
+    assert _texts(ins, expect) == expect
+    assert all(_calls(ins, {"seg7:0x12e4": "SetRect", "seg7:0x139d": "seg8:0xb76"}).values())
+
+
+def test_radar_bitmap_and_mapping(ins, dgroup):
+    """R01, R02, R03, R05, R07, R08, R09, R11: the radar's bitmap, centre, clip, scale and blit."""
+    assert struct.unpack_from("<hh", dgroup, 0xA72) == (86, 71)
+    assert struct.unpack_from("<i", dgroup, 0xA6C) == (120,)
+    assert struct.unpack_from("<ii", dgroup, 0xA64) == (86, 71)
+    expect = {
+        "seg11:0xd": "cmp word ptr [0x5042], 0", "seg11:0x12": "jne seg11:0x1d8",
+        "seg11:0x1b": "mov ax, 0x64", "seg11:0x1e": "imul word ptr [0x5a0]",
+        "seg11:0x22": "mov word ptr [0x501c], ax", "seg11:0x25": "mov word ptr [0x501e], dx",
+        "seg11:0x2c": "imul word ptr [0x5a2]", "seg11:0x30": "mov word ptr [0x5020], ax",
+        "seg11:0x3b": "push word ptr [0xa72]", "seg11:0x3f": "push word ptr [0xa74]",
+        "seg11:0x48": "mov word ptr [0x5042], ax", "seg11:0x187": "mov word ptr [0x93ce], ax",
+        "seg11:0x18b": "push word ptr [0x5042]",
+        "seg11:0xb0c": "mov ax, word ptr [0xa72]", "seg11:0xb12": "sar ax, 1",
+        "seg11:0xb14": "mov word ptr [0x5050], ax", "seg11:0xb1f": "mov word ptr [0x5052], ax",
+        "seg11:0x357f": "push 0x5048", "seg11:0x358c": "sub ax, word ptr [0x5050]", "seg11:0x3590": "neg ax",
+        "seg11:0x3592": "inc ax", "seg11:0x35a6": "add cx, word ptr [0x5050]", "seg11:0x35aa": "dec cx",
+        "seg11:0x35ac": "add dx, word ptr [0x5052]", "seg11:0x35b0": "dec dx",
+        "seg11:0x7215": "mov eax, dword ptr [0xa6c]", "seg11:0x7226": "cmp eax, 0x1f4",
+        "seg11:0x7268": "mov eax, dword ptr [0xa6c]", "seg11:0x7279": "cmp eax, 0x64",
+        "seg11:0x723a": "sub ax, 0x258",
+        "seg11:0x3418": "cmp word ptr [0x13dc], 0", "seg11:0x3635": "sub ax, 0x2b",
+        "seg11:0x3639": "mov ax, word ptr [0x8e5a]", "seg11:0x363c": "add ax, 7",
+        "seg11:0x3648": "push word ptr [0x93ce]", "seg11:0x3650": "push 0xcc",
+        "seg11:0x35c7": "mov ax, word ptr [0x9326]", "seg11:0x35da": "cmp word ptr [bx - 0x6bfa], ax",
+        "seg11:0x35ef": "cmp word ptr es:[bx + 0x18], 0", "seg11:0x35f6": "cmp word ptr es:[bx + 0x44], 0",
+        "seg11:0x35fb": "jle seg11:0x35cf", "seg11:0x3605": "lcall es:[bx + 0x62]"}
+    assert _texts(ins, expect) == expect
+    assert all(_calls(ins, {"seg11:0x43": "CreateCompatibleBitmap", "seg11:0x182": "CreateCompatibleDC",
+                            "seg11:0x18f": "SelectObject", "seg11:0x35b2": "SetRect",
+                            "seg11:0x384d": "PtInRect", "seg11:0x39ad": "PtInRect",
+                            "seg11:0x3a71": "PtInRect", "seg11:0x3c47": "PtInRect",
+                            "seg11:0x7242": "SetScrollPos", "seg11:0x7247": "seg11:0x33cc",
+                            "seg11:0x3655": "BitBlt", "seg11:0x3668": "ReleaseDC"}).values())
+    c = (_trunc(86, 2), _trunc(71, 2))
+    assert c == (43, 35)
+    assert (1 - (43 - c[0]), 1 - (35 - c[1]), 43 + c[0] - 1, 35 + c[1] - 1) == (1, 1, 85, 69)
+    # R09: RadarLeft/RadarTop are only read at start-up and written back under DGROUP:0x12a
+    assert _sites(ins.refs(0x1DD4, 0x1DD7)) == ["seg6:0x19b", "seg6:0x1b1", "seg6:0x3b5", "seg6:0x3db"]
+    assert struct.unpack_from("<h", dgroup, 0x12A) == (0,)
+    assert _write_values(ins, 0x12A, 0x12B) == {"seg6:0x6c4": 0}
+
+
+def test_radar_brushes_and_callbacks(ins):
+    """R15, R16, R17, R18, R19, R20: the brush table DGROUP:0x5004 and the radar callbacks."""
+    expect = {
+        "seg11:0xe5": "push word ptr [0x5032]", "seg11:0xee": "mov word ptr [0x500a], ax",
+        "seg11:0xf8": "mov word ptr [bp - 6], 0x60", "seg11:0xff": "mov word ptr [bp - 6], 0x40",
+        "seg11:0x109": "push 0x200", "seg11:0x112": "mov word ptr [0x5004], ax",
+        "seg11:0x115": "push 0x2ffc800", "seg11:0x120": "mov word ptr [0x5012], ax",
+        "seg11:0x123": "push 0xffa080", "seg11:0x12e": "mov word ptr [0x5010], ax",
+        "seg11:0x138": "mov word ptr [bp - 6], 0x80", "seg11:0x13f": "mov word ptr [bp - 6], 0x3f",
+        "seg11:0x149": "push 0x2ff", "seg11:0x152": "mov word ptr [0x5008], ax",
+        "seg11:0x155": "push 0xc0c0c0", "seg11:0x160": "mov word ptr [0x500c], ax",
+        "seg11:0x163": "push 0x40", "seg11:0x165": "push 0xc0ff", "seg11:0x16d": "mov word ptr [0x5006], ax",
+        "seg11:0x170": "push 0x20040ff", "seg11:0x17b": "mov word ptr [0x500e], ax",
+        # callbacks
+        "seg11:0x39c3": "push dword ptr es:[bx + di + 0x4c]", "seg11:0x39d5": "retf 6",
+        "seg11:0x3a81": "mov bx, word ptr es:[bx + di + 0x46]", "seg11:0x3a9c": "sub ax, 0xc8",
+        "seg11:0x3a9f": "mov cx, 0x96", "seg11:0x3aaa": "mov cx, 0xc8", "seg11:0x3ab5": "push 0xf0",
+        "seg11:0x3c50": "cmp dword ptr [0xa6c], 0xc8", "seg11:0x3c59": "jle seg11:0x3c96",
+        "seg11:0x3c80": "mov cx, 0x96", "seg11:0x3c88": "push ax", "seg11:0x3c89": "push ax",
+        "seg11:0x3cad": "push dword ptr es:[bx + si + 0x4c]",
+        "seg11:0x37af": "cmp word ptr [bp + 0xa], 0xe", "seg11:0x37ba": "cmp byte ptr [bx + 0x71d7], 0",
+        "seg11:0x3884": "mov bx, word ptr es:[bx + si + 0x46]",
+        "seg11:0x38c0": "imul ax, word ptr es:[bx + si + 0x28], 5", "seg11:0x38df": "push 0x50",
+        "seg11:0x38e3": "push 0xc000ca",
+        "seg11:0x38ee": "cmp word ptr [0x94e], 0", "seg11:0x3901": "mov word ptr [bx + 0x5054], ax",
+        "seg11:0x3905": "mov word ptr [bx + 0x5056], dx"}
+    assert _texts(ins, expect) == expect
+    assert all(_calls(ins, {"seg11:0xe9": "CreatePatternBrush", "seg11:0x10d": "CreateSolidBrush",
+                            "seg11:0x39c8": "SetPixel", "seg11:0x3a8b": "SelectObject",
+                            "seg11:0x3aba": "PatBlt", "seg11:0x3c8f": "PatBlt", "seg11:0x3cb2": "SetPixel",
+                            "seg11:0x38e9": "BitBlt"}).values())
+    assert "seg10:0x6d38" in ins.at("seg11:0x4f").text and ins.at("seg11:0x4c").text == "push 0xa80"
+    assert _cstr(unpacked_seg("inspace", 19), 0xA80) == b"METAL"
+    # the PtInRect-fail branch reaches the race store at seg11:0x38ee
+    assert "seg11:0x3854" in (WORK / "asm" / "inspace" / "seg11.asm").read_text() \
+        .split("seg11:0x38ee ", 1)[1].split("\n", 1)[0]
+    box = [(_trunc(z - 200, 150) + 2, _trunc(z - 200, 200) + 2) for z in (100, 349, 500)]
+    assert box == [(2, 2), (2, 2), (4, 3)]
+
+
+def test_pool8_radar_fields(ins):
+    """R23: pool-8 records get radar_draw seg11:0x39d8 with brush 1 or 4 in seg9:0x10d4."""
+    stores = {"seg9:0x11e7": (8, "mov word ptr es:[bx + si + 0x44], 0xdac"),
+              "seg9:0x1218": (8, "mov word ptr es:[bx + si + 0x46], 1"),
+              "seg9:0x18b8": (8, "mov word ptr es:[bx + si + 0x44], 0xdac"),
+              "seg9:0x18cc": (8, "mov word ptr es:[bx + si + 0x46], 4"),
+              "seg9:0x1aaf": (8, "mov word ptr es:[bx + si + 0x44], ax"),
+              "seg9:0x1be0": (8, "mov word ptr es:[bx + si + 0x46], 4")}
+    assert {s: (_pool_of(ins, s), ins.at(s).text) for s in stores} == stores
+    assert ins.at("seg9:0x1aa3").text == "mov ax, word ptr [bx + 0x4d9a]"
+    assert ins.at("seg9:0x1222").text == "mov word ptr es:[bx + si + 0x62], 0x39d8"
+    assert 0xDAC == 3500
+
+
+def test_icon_walk(ins, dgroup):
+    """I01, I02, I04, I05, I11, I12: the wave icon walk and the IS_ICON window."""
+    expect = {
+        "seg9:0x46": "push 0x71c", "seg9:0x62": "cmp word ptr [0x9206], 9", "seg9:0xb8": "push 0x722",
+        "seg9:0xd4": "cmp word ptr [0x9206], 9", "seg9:0xbf5": "push 8",
+        "seg9:0x176": "push -1", "seg9:0x21f": "cmp word ptr [0x9206], 9",
+        "seg9:0x229": "cmp word ptr [bp - 6], ax",
+        "seg9:0x979": "cmp word ptr es:[bx + si + 0x18], 0",
+        "seg9:0x99a": "mov byte ptr es:[bx + si + 0x1d0], 1", "seg9:0x9a0": "inc word ptr [0x9206]",
+        "seg9:0x1ad": "cmp ax, 1",
+        "seg7:0x6427": "cmp word ptr [0xa7c], 0", "seg7:0x642e": "cmp word ptr [0x9458], 0",
+        "seg7:0x6435": "cmp word ptr [0x91fc], 0", "seg7:0x6443": "imul bx, word ptr [bp - 4], 0x1e",
+        "seg7:0x6447": "mov word ptr [bx + 0x6eae], 0", "seg7:0x6450": "mov word ptr [bx + 0x6eac], ax",
+        "seg7:0x6454": "mov word ptr [bx + 0x6ea8], 2", "seg7:0x645a": "imul ax, ax, 0x2e",
+        "seg7:0x645f": "mov word ptr [bx + 0x6eaa], ax", "seg7:0x6466": "mov ax, word ptr [0x91fe]",
+        "seg7:0x646f": "push 0xb99", "seg7:0x6473": "push 0xb98", "seg7:0x6476": "push 0x10cc",
+        "seg7:0x6479": "push 0", "seg7:0x647b": "push word ptr [0x1de4]",
+        "seg7:0x647f": "push word ptr [0x1de6]", "seg7:0x6483": "push 0x32", "seg7:0x6485": "push 0x96",
+        "seg7:0x62d5": "mov cl, byte ptr [0xb6e]", "seg7:0x62d9": "mov ax, 0x32", "seg7:0x62dc": "sar ax, cl",
+        "seg7:0x62e1": "mov word ptr es:[bx + 0x10], ax", "seg7:0x62eb": "mov word ptr es:[bx + 0xc], ax",
+        "seg7:0x62fd": "imul cx, word ptr [0x91fe], 0x17", "seg7:0x6304": "add ax, 3",
+        "seg7:0x630a": "mov word ptr es:[bx + 0x12], ax", "seg7:0x630e": "mov word ptr es:[bx + 0xe], ax",
+        "seg7:0x631c": "imul cx, word ptr [0x91fe], 0x2e", "seg7:0x6323": "add ax, 6",
+        "seg7:0x61e9": "push 0xb80"}
+    assert _texts(ins, expect) == expect
+    assert all(_calls(ins, {"seg9:0x58": "seg5:0x364", "seg9:0x8e": "seg9:0x156",
+                            "seg9:0xca": "seg5:0x364", "seg9:0x100": "seg9:0x156",
+                            "seg9:0x178": "ExtractIcon", "seg9:0x1a5": "ExtractIcon",
+                            "seg9:0x18f": "seg9:0x94c", "seg9:0x1d2": "PatBlt", "seg9:0x1e0": "DrawIcon",
+                            "seg9:0x1e8": "DestroyIcon", "seg7:0x6496": "CreateWindow",
+                            "seg7:0x62f8": "GetSystemMetrics", "seg7:0x6317": "GetSystemMetrics"}).values())
+    assert ins.at("seg9:0x1b0").mnem == "jbe"            # HICON > 1, unsigned
+    assert dgroup[0x71C:0x728] == b"*.exe\x00*.dll\x00"
+    assert (_cstr(dgroup, 0xB99), _cstr(dgroup, 0xB98), _cstr(dgroup, 0xB80)) == \
+        (b"IS_ICON", b"", b"1/2x Scale")
+    assert len(ins.call_sites("seg9:0x0")) == 1
+    assert ins.call_sites("seg9:0x0") == ["seg9:0xbf7"] and ins.step(ins.at("seg9:0xbf5"), 1).off == 0xBF7
+
+
+def _mark_segments(ins: Module, case: str) -> list[tuple]:
+    """Emulate a case of seg11:0x2dac's direction switch: the MoveTo/LineTo points."""
+    regs = {"[bp - 6]": "x", "[bp - 4]": "y"}
+    stack, out, ax = [], [], None
+    i = ins.at(case)
+    for _ in range(80):
+        t = i.text
+        if t == "push word ptr [bp + 6]":
+            stack.append("hdc")
+        elif t.startswith("push word ptr [bp - "):
+            stack.append((regs[t[14:]], 0))
+        elif t.startswith("mov ax, word ptr [bp - "):
+            ax = (regs[t[17:]], 0)
+        elif t.startswith("add ax, "):
+            ax = (ax[0], ax[1] + int(t[8:], 0))
+        elif t == "push ax":
+            stack.append(ax)
+        elif i.mnem == "lcall" or "MoveTo" in t or "LineTo" in t:
+            y, x, _hdc = stack.pop(), stack.pop(), stack.pop()
+            assert x[0] == "x" and y[0] == "y"
+            out.append(("M" if "MoveTo" in t else "L", x[1], y[1]))
+        elif i.mnem == "jmp":
+            tgt = i.ops[0]
+            if tgt == "seg11:0x2f60":
+                return out
+            i = ins.at(tgt)
+            continue
+        i = ins.step(i, 1)
+    raise AssertionError(case)
+
+
+def test_direction_mark_segments(ins):
+    """radar D03: the eight segments of seg11:0x2dac's 43 x 43 frame."""
+    sw = ins.switches["seg11:0x2f4b"]
+    assert (sw["table"], sw["count"]) == ("seg11:0x2f50", 8)
+    assert ins.at("seg11:0x2f43").text == "cmp ax, 7"
+    got = [_mark_segments(ins, t) for t in sw["targets"]]
+    assert got == [
+        [("M", 14, 0), ("L", 29, 0)],
+        [("M", 29, 0), ("L", 43, 0), ("L", 43, 14)],
+        [("M", 43, 14), ("L", 43, 29)],
+        [("M", 29, 43), ("L", 43, 43), ("L", 43, 29)],
+        [("M", 14, 43), ("L", 29, 43)],
+        [("M", 14, 43), ("L", 0, 43), ("L", 0, 29)],
+        [("M", 0, 14), ("L", 0, 29)],
+        [("M", 14, 0), ("L", 0, 0), ("L", 0, 14)]]
+
+
+def test_beam_slot_loop(ins, dgroup):
+    """W38, W39: the wave-frame pre-loop of seg7:0x0 over the beam slots of seg8:0x3aec."""
+    expect = {"seg7:0x93a": "mov word ptr [0x9136], ax", "seg7:0x942": "push dword ptr [bp - 6]",
+              "seg7:0x94b": "mov word ptr [0x9136], ax", "seg7:0x94e": "inc word ptr [bp - 4]",
+              "seg7:0x951": "mov ax, word ptr [0x598]", "seg7:0x954": "add ax, word ptr [0x594]",
+              "seg7:0x95d": "inc dword ptr [0x5cc]", "seg7:0x965": "cmp word ptr [bp - 6], 5",
+              "seg8:0x3afb": "imul bx, word ptr [bp + 8], 0x94", "seg8:0x3fba": "retf 4"}
+    assert _texts(ins, expect) == expect
+    assert "seg8:0x3aec" in ins.at("seg7:0x946").text
+    assert struct.unpack_from("<hh", dgroup, 0x594) == (3, 0) and struct.unpack_from("<h", dgroup, 0x598) == (2,)
+    assert _write_values(ins, 0x594, 0x595) == {"seg11:0x4e19": 7}
+    assert ins.writers(0x598, 0x599) == []
+
+
+def test_world_global_writers(ins):
+    """globals.md Global table: the writers of the globals the wave set-up reads."""
+    assert _write_values(ins, 0x932A, 0x932B) == {
+        "seg6:0x120e": 130, "seg6:0x121c": 220, "seg6:0x1224": 310, "seg6:0x1232": 420,
+        "seg6:0x1240": 2000, "seg6:0x1284": None}
+    assert _write_values(ins, 0x9000, 0x9001) == {"seg6:0x1214": 0, "seg6:0x122a": 1, "seg6:0x1238": 2}
+    assert _write_values(ins, 0x8FF8, 0x8FF9) == {"seg6:0x1209": None}
+    assert _write_values(ins, 0x92EA, 0x92EB) == {"seg9:0x24cd": 14, "seg9:0x2540": None}
+    assert _sites(ins.refs(0x92EA, 0x92EB)) == ["seg9:0x24cd", "seg9:0x2540", "seg10:0xedb"]
+    assert _write_values(ins, 0x9318, 0x9319) == {
+        "seg9:0x4496": 1, "seg9:0x44c3": None, "seg9:0x44dc": None, "seg9:0x44f8": None,
+        "seg9:0x4680": None}
+    assert _write_values(ins, 0x9322, 0x9323) == {"seg9:0x3de6": None}
+    assert _write_values(ins, 0x92E8, 0x92E9) == {"seg6:0x3049": 0, "seg6:0x30e1": 0, "seg6:0x30e7": 1,
+                                                  "seg6:0x310e": 0}
+    assert _write_values(ins, 0x9326, 0x9327) == {"seg9:0x22cd": 0, "seg9:0x2588": 1, "seg18:0x428": 0,
+                                                  "seg18:0x435": 1, "seg18:0x979": 15}
+    assert _write_values(ins, 0x9158, 0x9159) == {"seg8:0x551": 2, "seg8:0x62a": 4, "seg8:0x741": 1}
+    assert _write_values(ins, 0x94B0, 0x94B1) == {"seg6:0x36b6": 1, "seg6:0x36ed": None}
+    assert _sites(ins.writers(0x94A2, 0x94A3)) == ["seg6:0x36f3", "seg6:0x3791", "seg6:0x9642",
+                                                   "seg10:0x38d3"]
+    # the icon walk's counters
+    assert _write_values(ins, 0x9200, 0x9201) == {"seg9:0x1a": 0, "seg9:0x241": None, "seg9:0xaf9": None}
+    assert _write_values(ins, 0x9202, 0x9203) == {"seg9:0x17": 0, "seg9:0xaa1": None}
+    assert _write_values(ins, 0x9204, 0x9205) == {"seg9:0x12": None, "seg9:0x148": 8}
+    assert _write_values(ins, 0x9206, 0x9207) == {"seg9:0x1d": 0, "seg9:0x9a0": None, "seg9:0xab7": None}
+    assert _sites(ins.writers(0x91FE, 0x91FF)) == ["seg9:0x145"]
+    assert {"seg9:0x13f", "seg10:0xc8"} == set(_sites(ins.writers(0x91FA, 0x91FB)))
+    assert _write_values(ins, 0x95F6, 0x95F7) == {"seg13:0x18": None, "seg13:0x23": 0,
+                                                  "seg18:0x404d": None, "seg18:0x4058": 0}
+    assert ins.at("seg13:0x1c").text == "cmp word ptr [0x95f6], 8"
+
+
+def test_pool_role_sites(ins):
+    """structs.md Pool roles: DGROUP:0x934a indexes the rock mover's pool, DGROUP:0x9328 pool 5's mover."""
+    assert ins.at("seg7:0x3bd2").text == "mov si, word ptr [0x934a]"
+    assert ins.owners(*A("seg7:0x3bd2")) == {"seg7:0x3bae"}
+    assert ins.at("seg7:0x4146").text == "mov si, word ptr [0x9328]"
+    assert ins.owners(*A("seg7:0x4146")) == {"seg7:0x40c4"}
+    assert ins.at("seg11:0x35da").text == "cmp word ptr [bx - 0x6bfa], ax"
+
+
+def test_body_thrust_bytes_are_ship_record_fields(ins):
+    """structs.md Ship records +0x5a, +0x5b, +0x5c: the body-thrust animation bytes sit in the
+    ship record (DGROUP:0x7090 + 0x15a·i), not in the object record."""
+    expect = {"seg13:0x2c0": "mov al, byte ptr [bx + 0x70ea]", "seg13:0x2c4": "add byte ptr [bx + 0x70ec], al",
+              "seg13:0x2c8": "cmp byte ptr [bx + 0x7176], 0", "seg13:0x2d3": "cmp byte ptr [bx + 0x70eb], al",
+              "seg13:0x2d9": "mov byte ptr [bx + 0x70ec], 0", "seg13:0x2fa": "mov byte ptr [bx + 0x70ea], 0xff",
+              "seg13:0x311": "mov byte ptr [bx + 0x70ea], 1", "seg13:0x316": "imul bx, word ptr [bp - 0x10], 0x15a",
+              "seg13:0x31b": "mov al, byte ptr [bx + 0x70ec]", "seg13:0x25f": "cmp byte ptr [bx + 0x7174], 0",
+              "seg13:0x268": "cmp word ptr [bx + 0x7092], 0"}
+    assert _texts(ins, expect) == expect
+    assert (0x70EA - 0x7090, 0x70EB - 0x7090, 0x70EC - 0x7090) == (0x5A, 0x5B, 0x5C)

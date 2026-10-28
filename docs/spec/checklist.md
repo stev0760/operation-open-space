@@ -53,9 +53,9 @@ One row per binding. MAINACCEL and FACTACCEL are the accelerator tables in ENG_L
 | KEY-07 | H: call the ambulance | [MANUAL QuickStart] [MANUAL Resource Management] [BYTES ENG_LANG.DLL STRING 77] id 1229 | manual | none | todo | unknown |
 | KEY-08 | F1: online help (MAINACCEL command 240) | [MANUAL QuickStart] [BYTES ENG_LANG.DLL STRING 76] id 1207 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES seg2:0x164b] | manual | located | wip | unknown |
 | KEY-09 | F2: online help (MAINACCEL command 256) | [BYTES ENG_LANG.DLL STRING 76] id 1207 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES seg2:0x1652] | strings | located | done | unknown |
-| KEY-10 | T: next target (any type); shows targeting instead of a message | [MANUAL General] [BYTES ENG_LANG.DLL STRING 76] id 1200 | manual | none | todo | unknown |
-| KEY-11 | R: ship target ("Smart Target") | [MANUAL General] [BYTES ENG_LANG.DLL STRING 76] id 1201 [BYTES ENG_LANG.DLL STRING 82] id 1301 | manual | none | todo | unknown |
-| KEY-12 | I: icon target | [MANUAL General] [BYTES ENG_LANG.DLL STRING 76] id 1203 | manual | none | todo | unknown |
+| KEY-10 | T: next target (any type); shows targeting instead of a message | [MANUAL General] [BYTES ENG_LANG.DLL STRING 76] id 1200 [BYTES seg11:0x7215 seg11:0x7233] | manual | verified | todo | unknown |
+| KEY-11 | R: ship target ("Smart Target") | [MANUAL General] [BYTES ENG_LANG.DLL STRING 76] id 1201 [BYTES ENG_LANG.DLL STRING 82] id 1301 [BYTES seg11:0x7215 seg11:0x7233] | manual | verified | todo | unknown |
+| KEY-12 | I: icon target | [MANUAL General] [BYTES ENG_LANG.DLL STRING 76] id 1203 [BYTES seg11:0x7215 seg11:0x7233] | manual | verified | todo | unknown |
 | KEY-13 | V: virus target | [MANUAL General] [BYTES ENG_LANG.DLL STRING 76] id 1204 | manual | none | todo | unknown |
 | KEY-14 | Y: hazard target | [MANUAL General] [BYTES ENG_LANG.DLL STRING 76] id 1202 | manual | none | todo | unknown |
 | KEY-15 | U: defender target | [MANUAL General] [BYTES ENG_LANG.DLL STRING 76] id 1205 | manual | none | todo | unknown |
@@ -67,7 +67,7 @@ One row per binding. MAINACCEL and FACTACCEL are the accelerator tables in ENG_L
 | KEY-21 | B: show the game speed on the target display | [MANUAL Game Settings] [BYTES ENG_LANG.DLL STRING 76] id 1208 [BYTES seg11:0x71d4] | manual | located | todo | unknown |
 | KEY-22 | Alt+Plus / Alt+Minus (also Alt+=, Alt+-): game speed up/down (commands 401/411) | [MANUAL Game Settings] [BYTES ENG_LANG.DLL STRING 77] id 1221 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES seg10:0x7e1c] | manual | understood | todo | unknown |
 | KEY-23 | Ctrl+Plus / Ctrl+Minus: rescale the game (1/2x, 1x, 2x) | [MANUAL Game Settings] [BYTES ENG_LANG.DLL STRING 77] id 1220 [BYTES seg10:0x9a2a] [BYTES seg6:0xb07] | manual | understood | todo | unknown |
-| KEY-24 | Plus / Minus: radar zoom | [BYTES ENG_LANG.DLL STRING 77] id 1219 [BYTES ENG_LANG.DLL STRING 83] id 1319 [MANUAL General] [BYTES seg11:0x7215] | strings | located | todo | unknown |
+| KEY-24 | Plus / Minus: radar zoom | [BYTES ENG_LANG.DLL STRING 77] id 1219 [BYTES ENG_LANG.DLL STRING 83] id 1319 [MANUAL General] [BYTES seg11:0x7215] [BYTES seg11:0x772e seg11:0x719c] | strings | verified | todo | unknown |
 | KEY-25 | F12: toggle Action and Strategy modes | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 77] id 1222 [BYTES seg11:0x6d19] | manual | understood | todo | unknown |
 | KEY-26 | Alt+G: Game Settings dialog (command 192) | [MANUAL QuickStart] [BYTES ENG_LANG.DLL STRING 76] id 1209 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES seg10:0x7f18] | manual | understood | todo | unknown |
 | KEY-27 | Alt+I: open/close the Icon Watch (command 491) | [MANUAL Icons] [BYTES ENG_LANG.DLL STRING 76] id 1210 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES seg11:0x6e94] | manual | understood | todo | unknown |
@@ -139,14 +139,14 @@ One row per binding. MAINACCEL and FACTACCEL are the accelerator tables in ENG_L
 | WIN-03 | Title screen: OPERATION:, edition and version line, copyright, demo-day line, Press 'R', "ESC to play - Alt-X to Exit" | [ORACLE smoke-0001] [ORACLE depth8-0001] [ORACLE intro-0001] [BYTES ENG_LANG.DLL STRING 133] id 2121 [BYTES ENG_LANG.DLL STRING 159] id 2542 [BYTES seg15:0x5809] [ORACLE install-0001] [ORACLE m2-accept-0001] | oracle | verified | done | demo |
 | WIN-04 | Title-screen hint "For best results, change Windows to 256 color mode" above 8 bpp | [ORACLE depth8-0001] [BYTES DGROUP:0x129d] [BYTES seg6:0x1716] | oracle | understood | todo | demo |
 | WIN-05 | Paused state: title "Inner Space - PAUSED..", PAUSED, CLICK HERE TO PLAY | [ORACLE smoke-0001] [BYTES ENG_LANG.DLL STRING 128] id 2044 [BYTES ENG_LANG.DLL STRING 127] id 2028 [BYTES ENG_LANG.DLL STRING 127] id 2027 [BYTES seg2:0x9c4] | oracle | located | todo | demo |
-| WIN-06 | Status display: score, target, radar, damage, play time, current weapon | [MANUAL General] [ORACLE runtime-0001] [BYTES seg11:0xafe] | oracle | located | todo | demo |
-| WIN-07 | Score readout, lower left of the status display | [MANUAL High Scores] [BYTES seg11:0x4ea] | manual | located | todo | unknown |
+| WIN-06 | Status display: score, target, radar, damage, play time, current weapon | [MANUAL General] [ORACLE runtime-0001] [BYTES seg11:0xafe] [BYTES seg11:0xc5d seg11:0xc97 seg11:0xcf6 seg11:0xcf9] | oracle | verified | todo | demo |
+| WIN-07 | Score readout, lower left of the status display | [MANUAL High Scores] [BYTES seg11:0x4ea] [BYTES seg11:0x11f4 seg11:0x1202] | manual | verified | todo | unknown |
 | WIN-08 | Target display: direction arrow, team and attitude in blue/grey/red, starfield at High or Highest detail; CURRENT TARGET (AUTO/MANUAL) | [MANUAL General] [ORACLE runtime-0001] [BYTES ENG_LANG.DLL STRING 59] id 931 [BYTES ENG_LANG.DLL STRING 59] id 932 | oracle | none | todo | demo |
 | WIN-09 | Messages in the target display, shown for a few seconds | [MANUAL General] | manual | none | todo | unknown |
-| WIN-10 | Radar screen: colour coding, cloaked ships shown, zoom | [MANUAL General] [BYTES seg11:0x375f] | manual | located | todo | unknown |
+| WIN-10 | Radar screen: colour coding, cloaked ships shown, zoom | [MANUAL General] [BYTES seg11:0x375f] [BYTES seg11:0x37 seg11:0x43 seg11:0xb0c seg11:0xb14 seg11:0x1b seg11:0x22] | manual | verified | todo | unknown |
 | WIN-11 | Damage display: Engine, Guns, Thruster, plus Wings or Cloak; green/amber/red/blinking red/grey | [MANUAL General] [BYTES ENG_LANG.DLL STRING 53] ids 840–844 | manual | none | todo | unknown |
 | WIN-12 | Weapon display: WEAPON SYSTEM, missiles left | [MANUAL General] [ORACLE runtime-0001] [BYTES ENG_LANG.DLL STRING 59] id 934 | oracle | none | todo | demo |
-| WIN-13 | Play-time clock (wave clock) in the status display | [MANUAL General] [ORACLE runtime-0001] [BYTES seg11:0x1f0e] | oracle | understood | todo | demo |
+| WIN-13 | Play-time clock (wave clock) in the status display | [MANUAL General] [ORACLE runtime-0001] [BYTES seg11:0x1f0e] [BYTES seg11:0x1407 seg11:0x147d] | oracle | verified | todo | demo |
 | WIN-14 | Game menu bar: menu 101 (Game, Ship Cmds, Defenders, Watch, Help) and menu 102 (adds Strategy) | [MANUAL QuickStart] [MANUAL Display Options] [BYTES ENG_LANG.DLL MENU 101] [BYTES ENG_LANG.DLL MENU 102] [BYTES seg2:0x13b2] [BYTES seg11:0x6d19] | manual | understood | todo | unknown |
 | WIN-15 | Popup menu: Options Menu, Game Options.., Exit Game | [BYTES ENG_LANG.DLL MENU POPUPMENU] [BYTES seg2:0x13b2] | strings | located | todo | unknown |
 | WIN-16 | 3D game border | [MANUAL Display Options] [BYTES seg2:0xcb1] | manual | understood | todo | unknown |
@@ -174,7 +174,7 @@ One row per binding. MAINACCEL and FACTACCEL are the accelerator tables in ENG_L
 | WIN-38 | Ship Watch window (IS_WATCH): position, direction, actions; race time gaps | [MANUAL Dealing With Other Ships] [MANUAL Race Courses] [BYTES DGROUP:0x51f] [BYTES seg11:0x7127] | manual | understood | todo | unknown |
 | WIN-39 | Watch menu: Icons, One Ship, All Ships | [BYTES ENG_LANG.DLL MENU 101] [BYTES seg2:0x15e0] [BYTES seg11:0x6ea0] | code | understood | todo | unknown |
 | WIN-40 | IS_SMART window; purpose [OPEN] | [BYTES DGROUP:0x53a] [BYTES seg11:0x6ea0] | code | understood | todo | unknown |
-| WIN-41 | IS_INFO window: the two status panels of the wave HUD | [BYTES DGROUP:0x55c] [BYTES seg11:0xafe] [BYTES seg11:0xca2] | code | understood | todo | unknown |
+| WIN-41 | IS_INFO window: the two status panels of the wave HUD | [BYTES DGROUP:0x55c] [BYTES seg11:0xafe] [BYTES seg11:0xca2] [BYTES seg11:0xc5d seg11:0xc97] [BYTES seg11:0x7798] | code | verified | todo | unknown |
 | WIN-42 | Online help window (IS_HELP, "Inner Space Online Help"): Main Menus, Radar Display, Search, Prev, Next, OK, See Also | [MANUAL General] [BYTES ENG_LANG.DLL STRING 137] ids 2182–2190 | manual | none | todo | unknown |
 | WIN-43 | Dynamic help topics: SPACE SHIPS, USEFUL OBJECTS, HAZARDS, OTHER OBJECTS, TEAMS, KEYBOARD CMDS, HOW TO PLAY, RACING, GAMES, WEAPONS, LAWS | [MANUAL General] [BYTES ENG_LANG.DLL STRING 51] ids 800–809 [BYTES ENG_LANG.DLL STRING 75] id 1198 | manual | none | todo | unknown |
 | WIN-44 | Two dynamic help pages per ship: statistics, damage, behaviour, attitudes | [MANUAL General] | manual | none | todo | unknown |
@@ -198,44 +198,44 @@ One row per binding. MAINACCEL and FACTACCEL are the accelerator tables in ENG_L
 | ID | Feature | Evidence | Spec | RE | Port | Edition |
 |---|---|---|---|---|---|---|
 | NAV-01 | Drive list in New Game: C: to Z: probed, A: and B: never; entries `L: label`, unlabelled drives `Unknown_HD` | [MANUAL General] [ORACLE newgame-0001] [ORACLE start-0001] [BYTES ISPACE.DLL seg10:0x2104] | oracle | verified | done | demo |
-| NAV-02 | Directory tree: lower case, sorted, green root, yellow real directories, red locked levels; double-click expands | [MANUAL General] [ORACLE newgame-0001] | oracle | none | todo | demo |
-| NAV-03 | Directory walk with findfirst/findnext (attr 0x15), one level ahead of the expanded node | [ORACLE newgame-0001] [BYTES seg5:0x352] [BYTES seg5:0x364] [BYTES DGROUP:0x1260] | oracle | located | todo | demo |
-| NAV-04 | Directory status line: icons and files counted, visited or not, "No apps in this directory" | [MANUAL General] [ORACLE newgame-0001] [BYTES ENG_LANG.DLL STRING 59] ids 938–943 | oracle | none | todo | demo |
-| NAV-05 | File pane: program names in lower case, multicolumn | [ORACLE newgame-0001] | oracle | none | todo | demo |
-| NAV-06 | Icon preview: the first program's icon at 2x | [ORACLE newgame-0001] | oracle | none | todo | demo |
-| NAV-07 | Icon count per directory from ExtractIcon count queries on *.exe and *.dll | [ORACLE newgame-0001] | oracle | none | todo | demo |
-| NAV-08 | List-text flag digits after each directory name (DEEP111); meaning [OPEN] | [ORACLE newgame-0001] | oracle | none | todo | demo |
-| NAV-09 | Enter: fly through a gate into the chosen directory | [MANUAL General] [ORACLE newgame-0001] [BYTES ENG_LANG.DLL STRING 134] id 2143 | oracle | none | todo | demo |
-| NAV-10 | Built-in levels in the tree: demon's gate, dodge city - duel, grand prix - race, lazy loop - race, sdi speedway - race | [ORACLE newgame-0001] [BYTES ENG_LANG.DLL STRING 47] ids 736–742 [BYTES ENG_LANG.DLL STRING 47] id 750 [BYTES ENG_LANG.DLL STRING 48] id 760 | oracle | none | todo | demo |
+| NAV-02 | Directory tree: lower case, sorted, green root, yellow real directories, red locked levels; double-click expands | [MANUAL General] [ORACLE newgame-0001] [BYTES seg6:0x38cd seg6:0x39e8 seg6:0x386a seg6:0x389e seg6:0x3909 seg6:0x3a04 seg6:0x1f22 seg6:0x2305 seg6:0x49c0 seg6:0x4b44 seg11:0x3fd4 seg6:0x4d8c] | oracle | verified | todo | demo |
+| NAV-03 | Directory walk with findfirst/findnext (attr 0x15), one level ahead of the expanded node | [ORACLE newgame-0001] [BYTES seg5:0x352] [BYTES seg5:0x364] [BYTES DGROUP:0x1260] [BYTES seg6:0x37ef seg6:0x3831 seg6:0x3931 seg6:0x5020 seg6:0x387f seg6:0x388f seg6:0x45be seg6:0x5065] | oracle | verified | todo | demo |
+| NAV-04 | Directory status line: icons and files counted, visited or not, "No apps in this directory" | [MANUAL General] [ORACLE newgame-0001] [BYTES ENG_LANG.DLL STRING 59] ids 938–943 [BYTES seg6:0x5bb5 seg6:0x5bc3 seg6:0x58a1 seg6:0x58b8 seg6:0x5a82 seg6:0x5a87 seg6:0x598c seg6:0x5994] | oracle | verified | todo | demo |
+| NAV-05 | File pane: program names in lower case, multicolumn | [ORACLE newgame-0001] [BYTES seg6:0x420a seg6:0x426a] | oracle | verified | todo | demo |
+| NAV-06 | Icon preview: the first program's icon at 2x | [ORACLE newgame-0001] [BYTES seg6:0x444e seg6:0x4469 seg6:0x5bea seg6:0x5bf8] | oracle | verified | todo | demo |
+| NAV-07 | Icon count per directory from ExtractIcon count queries on *.exe and *.dll | [ORACLE newgame-0001] [BYTES seg6:0x442a seg6:0x442c seg6:0x43d8 seg6:0x4473] | oracle | verified | todo | demo |
+| NAV-08 | List-text flag digits after each directory name (DEEP110): depth, sub-state and visit state | [ORACLE newgame-0001] [BYTES seg6:0x4118 seg6:0x38c7 seg6:0x38cd seg6:0x39e8] | oracle | verified | todo | demo |
+| NAV-09 | Enter: fly through a gate into the chosen directory | [MANUAL General] [ORACLE newgame-0001] [BYTES ENG_LANG.DLL STRING 134] id 2143 [BYTES seg6:0x3f4c seg6:0x3f8e seg6:0x3a2a seg6:0x3a2f seg6:0x5524 seg6:0x55bd] | oracle | verified | todo | demo |
+| NAV-10 | Built-in levels in the tree: demon's gate, dodge city - duel, grand prix - race, lazy loop - race, sdi speedway - race | [ORACLE newgame-0001] [BYTES ENG_LANG.DLL STRING 47] ids 736–742 [BYTES ENG_LANG.DLL STRING 47] id 750 [BYTES ENG_LANG.DLL STRING 48] id 760 [BYTES seg6:0x3f4c seg6:0x3f8e seg6:0x3a2a seg6:0x3a2f seg6:0x5524 seg6:0x55bd] | oracle | verified | todo | demo |
 | NAV-11 | RACE box: Solo/2/3/4 Ships, Normal/Difficult/Dangerous!, 1/5/10 Laps, Fastest..Slowest or Same Ships | [MANUAL Race Courses] [ORACLE newgame-0001] [BYTES ENG_LANG.DLL STRING 135] ids 2145–2159 [BYTES ENG_LANG.DLL STRING 136] ids 2160–2165 [BYTES seg6:0x23d4] | oracle | located | todo | demo |
 | NAV-12 | DUEL box: 1/2/3 Opponents, difficulty, Toughest..Weakest | [ORACLE newgame-0001] [BYTES ENG_LANG.DLL STRING 135] ids 2146–2159 [BYTES ENG_LANG.DLL STRING 136] ids 2160–2169 [BYTES seg6:0x23d4] | oracle | located | todo | demo |
-| NAV-13 | A wave per entered directory: its programs' icons, hazards and ships | [MANUAL General] [MANUAL Your Mission] [BYTES seg9:0x3202] | manual | located | todo | unknown |
-| NAV-14 | Wave counter and START OF WAVE; first 3–5 waves easy; difficulty most noticeable above wave 7 | [MANUAL Game Settings] [BYTES ENG_LANG.DLL STRING 21] id 324 | manual | none | todo | unknown |
-| NAV-15 | Entry and exit gates; leave through the gate when done | [BYTES ENG_LANG.DLL 5000 101] [BYTES ENG_LANG.DLL STRING 10] id 156 [BYTES ENG_LANG.DLL STRING 37] id 585 | strings | none | todo | unknown |
-| NAV-16 | Completed-directory state ("This directory is complete") | [BYTES ENG_LANG.DLL STRING 48] id 765 | strings | none | todo | unknown |
+| NAV-13 | A wave per entered directory: its programs' icons, hazards and ships | [MANUAL General] [MANUAL Your Mission] [BYTES seg9:0x3202] [BYTES seg9:0x9b0 seg9:0x0 seg9:0x2a seg9:0x114] | manual | verified | todo | unknown |
+| NAV-14 | Wave counter and START OF WAVE; first 3–5 waves easy; difficulty most noticeable above wave 7 | [MANUAL Game Settings] [BYTES ENG_LANG.DLL STRING 21] id 324 [BYTES seg6:0x11ec seg9:0x323a] | manual | verified | todo | unknown |
+| NAV-15 | Entry and exit gates; leave through the gate when done | [BYTES ENG_LANG.DLL 5000 101] [BYTES ENG_LANG.DLL STRING 10] id 156 [BYTES ENG_LANG.DLL STRING 37] id 585 [BYTES seg9:0x22b4 seg9:0x3202 seg9:0x5cca] | strings | verified | todo | unknown |
+| NAV-16 | Completed-directory state ("This directory is complete") | [BYTES ENG_LANG.DLL STRING 48] id 765 [BYTES seg6:0x598c seg6:0x5994] | strings | verified | todo | unknown |
 | NAV-17 | Demo directory limit: "play will be limited to only a few directories" | [BYTES ENG_LANG.DLL STRING 145] id 2315 | strings | none | todo | demo |
 | NAV-18 | Briefing remarks on the wave: viruses, hazard mix, hazard blocks, spinning hazards, big directories | [BYTES ENG_LANG.DLL STRING 75] ids 1190–1193 [BYTES ENG_LANG.DLL STRING 141] id 2242 | strings | none | todo | unknown |
-| NAV-19 | One directory record (0x297 bytes: path, roster indices, object counts) per entered directory, kept in the saved game | [BYTES seg6:0x36ce] | code | understood | todo | unknown |
+| NAV-19 | One directory record (0x297 bytes: path, roster indices, object counts) per entered directory, kept in the saved game | [BYTES seg6:0x36ce] [BYTES seg6:0x36b6 seg6:0x36e4] | code | verified | todo | unknown |
 
 ## FLT: Flight model
 
 | ID | Feature | Evidence | Spec | RE | Port | Edition |
 |---|---|---|---|---|---|---|
-| FLT-01 | Thrust along the heading, using fuel | [MANUAL QuickStart] [BYTES ENG_LANG.DLL 5000 301] [ORACLE runtime-0001] | oracle | none | todo | demo |
-| FLT-02 | Turning at the ship's turn rate | [MANUAL QuickStart] [BYTES ENG_LANG.DLL STRING 16] id 255 | manual | none | todo | unknown |
-| FLT-03 | Braking | [MANUAL QuickStart] | manual | none | todo | unknown |
-| FLT-04 | OverThruster / turbo thrust: extra thrust at high fuel cost | [MANUAL QuickStart] [MANUAL Race Courses] | manual | none | todo | unknown |
-| FLT-05 | Auto braking: brake whenever thrust stops | [MANUAL Game Settings] | manual | none | todo | unknown |
-| FLT-06 | Drift with drag when auto braking is off | [MANUAL Game Settings] | manual | none | todo | unknown |
-| FLT-07 | Mass from armour, thruster and tank; heavier ships turn slower, use more fuel, top out lower | [MANUAL Customizing Ships] [BYTES ENG_LANG.DLL STRING 16] ids 254–255 [BYTES ENG_LANG.DLL STRING 17] ids 256–269 | manual | none | todo | unknown |
+| FLT-01 | Thrust along the heading, using fuel | [MANUAL QuickStart] [BYTES ENG_LANG.DLL 5000 301] [ORACLE runtime-0001] [BYTES seg13:0x224 seg13:0x233 seg11:0x6600 seg11:0x6607] | oracle | verified | todo | demo |
+| FLT-02 | Turning at the ship's turn rate | [MANUAL QuickStart] [BYTES ENG_LANG.DLL STRING 16] id 255 [BYTES seg13:0x61b seg13:0x620 seg13:0x654 seg13:0x688] | manual | verified | todo | unknown |
+| FLT-03 | Braking | [MANUAL QuickStart] [BYTES seg11:0x608e seg11:0x6097] | manual | verified | todo | unknown |
+| FLT-04 | OverThruster / turbo thrust: extra thrust at high fuel cost | [MANUAL QuickStart] [MANUAL Race Courses] [BYTES seg11:0x63e2 seg11:0x63ee] | manual | verified | todo | unknown |
+| FLT-05 | Auto braking: brake whenever thrust stops | [MANUAL Game Settings] [BYTES seg11:0x608e seg11:0x6097] | manual | verified | todo | unknown |
+| FLT-06 | Drift with drag when auto braking is off | [MANUAL Game Settings] [BYTES seg11:0x6117 seg11:0x611c seg11:0x6143 seg11:0x6167] | manual | verified | todo | unknown |
+| FLT-07 | Mass from armour, thruster and tank; heavier ships turn slower, use more fuel, top out lower | [MANUAL Customizing Ships] [BYTES ENG_LANG.DLL STRING 16] ids 254–255 [BYTES ENG_LANG.DLL STRING 17] ids 256–269 [BYTES seg14:0x22b9 seg14:0x22c2 seg14:0x1e50 seg14:0x1e8a seg13:0x25f seg13:0x268] | manual | verified | todo | unknown |
 | FLT-08 | Collisions with rocks and objects | [MANUAL QuickStart] [BYTES ENG_LANG.DLL 5000 302] [BYTES ISPACE.DLL seg2:0x3c] | manual | located | todo | unknown |
 | FLT-09 | Loss of control after capturing a virused icon, until auto-repair purges it | [MANUAL Icons] | manual | none | todo | unknown |
 | FLT-10 | Loss of control after eating a doughnut | [BYTES ENG_LANG.DLL 5000 125] | strings | none | todo | unknown |
-| FLT-11 | Body-thrusting ships: frames animate instead of a thruster flame | [MANUAL Editing Ship Bitmaps] | manual | none | todo | unknown |
+| FLT-11 | Body-thrusting ships: frames animate instead of a thruster flame | [MANUAL Editing Ship Bitmaps] [BYTES seg13:0x341 seg13:0x378] | manual | verified | todo | unknown |
 | FLT-12 | Wings modelled as thin planes and the fuselage as a cone; wings shield the fuselage | [MANUAL Editing Ship Bitmaps] | manual | none | todo | unknown |
-| FLT-13 | Game time scales with the frame rate; calibrated for 36 frames/s | [MANUAL Game Settings] [BYTES seg7:0xb32] | manual | understood | todo | unknown |
+| FLT-13 | Game time scales with the frame rate; calibrated for 36 frames/s | [MANUAL Game Settings] [BYTES seg7:0xb32] [BYTES seg7:0xcd3 seg13:0x255 seg13:0x224 seg13:0x233] | manual | verified | todo | unknown |
 | FLT-14 | Being pulled by a fan | [BYTES ENG_LANG.DLL STRING 33] id 515 [BYTES ENG_LANG.DLL STRING 137] id 2179 | strings | none | todo | unknown |
-| FLT-15 | The wave world wraps: x past DGROUP:0x5a0 × 8 and y past DGROUP:0x5a2 × 8 return to 0, negative values to the far edge | [BYTES seg8:0x1b54] | code | understood | todo | unknown |
+| FLT-15 | The wave world wraps: x past DGROUP:0x5a0 × 8 and y past DGROUP:0x5a2 × 8 return to 0, negative values to the far edge | [BYTES seg8:0x1b54] [BYTES DGROUP:0x5a0] [BYTES seg8:0x1bdc seg8:0x1be0] | code | verified | todo | unknown |
 
 ## WPN: Weapons
 
@@ -418,10 +418,10 @@ The nine crimes of the Laws of Inner Space topic, with the charge text the Hall 
 | ID | Feature | Evidence | Spec | RE | Port | Edition |
 |---|---|---|---|---|---|---|
 | RACE-01 | Race-track directories in play: multi-lap race, the winner takes the icons | [MANUAL Race Courses] [BYTES ENG_LANG.DLL STRING 121] id 1930 [BYTES ENG_LANG.DLL STRING 121] id 1932 [BYTES seg4:0x215c] | manual | located | todo | unknown |
-| RACE-02 | Test track Lazy Loop - RACE (enterable in the demo) | [MANUAL Race Courses] [ORACLE newgame-0001] [BYTES ENG_LANG.DLL STRING 47] id 740 [BYTES ENG_LANG.DLL STRING 48] id 764 | oracle | none | todo | demo |
-| RACE-03 | Test track SDi Speedway - RACE | [MANUAL Race Courses] [ORACLE newgame-0001] [BYTES ENG_LANG.DLL STRING 47] id 741 [BYTES ENG_LANG.DLL STRING 146] id 2323 | oracle | none | todo | registered |
-| RACE-04 | Test track Grand Prix - RACE | [MANUAL Race Courses] [ORACLE newgame-0001] [BYTES ENG_LANG.DLL STRING 47] id 742 [BYTES ENG_LANG.DLL STRING 146] id 2323 | oracle | none | todo | registered |
-| RACE-05 | Race options: competitors, course difficulty, length, competitor speed | [MANUAL Race Courses] [BYTES seg6:0x23d4] | manual | located | todo | unknown |
+| RACE-02 | Test track Lazy Loop - RACE (enterable in the demo) | [MANUAL Race Courses] [ORACLE newgame-0001] [BYTES ENG_LANG.DLL STRING 47] id 740 [BYTES ENG_LANG.DLL STRING 48] id 764 [BYTES seg6:0x3f4c seg6:0x3f8e seg6:0x3a2a seg6:0x3a2f] | oracle | verified | todo | demo |
+| RACE-03 | Test track SDi Speedway - RACE | [MANUAL Race Courses] [ORACLE newgame-0001] [BYTES ENG_LANG.DLL STRING 47] id 741 [BYTES ENG_LANG.DLL STRING 146] id 2323 [BYTES seg6:0x3f4c seg6:0x3f8e seg6:0x3a2a seg6:0x3a2f] | oracle | verified | todo | registered |
+| RACE-04 | Test track Grand Prix - RACE | [MANUAL Race Courses] [ORACLE newgame-0001] [BYTES ENG_LANG.DLL STRING 47] id 742 [BYTES ENG_LANG.DLL STRING 146] id 2323 [BYTES seg6:0x3f4c seg6:0x3f8e seg6:0x3a2a seg6:0x3a2f] | oracle | verified | todo | registered |
+| RACE-05 | Race options: competitors, course difficulty, length, competitor speed | [MANUAL Race Courses] [BYTES seg6:0x23d4] [BYTES seg6:0x31d3 seg6:0x3339 seg9:0x3db6 seg9:0x3dbd] | manual | verified | todo | unknown |
 | RACE-06 | Refuel at the start and end of every race | [MANUAL Race Courses] | manual | none | todo | unknown |
 | RACE-07 | Race runs until every ship finishes | [MANUAL Race Courses] | manual | none | todo | unknown |
 | RACE-08 | Weapons stay enabled in races; more hazards on higher waves | [MANUAL Race Courses] | manual | none | todo | unknown |
@@ -431,7 +431,7 @@ The nine crimes of the Laws of Inner Space topic, with the charge text the Hall 
 | RACE-12 | Record announcements (course and lap records) | [BYTES ENG_LANG.DLL STRING 141] ids 2252–2255 [BYTES ENG_LANG.DLL STRING 142] ids 2256–2265 [BYTES ENG_LANG.DLL STRING 189] id 3015 [BYTES ENG_LANG.DLL STRING 189] id 3016 | strings | none | todo | unknown |
 | RACE-13 | Race course descriptions and strategy hints | [BYTES ENG_LANG.DLL STRING 101] ids 1600–1605 [BYTES ENG_LANG.DLL STRING 131] ids 2084–2088 | strings | none | todo | unknown |
 | RACE-14 | Start gun; waiting for the start | [BYTES ENG_LANG.DLL 5000 103] [BYTES ENG_LANG.DLL STRING 68] id 1086 | strings | none | todo | unknown |
-| RACE-15 | Duel directories (- DUEL, Dodge City): no icons, no exit until opponents fall, no help, no Enforcers | [MANUAL Duelling] [ORACLE newgame-0001] [BYTES ENG_LANG.DLL STRING 47] id 750 [BYTES ENG_LANG.DLL STRING 146] id 2323 | oracle | none | todo | registered |
+| RACE-15 | Duel directories (- DUEL, Dodge City): no icons, no exit until opponents fall, no help, no Enforcers | [MANUAL Duelling] [ORACLE newgame-0001] [BYTES ENG_LANG.DLL STRING 47] id 750 [BYTES ENG_LANG.DLL STRING 146] id 2323 [BYTES seg6:0x351d seg6:0x3569 seg6:0x3208 seg6:0x3262] | oracle | verified | todo | registered |
 | RACE-16 | Duel arena briefing | [BYTES ENG_LANG.DLL 5000 104] | strings | none | todo | unknown |
 | RACE-17 | Invitation to Dodge City | [BYTES ENG_LANG.DLL STRING 40] id 629 | strings | none | todo | unknown |
 | RACE-18 | Duel result summary (hits, damage, margin) | [BYTES ENG_LANG.DLL STRING 124] id 1983 [BYTES ENG_LANG.DLL STRING 125] ids 1984–1997 [BYTES ENG_LANG.DLL STRING 189] id 3018 | strings | none | todo | unknown |

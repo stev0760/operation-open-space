@@ -229,9 +229,17 @@ This page covers the DGROUP globals that drive the game, the code that reads the
 | DGROUP:0x1a | 2 | BOOL | while non-zero the tick seg7:0x0 returns at once, input included ([shell.md](shell.md#exit)) [BYTES seg7:0x10 seg7:0x15] | seg2:0xe07, seg10:0x23c (1); seg2:0xe65, seg7:0x441, seg10:0x2e, seg11:0x7b5f, seg15:0x57fc (0) | seg7:0x10, seg7:0x868, seg7:0x9b3 |
 | DGROUP:0x1c | 2 | BOOL | first timer tick pending [BYTES seg2:0x398 seg2:0x1205 seg2:0x120e] | seg2:0x398, seg2:0x120e | seg2:0x1205 |
 | DGROUP:0x1e | 2 | BOOL | WM_PAINT handling enabled [BYTES seg2:0x123b seg2:0x7ac] | seg2:0x123b | seg2:0x7ac |
+| DGROUP:0x5a0 | 2 | int | world width in 1/8-unit cells: 3200, so 25600 world units ([world.md](world.md#world-coordinates)) [BYTES DGROUP:0x5a0 seg8:0x1c27 seg8:0x1c2a] | none in INSPACE.EXE | seg8:0x1c27, seg10:0x75c, seg11:0x1e |
+| DGROUP:0x5a2 | 2 | int | world height in 1/8-unit cells: 3200 [BYTES DGROUP:0x5a2 seg8:0x1c66] | none in INSPACE.EXE | seg8:0x1c66, seg10:0x77b, seg11:0x2c |
+| DGROUP:0x94e | 2 | int | race code from Navigation Enter: 4 × course + opponents + 1, 0 when the wave is no race ([nav.md](nav.md), [world.md](world.md#difficulty-inputs)) [BYTES seg6:0x3344 seg6:0x3488 seg9:0x3db6] | seg6:0x3344, seg6:0x3488, seg6:0x37e4 | seg9:0x3db6, seg11:0xc19, seg11:0x38ee |
+| DGROUP:0x950 | 2 | int | duel code from Navigation Enter: opponents + 2, 0 when the wave is no duel [BYTES seg6:0x3527 seg9:0x3df9 seg9:0x3e06] | seg6:0x3527, seg6:0x37e7 | seg9:0x3df9, seg6:0x34ac |
 | DGROUP:0x9bc | 48 | long[12] | rating thresholds, initialised data [BYTES DGROUP:0x9bc] | — | seg9:0x4870 |
+| DGROUP:0xa6c | 4 | long | radar scale 100–500, 120 in the file; the HUD scrollbar shows 600 − scale ([world.md](world.md#scale-and-zoom), [timing.md](timing.md)) [BYTES DGROUP:0xa6c seg11:0xcf6 seg11:0xcf9] | seg11:0x7233, seg11:0x77b6, seg11:0x36c3 | seg11:0xcf9, seg11:0x3a99, seg11:0x3c50 |
 | DGROUP:0xb0e | 42 | int[21] | kill points per pool, initialised data [BYTES DGROUP:0xb0e] | — | seg8:0x7c11 |
 | DGROUP:0xb38 | 42 | int[21] | rating weight per pool, initialised data [BYTES DGROUP:0xb38] | — | seg8:0x7c84 |
+| DGROUP:0xf00 | 91 | byte[91] | sine × 128 for 0–90°, initialised data; the bytes differ from round(sin × 128) at 57 entries ([world.md](world.md#helpers)) [BYTES DGROUP:0xf00 seg6:0x71d3] | — | seg6:0x71d3, seg6:0x71f2 |
+| DGROUP:0x1018 | 25 | char[5][5] | joystick direction map: target heading 0–15, or −1 at the centre ([world.md](world.md#joystick)) [BYTES DGROUP:0x1018 seg11:0x7570] | — | seg11:0x7570 |
+| DGROUP:0x1050 | 64 | int[16][2] | heading vectors (dx, dy), entry 0 = (0, −16) pointing up, clockwise in 22.5° steps ([world.md](world.md#heading-table)) [BYTES DGROUP:0x1050] | — | seg4:0x22a8, seg8:0x2f76 |
 | DGROUP:0x131a | 2 | BOOL | debug traces reach OutputDebugString; INI key `Aux` [BYTES seg6:0x300 seg13:0x4ed4] | seg6:0x300 | seg13:0x4ed4 |
 | DGROUP:0x13dc | 2 | HDC | frame DC while GameFrame runs [BYTES seg2:0x1c7e seg2:0x1d44] | seg2:0x1c7e, seg2:0x1d44 | seg12:0x27e6 |
 | DGROUP:0x13de | 2 | BOOL | state change pending: GameFrame calls seg2:0x1d58 instead of the tick [BYTES seg2:0x1c64 seg2:0x1db0 seg7:0xdd seg7:0x3fc] | seg7:0xdd, seg7:0x3fc, seg7:0x447, seg2:0x1db0 | seg2:0x1c64 |
@@ -250,38 +258,66 @@ This page covers the DGROUP globals that drive the game, the code that reads the
 | DGROUP:0x1e84 | 4 | DWORD ms | as DGROUP:0x1e80, used instead when DGROUP:0x95bc ≠ 0 [BYTES seg12:0x2ac1 seg16:0xacd seg7:0x6b8] | seg12:0x2ac1, seg16:0xacd | seg7:0x6b8, seg7:0x1d1 |
 | DGROUP:0x1e88 | 4 | DWORD ms | due time that leads to state 6 [BYTES seg7:0x5ce seg7:0x5da] | — | seg7:0x5da |
 | DGROUP:0x1e90 | 900 | struct[45] | effect table ([structs.md](structs.md#effect-table-45--0x14-bytes-at-dgroup0x1e90)) [BYTES seg18:0x9b6] | seg12:0x28d8, seg18:0x9b6 | seg7:0x129a |
+| DGROUP:0x2400 | 8 | int[4] | view rectangle in world units: origin x, y (DGROUP:0x2400, DGROUP:0x2402) and far corner (DGROUP:0x2404, DGROUP:0x2406) ([world.md](world.md#view)) [BYTES seg8:0x4f seg8:0x5f] | seg8:0x4f, seg8:0x5f | seg8:0x3b3, seg11:0x3469 |
 | DGROUP:0x2f54 | 2160 | struct[27] | weapon records of 0x50 bytes: +0 name id 186 + i, +0x36 (DGROUP:0x2f8a) the Standard-edition replacement ([shell.md](shell.md#intro-and-title-screen), **Plus content**) [BYTES seg10:0x1fb2 seg10:0x1fe8] | seg10:0x1fb2 | seg14:0x33a, seg14:0xfb7, seg14:0x16e5, seg16:0x3d66, seg16:0x5169 |
 | DGROUP:0x38c8 | string | char[] | directory of the current wave, shown by the briefing ([shell.md](shell.md#game-start-dialogs), **Enter**) [BYTES seg6:0x3044 seg9:0x8b20] | lstrcpy at seg6:0x3044, seg6:0x30ed, seg6:0x348d, seg6:0x3642; seg11:0x4249 | seg9:0x8b20, seg17:0x3463, seg11:0x6ba8 |
 | DGROUP:0x3b94 | 4 | DWORD ms | input is ignored until DGROUP:0x1e50 reaches it [BYTES seg2:0x75c] | — | seg2:0x75c |
 | DGROUP:0x5018 | 4 | long | score as last drawn; −1 forces a redraw [BYTES seg11:0x508 seg9:0xcdd] | seg11:0x508, seg9:0xcdd | seg11:0x4ff |
 | DGROUP:0x5078 | 4 | long | rating ([Scoring](#scoring)) | seg8:0x7c34, seg16:0xb19, seg9:0xc52 | seg9:0x4863 |
+| DGROUP:0x6990 | 100 | char[100] | path of the selected Navigation row; the INI Track read may write 109 bytes into it ([nav.md](nav.md)) [BYTES seg6:0x3c81 seg6:0x3c84] | lstrcpy calls; GetPrivateProfileString at seg6:0x3c84 | seg6:0x5524, seg6:0x301a |
+| DGROUP:0x69f4 | 4 | far ptr | the directory records, 0x297 bytes each; record DGROUP:0x94a2 belongs to the current wave ([nav.md](nav.md)) [BYTES seg6:0x3721 seg9:0x4663 seg9:0x4669] | seg6:0x3721, seg6:0x376e | seg9:0x4669, seg9:0x450e |
 | DGROUP:0x7090 | 0xad0 | struct[8] | ship records ([structs.md](structs.md#ship-records-8--0x15a-bytes-at-dgroup0x7090)) [BYTES seg4:0x7084] | seg4:0x7091 | seg4:0x7084 |
 | DGROUP:0x8e60 | 2 | BOOL | pending input present [BYTES seg2:0x783 seg7:0x4e6 seg7:0x513] | seg2:0x783, seg7:0x513 | seg7:0x4e6 |
 | DGROUP:0x8e62 | 2 | UINT | pending input msg [BYTES seg2:0x78c seg11:0x6b54] | seg2:0x770, seg2:0x78c, seg11:0x6b54 | seg7:0x105, seg11:0x6ab2 |
 | DGROUP:0x8e64 | 2 | WPARAM | pending input wParam [BYTES seg2:0x792] | seg2:0x792 | seg7:0x111 |
 | DGROUP:0x8f66 | 2 | BOOL | idle frames allowed; private message 0x9d0 sets it [BYTES seg2:0x4be seg2:0x14a] | seg2:0x4be | seg2:0x14a, seg2:0x12b6 |
 | DGROUP:0x8f68 | 2 | BOOL | 0 while the game is paused ([timing.md](timing.md#window-timers)); the input path ignores input then [BYTES seg2:0x9d7 seg2:0xa66 seg2:0x751] | seg2:0x9d7, seg2:0xa66 | seg2:0xc9, seg2:0x751 |
+| DGROUP:0x8ff8 | 2 | int | INI key `Complex` (default 0) [BYTES seg6:0x11fb seg6:0x1209] | seg6:0x1209 | seg9:0x3947, seg9:0x5ea7 |
+| DGROUP:0x9000 | 2 | int | 0, 0, 1, 2 and 2 for `Complex` 0–4 ([world.md](world.md#difficulty-inputs)); damage to the player's ship scales by (DGROUP:0x9000 + 6) / 8 ([Scoring](#scoring)) [BYTES seg6:0x1214 seg6:0x122a seg6:0x1238 seg8:0x469d] | seg6:0x1214, seg6:0x122a, seg6:0x1238 | seg8:0x469d, seg9:0x25aa |
 | DGROUP:0x90ec | 2 | int | play-area height: the client height DGROUP:0x10 minus the HUD band DGROUP:0xa70 (85) ([shell.md](shell.md#window-geometry)) [BYTES seg2:0xb34 seg2:0xb3d seg2:0xc05 seg2:0x1b29] | seg2:0xb34, seg2:0xb3d, seg2:0xc05, seg2:0x1b29 | 95 instructions, among them seg2:0xce5 and seg15:0x483d |
 | DGROUP:0x90f4 | 2 | int | game state ([Game state globals](#game-state-globals)) | see that section | seg7:0xf9, seg11:0x6aef |
 | DGROUP:0x90f8 | 2 | BOOL | command line was `DEMO` or `PLAY` [BYTES seg6:0x1c2d seg6:0x1c53] | seg6:0x1c16, seg6:0x1c2d, seg6:0x1c53 | seg2:0x70e |
 | DGROUP:0x9100 | 42 | HGLOBAL[21] | pool handles [BYTES seg6:0x1bc2 seg18:0x1e2f] | seg6:0x1bc2, seg18:0x1e2f | seg6:0x1b7c |
 | DGROUP:0x9130 | 2 | BOOL | seg18 game mode active ([structs.md](structs.md#pool-roles)). seg18 sets it to 1 and seg10:0xd clears it [BYTES seg18:0x397 seg18:0x8e1 seg10:0xd seg11:0x6abb] | seg18:0x397, seg18:0x8e1, seg10:0xd | seg11:0x6abb, seg7:0x58f |
 | DGROUP:0x9144 | 2 | int | pass counter of the frame gate ([timing.md](timing.md#the-frame-gate)) [BYTES seg7:0x1a0 seg7:0x1b3] | seg7:0x1a0, seg7:0x1b3 | seg7:0x1a4 |
+| DGROUP:0x9150 | 2 | int | s = 4 − `Size`: one pixel is 1 << s world units ([world.md](world.md#world-coordinates)) [BYTES seg9:0x2408] | seg6:0xb07, seg9:0x2408, seg10:0x9b8d | seg8:0x0, seg10:0x7f7 |
+| DGROUP:0x9156 | 2 | int | `Size`, which scales the sprites: a cell of side c is (c << `Size`) >> 1 pixels [BYTES seg10:0xbaa seg10:0xbb1 seg10:0xbb3] | seg6:0xafd, seg9:0x23bd | seg10:0xbaa |
+| DGROUP:0x9158 | 2 | int | count of activity rectangles at DGROUP:0x23e0: 1, 2 or 4 ([world.md](world.md#view)) [BYTES seg8:0x551 seg8:0x62a seg8:0x741] | seg8:0x551, seg8:0x62a, seg8:0x741 | seg8:0x4e51, seg11:0x3574 |
+| DGROUP:0x91f8 | 2 | int | completed waves; 0 during the set-up of wave 1 ([world.md](world.md#wave-number)) [BYTES seg9:0x5e58 seg9:0x5e60 seg9:0x5fbf] | seg9:0x5fbf, seg9:0xc5c (0) | seg6:0x1258, seg9:0x449c |
+| DGROUP:0x91fa, DGROUP:0x91fc, DGROUP:0x91fe | 6 | int[3] | the wave's icon count, min(DGROUP:0x9206, 8), written by the icon walk seg9:0x0; DGROUP:0x91fe sets the rows of the icon column ([world.md](world.md#programs-and-icons)) [BYTES seg9:0x13f seg9:0x142 seg9:0x145] | seg9:0x13f, seg9:0x142, seg9:0x145 | seg7:0x6435, seg7:0x6466 |
+| DGROUP:0x9200 | 2 | int | number of the next icon candidate, one per icon index of every file ([world.md](world.md#programs-and-icons)) [BYTES seg9:0x1a seg9:0x241 seg9:0xaf9] | seg9:0x1a, seg9:0x241, seg9:0xaf9 | seg9:0x230, seg9:0xa47 |
+| DGROUP:0x9202 | 2 | int | icons placed as objects in this wave [BYTES seg9:0x17 seg9:0xaa1] | seg9:0x17, seg9:0xaa1 | seg9:0x114 |
+| DGROUP:0x9204 | 2 | int | icon limit of the walk, 8 [BYTES seg9:0x12 seg9:0x148 seg9:0xbf5] | seg9:0x12, seg9:0x148 | seg9:0x9d1 |
+| DGROUP:0x9206 | 2 | int | icon candidates handled, placed or not; the walk stops at 10 [BYTES seg9:0x1d seg9:0x9a0 seg9:0xab7 seg9:0x62] | seg9:0x1d, seg9:0x9a0, seg9:0xab7 | seg9:0x62, seg9:0x21f |
+| DGROUP:0x9208 | 2 | int | `Detail`: caps DGROUP:0x932e and picks the drag formula ([world.md](world.md#drift-and-drag)) [BYTES seg6:0xc7b seg9:0x4727 seg9:0x3e6e] | seg6:0xc7b | seg9:0x3e6e, seg9:0x4727 |
 | DGROUP:0x9212 | 2 | HINSTANCE | ENG_LANG.DLL, the source of strings and accelerators [BYTES seg2:0xb1 seg3:0x223] [ORACLE probe-0001] | — | seg2:0xb1, seg3:0x223 |
 | DGROUP:0x92da | 2 | int | size s of the launch ship image: 4s is the width of the ship frames ([shell.md](shell.md#game-start-dialogs), item 7) [BYTES seg15:0xa35 seg15:0xa4c] | seg15:0xa35 | seg15:0x15 |
 | DGROUP:0x92e4 | 2 | BOOL | keep the player's state: Navigation Enter then requests state 1 and seg9:0xc06 keeps score and wave ([shell.md](shell.md#game-start-dialogs), **Enter**) [BYTES seg6:0x3693 seg9:0xc44] | seg6:0x98c4, seg10:0x9d28, seg16:0x1c3b, seg18:0x5aa, seg18:0x351c (1); seg9:0x698f, seg9:0x6ceb, seg10:0x9da5, seg11:0x7a6c, seg16:0x1c46, seg18:0x724, seg18:0x354a (0) | seg6:0x3693, seg8:0x2d96, seg9:0xc44, seg9:0x6958 |
 | DGROUP:0x92e6 | 2 | BOOL | 0 selects the LOADING GRAPHICS branch of seg9:0x22b4, which sets it to 1 ([shell.md](shell.md#game-start-dialogs), **Load screen**) [BYTES seg9:0x22e9 seg9:0x27b3] | seg10:0xa9 (0), seg9:0x27b3 (1) | seg9:0x22e9, seg9:0x2770, seg9:0x27e4 |
-| DGROUP:0x92ec | 42 | int[21] | allocated records per pool [BYTES seg7:0x52c7] | seg7:0x52c7, seg14:0xa33 | seg7:0x52de, seg12:0x276b |
+| DGROUP:0x92e8 | 2 | BOOL | the wave is Demon's Gate: Navigation Enter sets it for the DEMON'S GATE row ([nav.md](nav.md)) [BYTES seg6:0x30e7 seg9:0x2581] | seg6:0x30e7 (1); seg6:0x3049, seg6:0x30e1, seg6:0x310e (0) | seg9:0x2581, seg8:0x1b84 |
+| DGROUP:0x92ea | 2 | int | small-rock count: 14, then DGROUP:0x933a before the rock clamp ([structs.md](structs.md#pool-roles)) [BYTES seg9:0x24cd seg9:0x2540] | seg9:0x24cd, seg9:0x2540 | seg10:0xedb |
+| DGROUP:0x92ec | 42 | int[21] | allocated records per pool [BYTES seg7:0x52c7] | seg7:0x52c7, seg14:0xa33, seg9:0x24d3 | seg7:0x52de, seg12:0x276b |
 | DGROUP:0x9316 | 2 | int | index of the last ship record (ships − 1) [BYTES seg14:0xa23 seg4:0x8c32] | seg14:0xa23 | seg4:0x8c32, seg7:0xb25 |
+| DGROUP:0x9318 | 2 | int | gates in the wave; pool 8 holds two posts and pool 12 two records per gate ([world.md](world.md#gates)) [BYTES seg9:0x4496 seg9:0x2561] | seg9:0x4496, seg9:0x44c3, seg9:0x4680 | seg9:0x255e, seg9:0x117d |
 | DGROUP:0x9320 | 2 | int | wave kind: 6 race track, 7 duel ([Game state globals](#game-state-globals)) | seg9:0x3ac4, seg9:0x3e00 | seg9:0x703c, seg4:0x7071 |
+| DGROUP:0x9322 | 2 | int | race course 0–2 (Lazy Loop, SDi Speedway, Grand Prix) ([world.md](world.md#difficulty-inputs)) [BYTES seg9:0x3de6] | seg9:0x3de6 | seg9:0x3e96, seg4:0x240b |
 | DGROUP:0x9324 | 2 | int | ship pool index, 14 or 20 [BYTES seg18:0x43b seg18:0x973 seg9:0x22c2] | seg9:0x22c2, seg18:0x43b, seg18:0x973 | seg18:0x208, seg8:0x643b |
-| DGROUP:0x9326 | 2 | int | pool index 0, 1 or 15. Role [OPEN] [BYTES seg18:0x428 seg18:0x979] | seg18:0x428, seg18:0x979 | seg11:0x371a |
-| DGROUP:0x9328 | 2 | int | pool index 5 or 17. Role [OPEN] [BYTES seg18:0x441 seg18:0x97f] | seg18:0x441, seg18:0x97f | seg8:0x1bb2 |
+| DGROUP:0x9326 | 2 | int | pool index 0, 1 or 15: the first pool the radar draws ([structs.md](structs.md#pool-roles)) [BYTES seg18:0x428 seg18:0x979 seg9:0x2588 seg11:0x35c7] | seg18:0x428, seg18:0x435, seg18:0x979, seg9:0x22cd, seg9:0x2588 | seg11:0x371a, seg11:0x35c7 |
+| DGROUP:0x9328 | 2 | int | pool index 5 or 17. What the pool holds is [OPEN] ([structs.md](structs.md#pool-roles)) [BYTES seg18:0x441 seg18:0x97f] | seg18:0x441, seg18:0x97f | seg8:0x1bb2, seg7:0x4146 |
+| DGROUP:0x932a | 2 | int | wave budget: 130, 220, 310, 420 or 2000 for `Complex` 0–4, halved for the first wave and full from wave 11 ([world.md](world.md#difficulty-inputs)) [BYTES seg6:0x120e seg6:0x1240 seg6:0x1258] | seg6:0x120e–seg6:0x1240, seg6:0x1284 | seg6:0x125f, seg9:0x3242 |
+| DGROUP:0x932e | 2 | int | units of pool 2, 8 records each ([world.md](world.md#difficulty-inputs)) [BYTES seg9:0x4716 seg9:0x24e0] | seg9:0x4716, seg9:0x5e9c | seg9:0x24dc |
 | DGROUP:0x9334 | 2 | int | rating level from the DGROUP:0x9bc thresholds [BYTES seg9:0x4882] | seg9:0x4882, seg9:0x38fc | seg9:0x3654 |
-| DGROUP:0x934a | 2 | int | pool index 3 or 19. Role [OPEN] [BYTES seg18:0x447 seg18:0x985] | seg18:0x447, seg18:0x985 | seg7:0x52d4, seg8:0x5eb8 |
-| DGROUP:0x9406 | 42 | int[21] | records in use per pool ([structs.md](structs.md#pool-table)) [BYTES seg11:0x376e] | seg7:0x10aa, seg14:0xa2f | seg11:0x376e, seg12:0x2761 |
+| DGROUP:0x9338 | 2 | int | opponents of a race or duel, (code − 1) mod 4; the wave generator also reads it ([world.md](world.md#difficulty-inputs)) [BYTES seg9:0x3e10 seg9:0x3e2b] | seg9:0x3e10, seg9:0x2596 and 36 generator sites | seg9:0x3e2b |
+| DGROUP:0x933a | 10 | int[5] | the five object counts of the wave generator: small rocks, big rocks, then pool-8 hazards (DGROUP:0x933e, DGROUP:0x9342) and pool 9 (DGROUP:0x9340) ([world.md](world.md#difficulty-inputs)) [BYTES seg9:0x2513 seg9:0x2520 seg9:0x2530] | the generator seg9:0x3202, seg9:0x2558 | seg9:0x2513 |
+| DGROUP:0x934a | 2 | int | pool index 3 or 19: the rock pool, moved by seg7:0x3bae ([structs.md](structs.md#pool-roles)) [BYTES seg18:0x447 seg18:0x985 seg7:0x3bd2] | seg18:0x447, seg18:0x985 | seg7:0x52d4, seg8:0x5eb8, seg7:0x3bd2 |
+| DGROUP:0x9406 | 42 | int[21] | records in use per pool ([structs.md](structs.md#pool-table)) [BYTES seg11:0x376e] | seg7:0x10aa, seg14:0xa2f, seg9:0x24b5 | seg11:0x376e, seg12:0x2761 |
+| DGROUP:0x9432 | 2 | int | [OPEN]. seg9:0x22b4 scales it by 9/10 when it is below 251 and by 7/10 otherwise at each wave load [BYTES seg9:0x2498 seg9:0x24a0 seg9:0x24a7 seg9:0x24b2] | seg9:0x24b2, seg7:0x2184 and 20 more | seg9:0x2498 |
 | DGROUP:0x9460 | 2 | HWND | the Online Help window (class IS_HELP), open during state 7 ([Game state globals](#game-state-globals)) [BYTES seg17:0x57fe seg17:0x600e seg2:0x1ba] | seg17:0x57fe, seg17:0x600e | seg2:0x1ba, seg2:0x1c52 |
+| DGROUP:0x94a2 | 2 | int | index of the current directory record at DGROUP:0x69f4 [BYTES seg6:0x3791 seg9:0x4663] | seg6:0x36f3, seg6:0x3791 | seg9:0x4663, seg6:0x3bee |
+| DGROUP:0x94a4 | 2 | int | number of directory records [BYTES seg6:0x373c seg6:0x3744] | seg6:0x373c, seg6:0x3744 | seg6:0x36c6, seg6:0x3775 |
+| DGROUP:0x94b0 | 2 | BOOL | the entered directory has no record yet: the wave generator draws new counts and the ships all start off-world ([world.md](world.md#ships-at-wave-start)) [BYTES seg6:0x36b6 seg6:0x36ed seg9:0x1128] | seg6:0x36b6, seg6:0x36ed | seg9:0x1128, seg9:0xb49 |
 | DGROUP:0x951c | 2 | BOOL | cheat-key mode, toggled by key code 0x2e ([shell.md](shell.md#intro-and-title-screen), **Cheat keys**) [BYTES seg11:0x6ef7 seg11:0x6f00] | seg11:0x6f00, seg6:0x98bb (0), seg10:0x850b (0) | seg11:0x535, seg11:0x6d58, seg11:0x6ef7 |
+| DGROUP:0x95f6 | 2 | int | frame cycle 0–8 of seg13:0x0; thrust, brake and drag run on its even values ([world.md](world.md#ships-seg130x0)) [BYTES seg13:0x18 seg13:0x23 seg13:0x23b] | seg13:0x18, seg13:0x23 | seg13:0x23b, seg11:0x5b6e |
 | DGROUP:0x9646 | 2 | int | `iMainSmart`, the player's ship record [BYTES seg18:0x203 seg18:0x213] | seg14:0x243, seg11:0xaf29 | seg18:0x203, seg3:0x6fa |
 | DGROUP:0x9684 | 2 | int | player's race place ([Game state globals](#game-state-globals)) | seg4:0x8bda | seg4:0x2e98, seg11:0x427f |
 | DGROUP:0x968c | 2 | BOOL | a frame is running [BYTES seg2:0x1c72 seg2:0x1d4a seg2:0x766] | seg2:0x1c72, seg2:0x1d4a | seg2:0x766 |

@@ -221,16 +221,19 @@ There is one record per directory the player has entered. DGROUP:0x94a2 indexes 
 
 | Offset | Size | Content | Evidence |
 |---|---|---|---|
-| +0xa0, +0xa1 | byte | seg6:0x99b6 counts pool-3 records with word +0x18 = 0 and word +0x44 = 350, and the same for 1400 | [BYTES seg6:0x9d20 seg6:0x9d30 seg6:0x9d75 seg6:0x9d92 seg6:0x9dbc] |
+| +0xa0 … +0xa4 | bytes | the generator's object counts, copied back to the briefing on a revisit ([world.md](world.md#difficulty-inputs)); +0xa0, +0xa1: seg6:0x99b6 counts pool-3 records with word +0x18 = 0 and word +0x44 = 350, and the same for 1400 | [BYTES seg6:0x9d20 seg6:0x9d30 seg6:0x9d75 seg6:0x9d92 seg6:0x9dbc] |
 | +0xa3 | byte | the same count for pool-9 records with word +0x18 = 0 | [BYTES seg6:0x9d10 seg6:0x9d41 seg6:0x9d56] |
-| +0xad | byte | the loader sets it to 1 in the current record when 0 | [BYTES seg6:0x9645] |
+| +0xad | byte | the gate count a revisited non-race directory takes ([world.md](world.md#difficulty-inputs)); the loader sets it to 1 in the current record when 0 | [BYTES seg6:0x9645] [BYTES seg9:0x3214] |
+| +0x14e, +0x150 | word | the DESTROYED and CAPTURED counts of the Navigation status line ([nav.md](nav.md#directory-records)) | [BYTES seg6:0x5b20 seg6:0x5994] |
 | +0xae | words | one per pool-8 record: word +0x1e, negated when that record's entry in the 0x34-byte table at DGROUP:0x3d5a holds −3 | [BYTES seg6:0x9dd7 seg6:0x9df2 seg6:0x9dfb seg6:0x9e23] |
 | +0xfe | words | the matching word +0x24 of that table entry | [BYTES seg6:0x9e2c seg6:0x9e41] |
-| +0x152 | string | directory path; a new record copies it from DGROUP:0x6990 and a lookup compares it with DGROUP:0x6990 | [BYTES seg6:0x36e4 seg6:0x377f] |
+| +0x152 | 110 bytes | directory path; a new record copies it from DGROUP:0x6990 and a lookup compares it with DGROUP:0x6990 ([nav.md](nav.md#buffers)) | [BYTES seg6:0x36e4 seg6:0x377f] |
 | +0x1c0 | 8 bytes | roster indices present in the directory, 0xff = free | [BYTES seg6:0x9c53 seg6:0x9cc4 seg6:0x9cd5] |
-| +0x1d0 | byte | 2 counts towards header +0x160 | [BYTES seg6:0x9102] |
+| +0x1d0 | byte | the directory's icon state: 2 complete (counts towards header +0x160), 1 icons remain, 0 placed with none left over ([world.md](world.md#programs-and-icons), [nav.md](nav.md#completion)) | [BYTES seg6:0x9102 seg6:0x598c seg9:0x2a seg9:0x114 seg9:0x99a seg9:0xab1] |
+| +0x1d2 + 2s | word | icon slot s's damage, clamped to 0 when negative ([world.md](world.md#programs-and-icons)) | [BYTES seg9:0x156] |
+| +0x1e2 | bitmap | icons already taken, bit n for icon number n ([nav.md](nav.md#directory-records)) | [BYTES seg9:0x156 seg9:0xac4] |
 
-- The meanings of these fields and the rest of the record are [OPEN].
+- The Navigation fields are in [nav.md](nav.md#directory-records); the rest of the record is [OPEN].
 
 ## Score list
 seg6:0x6576 builds the "Champions of INNER SPACE" list from the saved games. [BYTES seg6:0x6576] [MANUAL High Scores] The title is string 925. [BYTES seg6:0x6318] [BYTES ENG_LANG.DLL STRING 58] id 925
@@ -314,7 +317,7 @@ Type I is an integer and S a string with its buffer size. "→" names the DGROUP
 | `IconWnd`, `VScale`, `SmWnd`, `SScale` | 1, 0, 0, 0 | DGROUP:0x8f72, 0xb6e, 0x8f74, 0x95f8 | [BYTES seg6:0x112 seg6:0x128 seg6:0x13e seg6:0x154] | [BYTES seg6:0x496 seg6:0x4bc seg6:0x4e2 seg6:0x508] |
 | `ShowLaunch` | 2 | DGROUP:0x9298 | [BYTES seg6:0x16a] | — |
 | `Menu` | 0 | DGROUP:0x90f6 | [BYTES seg6:0x180 seg6:0xd36] [BYTES ISPACE.DLL seg9:0x2d04] | [BYTES seg6:0x3a4] [BYTES ISPACE.DLL seg9:0x2ef3] |
-| `RadarLeft`, `RadarTop` | 0 | DGROUP:0x1dd4, 0x1dd6 | [BYTES seg6:0x196 seg6:0x1ac] | [BYTES seg6:0x3d1 seg6:0x3f7] |
+| `RadarLeft`, `RadarTop` | 0 | DGROUP:0x1dd4, 0x1dd6; read and written back, they position nothing ([world.md](world.md#radar)) | [BYTES seg6:0x196 seg6:0x1ac] | [BYTES seg6:0x3d1 seg6:0x3f7] |
 | `WatchLeft`, `WatchTop` | 0 | DGROUP:0x1ddc, 0x1dde | [BYTES seg6:0x1c2 seg6:0x1d8] | [BYTES seg6:0x424 seg6:0x470] |
 | `WatchRight` | `WatchLeft` + 280 | DGROUP:0x1de0 | [BYTES seg6:0x1e8 seg6:0x1eb seg6:0x1f3] | [BYTES seg6:0x44a] |
 | `IconLeft` | screen width − 48 | DGROUP:0x1de4 | [BYTES seg6:0x205 seg6:0x20a seg6:0x212] | [BYTES seg6:0x535] |
@@ -331,13 +334,13 @@ Type I is an integer and S a string with its buffer size. "→" names the DGROUP
 | `Detail` | I | 3 | [BYTES seg6:0xc76] [BYTES ISPACE.DLL seg9:0x2592] | [BYTES ISPACE.DLL seg9:0x2196] | detail level → DGROUP:0x9208 |
 | `Quick` | I | 0 (INSPACE, Factory); 1 (ISPACE.DLL) | [BYTES seg6:0xc60] [BYTES ISPACE.DLL seg9:0x25a8] [BYTES FACTORY.EXE seg4:0x3bc3] | [BYTES ISPACE.DLL seg9:0x2170] | → DGROUP:0x931e |
 | `Enhance` | I | 1 | [BYTES seg6:0xc8c] [BYTES ISPACE.DLL seg9:0x257c] | [BYTES ISPACE.DLL seg9:0x20fe] | → DGROUP:0x8fe8 |
-| `Complex` | I | 0 (INSPACE seg6:0x1204); 2 (ISPACE.DLL) | [BYTES seg6:0x1204] [BYTES ISPACE.DLL seg9:0x1766] | [BYTES ISPACE.DLL seg9:0x20b3] | → DGROUP:0x8ff8 |
-| `Braking` | I | 0 | [BYTES seg6:0xcf4] [BYTES ISPACE.DLL seg9:0x16fb] | [BYTES ISPACE.DLL seg9:0x20d8] | → DGROUP:0x8ff6 |
+| `Complex` | I | 0 (INSPACE seg6:0x1204); 2 (ISPACE.DLL) | [BYTES seg6:0x1204] [BYTES ISPACE.DLL seg9:0x1766] | [BYTES ISPACE.DLL seg9:0x20b3] | → DGROUP:0x8ff8, and the wave budget DGROUP:0x932a and DGROUP:0x9000 ([world.md](world.md#difficulty-inputs)) |
+| `Braking` | I | 0 | [BYTES seg6:0xcf4] [BYTES ISPACE.DLL seg9:0x16fb] | [BYTES ISPACE.DLL seg9:0x20d8] | → DGROUP:0x8ff6, the auto-brake ([world.md](world.md#drift-and-drag)) |
 | `MixChannels` | I | 1 (INSPACE); 4 (ISPACE.DLL) | [BYTES seg6:0xc9c seg6:0xca7] [BYTES ISPACE.DLL seg9:0x55d seg9:0x571] | [BYTES ISPACE.DLL seg9:0x3493] | → DGROUP:0x920a; ISPACE.DLL DGROUP:0x219e, the channel count ([sound.md](sound.md#session)) |
 | `BadVideo` | I | 1 | [BYTES seg6:0xcda] [BYTES ISPACE.DLL seg10:0x16ab] | — | → DGROUP:0x742 |
 | `QuickIntro` | I | 0 | [BYTES seg6:0x318 seg6:0xcc4] [BYTES ISPACE.DLL seg9:0x2c77] | [BYTES ISPACE.DLL seg9:0x2e84] | → DGROUP:0x8f70 |
 | `ShipAnim` | I | 1 | [BYTES seg6:0xd0a] [BYTES ISPACE.DLL seg9:0x2d48] | [BYTES ISPACE.DLL seg9:0x2e5f] | → DGROUP:0x131c |
-| `Border` | I | 1 | [BYTES seg6:0xd20] [BYTES ISPACE.DLL seg9:0x2d26] | [BYTES ISPACE.DLL seg9:0x2ece] | — |
+| `Border` | I | 1 | [BYTES seg6:0xd20] [BYTES ISPACE.DLL seg9:0x2d26] | [BYTES ISPACE.DLL seg9:0x2ece] | → DGROUP:0xa78, the border and bevel switch ([world.md](world.md#border-and-bevel)); seg6:0xd51 is its only writer |
 | `Bright` | I | 0 | [BYTES seg6:0xe88] [BYTES ISPACE.DLL seg9:0x2ce2] | [BYTES ISPACE.DLL seg9:0x2ea9] | — |
 | `IgnoreRes` | I | 0 | [BYTES seg6:0x1401] | — | → DGROUP:0x9132 |
 | `Aux` | I | 0 | [BYTES seg6:0x2fb] | — | debug traces ([globals.md](globals.md)) → DGROUP:0x131a |
@@ -363,9 +366,9 @@ Type I is an integer and S a string with its buffer size. "→" names the DGROUP
 | `DRacers`, `DDiff`, `DLaps` | I | 0 | [BYTES seg6:0x3208 seg6:0x3262 seg6:0x327e] [BYTES ISPACE.DLL seg10:0x3809 seg10:0x376a seg10:0x395f] | [BYTES ISPACE.DLL seg10:0x3d65 seg10:0x3da2 seg10:0x3d28] | `DDiff` → DGROUP:0x94a8 |
 | `DemoType` | I | 519 | [BYTES seg15:0x5aa6] [BYTES ISPACE.DLL seg10:0x3670] | [BYTES ISPACE.DLL seg10:0x3df4] | → DGROUP:0x95ba |
 | `DScale` | I | 0 | [BYTES seg9:0x236b] [BYTES ISPACE.DLL seg10:0x3510] | [BYTES ISPACE.DLL seg10:0x3ceb] | — |
-| `Track` | S 0x6d or 20 | "" | [BYTES seg6:0x3c8a] [BYTES ISPACE.DLL seg10:0x36d5] | [BYTES ISPACE.DLL seg10:0x3e43] | → DGROUP:0x6990 |
+| `Track` | S 0x6d or 20 | "" | [BYTES seg6:0x3c8a] [BYTES ISPACE.DLL seg10:0x36d5] | [BYTES ISPACE.DLL seg10:0x3e43] | → DGROUP:0x6990, whose 100 bytes the 0x6d-byte read at seg6:0x3c84 exceeds ([nav.md](nav.md#buffers)) |
 | `Ship1`, `Ship2` | S 20 | "" | [BYTES seg14:0x236c seg14:0x239c seg15:0x5af0] [BYTES ISPACE.DLL seg10:0x399a seg10:0x39b7] | [BYTES ISPACE.DLL seg10:0x3e90] | SHP names; seg15:0x5962 reads `Ship1` with `DemoType` |
-| `Tree` | I | 0 | [BYTES seg6:0x37ef] | — | → DGROUP:0x94bc |
+| `Tree` | I | 0 | [BYTES seg6:0x37ef] | — | → DGROUP:0x94bc ([nav.md](nav.md#tree-ini-key)) |
 
 - ISPACE.DLL seg10:0x33e4 reads `DScale`, `DemoType`, `Track`, `DDiff`, `DRacers`, `DLaps`, `Ship1` and `Ship2` together, and ISPACE.DLL seg10:0x3c9c writes them. [BYTES ISPACE.DLL seg10:0x3510 seg10:0x399a seg10:0x3ceb seg10:0x3e90]
 - ISPACE.DLL seg10:0x250c writes `MainShip`, `Drive`, `Size`, `SetSize`, `ThePlayer` and `PlayMode`: the keys the oracle saw New Game OK write. [BYTES ISPACE.DLL seg10:0x259f seg10:0x25f7 seg10:0x2646 seg10:0x265b seg10:0x2687 seg10:0x26c8] [ORACLE newgame-0001]

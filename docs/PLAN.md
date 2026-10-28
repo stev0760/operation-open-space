@@ -212,7 +212,7 @@ Cheaper models handle refactors, tests and lint. I merge, update the checklist a
 |---|---|---|
 | M1 | Foundations (detailed plan below) | CMake presets for mingw i686/x86_64 under Wine (MSVC later). C++ readers: NE resources, SZDD, BOD/SHP, DIB with palette and transparency. 16→32-bit DLGTEMPLATE/MENU converter, so the original dialogs come from ENG_LANG. doctest. `isview` asset viewer. |
 | M2 | Shell | Game window and intro, Restore/New Game, accelerators, port-local INI, timestep per ADR, integer/DPI scaling, help (HLP→HTML). |
-| M3 | World | Filesystem walk per the original's rules, with a modern-safety ADR. Navigation, wave generation, ExtractIconEx at 32×32, rocks and gates, flight model, status panel, radar. |
+| M3 | World (detailed plan below), **in progress** | Filesystem walk per the original's rules, with a modern-safety ADR. Navigation, wave generation, ExtractIconEx at 32×32, rocks and gates, flight model, status panel, radar. |
 | M4 | Core loop | Capture, fuel, damage and auto-repair, weapons, ambulance economy, scoring, waves, save/load (format ADR). |
 | M5 | Ships & AI | Teams and attitudes, commands, defenders, viruses, hazards, enforcers, laws and Hall of Justice, Strategy mode, perspective shift. |
 | M6 | Specials | Races and duels, Inner Demon and Noble Weapons, demo, Special Times of Day. |
@@ -353,6 +353,21 @@ Cheaper models handle refactors, tests and lint. I merge, update the checklist a
 - Code quality: the `is::sound` wrappers live in `src/dialogs/audio_options.h`; the track-table test repeats sound.md's constants instead of reading ISPACE.DLL DGROUP:0xaa8.
 
 **Out of scope:** the wave's own sound events (M4 plays them through the same engine), the screensaver's `SaverVolume` path (M8), Ship Factory hit-sound names (M8).
+
+## M3 — World (detailed plan)
+**Goal:** the port fills the Navigation window from the player's own disk as the original does, builds the wave from the chosen directory (icons as objects, rocks, gates), flies the player's ship with the original's physics and controls, and draws the wave: the scrolling play area, the sprites, the status panels, the target and weapon displays and the radar. M3 is done when a run from Navigation Enter into wave 1 matches the oracle's `wave-0001` screens step for step (HUD, sprites, headings and positions within the frame tolerance of ADR 0001) and the Navigation window lists the same files, icons and counts for the fixture drive.
+
+**Source of truth:** `docs/re/world.md` (written by stage 0) for the Navigation walk, the wave set-up, the flight model and the drawing; `docs/re/structs.md` for the object pools and records; `docs/re/globals.md` for the tick; `oracle/digests/wave-0001.md` and `newgame-0002.md` for the running original.
+
+**ADRs:** ADR 0012 (accepted): the filesystem walk and the icons (Win32 find calls where the original uses DOS ones, untouched network and no-media drives, the 100-byte path bound, reparse points never entered, 8.3 aliases, the port's own icon reader at 32×32 on black). Owed before stage 2: the drawing model (the original draws straight to the window with self-erasing sprites and recreates the HUD child windows on every repaint; a back buffer and persistent children are modernisations), and the input edge latch (the original's `GetAsyncKeyState` bit 0 use), both under ADR 0001's frame cycle (the 0..8 cycle of DGROUP:0x95f6 and the 16-bit truncations kept exactly).
+
+**Stages** (one Workflow run per stage):
+0. **RE round** (done; 5 analysts, 5 verifiers, 3 doc writers, 1 doc reviewer; 207 claims, 150 confirmed, 56 corrected, 1 unclear, 0 refuted; `docs/re/nav.md`, `docs/re/world.md`, 31 fact tests): the Navigation window (the tree walk seg6:0x37ca, the directory and file lists, the icon count and the status line, the race and duel boxes, Enter's hand-over to the wave set-up, the demo's auto-navigation seg6:0x1e68, "Analysing Drive"); the wave set-up and the world (seg9:0x60bc, the object pools filled from the directory's files, rocks and gates, world extent and coordinates, the entry and exit gates, the world update seg8:0x3aec, seg8:0x3fbe and seg7:0x375a); the flight model and input (the player's ship record, thrust, turn and drift, the state-1 input router seg11:0x6aa8, the view scrolling, pause); the wave's drawing (the play-area frame and border, sprites, the HUD repaint seg11:0x15b3, the status panels, the `IS_INFO` target and weapon displays, the scrollbar); the radar and the icons (ExtractIcon at index −1 and 32×32, the icon column, the direction mark, the radar screen's rules). Out of the round: capture, fuel, damage and scoring (M4), other ships' behaviour (M5), races and duels beyond the Navigation boxes (M6).
+1. **Navigation and the filesystem walk** (implementers, reviewer, oracle comparison, fixer): `src/nav/` filled per world.md behind the walk ADR; the fixture drive compared against `wave-0001`'s Navigation screens and `files.txt`.
+2. **Wave set-up, flight and drawing** (implementers, reviewer, oracle comparison, fixer): `src/world/` (pools, records, generation, the update loop, the flight model), `src/wave/` or the renderer's wave frame (sprites, HUD, panels, displays, radar), the state-1 input; compared against `wave-0001` from the wave start through the flying and targeting steps.
+3. **Verify:** independent review, verifiers for the implementers' [BYTES] claims, the checklist NAV, WAVE and HUD rows.
+
+**Out of scope:** capture, the ambulance economy, weapons and damage (M4), ship AI (M5), races and duels (M6), the wave's sounds (M7's engine plays them when M4 wires the sites), MSVC.
 
 ## Verification (Phases 0–3)
 - **Phase 0:** the original reaches its title screen under Wine 11.20, with a screenshot and a relay trace showing 16-bit calls. `original.sha256` and the goldens are committed.
