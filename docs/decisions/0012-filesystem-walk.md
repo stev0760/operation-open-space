@@ -26,5 +26,5 @@
 ## Consequences
 - M3 stage 1 implements decisions 1 to 6 in `src/nav/` (a portable walker behind an interface the tests drive with an in-memory tree) and `src/formats/pe` and `src/formats/icon_source` (the count and the 32×32 cell, with golden tests against the fixture programs and `INSPACE.EXE`), for the Navigation window, the New Game drive list and the briefing's icon strip; stage 2 reuses the reader for the wave set-up and moves the briefing's own file enumeration behind the walker. [DESIGN]
 - On the oracle prefix the port lists the media-less CD device `E:` as `Unknown_HD`, where the original's `_chdrive` fails and the drive is absent from `newgame-0002` shot 09; the difference is accepted. With the port's own reader the icon counts on the fixture (tools: 4 icons in 2 files) match the patched runtime, not the unpatched `newgame-0002` run. [DESIGN] [ORACLE newgame-0002] [ORACLE wave-0001]
-- The drawing model (the original draws straight to the window with self-erasing sprites and recreates the HUD child windows on every repaint) is a separate decision owed before stage 2. [OPEN]
+- The wave's drawing model and the polled keys are [ADR 0013](0013-wave-drawing-and-input.md). [DESIGN]
 - Checklist rows NAV-01 to NAV-10 and NAV-13 describe the behaviour this ADR ports. [DESIGN]

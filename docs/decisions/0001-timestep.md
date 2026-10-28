@@ -40,7 +40,7 @@
 ## Consequences
 - On a machine that holds R, game time matches the original exactly: R / 36 of real time, with the same frame-counted rules. [DESIGN]
 - Frames are evenly spaced (27.78 ms at 36), where the original mixes 27, 28 and 29 ms. Frame logic does not see the difference. Wall-clock deadlines move by up to one frame relative to the frame count. [DESIGN]
-- The original runs per-pass work, such as the keyboard poll seg11:0x4db0, about 11 500 times per second in the wave. The port runs it once per pass, so input must be latched between passes to keep short presses. Whether seg11:0x4db0 itself latches is [OPEN]. [BYTES seg7:0x881] [ORACLE newgame-0002]
+- The original runs per-pass work, such as the keyboard poll seg11:0x4db0, about 11 500 times per second in the wave. The port runs it once per pass, so input is latched between passes to keep short presses ([ADR 0013](0013-wave-drawing-and-input.md) decision 6). [BYTES seg7:0x881] [ORACLE newgame-0002]
 - Deterministic tests become possible by injecting the frame schedule, the millisecond tick and the `rand()` seeds ([rng.md](../re/rng.md)). [DESIGN]
 - The port sleeps between frames, so it no longer occupies a whole core. [DESIGN]
 - At the maximum speed, a modern machine may run thousands of frames per second, which makes game time race. A cap would be a modernisation with its own ADR. [DESIGN]
@@ -49,6 +49,5 @@
 ## Open questions
 - [OPEN] The frame rates on the oracle of states 2, 3, 5, 8 and 9, of the dialog pass and of state 6 outside its gate condition, and whether their animations count frames or follow the wall clock.
 - [OPEN] Whether skipping the intro skips the Calibrate measurement, and so the first reading of `FrameRateSet`.
-- [OPEN] Whether the keyboard poll seg11:0x4db0 latches key presses between frames.
 - [OPEN] A per-rule survey of frame-counted and wall-clock rules.
 - [OPEN] The constant for Calibrate, if a Calibrate branch turns out to change gameplay rather than detail.
