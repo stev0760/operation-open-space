@@ -1,3 +1,4 @@
+// owner: world set-up (the single writer of this file in later stages).
 // The World's helpers (world.h). Portable.
 #include "world/world.h"
 
@@ -49,6 +50,12 @@ std::int16_t distance_cells(std::int16_t x1, std::int16_t y1, std::int16_t x2, s
     const std::int32_t e = a <= b ? (a >> 1) + b : (b >> 1) + a;
     if (e == 0) return 1;
     return lo16(((a * a + b * b) / e + e) >> 1);
+}
+
+bool gate_post_live(const World& w, int rec) {
+    if (rec < 0 || rec >= kPool8Max) return false;  // [DESIGN] storage bound
+    const Pool8Entry& e = w.pool8[static_cast<std::size_t>(rec)];
+    return e.at(0x1c) == 2 && e.at(0x0a) > 0;
 }
 
 }  // namespace is::world

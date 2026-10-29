@@ -1,3 +1,4 @@
+// owner: world set-up (the single writer of this file in later stages).
 // The wave set-up's hooks (hooks.h): the program's World, the state-1 load, the briefing entry's
 // world part and the wave start, wired around the briefing's own state-1 and state-3 hooks
 // (src/briefing/hooks.cpp). Win32 only: the host build compiles this file without its hooks.
@@ -183,6 +184,7 @@ void read_inputs(World& w, bool new_entry) {
     if (w.size < 0 || w.size > 2) w.size = 1;
     w.shift = static_cast<std::int16_t>(4 - w.size);  // DGROUP:0x9150
     w.play_mode = static_cast<std::int16_t>(g.play_mode);
+    w.w920c = static_cast<std::int16_t>(g.edition.edition);  // DGROUP:0x920c (shell.md "Editions")
     w.player_game = 1;  // DGROUP:0x95bc: the port has no demo yet
     nav::Handover v = nav::enter_state().handover;
     if (v.directory.empty()) {

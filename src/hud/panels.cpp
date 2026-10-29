@@ -118,8 +118,8 @@ void Panels::lamps(int force) {
     }
 }
 
-// seg11:0x894 read as the red button blink, which the pass's step 1 calls: the port's reading
-// [OPEN Red button, Turn follow-up] until a verifier confirms it (M3 s2 fixer).
+// seg11:0x894, the red button blink the pass's step 1 calls (world.md "Damage panel", "Red
+// button"; M3 s3 fixer, C105, C106) [BYTES seg11:0x8a1 seg11:0x96d].
 void Panels::button() {
     const std::uint32_t now = h_.now();
     if (s_.button_due > now) return;  // seg11:0x8a9-0x8ae: ja (unsigned)

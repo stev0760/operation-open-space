@@ -56,7 +56,8 @@ int create_boxes(HWND nav, HINSTANCE instance, HFONT font,
     for (const auto& cb : combos()) {
         HWND h = make(nav, instance, L"combobox", "", kComboStyle, create_box(cb.id, c.right, ext), cb.id);
         if (!h) continue;
-        // The combos get WM_SETFONT with lParam 0 [BYTES seg6:0x26b6].
+        // The combos get WM_SETFONT with lParam 0, the group boxes lParam 1 (shell.md
+        // "Game-start dialogs" item 11; M3 s3 fixer, C012) [BYTES seg6:0x26b6].
         if (font) SendMessageW(h, WM_SETFONT, reinterpret_cast<WPARAM>(font), FALSE);
         for (int id : cb.strings)
             SendMessageW(h, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(wide(load(lang, id)).c_str()));

@@ -1,13 +1,12 @@
-// The visibility pass seg8:0x4e14 (docs/re/world.md "Update loop", Open question "On-screen
-// flag"): which pool objects lie in the view's activity rectangles DGROUP:0x23e0 this frame. It
+// The visibility pass seg8:0x4e14 (docs/re/world.md "Visibility pass (seg8:0x4e14)"): which pool objects lie in the view's activity rectangles DGROUP:0x23e0 this frame. It
 // writes object word +0x1a (1 inside, -1 for one frame after leaving, then 0 with the screen
 // position parked at (-1000, -1000)), clears +0x1c of the objects it lists, lists them in the
 // byte tables DGROUP:0x507c (pool) and DGROUP:0x50e0 (record) counted by DGROUP:0x9146, and on
 // one frame in nine (rand() % 9 = 0) calls seg11:0x9fdc for each listed object with byte
 // +0x50 != 0 outside the ship pool when another listed object is live.
 //
-// Ported from the bytes by the M3 s2 fixer; world.md leaves the writer of +0x1a open, so the
-// reading is [OPEN On-screen flag] until a verifier confirms it [BYTES seg8:0x4e14-0x50a8].
+// world.md "Visibility pass (seg8:0x4e14)" and structs.md object +0x1a, +0x1c (M3 s3 fixer,
+// C043-C046) [BYTES seg8:0x4e14-0x50a8]; the player's +0x1a = 0 case stays [OPEN On-screen flag].
 // Portable, no Win32.
 #pragma once
 

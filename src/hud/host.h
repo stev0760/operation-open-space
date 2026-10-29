@@ -63,7 +63,9 @@ public:
     virtual int ship_pool() const { return 14; }     // DGROUP:0x9324
     virtual int watch_ship() const { return -1; }    // DGROUP:0x952e
     virtual int view_mode() const { return 0; }      // DGROUP:0x9e49
-    virtual bool blink() const { return false; }     // DGROUP:0x93fe [OPEN: its writer]
+    // DGROUP:0x93fe, toggled every 300 ms by seg11:0x1bcc (world.md "Status tick"; C096)
+    // [BYTES seg11:0x1c36 seg11:0x1c3e].
+    virtual bool blink() const { return false; }
 
     // ---- the panels' data
     virtual std::uint32_t score() const { return 0; }         // dword DGROUP:0x1e58
@@ -127,7 +129,9 @@ public:
     virtual int direction16(int /*dx*/, int /*dy*/) const { return 0; }
     // DGROUP:0x9406 + 2·pool, the pool's in-use count (structs.md "Pools").
     virtual int in_use(int /*pool*/) const { return 0; }
-    // seg8:0x285a(world position of a, world position of b): the distance of two objects [OPEN].
+    // seg8:0x285a(world position of a, world position of b): the distance of two objects in
+    // 1/8-unit cells, one Newton step of the root (world.md "World coordinates", "Distance";
+    // C030) [BYTES seg8:0x285a seg8:0x29c8].
     virtual int distance(int /*pool_a*/, int /*rec_a*/, int /*pool_b*/, int /*rec_b*/) const {
         return 0x7fff;
     }

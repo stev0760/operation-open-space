@@ -1,3 +1,4 @@
+// owner: world set-up (the single writer of this file in later stages).
 // The wave set-up (setup.h, docs/re/world.md "Wave set-up"). Each routine cites its original;
 // the readings that go beyond world.md are listed in the stage report for a verifier. Portable.
 #include "world/setup.h"
@@ -145,22 +146,30 @@ void level_from_score(World& w) {
     static constexpr std::uint32_t kThreshold[12] = {26000,  40000,  55000,  70000,  90000,  120000,
                                                      150000, 200000, 280000, 400000, 550000, 700000};
     w.score_level = 0;
-    const std::int32_t score = static_cast<std::int32_t>(w.score);
+    const std::int32_t score = static_cast<std::int32_t>(w.rating);
     for (int k = 0; k < 12; ++k)
         if (static_cast<std::int32_t>(kThreshold[k]) < score) w.score_level = static_cast<int16_t>(k + 1);
 }
 
 void new_game(World& w) {
-    // seg9:0xc06 [BYTES seg9:0xc06 seg9:0xc56]
+    // seg9:0xc06, world.md "New-game reset" [BYTES seg9:0xc06 seg9:0xc56]. The rating, 0xa1cd,
+    // 0xa1cf, the bytes 0xa193 ... 0xa196 and the DGROUP:0x4eec table (M3 s3 fixer, C016)
+    // [BYTES seg9:0xc3e seg9:0xc44 seg9:0xc4e seg9:0xc52 seg9:0xc7f seg9:0xc97 seg9:0xc9d seg9:0xca5
+    // seg9:0xcb0 seg9:0xcc8].
     w.w992 = 0;
     if (w.restored == 0) {
         w.score = 0;
+        w.rating = 0;
         w.w9346 = -1;
+        w.w4eec.fill(-1);
         w.wave = 0;
         w.w967c = 0;
         w.w94ca = 0;
         w.w93ac = 0;
+        w.wa1cd = 0;
         w.w9432 = 100;
+        w.wa1cf = 1;
+        w.ba193.fill(1);
     }
     w.w986.fill(1);
     w.w986[5] = 2;  // DGROUP:0x990
@@ -479,8 +488,8 @@ void generate(World& w, shell::Rng& rng) {
         w.gates = d.s8(0xad);
     } else {
         // The category draw loop [BYTES seg9:0x3efa-0x4079], then the thin categories
-        // [BYTES seg9:0x407d-0x40cd]: the port's reading [OPEN Generator draw loop] until a
-        // verifier confirms it (M3 s2 fixer).
+        // [BYTES seg9:0x407d-0x40cd] (world.md "Difficulty inputs", Categories "Draw", "Stop",
+        // "Thin pass"; M3 s3 fixer, C021-C023); DGROUP:0x994 stays [OPEN DGROUP:0x994].
         bool settled = false;
         while (!settled) {
             int16_t sum = 0;
@@ -667,11 +676,26 @@ void generate(World& w, shell::Rng& rng) {
 
 // ---------------------------------------------------------------- the load seg9:0x22b4
 
-namespace {
-
-// seg9:0x2828 as the load calls it, for wave 0 [BYTES seg9:0x241e seg9:0x2426].
-void wave0_followups(World& w, shell::Rng& rng) {
-    // seg13:0x2688 per ship and the DGROUP:0x9346 rule read the roster (M5) [OPEN].
+// seg9:0x2828 as the load calls it, for wave 0 [BYTES seg9:0x241e seg9:0x2426], world.md
+// "seg9:0x2828" and "DGROUP:0x9346".
+void wave0_followups(World& w, SetupHost& h) {
+    shell::Rng& rng = h.rng;
+    auto type_of = [&h](const ShipRecord& s) -> int16_t {
+        return h.design_type ? h.design_type(s.design_index) : int16_t{0};
+    };
+    // The per-ship seg13:0x2688 reads the roster (M5) [OPEN]. A ship of design type 7 sets the
+    // local flag [bp - 0x16] (M3 s3 fixer, C026) [BYTES seg9:0x2839 seg9:0x2855 seg9:0x285b
+    // seg9:0x2862].
+    bool type7 = false;
+    for (int i = 0; i <= w.last_ship && i < kShipCount; ++i)
+        if (type_of(w.ship(i)) == 7) type7 = true;
+    // The DGROUP:0x9346 rule (M3 s3 fixer, C017) [BYTES seg9:0x29d6 seg9:0x29e3 seg9:0x29ea
+    // seg9:0x29f1 seg9:0x29fb seg9:0x2a05 seg9:0x2a09].
+    for (int i = 0; i <= w.last_ship && i < kShipCount; ++i) {
+        const ShipRecord& s = w.ship(i);
+        if (s.bec != 0 && type_of(s) == 7 && ship_byte(s, 0x5e) == 0 && s.w54 == 14 && s.w56 == w.player)
+            w.w9346 = ship_word(w.ship(w.player), 0xd6);
+    }
     if (w.w9432 < 50)
         w.w9332 = 3;
     else if (w.w9432 < 180)
@@ -682,7 +706,9 @@ void wave0_followups(World& w, shell::Rng& rng) {
         w.w9332 = 0;
     w.w932c = 0;
     const int16_t n = w.w964a;
-    int a = 0;  // local_a: unset on one path of the original [OPEN]
+    // [bp - 8]: a negative DGROUP:0x964a reaches seg9:0x2ac1 with it unset; the port draws
+    // nothing there [DESIGN] [BYTES seg9:0x2ab5 seg9:0x2aba seg9:0x2ac1].
+    int a = 0;
     if (n == 0)
         a = 1;
     else if ((0 < n && n < 5))
@@ -690,7 +716,7 @@ void wave0_followups(World& w, shell::Rng& rng) {
     else if (n < 5 || 8 < n) {
         if (n < 9 || 15 < n) {
             if (n >= 16) a = 4;
-        } else if (1 < w.w9332) {  // and no ship of type 7 [OPEN]
+        } else if (1 < w.w9332 && !type7) {  // [BYTES seg9:0x2aa6 seg9:0x2aad] (M3 s3 fixer, C026)
             a = 3;
         } else {
             a = 4;
@@ -707,14 +733,12 @@ void wave0_followups(World& w, shell::Rng& rng) {
     if (w.wave == 0) w.w932c = 0;
 }
 
-}  // namespace
-
 void load(World& w, SetupHost& h) {
     // Roles and resets [BYTES seg9:0x22c2-0x22e0].
     w.roles = wave_roles(false);
     // The DEMO command line's DScale draw (seg9:0x237e) needs the DEMO command line, which the
     // port does not run [DESIGN].
-    if (w.wave == 0) wave0_followups(w, h.rng);
+    if (w.wave == 0) wave0_followups(w, h);
     for (ShipRecord& s : w.ships) {  // [BYTES seg9:0x2430-0x2480]
         s.w44 = s.w46 = s.w48 = s.w4a = s.w4c = 0;
         for (int j = 0; j < 8; ++j) {
@@ -1712,9 +1736,12 @@ void start_wave(World& w, SetupHost& h) {
     w.w913e = 0;
     ShipRecord& me = w.ships[static_cast<std::size_t>(w.player)];
     const int16_t since = sub16(w.wave, w.w93ac);
+    // world.md "Chance block"; the edition DGROUP:0x920c neither 0 nor 3 (M3 s3 fixer, C029)
+    // [BYTES seg9:0x6126 seg9:0x612c].
     if (4 < w.score_level && w.handover.demons_gate == 0 && w.kind != 6 && w.kind != 7 &&
-        (add16(w.w992, 30) < w.budget || 15 < since)) {
-        // DGROUP:0x920c (the edition) must be neither 0 nor 3 as well [OPEN]. [BYTES seg9:0x612c]
+        w.w920c != 0 && w.w920c != 3 && (add16(w.w992, 30) < w.budget || 15 < since)) {
+        // The weapon-slot count below is the implementer's reading of seg9:0x612c-0x6219, landed
+        // in world.md but not yet confirmed by a verifier [OPEN weapon-slot count].
         int16_t heavy = 0;
         const int n = static_cast<std::int8_t>(ship_byte(me, 0xcb));
         for (int k = 0; k < n; ++k) {
@@ -1777,8 +1804,9 @@ void start_wave(World& w, SetupHost& h) {
         }
         // Ship byte +0xcd = 0xff unless its design type is 7 (M5) [OPEN].
     }
-    // seg8:0x4d94, seg2:0x45a and seg11:0x3cc2(player, 0) (the HUD, whose seg11:0xafe seeds
-    // rand) follow; the hooks run them [BYTES seg9:0x6320].
+    // seg8:0x4d94, seg3:0x45a(2) and seg11:0x3cc2(player, 0) (the HUD, whose seg11:0xafe seeds
+    // rand) follow [BYTES seg9:0x64a7 seg9:0x64ae seg9:0x64ba]: hud::wave_start() runs
+    // seg3:0x45a(2); seg8:0x4d94 is not ported [OPEN seg8:0x4d94] (M3 s3 fixer).
     w.w0a76 = 2;
     if (w.wave < 2) {
         set_ship_byte(me, 0x5d, 2);

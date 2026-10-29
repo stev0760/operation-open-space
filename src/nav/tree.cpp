@@ -405,6 +405,8 @@ InitialSelection initial_selection(Tree& tree, Strings& s, const Records& r, con
             }
             if (seen != 0) {
                 int f = tree.find_exact(sel, comp);
+                // nav.md "Initial selection" step 2: the prefix search starts at -1, the top
+                // (M3 s3 fixer, C003) [BYTES seg6:0x3ec5 seg6:0x3ee0].
                 if (f == -1) f = tree.find_prefix(-1, comp);
                 sel = f;
             }

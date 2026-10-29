@@ -3871,3 +3871,219 @@ def test_body_thrust_bytes_are_ship_record_fields(ins):
               "seg13:0x268": "cmp word ptr [bx + 0x7092], 0"}
     assert _texts(ins, expect) == expect
     assert (0x70EA - 0x7090, 0x70EB - 0x7090, 0x70EC - 0x7090) == (0x5A, 0x5B, 0x5C)
+
+
+# ------------------------------------------------------------------ M3 stage 3: verified world facts
+
+
+def test_ship_entry_pushes_only_the_first_later_ship(ins):
+    """world.md Ship entry: the +0x88 store falls through out of the j loop, so only the first
+    later waiting ship gets now + 5000; the time test is unsigned; the gate draw precedes the
+    player's g = 0."""
+    expect = {"seg7:0x1d40": "jg seg7:0x1d78", "seg7:0x1d51": "jne seg7:0x1d37",
+              "seg7:0x1d65": "add ax, 0x1388", "seg7:0x1d70": "mov word ptr [bx + 0x7118], ax",
+              "seg7:0x1d74": "mov word ptr [bx + 0x711a], dx",
+              "seg7:0x1d78": "imul si, word ptr [bp - 4], 0x70", "seg7:0x1d85": "jne seg7:0x1ef3",
+              "seg7:0x1d9d": "call far seg5:0xdc", "seg7:0x1da3": "idiv word ptr [0x9318]",
+              "seg7:0x1db2": "mov word ptr [bp - 0xa], 0",
+              "seg7:0x1f0a": "cmp word ptr [bx + 0x711a], dx", "seg7:0x1f0e": "ja seg7:0x1ef3",
+              "seg7:0x1f10": "jb seg7:0x1f18", "seg7:0x1f16": "jae seg7:0x1ef3",
+              "seg7:0x1f2c": "jmp seg7:0x1d3a"}
+    assert _texts(ins, expect) == expect
+    assert ins.step(ins.at("seg7:0x1d74"), 1).addr == "seg7:0x1d78"     # no jump back into the j loop
+    assert 0x1388 == 5000 and 0x7118 - 0x7090 == 0x88
+
+
+def _key_decode(ins: Module) -> dict[int, str]:
+    """Emulate seg11:0x6b64's WM_KEYDOWN decode chain at seg11:0x6e42 for every key 0 ... 0xff."""
+    out = {}
+    for key in range(0x100):
+        al, i = key, ins.at("seg11:0x6e45")
+        assert i.text == "cmp ax, 0xbd"
+        if key == 0xBD:
+            out[key] = ins.step(i, 1).ops[0]
+            continue
+        if key > 0xBD:
+            out[key] = ins.step(i, 2).ops[0]
+            continue
+        i = ins.step(i, 3)
+        while True:
+            if i.mnem == "sub":
+                al = (al - int(i.ops[1], 0)) & 0xFF
+            elif i.mnem == "dec":
+                al = (al - 1) & 0xFF
+            elif i.mnem == "jmp":
+                out[key] = i.ops[0]
+                break
+            else:
+                raise AssertionError(i.text)
+            j = ins.step(i, 1)
+            assert j.mnem == "je", j.text
+            if al == 0:
+                out[key] = j.ops[0]
+                break
+            i = ins.step(j, 1)
+    return out
+
+
+def test_wave_key_decode(ins):
+    """world.md Key messages, Decode: the WM_KEYDOWN targets of seg11:0x6e42-0x6ee4."""
+    got = _key_decode(ins)
+    expect = {0x09: "0x71e3", 0x0D: "0x6f58", 0x2E: "0x6ee7", 0x41: "0x7065", 0x42: "0x71d4",
+              0x43: "0x7019", 0x44: "0x6f20", 0x45: "0x70a5", 0x46: "0x6feb", 0x47: "0x6fff",
+              0x48: "0x6f7a", 0x49: "0x716c", 0x4D: "0x71a9", 0x52: "0x718b", 0x53: "0x7033",
+              0x54: "0x7132", 0x55: "0x7183", 0x56: "0x7187", 0x57: "0x7127", 0x58: "0x6f3a",
+              0x59: "0x717f", 0x5A: "0x6f58", 0x6B: "0x71ef", 0xBB: "0x71ef", 0x6D: "0x724e",
+              0xBD: "0x724e"}
+    assert {k: got[k] for k in expect} == {k: "seg11:" + v for k, v in expect.items()}
+    assert {v for k, v in got.items() if k not in expect} == {"seg11:0x72a1"}
+
+
+def test_key_map_strings_overlap(ins):
+    """world.md Router, Key map: strings 2900/2901 overlap in DGROUP and map only Q to H."""
+    expect = {"seg6:0x1789": "push 0xb54", "seg6:0x178d": "push 0x94e4", "seg6:0x1790": "push 0x28",
+              "seg6:0x179b": "push 0xb55", "seg6:0x179f": "push 0x94fa", "seg6:0x17a2": "push 0x28",
+              "seg11:0xb313": "cmp byte ptr [0x94fa], 0x59"}
+    assert _texts(ins, expect) == expect
+    assert all(_calls(ins, {"seg6:0x1792": "LoadString", "seg6:0x17a4": "LoadString"}).values())
+    assert (0xB54, 0xB55, 0x94FA - 0x94E4) == (2900, 2901, 0x16)
+    a, b = _eng(2900), _eng(2901)
+    assert (a, b) == ("YHADTGSCDVPBWGXSIEFSCM", "NQADTGSCDVPBWGXSIEFSCM")
+    buf = bytearray(0x16 + 0x28)
+    buf[0:len(a) + 1] = a.encode() + b"\0"
+    buf[0x16:0x16 + len(b) + 1] = b.encode() + b"\0"          # 2901 overwrites 2900's tail
+    assert buf[0x16] != ord("Y")
+
+    def remap(key: int) -> int:
+        for j in range(1, 22):
+            if buf[0x16 + j] == key:
+                return buf[j]
+        return key
+    assert {chr(k): chr(remap(k)) for k in range(0x20, 0x7F) if remap(k) != k} == {"Q": "H"}
+
+
+def test_image_slot_tables(ins):
+    """structs.md Image slots: four parallel 58-slot word arrays 0x74 bytes apart."""
+    expect = {"seg10:0x544": "cmp word ptr [bp - 4], 0x3a", "seg10:0x562": "cmp word ptr [bx + 0x39e8], 0",
+              "seg10:0x5c2": "cmp word ptr [bx + 0x3a5c], 0", "seg10:0x5e1": "push word ptr [bx + 0x3974]",
+              "seg10:0x5fb": "cmp word ptr [si + 0x3ad0], 0"}
+    assert _texts(ins, expect) == expect
+    assert "seg10:0x552" in ins.at("seg10:0x53b").text
+    assert 0x39E8 - 0x3974 == 0x3A5C - 0x39E8 == 0x3AD0 - 0x3A5C == 0x74 == 2 * 0x3A == 2 * 58
+    assert ((0x3A02 - 0x39E8) // 2, (0x3A28 - 0x39E8) // 2, (0x3A38 - 0x39E8) // 2) == (13, 0x20, 0x28)
+    assert (0x39F4 - 0x39E8) // 2 == 6 and (0x3ADC - 0x3AD0) // 2 == 6
+
+
+def test_rock_image_sizes(ins):
+    """world.md Rock images: seg10:0x3a2e's 869 x 53 and 473 x 31 bitmaps from 43, 21 and gap 5."""
+    expect = {"seg10:0x3a46": "mov word ptr [bp - 0x30], 0x2b",
+              "seg10:0x3a4b": "mov dword ptr [bp - 0x34], 0x50015",
+              "seg10:0x3acd": "imul ax, word ptr [bp - 0x32], 0x13",
+              "seg10:0x3ad1": "imul cx, word ptr [bp - 0x30], 0x12",
+              "seg10:0x3b0d": "imul ax, word ptr [bp - 0x34], 0x12",
+              "seg10:0x3afc": "mov word ptr [0x3adc], ax"}
+    assert _texts(ins, expect) == expect
+    assert all(_calls(ins, {"seg10:0x3af7": "CreateBitmap", "seg10:0x3b05": "CreateCompatibleBitmap",
+                            "seg10:0x3b28": "CreateBitmap", "seg10:0x3b36": "CreateCompatibleBitmap"}).values())
+    big, small, gap = 0x2B, 0x15, 5
+    assert (gap * 19 + big * 18, 2 * gap + big) == (869, 53)
+    assert (gap * 19 + small * 18, 2 * gap + small) == (473, 31)
+    assert _dib(_resource("IGRAPHIC.DL1", 2, "ROCKS"))[:3] == (18 * 43, 43, 1)
+
+
+def test_hud_graphics(ins, dgroup):
+    """world.md Graphics: seg11:0x0's loads, DIGITAL and SYSTEMS, the lamp cache and clock strings."""
+    expect = {"seg11:0x57": "mov word ptr [0x5032], ax", "seg11:0x5e": "push 0xfa",
+              "seg11:0x69": "mov word ptr [0x5034], ax", "seg11:0x70": "push 0xf0",
+              "seg11:0x7b": "mov word ptr [0x5036], ax", "seg11:0x87": "push 0x2d",
+              "seg11:0x91": "mov word ptr [0x5044], ax", "seg11:0x94": "cmp word ptr [0x90f0], 0",
+              "seg11:0xa3": "push 3", "seg11:0xa5": "push 0x104", "seg11:0xb0": "mov word ptr [0x503a], ax",
+              "seg11:0xb4": "push 0xa86", "seg11:0xbf": "mov word ptr [0x5038], ax",
+              "seg11:0xc3": "push 0xa8e", "seg11:0xce": "mov word ptr [0x5046], ax",
+              "seg11:0xd2": "push 0xa96", "seg11:0xdd": "mov word ptr [0x5030], ax",
+              "seg11:0x1d2": "mov word ptr [0x93d8], 1"}
+    assert _texts(ins, expect) == expect
+    assert (0xFA, 0xF0, 0x2D, 0x104) == (250, 240, 45, 260)
+    assert [_cstr(dgroup, o) for o in (0xA80, 0xA86, 0xA8E, 0xA96)] == [b"METAL", b"DIGITAL", b"RADSHIP",
+                                                                       b"SYSTEMS"]
+    assert _dib(_resource("IGRAPHIC.DL1", 2, "DIGITAL"))[:3] == (14 * 10, 10, 1)
+    assert _dib(_resource("IGRAPHIC.DL1", 2, "SYSTEMS"))[:3] == (32, 7 * 11, 4)
+    assert _dib(_resource("IGRAPHIC.DL1", 4000, 45))[:2] == (3 * 58, 58)
+    assert _dib(_resource("IGRAPHIC.DL1", 4000, 240))[:2] == (2 * 20, 20)     # the red button's cells
+    assert _dib(_resource("IGRAPHIC.DL1", 4000, 250))[:2] == (27, 3 * 6)      # three lamp rows
+    assert _dib(_resource("IGRAPHIC.DL1", 4000, 260))[:2] == (14, 60)
+    assert dgroup[0xAA2:0xAAA] == b"\xfe\xff" * 4                          # lamp cache, -2 each
+    assert (_cstr(dgroup, 0xAC7), _cstr(dgroup, 0xAC9)) == (b" ", b"0")
+
+
+def test_radar_brush_creation_order(ins):
+    """world.md Radar colours: seg11:0x0 creates the brush table entries in the order 3, 0, 7, 6, 2, 4, 1, 5."""
+    stores = [i for i in ins.func_insns("seg11:0x0")
+              if i.mnem == "mov" and i.abs_ds and 0x5004 <= i.mem.disp <= 0x5012 and i.ops[1] == "ax"]
+    assert [(i.mem.disp - 0x5004) // 2 for i in stores] == [3, 0, 7, 6, 2, 4, 1, 5]
+
+
+def test_world_frame_cycles(ins):
+    """world.md Update loop step 8 and Ships Head: DGROUP:0x9142 0 ... 54, DGROUP:0x134e 0 ... 100,
+    the 9000 ms deadline DGROUP:0x1350 and the pool-14 counts."""
+    expect = {"seg7:0x9dc": "inc word ptr [0x9142]", "seg7:0x9e0": "cmp word ptr [0x9142], 0x36",
+              "seg7:0x9e7": "mov word ptr [0x9142], 0", "seg7:0xb2d": "inc dword ptr [0x5a8]",
+              "seg7:0xb32": "inc dword ptr [0x1e68]",
+              "seg13:0x29": "inc word ptr [0x134e]", "seg13:0x2d": "cmp word ptr [0x134e], 0x64",
+              "seg13:0x34": "mov word ptr [0x134e], 0", "seg13:0x44": "mov word ptr [bx - 0x6bfa], ax",
+              "seg13:0x48": "mov word ptr [bx - 0x6d14], ax", "seg13:0x60": "add ax, 0x2328"}
+    assert _texts(ins, expect) == expect
+    assert (0x36, 0x64, 0x2328) == (54, 100, 9000)
+    assert (0x10000 - 0x6BFA, 0x10000 - 0x6D14) == (0x9406, 0x92EC)
+
+
+def test_speed_cap_and_autopilot_step(ins):
+    """structs.md ship +0x61, +0xda; world.md Thrust: the speed cap and the autopilot step."""
+    expect = {"seg11:0x5c5d": "cmp byte ptr [bx + 0x70f1], 0", "seg11:0x5c64": "cmp word ptr [bx + 0x70ba], 0x4b",
+              "seg11:0x5c75": "cmp word ptr [bx + 0x70c2], 0xc",
+              "seg11:0x5cc6": "imul ax, word ptr [bx + 0x709c], 0x13",
+              "seg11:0x5ccc": "idiv word ptr [bx + 0x709e]", "seg11:0x5cd0": "mov word ptr [bx + 0x716a], ax",
+              "seg11:0x5f2a": "cmp ax, 0x28", "seg11:0x5f56": "cmp ax, 0x1e", "seg11:0x5f70": "cmp ax, 0x1e"}
+    assert _texts(ins, expect) == expect
+    assert [d - 0x7090 for d in (0x70F1, 0x70BA, 0x70C2, 0x709C, 0x709E, 0x716A)] == \
+        [0x61, 0x2A, 0x32, 0x0C, 0x0E, 0xDA]
+    assert (0x4B, 0xC, 0x13) == (75, 12, 19)
+    assert _trunc(_w16(205 * 19), 25) == 155
+
+
+def test_icon_dissolve_and_direction_table(ins):
+    """world.md Icon dissolve: size and gap from pool-0 record 0; Direction mark Table: +0x1a, +0x1c."""
+    expect = {"seg7:0x3a51": "les bx, ptr [0x1df8]", "seg7:0x3a55": "mov ax, word ptr es:[bx + 0x22]",
+              "seg7:0x3a5c": "mov ax, word ptr es:[bx + 0x24]",
+              "seg13:0x2539": "cmp word ptr [0x6e72], -1", "seg13:0x2548": "mov ax, word ptr [0x6e70]",
+              "seg13:0x2553": "mov ax, word ptr [0x6e90]", "seg13:0x2559": "mov ax, word ptr [0x6e8e]"}
+    assert _texts(ins, expect) == expect
+    assert [(0x6E38 + 0x1E * d + 0x1A, 0x6E38 + 0x1E * d + 0x1C) for d in range(3)] == \
+        [(0x6E52, 0x6E54), (0x6E70, 0x6E72), (0x6E8E, 0x6E90)]
+    assert 0x6E44 - 0x6E38 == 0xC
+
+
+def test_probe_wave_dump():
+    """world.md Probe wave, structs.md Probe values, world.md Refresh: values of the probe-0001
+    DGROUP images."""
+    dumps = WORK / "probe" / "dumps"
+    wave = require(dumps / "wave-inspace.bin").read_bytes()
+    w = lambda o: struct.unpack_from("<h", wave, o)[0]
+    assert struct.unpack_from("<I", wave, 0x144C)[0] == 0xE43E04A1
+    assert {o: w(o) for o in (0x9320, 0x9318, 0x933A, 0x933C, 0x940C, 0x940E, 0x9406 + 16, 0x9406 + 24,
+                              0x992, 0x94E2, 0x9332, 0x932E, 0x9346, 0x93D6, 0x93C0, 0x93C2, 0x9646)} == {
+        0x9320: 0, 0x9318: 1, 0x933A: 24, 0x933C: 14, 0x940C: 38, 0x940E: 3, 0x9416: 2, 0x941E: 2,
+        0x992: 50, 0x94E2: 38, 0x9332: 2, 0x932E: 0, 0x9346: -1, 0x93D6: 6, 0x93C0: 580, 0x93C2: 608,
+        0x9646: 0}
+    assert [w(0x6678 + 2 * k) for k in range(4)] == [6424, 14032, 7624, 14080]
+    b = 0x7090
+    assert [w(b + o) for o in (0x0C, 0x0E, 0x14, 0x26, 0x28, 0x2A, 0x2C, 0x1E, 0x18, 0xDA)] == \
+        [205, 25, 21, 100, 100, 100, 100, 1320, 1, 155]
+    assert [wave[b + o] for o in (0xAE, 0xAF, 0xB9, 0xCB, 0xE4, 0xE5, 0xE9, 0xEC, 0x148, 0x149)] == \
+        [1, 20, 8, 2, 1, 1, 1, 1, 0xFF, 0xFF]
+    assert _cstr(wave, 0x9742) == b"TRANSFORMER" and 40 * 33 == 1320
+    for name in ("title", "navigation"):
+        d = require(dumps / f"{name}-inspace.bin").read_bytes()
+        assert struct.unpack_from("<h", d, 0x93D6)[0] == 0
+    nav = (dumps / "navigation-inspace.bin").read_bytes()
+    assert struct.unpack_from("<h", nav, 0x9346)[0] == 0

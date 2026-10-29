@@ -59,14 +59,17 @@ Box file_list_create_box(int cw, int ch);
 // The layout of WM_SIZE in client coordinates: Enter and Help at (cw - 105, 5) and (cw - 105,
 // 40), 90 x 26, the directory list at (0, 0), 160 x (ch - 26), the file list at (164, 0),
 // (cw - 284) x (ch - 26) [BYTES seg6:0x1f22] [ORACLE newgame-0001: 447,5, 447,40, 160 x 290 and
-// 164,0 268 x 290 in a 552 x 316 client]. The directory list is created at its WM_SIZE box.
+// 164,0 268 x 290 in a 552 x 316 client], docs/re/shell.md "Game-start dialogs" item 11 (M3 s3
+// fixer, C010) [BYTES seg6:0x20a3 seg6:0x20c7 seg6:0x20e4 seg6:0x2109]. The directory list is
+// created at its WM_SIZE box, where the original creates the controls at the WM_CREATE boxes and
+// WM_SIZE then moves them [DESIGN: same end state].
 Box enter_box(int cw, int ch);
 Box help_box(int cw, int ch);
 Box dir_list_box(int cw, int ch);
 Box file_list_box(int cw, int ch);
 
-// The minimum track size of WM_GETMINMAXINFO: 560 x 350 [OPEN: from the decompilation of
-// seg6:0x1f22, not in the docs].
+// The minimum track size of WM_GETMINMAXINFO: 560 x 350 (shell.md "Game-start dialogs" item 11)
+// [BYTES seg6:0x1fe3].
 constexpr int kMinTrackW = 560, kMinTrackH = 350;
 
 // DGROUP:0xd18, the drive root seg6:0x1c72 builds: 'C' + DGROUP:0x94ac, ":\\" [BYTES

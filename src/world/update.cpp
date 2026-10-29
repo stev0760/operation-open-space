@@ -110,7 +110,11 @@ void wave_frame(UpdateCtx& c) {
     if (g.joystick != 0) {
         if (passed(f.joy_due, g.now)) {
             f.joy_due = g.now + 50u;
-            h.joy_read();
+            // seg11:0x72b2: the read runs only while the player's byte +0xe2 is 0, and a result
+            // of 0xa7 clears `JoyStick` (world.md "Joystick", M3 s3 fixer, C039) [BYTES
+            // seg11:0x72c2 seg11:0x72c9 seg11:0x72ce seg11:0x72d3].
+            if (c.flight.ships[static_cast<std::size_t>(g.player)].be2 == 0 && h.joy_read() == 0xa7)
+                g.joystick = 0;
         }
         joystick_poll(g, c.joy, c.joy_buttons, c.flight.ship_obj(g.player).frame,
                       [&h](std::uint32_t msg, std::uint16_t key) { h.post_key(msg, key); });
@@ -205,9 +209,9 @@ void wave_frame(UpdateCtx& c) {
     h.seg13_447a();
 }
 
-// seg7:0x1d0c [BYTES seg7:0x1d1b-0x1f2c]. The entry moves the player from the set-up's gate
-// centre to the post: the port's reading [OPEN Ships at wave start, Start heading] until a
-// verifier confirms it (M3 s2 fixer).
+// seg7:0x1d0c [BYTES seg7:0x1d1b-0x1f2c], docs/re/world.md "Ship entry (seg7:0x1d0c)". The entry
+// moves the player from the set-up's gate centre to the post [BYTES seg7:0x1dd0 seg9:0x6320]
+// (M3 s3 fixer, C033-C036); the start heading stays [OPEN Start heading].
 void ship_entry(UpdateCtx& c) {
     WaveGlobals& g = c.flight.g;
     FrameGlobals& f = c.f;
@@ -217,10 +221,14 @@ void ship_entry(UpdateCtx& c) {
         ShipRecord& si = c.flight.ships[static_cast<std::size_t>(i)];
         if (!(si.d88.get() < g.now)) continue;  // [BYTES seg7:0x1efe-0x1f16]
         const std::int16_t kind = c.flight.host.design_kind(si.design_index);  // DGROUP:0x970a
-        // Every later off-world ship waits 5000 ms more [BYTES seg7:0x1d37-0x1d74].
+        // When ship i waits off-world, only the first later waiting ship gets now + 5000: the
+        // store falls through out of the j loop (M3 s3 fixer, C036) [BYTES seg7:0x1d4c seg7:0x1d57
+        // seg7:0x1d70 seg7:0x1d78].
         for (int j = i + 1; j <= g.last_ship && j < kShipCount; ++j) {
-            if (c.flight.ship_obj(i).state == 100 && c.flight.ship_obj(j).state == 100)
+            if (c.flight.ship_obj(i).state == 100 && c.flight.ship_obj(j).state == 100) {
                 c.flight.ships[static_cast<std::size_t>(j)].d88.set(g.now + 5000u);
+                break;
+            }
         }
         ObjectRecord& o = c.flight.ship_obj(i);
         if (o.state != 100) continue;                          // [BYTES seg7:0x1d80]

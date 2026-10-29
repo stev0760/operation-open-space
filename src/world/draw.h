@@ -18,7 +18,10 @@ struct DrawGlobals {
     SpriteGlobals sprite;               // seg8:0xb76's words (window DC, player, W, H, ...)
     std::int16_t state = 0;             // DGROUP:0x90f4, the screen state (1 = wave)
     std::int16_t dg_9130 = 0;           // DGROUP:0x9130: not 0 in the seg18 mode [OPEN]
-    std::int16_t dg_3a38 = 0;           // DGROUP:0x3a38: the player's sprite is drawn while not 0 [OPEN]
+    // DGROUP:0x3a38, slot 0x28 of the DC table DGROUP:0x39e8: ship record 0's image, so the
+    // player's only when DGROUP:0x9646 = 0 (world.md "The player's sprite", "Conditions";
+    // structs.md "Image slots"; M3 s3 fixer, C071) [BYTES seg7:0x1257 seg13:0xa9b].
+    std::int16_t dg_3a38 = 0;
     std::int16_t last_effect = 0;       // DGROUP:0x9434: the last effect-table index in use
     std::int16_t detail = 0;            // DGROUP:0x9208 `Detail`
     std::uint8_t dissolve_step = 0;     // byte DGROUP:0x8ffe, the dissolve's decrement [OPEN]
@@ -32,9 +35,12 @@ struct DrawGlobals {
 class DissolveHooks {
 public:
     virtual ~DissolveHooks() = default;
-    // seg13:0x59e8(0, i): whether to draw an off-screen icon's dissolve [OPEN].
+    // seg13:0x59e8(0, i): an off-screen icon's dissolve returns at once when it gives 0
+    // (world.md "Icon dissolve", "Off screen"; C081) [BYTES seg7:0x3a86 seg7:0x3a92]; what
+    // seg13:0x59e8 tests is [OPEN].
     virtual bool seg13_59e8(int a, int i) { return (void)a, (void)i, false; }
-    // seg7:0x65aa(0, i) and seg7:0x2080(0, -1) after the last step [OPEN].
+    // seg7:0x65aa(0, i) and seg7:0x2080(0, -1) after the last step (world.md "Icon dissolve",
+    // "End"; C083) [BYTES seg7:0x3b8d seg7:0x3b9d]; what they do is [OPEN].
     virtual void seg7_65aa(int a, int i) { (void)a, (void)i; }
     virtual void seg7_2080(int a, int b) { (void)a, (void)b; }
 };

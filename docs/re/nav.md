@@ -38,6 +38,7 @@ seg6:0x37ca runs these steps: [BYTES seg6:0x37ca]
 | seg6:0x45be(path) | seg6:0x4190(path), or path differs from the drive root DGROUP:0xd18 (lstrcmp before the '\' is appended) and seg6:0x4748 and seg6:0x4650 are both true | [BYTES seg6:0x45be] |
 
 - seg6:0x45be filters the top-level rows only when `Tree` ≠ 0, and filters expanded children always. [BYTES seg6:0x397d seg6:0x5065]
+- seg6:0x4748 stores its find-first result and, when it failed, goes straight to find-next (seg5:0x352); seg6:0x4650 stores the result and never tests it, examines the find buffer's attribute byte and then also calls find-next. [BYTES seg6:0x47ab seg6:0x47b0 seg6:0x47cf seg6:0x47d3 seg6:0x46b0 seg6:0x46b3]
 - newgame-0002 shows the walk on opening: for each root entry the game issues `D:\<NAME>\*.*` attribute 0x15 and reads entries until it meets a subdirectory or the end. [ORACLE newgame-0002]
 - Attribute 0x15 is directory, system and read-only, without hidden (0x02), so hidden directories are left out. [BYTES seg6:0x3931] [REF MS-DOS int 21h AH=4Eh attribute semantics]
 - Every name is the 8.3 name that DOS find-first returns at find-buffer +0x1e, so long-named directories appear as their short aliases; start-0001 lists `prog~fp2`. [BYTES seg6:0x3931 seg6:0x5020 seg6:0x46a1 seg6:0x479c] [ORACLE start-0001]
@@ -52,7 +53,8 @@ seg6:0x37ca runs these steps: [BYTES seg6:0x37ca]
 2. seg6:0x5260 on row 0 copies DGROUP:0xd18 and reads ':' − '0' = 10, so the root never expands or collapses. [BYTES seg6:0x5260]
 3. **Expand.** seg6:0x4f46 rewrites the selected row with sub digit '2' (LB_DELETESTRING, LB_INSERTSTRING and LB_SETCURSEL at the same index) and increments the insertion index once. It then enumerates DGROUP:0x6990 + "*.*" with attribute 0x15 and inserts each child that is a directory, does not start with '.' and passes seg6:0x45be, with LB_INSERTSTRING at that fixed index (parent + 1), so siblings show in the reverse of the find-next order. It returns 1 when it added a row. [BYTES seg6:0x4f46 seg6:0x4ffe seg6:0x5020 seg6:0x5026 seg6:0x5065 seg6:0x50d0 seg6:0x50db]
    - A child's depth is the parent's + 1, its state seg6:0x3f4c(child path) and its sub digit seg6:0x4748 && seg6:0x4650. [BYTES seg6:0x4ff4 seg6:0x50bc seg6:0x507a seg6:0x508a]
-4. **Collapse.** seg6:0x511c rewrites the sub digit to '1' and then deletes the following rows (LB_DELETESTRING at parent + 1) while their depth digit is greater than the row's depth (signed) and within the original count. [BYTES seg6:0x511c seg6:0x5182]
+4. **Collapse.** seg6:0x511c rewrites the sub digit to '1' (LB_DELETESTRING, LB_INSERTSTRING and LB_SETCURSEL at the same index) and then deletes the following rows (LB_DELETESTRING at parent + 1) while their depth digit is greater than the row's depth (signed) and within the original count. [BYTES seg6:0x511c seg6:0x5182 seg6:0x51ad]
+   - Expand and collapse both run between WM_SETREDRAW 0 and WM_SETREDRAW 1 on listbox 0x65. [BYTES seg6:0x4f72 seg6:0x4fd6 seg6:0x50fe seg6:0x5144 seg6:0x5251]
 5. The row count DGROUP:0x94b6 is incremented for every row added and never decremented by a collapse; its only other writer is the reset in seg6:0x37ca. [BYTES seg6:0x390e seg6:0x3a09 seg6:0x3a71 seg6:0x3b1d seg6:0x3bbe seg6:0x50e0 seg6:0x3813]
 6. newgame-0002 expands `deep`, then `a`; each child probe is two `D:\DEEP\A\*.*` attribute 0x15 searches. [ORACLE newgame-0002]
 
@@ -61,7 +63,7 @@ seg6:0x37ca runs these steps: [BYTES seg6:0x37ca]
   - newgame-0001 runs `D:\DEEP\*.exe` once after opening (row 1 is `deep`). [ORACLE newgame-0001]
 - With DGROUP:0x91f8 ≠ 0, DGROUP:0x6990 becomes the current record's +0x152, prefixed with DGROUP:0xd18 when its second byte is not ':'. [BYTES seg6:0x3e17]
   1. The first component below the root is selected by LB_FINDSTRINGEXACT(−1), then LB_FINDSTRING(−1) (prefix). When both fail the selection is row 0 and DGROUP:0xd18 is appended to DGROUP:0x6990. [BYTES seg6:0x3e29 seg6:0x3e40 seg6:0x3e47-0x3e55]
-  2. When the path has two or more components, each component in turn, the last included, is selected by LB_FINDSTRINGEXACT then LB_FINDSTRING from the current selection (the first keeps the existing selection) and expanded by seg6:0x4f46 when its sub digit is 1. During this walk DGROUP:0x6990 is cut to that component's path, so seg6:0x4f46 enumerates the right directory; it is restored afterwards. A path with one component expands nothing. [BYTES seg6:0x3e6e-0x3f31 seg6:0x3f34]
+  2. When the path has two or more components, each component in turn, the last included, is selected and expanded by seg6:0x4f46 when its sub digit is 1; the first keeps the existing selection. A later component is searched with LB_FINDSTRINGEXACT from the current selection DGROUP:0x94b4 and, when that fails, with LB_FINDSTRING from the top of the list (start index −1); the result goes to LB_SETCURSEL. Every row carries the 3-digit suffix and the component does not, so the exact search never matches and the first prefix match from the top of the list wins. [BYTES seg6:0x3ec5 seg6:0x3ee0 seg6:0x3efa seg6:0x3f0e seg6:0x4118] During this walk DGROUP:0x6990 is cut to that component's path, so seg6:0x4f46 enumerates the right directory; it is restored afterwards. A path with one component expands nothing. [BYTES seg6:0x3e6e-0x3f31 seg6:0x3f34]
 - A DEMO or PLAY command line selects the row of [Demo pilot](#demo-pilot). [BYTES seg6:0x3c43]
 
 ### Drawing the tree
@@ -90,6 +92,8 @@ seg6:0x37ca runs these steps: [BYTES seg6:0x37ca]
   - for depth d ≠ 0, a line x = left + 14d − 10 from top to bottom, or to top + 6 when the row is the last or, for d > 1, when the next row's depth differs (a deeper child included); [BYTES seg6:0x4c5e seg6:0x4c72 seg6:0x4cbc]
   - and a tick from (left + 14d − 10, top + 6) to (left + 14d − 5, top + 6). [BYTES seg6:0x4cde]
 
+- **Focus.** The IS_NAV procedure seg6:0x1f22 dispatches WM_DRAWITEM: itemID −1 goes to seg6:0x4e04, which draws DrawFocusRect; otherwise ODA_FOCUS goes to seg6:0x4e04 (DrawFocusRect when ODS_FOCUS is set, else seg6:0x4ea8), ODA_DRAWENTIRE goes to seg6:0x4ea8 (seg6:0x47e8, then DrawFocusRect when ODS_FOCUS is set) and ODA_SELECT goes to seg6:0x47e8. Both focus rectangles are rcItem with, for control 0x65 and an item other than 0, left moved by (the third-to-last character of the item's LB_GETTEXT text − '0') × 16 − 6, the depth digit, as for the row indent. [BYTES seg6:0x1f58 seg6:0x1f95 seg6:0x1fa7 seg6:0x4e28 seg6:0x4e4d seg6:0x4e5e seg6:0x4e68 seg6:0x4e7a seg6:0x4e81 seg6:0x4e91 seg6:0x4ebb seg6:0x4ed4 seg6:0x4f0a seg6:0x4f26 seg6:0x4f36]
+
 ### Tree INI key
 `Tree` (default 0, DGROUP:0x94bc) is read by seg6:0x37ca. Non-zero applies seg6:0x45be to the top-level rows and requires seg6:0x4650 for their sub digit; 0 lists every non-hidden top-level directory. Its table row is in [formats.md](formats.md#inspaceini-inner-space). [BYTES seg6:0x37ef seg6:0x397d seg6:0x399e]
 
@@ -114,7 +118,8 @@ After the real directories seg6:0x37ca adds the built-in rows with LB_ADDSTRING,
   | 736 | seg6:0x2dba(2), DUEL ids 0x93, 0x91, 0x92, 0x94 | "D" (DGROUP:0xeef) | 766 + ". " + 767 | [BYTES seg6:0x5799 seg6:0x57c3] |
   | anything else | seg6:0x2dba(0) | — | ordinary directory | [BYTES seg6:0x586a] |
 
-- A built-in row whose seg6:0x3f4c (on the path with byte 1 set to ' ') returns 3 gets 2323 "To enter, you must pay for the full game version." in place of its status. All three built-in cases end in EnableWindow(Enter id 1, TRUE). [BYTES seg6:0x569d] [BYTES ENG_LANG.DLL STRING 146] id 2323
+- A built-in row whose seg6:0x3f4c (on the path with byte 1 set to ' ') returns 3 keeps its first string and separator and gets 2323 "To enter, you must pay for the full game version." in place of its second string: 761 + " " + 2323, 763 + ". " + 2323 or 766 + ". " + 2323. All three built-in cases end in EnableWindow(Enter id 1, TRUE). [BYTES seg6:0x5617 seg6:0x5634 seg6:0x569d seg6:0x573e seg6:0x581b] [BYTES ENG_LANG.DLL STRING 146] id 2323
+  - newgame-0001 shows "This is an inner space race track. To enter, you must pay for the full game version." [ORACLE newgame-0001]
 - **Icons.** The built-in rows call seg6:0x4368(key, ""). seg6:0x43d0–0x43e8 maps a one-character key 'S' to 105, 'R' to 106 and 'D' to 107; seg6:0x4368 then calls ExtractIcon("S\" | "R\" | "D\", −1), adds the result to DGROUP:0x94a6 unclamped, and loads ISPACE.DLL GROUP_ICON 105, 106 or 107 with LoadIcon(DGROUP:0x9210, id). [BYTES seg6:0x43d8 seg6:0x442c seg6:0x4473 seg6:0x447c seg6:0x448c seg6:0x4498] [BYTES ISPACE.DLL GROUP_ICON 105] [BYTES ISPACE.DLL GROUP_ICON 106] [BYTES ISPACE.DLL GROUP_ICON 107]
   - newgame-0001 logs `EXTRACTICON("S\" | "D\" | "R\", 0xffff)`. [ORACLE newgame-0001]
 - Enter on a built-in row is in [Enter](#enter). [BYTES seg6:0x301a]
@@ -149,6 +154,7 @@ seg6:0x3f4c(path) gives the state digit: [BYTES seg6:0x3f4c]
 
 ### Completion
 - A visited directory counts as complete when its byte +0x1d0 is 2 or the signed sum of words +0x14e and +0x150 exceeds the icon count DGROUP:0x94a6. The status then starts with 765, Enter is disabled, and when +0x1d0 was not 2 it is set to 2 and the tree row's state digit is rewritten to '2' (LB_DELETESTRING, LB_INSERTSTRING). [BYTES seg6:0x598c seg6:0x5994 seg6:0x599e seg6:0x59a2 seg6:0x59b6 seg6:0x59f0 seg6:0x5a32 seg6:0x5a51 seg6:0x5a6d]
+- The rewrite sends no LB_SETCURSEL, and neither does seg6:0x5318 after it, so the rewritten row loses its selection highlight. [BYTES seg6:0x59d9 seg6:0x5a32 seg6:0x5a51 seg6:0x5a6d seg6:0x5516]
 - The wave file loader also writes +0x1d0 ([Enter](#enter), step 7). [BYTES seg9:0x2a]
 
 ### Buffers
@@ -157,6 +163,8 @@ seg6:0x3f4c(path) gives the state digit: [BYTES seg6:0x3f4c]
 - The INI `Track` read at seg6:0x3c84 allows 0x6d = 109 bytes into the 100-byte DGROUP:0x6990, and no lstrcpy or lstrcat on these paths checks length. [BYTES seg6:0x3c84 seg6:0x5318]
 
 ## File pane and icons
+seg6:0x5318 sends WM_SETREDRAW 0 and LB_RESETCONTENT to listbox 0x6b, fills the pane through seg6:0x5524, sends WM_SETREDRAW 1 and ends with SetFocus on listbox 0x65. [BYTES seg6:0x5318 seg6:0x532b seg6:0x534c seg6:0x54ee seg6:0x54fd seg6:0x5516]
+
 For an ordinary directory seg6:0x5524 clears the icon count DGROUP:0x94a6 and calls seg6:0x420a for each pattern. [BYTES seg6:0x5536 seg6:0x5877 seg6:0x5889]
 
 1. **Walk.** seg6:0x420a(dir, pattern) lists DGROUP:0x6990 + "*.exe", then + "*.dll", with find-first attribute 0, in find order. For each file it calls seg6:0x4368(dir, name) and LB_ADDSTRINGs "" + name + " " + "0" (digit 0) into listbox 0x6b; it returns the number of files found. [BYTES seg6:0x420a seg6:0x4263 seg6:0x426a]
@@ -191,19 +199,35 @@ The status text DGROUP:0x6a24 is drawn by seg6:0x5b4c over the band seg11:0x1774
 | Demon's Gate | 761 "Gateway to the ultimate challenge!" + " " (DGROUP:0xee6) + 762 "Enter when you have what it takes.." | enabled | [BYTES seg6:0x55f2 seg6:0x569d] [BYTES ENG_LANG.DLL STRING 48] ids 761–762 |
 | race | 763 "This is an Inner Space race track" + ". " (DGROUP:0x9ee) + 764 "Enter here for a thrill!" | enabled | [BYTES seg6:0x56e6] [BYTES ENG_LANG.DLL STRING 48] ids 763–764 |
 | duel | 766 "This is the arena for Inner Space duels" + ". " + 767 "If you have a dispute, take him here!" | enabled | [BYTES seg6:0x57c3] [BYTES ENG_LANG.DLL STRING 48] ids 766–767 |
-| locked built-in | 2323 "To enter, you must pay for the full game version." | enabled | [BYTES seg6:0x5634] [BYTES ENG_LANG.DLL STRING 146] id 2323 |
+| locked built-in | the row's first string and separator + 2323 "To enter, you must pay for the full game version." | enabled | [BYTES seg6:0x5634 seg6:0x573e seg6:0x581b] [BYTES ENG_LANG.DLL STRING 146] id 2323 |
 | no *.exe | 938 "No apps" + 942 " IN THIS DIRECTORY" + ". " + 939 "Select another directory to enter." | disabled, unless the row's sub digit is 1 or 2, which leaves it as it was | [BYTES seg6:0x58a1 seg6:0x58b8 seg6:0x58dd seg6:0x5911 seg6:0x5948 seg6:0x5953 seg6:0x596e] [BYTES ENG_LANG.DLL STRING 59] ids 938–942 |
-| at least one *.exe | seg10:0xa332(3028 "%? %# IN %#.", mode 1, DGROUP:0x94a6 = 1, 2056 "THERE ARE", 2055 "THERE IS", DGROUP:0x94a6, 2515 "ICON", files, 941 "FILE"), then one of the three below | enabled | [BYTES seg6:0x5a74 seg6:0x5a82 seg6:0x5a87] [BYTES ENG_LANG.DLL STRING 190] id 3028 [BYTES ENG_LANG.DLL STRING 129] ids 2055–2056 [BYTES ENG_LANG.DLL STRING 158] id 2515 |
+| at least one *.exe | seg10:0xa332(3028 "%? %# IN %#.", mode 1, DGROUP:0x94a6 = 1, 2056 "THERE ARE", 2055 "THERE IS", DGROUP:0x94a6, 2515 "ICON", files, 941 "FILE"), then the not-visited or visited text below | enabled | [BYTES seg6:0x5a74 seg6:0x5a82 seg6:0x5a87] [BYTES ENG_LANG.DLL STRING 190] id 3028 [BYTES ENG_LANG.DLL STRING 129] ids 2055–2056 [BYTES ENG_LANG.DLL STRING 158] id 2515 |
 | … not visited | + 943 "YOU HAVE NOT BEEN HERE BEFORE" + ". " | enabled | [BYTES seg6:0x5ab4] [BYTES ENG_LANG.DLL STRING 59] id 943 |
 | … visited | + seg10:0xa332(3029 "%# CAPTURED AND %# DESTROYED.", mode 0, +0x150, 2506 "ICON WAS", +0x14e, 2506) | enabled | [BYTES seg6:0x5ad1 seg6:0x5aee seg6:0x5af8 seg6:0x5b20] [BYTES ENG_LANG.DLL STRING 190] id 3029 [BYTES ENG_LANG.DLL STRING 157] id 2506 |
-| … complete | 765 "This directory is complete" + ". " before the 3029 text | disabled | [BYTES seg6:0x598c seg6:0x5a6d] [BYTES ENG_LANG.DLL STRING 48] id 765 |
+| complete | 765 "This directory is complete" + ". " + the 3029 text only; the jump to seg6:0x5abc skips the 3028 text | disabled | [BYTES seg6:0x598c seg6:0x5a6d seg6:0x5a72 seg6:0x5abc seg6:0x5af8] [BYTES ENG_LANG.DLL STRING 48] id 765 |
 
 - The no-exe test reads only the exe count; DLLs are not consulted. [BYTES seg6:0x58a1]
 - seg10:0xa332 mode 1 overwrites the buffer and mode 0 appends to it. [BYTES seg6:0x5a82 seg6:0x5b20]
+- Its `%?` directive takes three arguments in the order flag, id0, id1 and loads string ids[idx] with idx = (flag > 1 ? 1 : flag), signed: flag 0 gives id0, any flag of 1 or more gives id1, and a negative flag indexes before the array. In the 3028 call the flag is (DGROUP:0x94a6 = 1), so one icon gives 2055 "THERE IS" and any other count 2056 "THERE ARE". [BYTES seg10:0xa3ee seg10:0xa713 seg10:0xa73a seg10:0xa740 seg10:0xa74e]
 - newgame-0001 shows "There are 3 icons in 3 files.You have not been here before." and "No apps in this directory. Select another directory to enter.". [ORACLE newgame-0001]
 
 ## Race and duel boxes
 seg6:0x2dba(kind) shows the box of the selected row with SW_SHOW: kind 1 the RACE controls 0x8c–0x90, kind 2 the DUEL controls 0x93, 0x91, 0x92 and 0x94, kind 0 neither. The controls are created in seg6:0x23d4 ([shell.md](shell.md#game-start-dialogs), item 11). [BYTES seg6:0x2dba seg6:0x55df seg6:0x56e9 seg6:0x57c6]
+
+- 0x8c and 0x93 are group boxes (class "button", style 0x50000007) captioned 2145 "RACE" and 2146 "DUEL". [BYTES seg6:0x2587 seg6:0x2595 seg6:0x25e5] [BYTES ENG_LANG.DLL STRING 135] ids 2145–2146
+- The seven combos have style 0x50210003 (CBS_DROPDOWNLIST, unsorted). seg6:0x23d4 fills each with CB_ADDSTRING of LoadStrings into a 0x28-byte buffer and ends each with CB_SETCURSEL: [BYTES seg6:0x267f seg6:0x26da-0x2d7f]
+
+  | Control | Strings |
+  |---|---|
+  | 0x8d | 2147 "Solo", 2148 "2 Ships", 2149 "3 Ships", 2150 "4 Ships" |
+  | 0x91 | 2151 "1 Opponent", 2152 "2 Opponents", 2153 "3 Opponents" |
+  | 0x8e, 0x92 | 2154 "Normal", 2155 "Difficult", 2156 "Dangerous!" |
+  | 0x8f | 2157 "1 Lap", 2158 "5 Laps", 2159 "10 Laps" |
+  | 0x90 | 2160 "Fastest", 2161 "Faster", 2162 "Similar", 2163 "Same Ships", 2164 "Slower", 2165 "Slowest" |
+  | 0x94 | 2166 "Toughest", 2167 "Tougher", 2162 "Similar", 2163 "Same Ships", 2168 "Weaker", 2169 "Weakest" |
+
+  [BYTES ENG_LANG.DLL STRING 135] ids 2147–2159 [BYTES ENG_LANG.DLL STRING 136] ids 2160–2169
+- DGROUP:0x94b8 is the height of GetTextExtent("Test", 4) (DGROUP:0xd51) in font DGROUP:0x90fe, measured in seg6:0x23d4. The WM_SIZE layout of the boxes starts at y0 = client height − 0x9b. [BYTES seg6:0x23e3 seg6:0x2642 seg6:0x2658 seg6:0x2692 seg6:0x211e]
 
 | Control | Box | INI key | Enter stores | Evidence |
 |---|---|---|---|---|
@@ -231,22 +255,24 @@ seg6:0x301a is the Enter routine; its callers, the state request and the briefin
 8. **Acceptance** (seg6:0x3686) adds or finds the directory record ([Directory records](#adding-a-record)) and continues as [shell.md](shell.md#game-start-dialogs) item 12 describes. [BYTES seg6:0x3686 seg6:0x36b6]
 
 ### Values handed to the wave set-up
-| Global | Meaning | Written at | Reader in seg9 (— where not settled) |
+| Global | Meaning | Written at | Readers |
 |---|---|---|---|
 | DGROUP:0x38c8 | directory of the wave: the path, "DEMON'S GATE", the course name or "Dodge City" | seg6:0x3044, seg6:0x30ed, seg6:0x348d, seg6:0x3642 | wave file loader seg9:0x0 |
 | DGROUP:0x92e8 | 1 = Demon's Gate | seg6:0x30e7 | seg9:0x2581, and the generator seg9:0x3202 at seg9:0x3e83, seg9:0x44ae and seg9:0x4767 ([world.md](world.md#difficulty-inputs)) |
 | DGROUP:0x94e | race: 4 × course + racers code | seg6:0x3339 | seg9:0x3db6 |
 | DGROUP:0x950 | duel: opponents code | seg6:0x351d | seg9:0x3e00 |
-| DGROUP:0x94a8 | race or duel difficulty index | seg6:0x3392, seg6:0x3569 | — |
-| DGROUP:0x94aa | opponent index, 2 under DEMO | seg6:0x33dc, seg6:0x35b3 | — |
-| DGROUP:0x9ea0 | race laps 1, 5 or 10 | seg6:0x343e | — |
+| DGROUP:0x94a8 | race or duel difficulty index | seg6:0x3267, seg6:0x339a, seg6:0x34cf, seg6:0x3571 | seg4:0x2eb1, seg4:0x2ed4, seg9:0x4120, seg9:0x4211, seg9:0x601d, seg11:0x48b6 |
+| DGROUP:0x94aa | opponent index, 2 under DEMO | seg6:0x326a, seg6:0x33e4, seg6:0x34d5, seg6:0x35bb | seg4:0x2ea9, seg4:0x2ee1, seg9:0x3bdc, seg14:0x2793, seg14:0x2ad6, seg14:0x348f |
+| DGROUP:0x9ea0 | race laps 1, 5 or 10 | seg6:0x32a6, seg6:0x32b3, seg6:0x343e | seg4:0x1f78–0x2640, seg4:0x2b10–0x2bb2, seg4:0x2c51–0x2e0e, seg9:0x289d, seg9:0x417d, seg9:0x71f4, seg9:0x76ca, seg9:0x7c88, seg11:0x41f7, seg11:0x42cf, seg11:0x4432, seg11:0x73c8, seg17:0x7a7a, seg17:0x7aad |
 
-[BYTES seg6:0x3044 seg6:0x30e7 seg6:0x30ed seg6:0x3339 seg6:0x343e seg6:0x348d seg6:0x351d seg6:0x3642 seg9:0x3db6 seg9:0x3e00 seg9:0x2581 seg9:0x3e83 seg9:0x44ae seg9:0x4767]
+[BYTES seg6:0x3044 seg6:0x30e7 seg6:0x30ed seg6:0x3339 seg6:0x343e seg6:0x348d seg6:0x351d seg6:0x3642 seg9:0x3db6 seg9:0x3e00 seg9:0x2581 seg9:0x3e83 seg9:0x44ae seg9:0x4767] [BYTES seg4:0x2640 seg4:0x2b10 seg4:0x2e0e seg9:0x3bdc seg9:0x4120 seg9:0x4211 seg9:0x601d seg11:0x48b6 seg17:0x7a7a seg6:0x3267 seg6:0x35bb]
+
+- The generator seg9:0x3202 also writes DGROUP:0x9ea0 (seg9:0x3ae5, seg9:0x3afd), DGROUP:0x94aa (seg9:0x3b2d, seg9:0x3b64, seg9:0x3bb7, seg9:0x3c27, seg9:0x3c6d, seg9:0x3c86, seg9:0x3cb1) and DGROUP:0x94a8 (seg9:0x3bbd, seg9:0x3c0e, seg9:0x3cba). These are all the direct references; the listings hold no other addressing form for the three words. [BYTES seg9:0x3ae5 seg9:0x3afd seg9:0x3b2d seg9:0x3b64 seg9:0x3bb7 seg9:0x3bbd seg9:0x3c0e seg9:0x3c27 seg9:0x3c6d seg9:0x3c86 seg9:0x3cb1 seg9:0x3cba]
 
 - **Decoding.** The wave set-up decodes a race as DGROUP:0x9320 = 6, DGROUP:0x9338 = (DGROUP:0x94e − 1) mod 4 (opponents) and DGROUP:0x9322 = (DGROUP:0x94e − 1) / 4 (course 0 Lazy Loop, 1 SDi Speedway, 2 Grand Prix), both by signed idiv (quotient rounded toward 0). A duel gives DGROUP:0x9320 = 7 and DGROUP:0x9338 = (DGROUP:0x950 − 1) mod 4; the duel overrides when both are set. [BYTES seg9:0x3db6 seg9:0x3dbd seg9:0x3dd7 seg9:0x3de6 seg9:0x3e00 seg9:0x3e10]
 - **Wave file loader.** seg9:0x0(8), called from seg9:0xbf7: [BYTES seg9:0xbf5 seg9:0x2a]
   1. It sets the current record's byte +0x1d0 = 2. [BYTES seg9:0x2a]
-  2. It walks DGROUP:0x38c8 + "*.exe", then + "*.dll", with find-first attribute 1 into DGROUP:0x3948 (name at DGROUP:0x3966), while DGROUP:0x9206 < 10. [BYTES seg9:0x46 seg9:0x51 seg9:0x58]
+  2. It walks DGROUP:0x38c8 + "*.exe", then + "*.dll", with find-first attribute 1 into DGROUP:0x3948 (name at DGROUP:0x3966). For each pattern it tests DGROUP:0x9206 > 9 after every successful find (find-first seg5:0x364, then find-next seg5:0x352) and before it processes the candidate with seg9:0x156; it calls find-next after each processed candidate, so the find-next that returns the candidate past the limit runs before the test ends the pattern, and a failed find ends it without the test. [BYTES seg9:0x46 seg9:0x51 seg9:0x58 seg9:0x62 seg9:0x67 seg9:0x8e seg9:0x94 seg9:0xa0 seg9:0xd4]
   3. Per file seg9:0x156 calls ExtractIcon(path, −1). A count of 0 gets ExtractIcon(path, 0) and seg9:0x278. Otherwise each index i below the count, while DGROUP:0x9206 ≤ 9, is skipped when seg9:0xac4 finds bit DGROUP:0x9200 set in the record bitmap +0x1e2, and else gets ExtractIcon(path, i). [BYTES seg9:0x156 seg9:0x178 seg9:0x1a5 seg9:0x251]
   4. Afterwards +0x1d0 becomes 0 when DGROUP:0x9202 ≠ 0 and +0x1d0 ≠ 1, and DGROUP:0x91fa = DGROUP:0x91fc = DGROUP:0x91fe = min(DGROUP:0x9206, 8). [BYTES seg9:0x145]
 
@@ -298,6 +324,6 @@ Every call the Navigation code and the wave file loader make on the user's drive
 - What do the readers seg7:0xe91, seg13:0x1d95 and seg16:0xb7d do with DGROUP:0x94b2, which is 1 only when DGROUP:0x920c is −1 or 2 and no root or top-level row has a state below 2? [OPEN] [BYTES seg6:0x37f7 seg6:0x38c1 seg6:0x39ce seg7:0xe91 seg13:0x1d95 seg16:0xb7d]
 - What do record words +0x14e and +0x150 count beyond the status labels "DESTROYED" and "CAPTURED" (seg9:0xbeb copies +0x150 to +0x14e)? [OPEN] [BYTES seg9:0xbeb]
 - What does the original do when a path exceeds DGROUP:0x6990's 100 bytes and overruns the record pointer DGROUP:0x69f4 behind it? [OPEN] [BYTES seg6:0x5318]
-- How do seg10:0xa332's `%?` and `%#` directives choose between their string ids and plural forms ("There are 3 icons in 3 files")? [OPEN] [BYTES seg6:0x5a82] [ORACLE newgame-0001]
-- Which seg9 code reads DGROUP:0x94a8, DGROUP:0x94aa and DGROUP:0x9ea0 in the wave set-up? [OPEN] [BYTES seg6:0x3392 seg6:0x33dc seg6:0x343e]
-- Which strings fill the race combos 0x8d–0x90 and the duel combos 0x91, 0x92 and 0x94, and what does control 0x8c (and 0x93) show? [OPEN] [BYTES seg6:0x23d4]
+- How does seg10:0xa332's `%#` directive choose between the singular and plural forms of its noun ("3 icons in 3 files" from 2515 "ICON" and 941 "FILE")? [OPEN] [BYTES seg6:0x5a82] [ORACLE newgame-0001]
+- What the readers of DGROUP:0x94a8, DGROUP:0x94aa and DGROUP:0x9ea0 in seg4, seg9, seg11, seg14 and seg17 ([Values handed to the wave set-up](#values-handed-to-the-wave-set-up)) do with the difficulty, opponent and lap values. [OPEN] [BYTES seg4:0x1f78 seg4:0x2ea9 seg9:0x3bdc seg9:0x4120 seg11:0x48b6 seg14:0x2793 seg17:0x7a7a]
+- What the focus rectangle of an itemID −1 WM_DRAWITEM on listbox 0x65 shifts by: seg6:0x4e04 sends LB_GETTEXT for item −1 and reads the third-to-last byte of whatever the stack buffer holds. [OPEN] [BYTES seg6:0x4e3d seg6:0x4e4d seg6:0x4e5e]

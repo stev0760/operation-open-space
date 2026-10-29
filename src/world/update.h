@@ -94,7 +94,9 @@ public:
     virtual void effect(int k) { (void)k; }            // seg8:0x3fbe
     virtual void burst() {}                            // seg7:0x375a, the particle burst
     // ---- the frame
-    virtual void joy_read() {}                         // seg11:0x72b2 fills far DGROUP:0x1e4c
+    // ISPACE.DLL ordinal 41 as seg11:0x72b2 calls it: fills far DGROUP:0x1e4c and returns the
+    // read's result, 0xa7 (JOYERR_UNPLUGGED) for no stick [BYTES seg11:0x72c9 seg11:0x72ce].
+    virtual std::uint16_t joy_read() { return 0; }
     // PostMessage(main DGROUP:0x16, msg, key, 0) of a joystick button (seg11:0x7588).
     virtual void post_key(std::uint32_t msg, std::uint16_t key) { (void)msg, (void)key; }
     virtual void seg18_frame() {}                      // seg16:0x64fa in the seg18 mode

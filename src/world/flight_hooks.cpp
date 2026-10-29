@@ -43,7 +43,7 @@ public:
     void sound_frame() override {
         if (prev_frame && state) prev_frame(*state);
     }
-    void joy_read() override;
+    std::uint16_t joy_read() override;
     void mover(Mover m) override { todo_once("wave mover", mover_address(m)); }
     // The calls src/hud's integration links (WaveLinks, M3 s2 fixer); a missing link logs.
     void fuel_mass() override {
@@ -239,20 +239,25 @@ UpdateCtx make_ctx(Runtime& r) {
                      r.f, r.view, r.h(), r.joy, r.jb};
 }
 
-// seg11:0x72b2 reads the stick into far DGROUP:0x1e4c every 50 ms; the port reads joystick 1
-// with joyGetPos (Win16's coordinates, 0 ... 65535) [DESIGN] [OPEN: seg11:0x72b2 is not read].
-void DefaultHost::joy_read() {
+// ISPACE.DLL ordinal 41 (seg10:0x6b54), which seg11:0x72b2 calls every 50 ms (world.md
+// "Joystick"): the port reads joystick 0 with winmm's joyGetPos (Win16's coordinates,
+// 0 ... 65535) and returns its result, so JOYERR_UNPLUGGED (0xa7) clears `JoyStick` in the
+// caller [BYTES seg11:0x72c9 seg11:0x72ce seg10:0x6b65] [DESIGN: what ordinal 41 does inside
+// ISPACE.DLL is not read; joyGetPos stands in for it].
+std::uint16_t DefaultHost::joy_read() {
     JOYINFO ji{};
     Runtime& r = rt();
-    if (joyGetPos(JOYSTICKID1, &ji) != JOYERR_NOERROR) {
+    const MMRESULT rc = joyGetPos(JOYSTICKID1, &ji);
+    if (rc != JOYERR_NOERROR) {
         r.joy = JoyState{};
         r.joy.x = r.joy.y = 0x8000;  // centred
-        return;
+        return static_cast<std::uint16_t>(rc);
     }
     r.joy.x = static_cast<std::uint16_t>(ji.wXpos);
     r.joy.y = static_cast<std::uint16_t>(ji.wYpos);
     for (int i = 0; i < 4; ++i)
         r.joy.buttons[static_cast<std::size_t>(i)] = (ji.wButtons & (1u << i)) ? 1 : 0;
+    return 0;
 }
 
 // Alt + and Alt - : seg10:0x7e1c's rate rule, the scheduler's rate (ADR 0001 decision 2), the

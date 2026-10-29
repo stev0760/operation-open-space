@@ -1,8 +1,10 @@
+// owner: world set-up (the single writer of this file in later stages).
 // The wave set-up (src/world/setup.h; docs/re/world.md "Wave set-up"): the difficulty inputs,
 // the power-on words, the generator's bounds, the icon fill through nav::Walker and IconReader
 // (ADR 0012 decision 5) with its logged calls, the placement's invariants and the wave start.
 // Everything runs on nav::MemFs with a fake icon reader, so the suite is portable.
 #include <cstdint>
+#include <cstring>
 #include <map>
 #include <string>
 #include <vector>
@@ -117,16 +119,16 @@ TEST_CASE("world setup: budget from Complex [BYTES seg6:0x1204-0x1284]") {
 
 TEST_CASE("world setup: score level [BYTES seg9:0x484c]") {
     World w;
-    w.score = 0;
+    w.rating = 0;
     level_from_score(w);
     CHECK(w.score_level == 0);
-    w.score = 26000;
+    w.rating = 26000;
     level_from_score(w);
     CHECK(w.score_level == 0);
-    w.score = 26001;
+    w.rating = 26001;
     level_from_score(w);
     CHECK(w.score_level == 1);
-    w.score = 700001;
+    w.rating = 700001;
     level_from_score(w);
     CHECK(w.score_level == 12);
 }
@@ -136,6 +138,8 @@ TEST_CASE("world setup: new game resets [BYTES seg9:0xc06 seg9:0xc56]") {
     power_on(w);
     w.restored = 0;
     w.score = 5;
+    w.rating = 6;
+    w.wa1cd = 3;
     w.wave = 7;
     new_game(w);
     CHECK(w.score == 0);
@@ -143,6 +147,16 @@ TEST_CASE("world setup: new game resets [BYTES seg9:0xc06 seg9:0xc56]") {
     CHECK(w.w9346 == -1);
     CHECK(w.w9432 == 100);
     CHECK(w.w992 == 0);
+    // world.md "New-game reset" (M3 s3 fixer, C016) [BYTES seg9:0xc52 seg9:0xc7f seg9:0xc97
+    // seg9:0xcb0 seg9:0xcc8]: the rating and DGROUP:0xa1cd cleared, DGROUP:0xa1cf and the bytes
+    // DGROUP:0xa193 ... 0xa196 = 1, all 8 x 3 words of DGROUP:0x4eec = -1.
+    CHECK(w.rating == 0);
+    CHECK(w.wa1cd == 0);
+    CHECK(w.wa1cf == 1);
+    for (std::uint8_t b : w.ba193) CHECK(b == 1);
+    for (std::int16_t v : w.w4eec) CHECK(v == -1);
+    CHECK(w.w986[0] == 1);
+    CHECK(w.w986[5] == 2);
     // A restored game keeps the score and the wave.
     World r;
     power_on(r);
@@ -152,6 +166,45 @@ TEST_CASE("world setup: new game resets [BYTES seg9:0xc06 seg9:0xc56]") {
     new_game(r);
     CHECK(r.score == 5);
     CHECK(r.wave == 7);
+}
+
+TEST_CASE("world setup: seg9:0x2828, the type-7 test and DGROUP:0x9346") {
+    // world.md "seg9:0x2828" (M3 s3 fixer, C026): DGROUP:0x964a = 9 ... 15 with DGROUP:0x9332 >= 2
+    // draws one rand() % 100 for 80 %, but a ship of design type 7 makes it certain (no draw)
+    // [BYTES seg9:0x2862 seg9:0x2aa6 seg9:0x2aad seg9:0x2abc]; wave 0 clears DGROUP:0x932c again.
+    Rig r;
+    r.w.wave = 0;
+    r.w.w964a = 10;
+    r.w.w9432 = 100;  // below 180: DGROUP:0x9332 = 2
+    r.w.last_ship = 1;
+    std::uint32_t before = r.rng.state();
+    wave0_followups(r.w, r.host);
+    CHECK(r.w.w9332 == 2);
+    CHECK(r.w.w932c == 0);
+    CHECK(r.rng.state() != before);  // the 80 % draw
+    r.w.ship(1).design_index = 3;
+    r.host.design_type = [](int d) { return static_cast<std::int16_t>(d == 3 ? 7 : 0); };
+    before = r.rng.state();
+    wave0_followups(r.w, r.host);
+    CHECK(r.rng.state() == before);  // certain: no draw
+    // world.md "DGROUP:0x9346" (C017): a ship with byte +0xec != 0, type 7, byte +0x5e = 0,
+    // +0x54 = 14 and +0x56 = the player gives DGROUP:0x9346 = the player's +0xd6
+    // [BYTES seg9:0x29d6 seg9:0x29ea seg9:0x29f1 seg9:0x29fb seg9:0x2a05 seg9:0x2a09].
+    r.w.w9346 = -1;
+    ShipRecord& s = r.w.ship(1);
+    s.bec = 1;
+    s.w5e = 0;
+    s.w54 = 14;
+    s.w56 = static_cast<std::int16_t>(r.w.player);
+    std::int16_t d6 = 4321;
+    std::memcpy(reinterpret_cast<unsigned char*>(&r.w.ship(r.w.player)) + 0xd6, &d6, 2);
+    wave0_followups(r.w, r.host);
+    CHECK(r.w.w9346 == 4321);
+    // +0x54 != 14 leaves it.
+    r.w.w9346 = -1;
+    s.w54 = 13;
+    wave0_followups(r.w, r.host);
+    CHECK(r.w.w9346 == -1);
 }
 
 TEST_CASE("world setup: centre exclusion [BYTES seg10:0x998 seg10:0x99d]") {
@@ -180,7 +233,7 @@ TEST_CASE("world setup: the generator stays within the pools' bounds for 200 see
         Rig r;
         r.rng.srand(static_cast<std::uint16_t>(seed));
         r.w.wave = static_cast<std::int16_t>(seed % 40);
-        r.w.score = static_cast<std::uint32_t>(seed) * 5000u;
+        r.w.rating = static_cast<std::uint32_t>(seed) * 5000u;
         state1_load(r.w, r.host);
         for (int p = 0; p <= kPoolShips; ++p) {
             CHECK(r.w.pools.in_use(p) >= 0);
@@ -297,8 +350,56 @@ TEST_CASE("world setup: the briefing entry places once and the wave start follow
     CHECK(r.w.pools.rec(kPoolShips, r.w.player).state != 0);
 }
 
+TEST_CASE("world setup: the chance block needs an edition other than 0 and 3") {
+    // world.md "Ships at wave start", "Chance block" (M3 s3 fixer, C029) [BYTES seg9:0x6126
+    // seg9:0x612c]: score level 5, kind 0, six waves since DGROUP:0x93ac, no weapons: chance
+    // ((6 - 3) * 2 + 5) * 2 = 22, one rand() % 100 when the edition allows it.
+    for (int edition : {-1, 0, 1, 2, 3}) {
+        Rig r;
+        state1_load(r.w, r.host);
+        new_game(r.w);
+        enter_briefing(r.w, r.host);
+        r.w.w920c = static_cast<std::int16_t>(edition);
+        r.w.score_level = 5;
+        r.w.kind = 0;
+        r.w.handover.demons_gate = 0;
+        r.w.wave = 6;
+        r.w.w93ac = 0;
+        r.w.w992 = 0;
+        r.w.budget = 100;
+        r.w.added = 1;  // no resident ships: the block is the only draw
+        const std::uint32_t before = r.rng.state();
+        start_wave(r.w, r.host);
+        INFO("edition " << edition);
+        if (edition == 0 || edition == 3) {
+            CHECK(r.rng.state() == before);
+            CHECK(r.w.w913e == 0);
+        } else {
+            CHECK(r.rng.state() != before);
+        }
+    }
+}
+
 TEST_CASE("world setup: seed_wave takes the low word of the tick [BYTES seg11:0xb22 seg11:0xb28]") {
     is::shell::Rng rng;
     seed_wave(rng, 0x12345678u);
     CHECK(rng.state() == 0x5678u);
+}
+
+TEST_CASE("world: gate_post_live, seg3:0x65e's code-3 table test") {
+    // world.md "Key messages", "Suit test": kind word DGROUP:0x3d6c + 0x34·rec = 2 and class word
+    // DGROUP:0x3d5a + 0x34·rec > 0 (M3 s3 fixer) [BYTES seg3:0x6a2-0x6b8].
+    World w;
+    CHECK_FALSE(gate_post_live(w, 0));
+    w.pool8[3].at(0x1c) = 2;
+    CHECK_FALSE(gate_post_live(w, 3));  // class 0
+    w.pool8[3].at(0x0a) = 1;
+    CHECK(gate_post_live(w, 3));
+    w.pool8[3].at(0x1c) = 3;  // a gate post (kind 3)
+    CHECK_FALSE(gate_post_live(w, 3));
+    w.pool8[4].at(0x1c) = 2;
+    w.pool8[4].at(0x0a) = -1;
+    CHECK_FALSE(gate_post_live(w, 4));
+    CHECK_FALSE(gate_post_live(w, -1));
+    CHECK_FALSE(gate_post_live(w, kPool8Max));
 }

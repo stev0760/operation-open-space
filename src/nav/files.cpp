@@ -170,6 +170,8 @@ Selected select(Walker& w, IconCounter& icons, Strings& s, Records& records, con
             sep = ". ";
             key = 'D';
         }
+        // A locked built-in keeps its first string and separator; only the second becomes 2323
+        // (nav.md "Status line"; M3 s3 fixer, C001) [ORACLE newgame-0001].
         out.status = load(s, first, 0x28) + sep +
                      (locked ? load(s, kStrPayFull, 0x3c) : load(s, second, 0x28));
         out.pane = builtin_pane(w, key);

@@ -1,3 +1,4 @@
+// owner: world set-up (the single writer of this file in later stages).
 // The wave's state: the part of the original's DGROUP that the wave set-up writes and the other
 // wave routines read (docs/re/world.md "Wave set-up", docs/re/structs.md). One World lives for
 // the whole game, as DGROUP does: pools keep their records across waves (GlobalReAlloc keeps the
@@ -86,6 +87,12 @@ struct DirRecord {
 std::int16_t distance_cells(std::int16_t x1, std::int16_t y1, std::int16_t x2, std::int16_t y2,
                             std::int16_t& dx, std::int16_t& dy, std::int16_t cells_x = kWorldCells,
                             std::int16_t cells_y = kWorldCells);
+
+class World;
+// seg3:0x65e's code-3 table test on pool-8 record rec: word DGROUP:0x3d6c + 0x34·rec (the kind,
+// +0x1c of the side table) = 2 and word DGROUP:0x3d5a + 0x34·rec (+0x0a, the class) > 0
+// (world.md "Key messages", "Suit test"; M3 s3 fixer, KEY-14) [BYTES seg3:0x6a2-0x6b8].
+bool gate_post_live(const World& w, int rec);
 
 // ---- the icon records DGROUP:0x57a8 + 0x23·s (world.md "Programs and icons")
 struct IconRecord {
@@ -232,8 +239,9 @@ public:
     std::int16_t course = 0;      // DGROUP:0x9322
     std::int16_t opponents = 0;   // DGROUP:0x9338
     std::int16_t w9336 = 0;       // DGROUP:0x9336
-    std::int16_t score_level = 0; // DGROUP:0x9334 (seg9:0x484c, from the score DGROUP:0x5078)
-    std::uint32_t score = 0;      // DGROUP:0x5078
+    std::int16_t score_level = 0; // DGROUP:0x9334 (seg9:0x484c, from the rating DGROUP:0x5078)
+    std::uint32_t rating = 0;     // DGROUP:0x5078, the rating (globals.md "Scoring")
+    std::uint32_t score = 0;      // DGROUP:0x1e58, the score
     std::int16_t w932c = 0;       // DGROUP:0x932c
     std::int16_t w9332 = 0;       // DGROUP:0x9332
     std::int16_t w9344 = 0;       // DGROUP:0x9344 special places
@@ -244,6 +252,9 @@ public:
     std::int16_t w94ca = 0;       // DGROUP:0x94ca
     std::int16_t w94a6 = 0;       // DGROUP:0x94a6
     std::int16_t w93ac = 0;       // DGROUP:0x93ac
+    std::int16_t wa1cd = 0;       // DGROUP:0xa1cd [OPEN meaning]
+    std::int16_t wa1cf = 0;       // DGROUP:0xa1cf [OPEN meaning]
+    std::array<std::uint8_t, 4> ba193{};  // bytes DGROUP:0xa193 ... 0xa196 [OPEN meaning]
     std::int16_t w920c = 0;       // DGROUP:0x920c edition
     std::int16_t w992 = 0;        // DGROUP:0x992
     std::int16_t w994 = 0;        // DGROUP:0x994

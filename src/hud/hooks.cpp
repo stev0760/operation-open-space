@@ -86,6 +86,9 @@ public:
         v.fuel = r.fuel;
         return v;
     }
+    // The weapon table DGROUP:0x2f54 and the count byte DGROUP:0x713e (world.md "Weapon
+    // display" step 2) have no port yet: unlinked, the line reads "FUEL - " and a default name
+    // [OPEN weapon table, a later stage (M4)].
     WeaponView weapon() const override { return call(links().weapon, WeaponView{}); }
     void message(int ship, int id) override {
         if (links().message) links().message(ship, id);
@@ -93,8 +96,12 @@ public:
     int frame_rate_set() const override {
         return links().frame_rate_set ? links().frame_rate_set() : g.scheduler.rate();
     }
+    // DGROUP:0x59a, the frames of the last second (timing.md "Every 1000 ms") has no port in the
+    // scheduler yet: unlinked, the B display's ACTUAL line reads 0 [OPEN frame count, ADR 0001].
     int frame_rate_actual() const override { return call(links().frame_rate_actual, 0); }
 
+    // seg11:0x3f2e's attitude, seg3:0x0 and seg13:0x371c are not ported: unlinked, attitude 0,
+    // every target acceptable and kind 0 [OPEN target tests, a later stage].
     int attitude(int a, int b) const override { return call(links().attitude, 0, a, b); }
     bool target_ok(int p, int r) const override { return call(links().target_ok, true, p, r); }
     int target_kind(int p, int r) const override { return call(links().target_kind, 0, p, r); }
@@ -107,6 +114,8 @@ public:
     std::string text_8740() const override { return call(links().text_8740, std::string()); }
     std::string text_8768() const override { return call(links().text_8768, std::string()); }
     std::string text_87b8() const override { return call(links().text_87b8, std::string()); }
+    // seg11:0x2ce6 / seg13:0x58dc, the target's picture (world.md "Target display" step 3):
+    // unlinked, no icon is drawn [OPEN target icon, a later stage].
     void draw_target_icon(Canvas& c) override {
         if (links().draw_target_icon) links().draw_target_icon(c);
     }
@@ -120,6 +129,8 @@ public:
     int player_target_rec() const override {
         return call(links().player_target_rec, int{w().ship(w().player).target_rec});
     }
+    // seg13:0x2206 is not ported: unlinked, -1 makes Ctrl+T and the retarget call
+    // seg3:0xf4(player, 0xff, 0xff) (world.md "Key messages", Ctrl+T) [OPEN seg13:0x2206].
     int next_target() override { return call(links().next_target, -1); }
     // seg3:0xf4(ship, pool, rec) as far as the HUD knows it, until links().set_target holds the
     // whole routine: the ship's target words, the target display's object and texts, and the
@@ -178,7 +189,10 @@ public:
         std::int16_t dx = 0, dy = 0;
         return world::distance_cells(a.x, a.y, b.x, b.y, dx, dy);
     }
-    bool gate_post_live(int r) const override { return call(links().gate_post_live, false, r); }
+    // seg3:0x65e code 3 on the World's pool-8 side table (M3 s3 fixer) [BYTES seg3:0x6a2-0x6b8].
+    bool gate_post_live(int r) const override {
+        return call(links().gate_post_live, world::gate_post_live(w(), r), r);
+    }
     int record_bound_9422() const override { return call(links().record_bound_9422, 0); }
     bool mark2_window() const override { return call(links().mark2_window, false); }
     void draw_mark2() override {

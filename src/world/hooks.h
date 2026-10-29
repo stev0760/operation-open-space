@@ -1,3 +1,4 @@
+// owner: world set-up (the single writer of this file in later stages).
 // The wave set-up's hook points (hooks.cpp, Win32 only): the state-1 entry seg10:0x0 (the load),
 // the briefing entry's world part seg9:0xc06 / seg9:0x5cca (the icon fill and the placement), the
 // wave start seg9:0x60bc (the ships) and the teardown. The program's World lives here.

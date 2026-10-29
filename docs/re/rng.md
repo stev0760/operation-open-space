@@ -69,6 +69,15 @@ The probe run's raw memory dumps confirm the generator and the seed source. Step
   - In the 270 sites of the first row, the moduli range from 1 to 26000. The most common are 3 (37 sites), 2 (28), 100 (18), 4 and 6 (14 each) and 10 (13). [BYTES seg4:0x1267]
   - `rand()` lies in 0–32767 and `cwd` sets DX to 0, so the signed `idiv` yields the plain remainder `r % n` for every positive n. [BYTES seg5:0x105]
 - The text formatter seg10:0xa332 draws one number for its `R` directive (0x52). `R` reads two arguments n and base, computes `rand() % n + base` and loads that string id from the language DLL (DGROUP:0x9212) with `LoadString`. So `R` picks one of n consecutive strings. Its callers include the "RESOURCE ALERT" message (seg7:0x62). Which strings use `R` is [OPEN]. [BYTES seg10:0xa406] [BYTES seg10:0xa7c4] [BYTES seg10:0xa7e2] [BYTES seg10:0xa7f3]
+- Wave sites whose draws depend on game state ([world.md](world.md)):
+
+  | Site | Draws | Evidence |
+  |---|---|---|
+  | seg9:0x94ba | one `rand()` per icon slot (8 slots) at seg9:0x952c, only when DGROUP:0x9320 = 2 and DGROUP:0x9334 ≠ 0. Its callee seg7:0x2512 calls seg7:0x65aa(0, i), whose only path to `rand()` needs the ship pool DGROUP:0x9324, so it draws none for pool 0 | [BYTES seg9:0x94ba seg9:0x952c seg7:0x2512 seg7:0x65aa] |
+  | seg8:0x4e14 | one `rand()` at the end of every visibility pass. When `rand()` % 9 = 0, each listed object with byte +0x50 ≠ 0 outside pool DGROUP:0x9324 calls seg11:0x9fdc(pool, rec) once, provided another listed object j ≠ i has `state` 0 | [BYTES seg8:0x4ffb seg8:0x5006 seg8:0x5012-0x5058 seg8:0x5060-0x509d seg8:0x50a0] |
+  | seg13:0x0, damage block | `rand()` % (2w + 1) for a ship whose word +0x2c < 50 under byte +0xe8 or +0xea, on frames picked by the DGROUP:0x134e cycle with the `Detail`-dependent divisors 10 − max(2·`Detail`, 5) and 18 − 4·`Detail` (`Detail` = DGROUP:0x9208) | [BYTES seg13:0x3e3-0x4d8 seg13:0x449 seg13:0x47b] |
+  | seg13:0x0, tail smoke | `rand()` % (ship word +0x26 + 30), below 2 calling seg7:0x5b68(DGROUP:0x9324, i, 1), only for a ship on screen (+0x1a ≠ 0) with +0x26 < 50, and not for ship DGROUP:0x952e while DGROUP:0x9e49 = 4 | [BYTES seg13:0x68d-0x6e2] |
+  | seg8:0x0, shake | under DGROUP:0x238c ≠ 0: seg10:0x744c(0x69), then seg10:0x754a(8, `rand()` % DGROUP:0x90ea, `rand()` % DGROUP:0x90ec, 4) with the DGROUP:0x90ec draw first, then `rand()` % 3 − 2 for x and then for y (−2 … 0) | [BYTES seg8:0x251-0x2a3] |
 
 ## ISPACE.DLL and FACTORY.EXE
 - ISPACE.DLL has the same pair: `srand` at ISPACE.DLL seg3:0x650 and `rand` at seg3:0x668, with the dword state at ISPACE.DLL DGROUP:0xb8c (initialised to 1). It uses the multiply helper seg3:0xfe. [BYTES ISPACE.DLL seg3:0x650] [BYTES ISPACE.DLL seg3:0x66d] [BYTES ISPACE.DLL DGROUP:0xb8c]

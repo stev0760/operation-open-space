@@ -532,6 +532,10 @@ void draw_row(const DRAWITEMSTRUCT* d) {
     SetTextColor(dc, old_text);
 }
 
+// The shift uses the depth digit, the third-to-last character of the row text (nav.md "Drawing
+// the tree", "Focus"; M3 s3 fixer, C006) [BYTES seg6:0x4e5e seg6:0x4f0a]. For itemID -1 the
+// original reads a stack buffer LB_GETTEXT(-1) never fills; the port applies no shift
+// [OPEN nav.md focus rectangle for itemID -1].
 RECT focus_rect(const DRAWITEMSTRUCT* d) {
     RECT r = d->rcItem;
     if (d->CtlID == static_cast<UINT>(kDirListId) && d->itemID != static_cast<UINT>(-1))

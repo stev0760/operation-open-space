@@ -167,7 +167,9 @@ void spin(FlightCtx& c, int ship) {
     c.host.player_sprite();
 }
 
-// seg11:0x592a [BYTES seg11:0x5938-0x5aa7]
+// seg11:0x592a [BYTES seg11:0x5938-0x5aa7]. A 0.3 s Left press turns the port 3 sectors where
+// the oracle's turned 4 (90 degrees) [ORACLE wave-0001]; whether the press timing, the frame
+// cadence or the start heading accounts for it is [OPEN Start heading, turn cadence].
 void turn_input(FlightCtx& c) {
     WaveGlobals& g = c.g;
     if (g.dg_1034 == 0) return;
@@ -350,7 +352,9 @@ void thrust(FlightCtx& c, std::int16_t mode, int ship) {
         // The race timer path of kind-6 waves [BYTES seg11:0x6730-0x6846] (M6).
         if (g.wave_kind == 6 && !(g.race_timer >= g.now) && g.dg_9eb5 == 0) c.host.race_thrust(ship);
     }
-    // Mode 1 reaches here with T and k unset in the original [OPEN]; the port uses 0.
+    // Mode 1 reaches the store with T ([bp - 0x14]) and k ([bp - 0x10]) never written in that
+    // call, so the original's +0x2f is stale stack; the port uses 0 (world.md "Flame length",
+    // M3 s3 fixer, C054) [BYTES seg11:0x65e7 seg11:0x684a] [DESIGN no ADR yet].
     o.flame = static_cast<std::uint8_t>(idiv16(mul16(t, k), 20));  // [BYTES seg11:0x684a-0x6865]
 }
 

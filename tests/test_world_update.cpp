@@ -34,6 +34,9 @@ public:
     void player_sprite() override { ++sprites; }
     void draw_sprite(std::int16_t pr, int, int, int) override { drawn.push_back(pr); }
     void seg13_447a() override { calls.push_back("447a"); }
+    std::uint16_t joy_rc = 0;
+    int joy_reads = 0;
+    std::uint16_t joy_read() override { return ++joy_reads, joy_rc; }
 };
 
 struct Rig {
@@ -180,6 +183,53 @@ TEST_CASE("update: the player enters at the first gate") {
     CHECK(p.y == 9000 - 30);
     CHECK(p.state == 0);
     CHECK(r.f.entry_pending == 0);
+}
+
+TEST_CASE("update: the entry pushes back only the first later waiting ship") {
+    // world.md "Ship entry (seg7:0x1d0c)" step 2: when ship i is in state 100, the first later
+    // ship j with state 100 gets +0x88 = now + 5000 and no other ship does (M3 s3 fixer, C036)
+    // [BYTES seg7:0x1d4c seg7:0x1d70 seg7:0x1d78].
+    Rig r;
+    r.g.last_ship = 3;
+    r.pools.rec(kPoolGatePosts, 0).x = 5000;
+    r.pools.rec(kPoolGatePosts, 0).y = 9000;
+    r.pools.rec(kPoolGatePosts, 0).extent = 272;
+    r.pools.rec(kPoolGatePosts, 1).x = 5000 + 272 + 1200;
+    r.pools.rec(kPoolGatePosts, 1).y = 9000;
+    for (int i = 0; i <= 3; ++i) {
+        r.pools.rec(kPoolShips, i).state = 100;
+        r.ships[static_cast<std::size_t>(i)].d88.set(i == 0 ? 0u : 900000u);
+    }
+    r.pools.rec(kPoolShips, 1).state = 2;  // not waiting: passed over by the j search
+    r.f.entry_pending = 1;
+    wave_frame(r.c);
+    CHECK(r.pools.rec(kPoolShips, 0).state == 0);
+    CHECK(r.ships[1].d88.get() == 900000u);
+    CHECK(r.ships[2].d88.get() == r.g.now + 5000u);
+    CHECK(r.ships[3].d88.get() == 900000u);
+}
+
+TEST_CASE("update: the joystick read and the unplugged result") {
+    // world.md "Joystick", "Read" (M3 s3 fixer, C039) [BYTES seg11:0x72c2 seg11:0x72ce
+    // seg11:0x72d3]: every 50 ms, only while the player's byte +0xe2 is 0; 0xa7 clears JoyStick.
+    Rig r;
+    r.g.joystick = 1;
+    r.ships[0].be2 = 1;
+    wave_frame(r.c);
+    CHECK(r.host.joy_reads == 0);
+    CHECK(r.f.joy_due == r.g.now + 50u);
+    r.ships[0].be2 = 0;
+    r.g.now += 51;
+    wave_frame(r.c);
+    CHECK(r.host.joy_reads == 1);
+    CHECK(r.g.joystick == 1);
+    wave_frame(r.c);  // not due yet
+    CHECK(r.host.joy_reads == 1);
+    r.host.joy_rc = 0xa7;
+    r.g.now += 51;
+    wave_frame(r.c);
+    CHECK(r.host.joy_reads == 2);
+    CHECK(r.g.joystick == 0);
 }
 
 TEST_CASE("update: rocks on and off screen") {

@@ -1,3 +1,4 @@
+// owner: world set-up (the single writer of this file in later stages).
 // The wave set-up (docs/re/world.md "Wave set-up"): the load seg9:0x22b4 with the generator
 // seg9:0x3202, the pool counts and the record templates seg10:0xb94; the briefing entry's part
 // seg9:0x5cca with the icon fill seg9:0xb2a / seg9:0x0 and the placement seg9:0x6624 (rocks,
@@ -43,6 +44,9 @@ struct SetupHost {
     // seg14:0x3eda, seg14:0x0(-1) and seg14:0x4074 at the placement (the ship records from
     // MASTER.SHP and the opponents). Unset: the player's ship alone (ship_setup_minimal).
     std::function<void(World&)> ship_setup;
+    // The design type word DGROUP:0x970a + 0xad·design (ship word +0x4e), read by seg9:0x2828
+    // [BYTES seg9:0x2855 seg9:0x285b seg9:0x29e3]. Unset: 0 for every design (the designs are M5).
+    std::function<std::int16_t(int design)> design_type;
     // seg8:0x0, the view recentred on the player at the wave start (flight role).
     std::function<void(World&)> recentre;
 };
@@ -57,14 +61,19 @@ void power_on(World& w);
 // easy first waves [BYTES seg6:0x1204-0x1256 seg6:0x1258-0x1284].
 void read_budget(World& w);
 // seg9:0x484c: DGROUP:0x9334 = the number of score thresholds DGROUP:0x9bc + 4k (k < 12) below
-// the score dword DGROUP:0x5078 [BYTES seg9:0x484c].
+// the rating dword DGROUP:0x5078 [BYTES seg9:0x484c].
 void level_from_score(World& w);
-// seg9:0xc06's resets of a new game (DGROUP:0x92e4 = 0): DGROUP:0x992, the score, DGROUP:0x9346
-// = -1, the wave, DGROUP:0x9432 = 100, the wave kinds DGROUP:0x986 ... 0x990 [BYTES seg9:0xc06
-// seg9:0xc56].
+// seg9:0xc06's resets of a new game (docs/re/world.md "New-game reset"): DGROUP:0x992 always;
+// with DGROUP:0x92e4 = 0 the score, the rating, the wave, DGROUP:0x9346 and DGROUP:0x4eec = -1,
+// DGROUP:0x9432 = 100, DGROUP:0xa1cf and the bytes DGROUP:0xa193 ... 0xa196 = 1; then the wave
+// kinds DGROUP:0x986 ... 0x990 [BYTES seg9:0xc06 seg9:0xc56 seg9:0xc7f seg9:0xcc8].
 void new_game(World& w);
 
 // ---- the load seg9:0x22b4
+// seg9:0x2828 as the load calls it at wave 0 (docs/re/world.md "seg9:0x2828", "DGROUP:0x9346"):
+// DGROUP:0x9346 from a duel opponent's record, DGROUP:0x9332 from DGROUP:0x9432, and the
+// DGROUP:0x932c chance (cleared again at wave 0) [BYTES seg9:0x2828 seg9:0x2a09 seg9:0x2b4d].
+void wave0_followups(World& w, SetupHost& h);
 // seg9:0x3202, the wave generator: wave kind, target, category counts, pool-4 count, gate count,
 // pool-2 units and the opponents [BYTES seg9:0x3202] [OPEN: world.md "Generator draw loop";
 // the port follows the routine's 61 rand() sites in address order, see setup.cpp].
