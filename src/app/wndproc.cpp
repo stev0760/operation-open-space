@@ -120,7 +120,20 @@ void palette_message() {
     const bool done = gfx::emulate_query_new_palette(
         *g.gfx, g.game.state(), g.timer_seen, [] { paint_routine(); },
         [] { PostMessageW(g.main, kMsgPaint, 0, 0); });
-    if (done && g.main) g.gfx->present(g.main, true);
+    // InvalidateRect(main, NULL, TRUE) also invalidates the child windows, as main has no
+    // WS_CLIPCHILDREN (style 0x80CF0000 or WS_POPUP) [REF Win32 SDK RedrawWindow] [BYTES
+    // seg6:0x180e seg6:0x1816]: the IS_INFO panels, drawn on the surface (ADR 0013 decision 4),
+    // paint again after the erase as the oracle's do [ORACLE wave-0001 35-watch-icons-on.png]
+    // (M3 s4 fixer).
+    if (done && children_invalidated()) children_invalidated()();
+    // UpdateWindow (seg2:0x607) handled the whole client region, so no WM_PAINT for main was
+    // left pending: one that was (a ShowWindow's) would run seg2:0x970 again without its erase
+    // and bring the wiped HUD back. The port validates main to the same effect [DESIGN ADR 0013
+    // decision 3] [BYTES seg2:0x5ff seg2:0x607].
+    if (done && g.main) {
+        ValidateRect(g.main, nullptr);
+        g.gfx->present(g.main, true);
+    }
 }
 
 // seg6:0x19bc: the teardown, once [BYTES seg6:0x19c9-0x1a5a].
@@ -306,9 +319,15 @@ void input(UINT msg, WPARAM wparam, LPARAM lparam) {
     // (src/world/flight_hooks.cpp).
     if (msg == WM_KEYDOWN || msg == WM_KEYUP || msg == WM_SYSKEYDOWN || msg == WM_SYSKEYUP)
         world::feed_key(msg, wparam, lparam);
-    // The latch only; DefWindowProc follows. How Alt+I, Alt+R and Alt+plus/minus reach seg11:0x6b64
-    // in the original (WM_SYSKEYDOWN in seg2's WndProc, the 0x99b post or MainAccel) is [OPEN]:
-    // until it is read, the port's Alt keys act only through the latch and 0x99b (M3 s2 fixer).
+    // The latch only; DefWindowProc follows. seg2's WndProc has no case for WM_SYSKEYDOWN,
+    // WM_SYSKEYUP, WM_CHAR or WM_SYSCHAR: they reach DefWindowProc [BYTES seg2:0x2d4 seg2:0x38a
+    // seg2:0x445]. Alt+I, Alt+R and Alt+plus/minus come through the message loop instead:
+    // TranslateAccelerator with MainAccel while the main window is active (main.cpp) turns them
+    // into WM_COMMAND 491, 471, 401 and 411 [BYTES seg2:0x191 seg2:0x1a5 ENG_LANG.DLL ACCELERATOR
+    // MAINACCEL], whose handler seg2:0x13b2 posts 0x99b with 'I', 'R', VK_ADD or VK_SUBTRACT
+    // (src/shell/command_table.cpp) [BYTES seg2:0x646 seg2:0x13c5 seg2:0x13fb seg2:0x13da
+    // seg2:0x13e5]; 0x99b then takes WM_KEYDOWN's path below into seg11:0x6aa8 and seg11:0x6b64
+    // [BYTES seg2:0x345 seg2:0x70e].
     if (msg == WM_SYSKEYDOWN || msg == WM_SYSKEYUP) return;
     // DEMO mode (DGROUP:0x90f8 and DGROUP:0x8e5e) quits on input after 4000 ms; the port has
     // no DEMO command line [OPEN] (M3, shell.md "DEMO and PLAY"). Otherwise input needs DGROUP:0x1212, DGROUP:0x8f68 and
@@ -385,7 +404,41 @@ void reload_menu() {
     if (g.keys.menu) SetMenu(g.main, g.menu);
 }
 
+// seg2:0x4f0 and seg2:0x513: a window that exists is destroyed and its INI key cleared, else the
+// key is set and the window created (the creator applies its own conditions, world.md "Icon
+// column") [BYTES seg2:0x4f0 seg2:0x4f7 seg2:0x4fd seg2:0x505 seg2:0x50b seg2:0x513 seg2:0x51a
+// seg2:0x520 seg2:0x528 seg2:0x52e].
+void toggle_watch(WatchToggle& w, int& key, const char* what, const char* create_at,
+                  const char* destroy_at) {
+    if (w.exists && w.exists()) {
+        key = 0;
+        if (w.destroy)
+            w.destroy();
+        else
+            log_todo(std::string(what) + " destroy", destroy_at);
+    } else {
+        key = 1;
+        if (w.create)
+            w.create();
+        else
+            log_todo(std::string(what) + " create", create_at);
+    }
+}
+
 }  // namespace
+
+WatchToggle& icon_watch() {
+    static WatchToggle w;
+    return w;
+}
+WatchToggle& smart_watch() {
+    static WatchToggle w;
+    return w;
+}
+std::function<void()>& children_invalidated() {
+    static std::function<void()> f;
+    return f;
+}
 
 // A diagnostic line for the headless checks: class, styles, rectangles, caption and the
 // topmost flag of the main window [DESIGN].
@@ -485,24 +538,32 @@ LRESULT handle(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
         EndPaint(hwnd, &ps);
         return 0;
     }
-    case WM_ERASEBKGND:  // the presented surface covers the client area [DESIGN]
+    case WM_ERASEBKGND: {  // the presented surface covers the client area [DESIGN]
         // seg2:0x224 leaves WM_ERASEBKGND to DefWindowProc, which fills the client with the
         // class brush BLACK_BRUSH, clipped to the update region that the wParam DC's clip box
-        // bounds [REF Win32 SDK WM_ERASEBKGND]. State 0 draws only what changes, so the erase
-        // is kept there: on the surface, over the logical cover of that box, before the repaint
-        // seg11:0xafe [DESIGN]. Other states black the play area in the paint routine until
-        // they draw.
-        if (g.game.state() == shell::kIntro && !g.gfx->surface().empty()) {
+        // bounds [REF Win32 SDK WM_ERASEBKGND]. The erase is kept on the surface, over the
+        // logical cover of that box [DESIGN]: in state 0, which draws only what changes, before
+        // the repaint seg11:0xafe that 0x978 runs; in states 1 and 7 after it, as seg2:0x7ac runs
+        // seg2:0x970 before DefWindowProc's BeginPaint [BYTES seg2:0x7c4 seg2:0x7c7 seg6:0x14a8]
+        // (ADR 0013 decisions 1 and 3; this is what wipes the HUD at the wave start, [ORACLE
+        // wave-0001 05-12]); the IS_INFO children paint again after it (children_invalidated).
+        // Other states black the play area in the paint routine until they draw.
+        const int erase_state = g.game.state();
+        const bool wave_states = erase_state == shell::kWave || erase_state == shell::kHelp;
+        if ((erase_state == shell::kIntro || wave_states) && !g.gfx->surface().empty()) {
             RECT cb;
             if (GetClipBox(reinterpret_cast<HDC>(wparam), &cb) != ERROR) {
                 const Rect r = shell::logical_cover(Rect{cb.left, cb.top, cb.right, cb.bottom},
                                                     g.gfx->factor(), g.gfx->logical_width(),
                                                     g.gfx->logical_height());
-                if (r.width() > 0 && r.height() > 0)
+                if (r.width() > 0 && r.height() > 0) {
                     PatBlt(g.gfx->dc(), r.left, r.top, r.width(), r.height(), BLACKNESS);
+                    if (wave_states && children_invalidated()) children_invalidated()();
+                }
             }
         }
         return 1;
+    }
     case WM_DPICHANGED:  // per-monitor DPI awareness v2 (ADR 0006 decision 4)
         if (!g.keys.full) {
             const auto* r = reinterpret_cast<const RECT*>(lparam);
@@ -577,8 +638,12 @@ LRESULT handle(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
         return 0;
     case kMsgShipWatch: log_todo("Ship Watch window", "seg13:0x5878"); return 0;
     case kMsgMenuReload: reload_menu(); return 0;  // seg2:0x4e9
-    case kMsgIconWatch: log_todo("Icon Watch toggle", "seg2:0x4f0"); return 0;
-    case kMsgAllShips: log_todo("All Ships toggle", "seg2:0x513"); return 0;
+    case kMsgIconWatch:  // seg2:0x358 -> seg2:0x4f0
+        toggle_watch(icon_watch(), g.keys.icon_wnd, "IS_ICON", "seg7:0x641a", "seg7:0x63f2");
+        return 0;
+    case kMsgAllShips:  // seg2:0x35f -> seg2:0x513
+        toggle_watch(smart_watch(), g.keys.sm_wnd, "IS_SMART", "seg13:0x638a", "seg13:0x6362");
+        return 0;
     case kMsgDemo:
     case kMsgPlay: log_todo("DEMO and PLAY", "seg2:0x86a"); return 0;  // [OPEN] (M3)
     // seg2:0x4cf pushes only wParam; seg10:0x7480 reads a stale stack word as the flag

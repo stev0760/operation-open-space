@@ -5,6 +5,9 @@
 #ifdef _WIN32
 #include <windows.h>
 
+#include <utility>
+#include <vector>
+
 namespace is::app {
 struct App;
 }
@@ -16,6 +19,13 @@ void install_wave(app::App& app);
 // seg9:0x22b4's rock images and seg11:0x0's radar part, once the surface exists (the HUD's
 // state-1 entry calls it after seg11:0x0's HUD loads).
 void load_wave_resources();
+// The visible list of the last visibility pass: DGROUP:0x507c / DGROUP:0x50e0, DGROUP:0x9146
+// entries, as sign-extended (pool, record) pairs (seg13:0x2206's input).
+std::vector<std::pair<int, int>> wave_visible();
+// The player's design words the panels read (src/hud/hooks.cpp), re-read at each wave start.
+void refresh_player_design();
+// seg11:0x2f8c: the weapon picture DGROUP:0x5040 of the player's weapon (src/hud/hooks.cpp).
+void weapon_picture_refresh();
 // The METAL pattern brush DGROUP:0x500a of the HUD's canvas (src/hud/hooks.cpp), null before
 // seg11:0x0 ran.
 HBRUSH metal_brush();

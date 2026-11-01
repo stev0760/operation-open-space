@@ -1,6 +1,8 @@
 // The wave's update (update.h).
 #include "world/update.h"
 
+#include "world/rock_images.h"
+
 namespace is::world {
 
 const char* mover_address(Mover m) {
@@ -27,6 +29,67 @@ namespace {
 
 // `cmp dword [d], now; jae skip`: true when the deadline d lies before now (unsigned).
 bool passed(std::uint32_t d, std::uint32_t now) { return d < now; }
+
+}  // namespace
+
+namespace {
+World* g_frame_world = nullptr;
+}  // namespace
+
+void set_frame_world(World* w) { g_frame_world = w; }
+
+World* UpdateHost::frame_world(Pools& pools) {
+    return g_frame_world && &g_frame_world->pools == &pools ? g_frame_world : nullptr;
+}
+
+std::uint16_t UpdateHost::select_rock_brush(int b) {
+    Blitter* out = blitter();
+    if (!out || b < 1 || b > 9) return 0;
+    return out->select_brush(kDcWindow, wave_graphics().heat[static_cast<std::size_t>(b)]);
+}
+
+void UpdateHost::restore_brush(std::uint16_t old) {
+    if (Blitter* out = blitter(); out && old != 0) out->select_brush(kDcWindow, old);
+}
+
+namespace {
+
+// seg8:0x158a(arg) at seg7:0xb87 with the frame's words (draw.h draw_stars), or the host's
+// stars() while the frame has no World or Blitter.
+void frame_stars(UpdateCtx& c, int arg) {
+    UpdateHost& h = c.host;
+    World* w = h.frame_world(c.flight.pools);
+    Blitter* out = h.blitter();
+    if (!w || !out) {
+        h.stars(arg);
+        return;
+    }
+    // The brush tables on first use, when the load did not make them (rock_images.h) [DESIGN].
+    create_wave_brushes(*out, wave_graphics());
+    const WaveGlobals& g = c.flight.g;
+    StarInputs in;
+    in.ship_pool = g.ship_pool;
+    in.player = g.player;
+    in.size = g.size;
+    in.autopilot = g.autopilot;
+    in.shake = g.dg_238c;
+    in.shake_x = c.view.shake_x;  // DGROUP:0x2390
+    in.shake_y = c.view.shake_y;  // DGROUP:0x2392
+    in.demons_gate = g.demons_gate;
+    // DGROUP:0x2394 / 0x2396, the 0x951a motion, have no port yet [OPEN].
+    draw_stars(*w, in, wave_graphics(), *out, c.flight.rng, arg,
+               [&h](int a) { h.bright_stars(a); });
+}
+
+// seg12:0x3778 at seg7:0xbed (draw.h draw_lines), or the host's lines() without a World.
+void frame_lines(UpdateCtx& c) {
+    World* w = c.host.frame_world(c.flight.pools);
+    if (!w) {
+        c.host.lines();
+        return;
+    }
+    draw_lines(*w, c.flight.g.ship_pool, kDcWindow, c.host.link_hooks());
+}
 
 }  // namespace
 
@@ -127,7 +190,7 @@ void wave_frame(UpdateCtx& c) {
         h.size_reread();
         f.size_reread = 0;
     }
-    h.stars(0);  // seg7:0xb87 [OPEN Draw order] (M3 s2 fixer)
+    frame_stars(c, 0);  // seg7:0xb87 seg8:0x158a(0) (M3 s4 DRAW)
     // 8. The view [BYTES seg7:0xb8c]
     {
         ObjectRecord& p = c.flight.ship_obj(g.player);
@@ -151,7 +214,7 @@ void wave_frame(UpdateCtx& c) {
         else
             h.speed_display_end_7_119c();
     }
-    h.lines();  // seg7:0xbed [OPEN Draw order] (M3 s2 fixer)
+    frame_lines(c);  // seg7:0xbed seg12:0x3778 (M3 s4 DRAW)
     // The icon dissolves [BYTES seg7:0xbf2-0xc1a] [OPEN Draw order] (M3 s2 fixer)
     for (int i = 0; i < c.flight.pools.in_use(kPoolIcons) && i < c.flight.pools.records(kPoolIcons);
          ++i)
@@ -180,7 +243,10 @@ void wave_frame(UpdateCtx& c) {
     move_ships(c.flight);  // seg13:0x0
     move_rocks(c);         // seg7:0x3bae
     h.mover(Mover::k12_532c);
-    h.mover(Mover::k12_633e);
+    if (World* w = h.frame_world(c.flight.pools))  // seg12:0x633e (M3 s4 DRAW)
+        move_pool8(c, *w);
+    else
+        h.mover(Mover::k12_633e);
     h.mover(Mover::k8_8256);
     h.mover(Mover::k7_309c);
     h.mover(Mover::k7_32d0);
@@ -265,7 +331,11 @@ void ship_entry(UpdateCtx& c) {
         for (int j = 0; j <= g.last_ship && j < kShipCount; ++j)
             if (c.flight.ship_obj(j).state == 100 && c.flight.ships[static_cast<std::size_t>(j)].bec != 0)
                 f.entry_pending = 1;
-        if (f.entry_pending == 0 && g.wave_kind == 7) f.dg_668a = 1;  // [BYTES seg7:0x1ebb-0x1ec9]
+        if (f.entry_pending == 0 && g.wave_kind == 7) {  // [BYTES seg7:0x1ebb-0x1ec9]
+            // DGROUP:0x668a is gate 0's speed word World::gate[0].w12, its one copy (M3 s4 DRAW,
+            // s4 fixer review L6).
+            if (World* w = c.host.frame_world(pools)) w->gate[0].w12 = 1;
+        }
         if ((f.race != 0 || f.dg_950 != 0) && i != g.player) c.host.seg13_563c();  // [BYTES seg7:0x1ecf-0x1eee]
         return;
     }
@@ -355,6 +425,274 @@ void move_rocks(UpdateCtx& c) {
         h.rock_hit(i, hit);
         f.dg_9454 = 0;
     }
+}
+
+// ---- seg12:0x633e, seg12:0x1776, seg12:0x1f7a (work/analysis/m3/s4-draw.md 1) (M3 s4 DRAW)
+
+void move_pool8(UpdateCtx& c, World& w) {
+    WaveGlobals& g = c.flight.g;
+    UpdateHost& h = c.host;
+    Pools& p = w.pools;
+    // [BYTES seg12:0x634b-0x6356]
+    w.w94a0 = add16(idiv16(add16(w.detail, 1), 2), 2);
+    if (w.w1c32 == 0) h.seg12_7006();  // [BYTES seg12:0x6359-0x6361]
+    w.w1c32 = add16(w.w1c32, 1);       // [BYTES seg12:0x6364-0x636f]
+    if (w.w1c32 > 1) w.w1c32 = 0;
+    w.w0d08 = add16(w.w0d08, w.w0d06);  // [BYTES seg12:0x6375-0x638a]
+    if (w.w0d08 > 4 || w.w0d08 < 2) w.w0d06 = sub16(0, w.w0d06);
+    w.w949e = 1;  // [BYTES seg12:0x638e-0x6399]
+    w.w949c = 0;
+    w.w949a = 0;
+    // The kind dispatch [BYTES seg12:0x63a1-0x6406].
+    for (int i = 0; i < p.in_use(kPoolGatePosts) && i < p.records(kPoolGatePosts) && i < kPool8Max; ++i) {
+        ObjectRecord& o = p.rec(kPoolGatePosts, i);
+        if (o.state != 0) continue;
+        o.w1c = 0;
+        const std::int16_t kind = w.pool8[static_cast<std::size_t>(i)].at(0x1c);  // DGROUP:0x3d6c
+        if (kind == 1) {
+            h.hazard(1, i);  // seg12:0x390e(i) (M5)
+        } else if (kind == 2) {
+            h.hazard(2, i);  // seg12:0x5636(i) (M5)
+        } else if (kind == 3) {
+            move_gate(c, w, i / 2);
+            ++i;
+        }
+    }
+    // The hazard marks: written by seg12:0x5636 only [BYTES seg12:0x6408-0x6458].
+    if (w.w949e != 0) {
+        Blitter* out = h.blitter();
+        const std::int16_t side = sprite_side(2, g.size);
+        for (int k = 0; k < w.w94a0 && k < static_cast<int>(w.marks.size()); ++k) {
+            const HazardMark& m = w.marks[static_cast<std::size_t>(k)];
+            if (m.w8 != 0 && m.w8 < m.wa && out) out->pat_blt(kDcWindow, m.x, m.y, side, side, kBlackness);
+        }
+    }
+    // [BYTES seg12:0x645a-0x649f]
+    if (w.w949a != 0) w.w6988 = g.now + 1000u;
+    if (w.w949c != 0) w.w666c = g.game_frames + (w.kind == 6 ? 3u : 8u);
+}
+
+void move_gate(UpdateCtx& c, World& w, int p) {
+    WaveGlobals& g = c.flight.g;
+    FrameGlobals& f = c.f;
+    UpdateHost& h = c.host;
+    Pools& pools = w.pools;
+    const int r0i = 2 * p, r1i = 2 * p + 1;
+    if (p < 0 || p >= kMaxGates || pools.records(kPoolGatePosts) <= r1i) return;  // [DESIGN] bounds
+    GateRecord& gate = w.gate[static_cast<std::size_t>(p)];
+    ObjectRecord& r0 = pools.rec(kPoolGatePosts, r0i);
+    ObjectRecord& r1 = pools.rec(kPoolGatePosts, r1i);
+    const std::int16_t s = w.shift;  // DGROUP:0x9150
+    const int size = g.size;          // DGROUP:0x9156
+    Blitter* out = h.blitter();
+    WaveGraphics& wg = wave_graphics();
+    if (out) create_wave_brushes(*out, wg);  // on first use (rock_images.h) [DESIGN]
+    r0.w1c = 0;  // [BYTES seg12:0x178f-0x17a9]
+    r1.w1c = 0;
+    // The beam brush index, gate 0 only [BYTES seg12:0x17ab-0x17cd].
+    if (w.beam_index != 0 && p == 0) {
+        w.beam_index = add16(w.beam_index, w.beam_step);
+        if (w.beam_index > 4 || w.beam_index < 2) w.beam_step = sub16(0, w.beam_step);
+    }
+    std::int16_t& v = gate.w12;  // DGROUP:0x668a + 0x1c·p, the speed
+    std::int16_t draw_w = 0;     // [bp-0xc], the PATCOPY width
+    std::int16_t erase_w = 0;    // [bp-0xe], the erase width (gap + 16)
+    for (int r = r0i; r <= r1i; ++r) {
+        ObjectRecord& o = pools.rec(kPoolGatePosts, r);
+        const bool second = r == r1i;
+        // a. The gap and the moving gate [BYTES seg12:0x1862-0x1888 seg12:0x1ed6-0x1f6a
+        // seg12:0x17dc-0x1860].
+        if (v == 0) {
+            if (second) draw_w = erase_w = sub16(sub16(r1.x, r1.extent), r0.x);
+        } else {
+            if (second) erase_w = add16(sub16(sub16(r1.x, r1.extent), r0.x), 16);
+            const std::int16_t step = mul16(v, 8);
+            if (!second) {
+                r0.x = add16(r0.x, step);
+                r0.vx = shl16(v, 3);
+                draw_w = sub16(sub16(r1.x, r0.x), r0.extent);
+                gate.beam.l = add16(gate.beam.l, step);
+            } else {
+                r1.x = add16(r1.x, sub16(0, step));
+                r1.vx = mul16(v, -8);
+                draw_w = sub16(sub16(r1.x, r1.extent), r0.x);
+                gate.beam.r = add16(gate.beam.r, sub16(0, step));
+            }
+            if (gate.width < draw_w || draw_w < gate.w0e) v = w.kind == 7 ? std::int16_t{0} : sub16(0, v);
+        }
+        // b. The post [BYTES seg12:0x18a3-0x19e7].
+        if (o.on_screen != 0) {
+            int slot = kSlotGate;
+            int masked = 0;
+            std::uint16_t old = 0;
+            const std::int8_t heat = static_cast<std::int8_t>(o.flame);  // byte +0x2f
+            if (heat < 3) {
+                if (heat < 0) {  // [BYTES seg12:0x195b seg12:0x1969 seg12:0x1972 seg12:0x1982]
+                    if (imod16(static_cast<std::int16_t>(c.flight.rng.rand()), 7) == 2)
+                        c.flight.host.puff(kPoolGatePosts, r, 0);  // seg7:0x5b68(8, r, 0)
+                    o.flame = static_cast<std::uint8_t>(o.flame + 1);
+                }
+            } else {
+                slot = kSlotGateMask;  // [BYTES seg12:0x18ad-0x1940]
+                masked = 1;
+                int b = heat < 5 ? heat + w.beam_index - 1 : heat - w.beam_index;
+                if (b < 1) b = 1;
+                old = h.select_rock_brush(b);  // DGROUP:0x3b74[b]
+                if (o.d6a.get() < g.now) {
+                    o.flame = static_cast<std::uint8_t>(o.flame - 1);
+                    o.d6a.set(g.now + 3000u);
+                }
+            }
+            // +0x10 = (size + gap)·((r - 2p) % 2) + gap: cell 0 for 2p, cell 1 for 2p + 1
+            // [BYTES seg12:0x19a1 seg12:0x19ad seg12:0x19b5 seg12:0x19bb].
+            o.src_x = add16(mul16(add16(o.size, o.gap), static_cast<std::int16_t>((r - 2 * p) % 2)), o.gap);
+            // seg8:0xb76((char)r | 0x800, 1, DGROUP:0x39e8[slot], masked) [BYTES seg12:0x19d5].
+            h.draw_sprite(pool_rec(kPoolGatePosts, r), 1, slot, masked);
+            if (old != 0) h.restore_brush(old);
+        }
+        // c. The beam and d. the OUT sign, on r1 [BYTES seg12:0x19fa-0x1c9d].
+        if (second && (r0.on_screen != 0 || r1.on_screen != 0)) {
+            const std::size_t bi = static_cast<std::size_t>(w.beam_index);
+            const BrushId old =
+                out && bi < wg.beam.size() ? out->select_brush(kDcWindow, wg.beam[bi]) : kBrushNone;
+            gate.old_beam_x = gate.beam_x;
+            gate.old_beam_y = gate.beam_y;
+            std::int16_t px = r0.scr_x, py = r0.scr_y;
+            if (r0.on_screen == 0) {  // seg8:0x29ea(r0.x, r0.y) [BYTES seg12:0x1a54]
+                const ScreenPoint sp = world_to_screen(c.view, r0.x, r0.y, g.wave_kind, g.dg_9eb5, g.dg_9130);
+                px = sp.x, py = sp.y;
+            }
+            gate.beam_x = add16(px, r0.size);
+            gate.beam_y = add16(sprite_side(15, size), py);
+            if (out) {
+                if (gate.beam_x != gate.old_beam_x || gate.beam_y != gate.old_beam_y)
+                    out->pat_blt(kDcWindow, gate.old_beam_x, gate.old_beam_y,
+                                 add16(sprite_side(1, size), sar16(erase_w, s & 15)),
+                                 sprite_side(2, size), kBlackness);
+                out->pat_blt(kDcWindow, gate.beam_x, gate.beam_y, sar16(draw_w, s & 15),
+                             sprite_side(2, size), kPatCopy);
+                if (old != kBrushNone) out->select_brush(kDcWindow, old);
+            }
+            // The OUT sign flashes once the icons are gone (DGROUP:0x91fc = 0) [BYTES seg12:0x1b3b
+            // seg12:0x1b5d seg12:0x1b63 seg12:0x1b73 seg12:0x1c0e seg12:0x1c64]. The second
+            // frame lands one column right of seg10:0x3ea2's (2 gap + size + 7 against 2 (gap +
+            // 3) + size), as the bytes say.
+            if (w.icons_b == 0 && w.out_due < g.now) {
+                w.out_due = g.now + 400u;
+                w.out_frame = w.out_frame == 0 ? 1 : 0;
+                if (out && wg.gate_dc != kDcNone && wg.out_sign != kDcNone) {
+                    const std::int16_t fw = sprite_side(kOutSignW, size), fh = sprite_side(kOutSignH, size);
+                    const std::int16_t sy = add16(sprite_side(10, size), r1.gap);
+                    out->bit_blt(wg.gate_dc, add16(sprite_side(2, size), r1.gap), sy, fw, fh,
+                                 wg.out_sign, mul16(fw, w.out_frame), 0, kSrcCopy);
+                    out->bit_blt(wg.gate_dc, add16(add16(mul16(r1.gap, 2), r1.size), sprite_side(7, size)),
+                                 sy, fw, fh, wg.out_sign, mul16(fw, w.out_frame), 0, kSrcCopy);
+                }
+            }
+        }
+        // e. Collisions and f. the passage [BYTES seg12:0x1ca2-0x1ebd].
+        if (o.on_screen == 0 || o.w1c != 0) continue;
+        f.dg_943a = kPoolGatePosts;
+        f.dg_943c = static_cast<std::int16_t>(r);
+        const std::uint16_t hit = h.collide(pool_rec(kPoolGatePosts, r));
+        if (hit != 0xffffu) {
+            const int hp = hit >> 8, hr = hit & 0xff;
+            if (hp == g.pool5 && hp < kPoolCount && hr < pools.records(hp)) {
+                const std::int8_t heat = static_cast<std::int8_t>(o.flame);
+                if (pools.rec(hp, hr).mass == 0x78) {  // [BYTES seg12:0x1d06 seg12:0x1d17]
+                    o.flame = static_cast<std::uint8_t>(heat + 1 > 9 ? 9 : heat + 1);
+                    o.d6a.set(g.now + 5000u);
+                } else if (pools.rec(hp, hr).mass == 200 && heat > 0) {  // [BYTES seg12:0x1d2a seg12:0x1d56]
+                    o.flame = static_cast<std::uint8_t>(heat * -5);
+                }
+            }
+            h.post_hit(r, hit);  // seg8:0x546c, seg8:0x5df2 [BYTES seg12:0x1da9 seg12:0x1dbe] (M4)
+        }
+        const std::uint16_t t = gate_test(c, w, p);  // [BYTES seg12:0x1dca]
+        const int tp = t >> 8, tr = t & 0xff;
+        if (t == 0xffffu || tp >= kPoolCount || tr >= pools.records(tp)) continue;
+        // Ship byte +0xe8 (DGROUP:0x7178) [BYTES seg12:0x1dda seg12:0x1dff].
+        const std::int8_t be8 = tp == g.ship_pool && tr < kShipCount
+                                    ? static_cast<std::int8_t>(c.flight.ships[static_cast<std::size_t>(tr)].be8)
+                                    : std::int8_t{0};
+        ObjectRecord& to = pools.rec(tp, tr);
+        if (to.b2e != 0 && be8 == 0) continue;
+        h.gate_passed(tp, tr);  // seg12:0x2288 [OPEN]
+        if (tp == g.ship_pool && tr == g.player) {
+            w.w1e80 = g.now + 1000u;  // [BYTES seg12:0x1e11 seg12:0x1e28]
+        } else {
+            // [BYTES seg12:0x1e81 seg12:0x1eb2 seg12:0x1ebd]
+            if (out) out->pat_blt(kDcWindow, to.scr_x, to.scr_y, to.size, to.size, kBlackness);
+            c.flight.host.sound(0x27, tp, tr, 1);
+        }
+    }
+}
+
+std::uint16_t gate_test(UpdateCtx& c, World& w, int p) {
+    WaveGlobals& g = c.flight.g;
+    Pools& pools = w.pools;
+    const GateRecord& gate = w.gate[static_cast<std::size_t>(p)];
+    // A duel's closed static gate [BYTES seg12:0x1f89-0x1faf].
+    if (w.kind == 7 && w.gate[0].w12 == 0 && pools.records(kPoolGatePosts) > 1) {
+        const ObjectRecord& a = pools.rec(kPoolGatePosts, 0);
+        const ObjectRecord& b = pools.rec(kPoolGatePosts, 1);
+        if (sub16(sub16(b.x, a.x), a.extent) < 100) return 0xffffu;
+    }
+    const VisibilityGlobals* list = c.host.visible_list();
+    if (!list) return 0xffffu;
+    const int n = list->count < kVisibleMax ? list->count : kVisibleMax;  // DGROUP:0x9146
+    for (int k = 0; k < n; ++k) {
+        const int lp = static_cast<std::int8_t>(list->pool[static_cast<std::size_t>(k)]);
+        const int lr = static_cast<std::int8_t>(list->rec[static_cast<std::size_t>(k)]);
+        if (lp < 0 || lp >= kPoolCount || lr < 0 || lr >= pools.records(lp)) continue;
+        ObjectRecord& o = pools.rec(lp, lr);
+        if (o.state != 0) continue;
+        const bool ship = lp == g.ship_pool && lr < kShipCount;
+        const Rect16 sq = rect16(o.x, o.y, o.x + o.extent, o.y + o.extent);
+        if (intersect(gate.beam, sq)) {
+            bool due = true;
+            if (ship) {  // dword +0x88 + 300 (the player) or + 3000, unsigned [BYTES seg12:0x2040-0x20a6]
+                const std::uint32_t t =
+                    c.flight.ships[static_cast<std::size_t>(lr)].d88.get() + (lr == g.player ? 300u : 3000u);
+                due = t < g.now;
+            }
+            if (lp != 7 && o.mass != 0xdac && due) {
+                if (o.b2e != 1 || (ship && word_at(c.flight.ships[static_cast<std::size_t>(lr)], 0x2e) == 2))
+                    return static_cast<std::uint16_t>((lp << 8) | (lr & 0xff));
+            }
+        }
+        // A computer ship heading for this gate (ship words +0x32 = 12, +0x34 = the centre
+        // record, +0x38 = 2) stops near it and gets its AI words (M5) [BYTES seg12:0x206f-0x21ca].
+        if (!ship) continue;
+        ShipRecord& sr = c.flight.ships[static_cast<std::size_t>(lr)];
+        if (word_at(sr, 0x32) != 12 || word_at(sr, 0x34) != gate.post || word_at(sr, 0x38) != 2) continue;
+        if (lr == g.player && g.play_mode == 0) continue;
+        if (pools.records(kPoolGateCentres) <= gate.post || gate.post < 0) continue;
+        const ObjectRecord& centre = pools.rec(kPoolGateCentres, gate.post);
+        const Rect16 around = rect16(o.x - 320, o.y - 320, o.x + 800, o.y + 800);
+        if (!pt_in_rect(around, centre.x, centre.y)) continue;
+        o.vx = 0;
+        o.vy = 0;
+        // The hand-off runs when the gate stands, or closes (speed < 0) with the beam within 16
+        // of 480 wide: seg9:0x88ba is abs, its argument beam.r - beam.l - 0x1e0
+        // [BYTES seg12:0x216e-0x218c] (M3 s4 fixer, review M1).
+        const std::int16_t sp = gate.w12;
+        const std::int16_t off = sub16(sub16(gate.beam.r, gate.beam.l), 0x1e0);
+        const std::int16_t aoff = off < 0 ? sub16(0, off) : off;
+        if (sp == 0 || (sp < 0 && aoff <= 16)) {
+            const std::int16_t next = add16(gate.post, 1);
+            set_word_at(sr, 0x32, 12);
+            set_word_at(sr, 0x06, 12);
+            set_word_at(sr, 0x34, next);
+            set_word_at(sr, 0x08, next);
+            set_word_at(sr, 0x38, 2);
+            set_word_at(sr, 0x36, 2);
+            set_word_at(sr, 0x3c, 2);
+            set_word_at(sr, 0x3a, 2);
+            c.host.gate_ai(lr);  // seg13:0x2f30 (M5)
+        }
+    }
+    return 0xffffu;
 }
 
 }  // namespace is::world

@@ -2,6 +2,7 @@
 // coordinates"): hand-worked frames with the documented constants and the original's 16-bit
 // truncations (ADR 0013 decision 7).
 #include <cstdint>
+#include <set>
 
 #include "doctest.h"
 #include "shell/rng.h"
@@ -304,6 +305,32 @@ TEST_CASE("flight: Alt spin and the turn cadence") {
     }
     CHECK(steps == 2);
     CHECK(r.s().turn_acc == 22);
+}
+
+// The 0.3 s turn of wave-0001 (4 steps for Left, 3 for Right in the same run): the accumulator
+// +0x16 runs whether a key is held or not, so a key held N frames turns 3 or 4 steps for N = 10
+// ... 12 and 2 or 3 for N = 9, by +0x16 at key-down [BYTES seg13:0x61b seg13:0x654 seg13:0x688].
+TEST_CASE("flight: a held turn's steps depend on the accumulator's phase") {
+    for (int n = 9; n <= 12; ++n) {
+        std::set<int> seen;
+        for (int a0 = 0; a0 <= 30; ++a0) {
+            Rig r;
+            r.s().turn_acc = static_cast<std::int16_t>(a0);
+            r.keys.key_down(kVkLeft, false);
+            std::int16_t prev = r.o().frame;
+            int steps = 0;
+            for (int i = 0; i < n; ++i) {
+                move_ships(r.c);
+                if (r.o().frame != prev) ++steps;
+                prev = r.o().frame;
+            }
+            seen.insert(steps);
+        }
+        if (n == 9)
+            CHECK(seen == std::set<int>{2, 3});
+        else
+            CHECK(seen == std::set<int>{3, 4});
+    }
 }
 
 TEST_CASE("flight: a tap of Up thrusts once through the pressed bit") {

@@ -33,6 +33,7 @@ struct Mark {
     int shown = 0;            // +0x02 (DGROUP:0x6e3a): the direction on screen
     int lit = 0;              // +0x04 (DGROUP:0x6e3c): drawn in colour (1) or black (0)
     Colour colour = 0;        // +0x0c (DGROUP:0x6e44): the pen colour
+    int glint = 0;            // +0x14 (DGROUP:0x6e4c): seg13:0x5a6a's glint counter 0..2
     int ox = 0, oy = 0;       // +0x16/+0x18 (DGROUP:0x6e4e/0x6e50): the frame origin
     int rec = 0;              // +0x1a (DGROUP:0x6e52)
     int pool = 0;             // +0x1c (DGROUP:0x6e54)
@@ -82,6 +83,12 @@ public:
     void blink_mark(int d);
     // seg11:0x2ce6(d) on the left panel: the frame origin, then the mark.
     void draw_mark(int d);
+    // seg13:0x58dc(hdc, flag) on the current view: the picture of the left display's object
+    // (mark a76 - 2) through seg13:0x5a6a / seg13:0x5c22; in mode 3 an object that is gone
+    // returns the display to mode 2 (M3 stage 4).
+    void target_picture(int flag);
+    // seg13:0x58dc(0, 1) from seg7:0x65aa: on the left panel, without a repaint.
+    void target_picture_now();
     // seg11:0x3f2e(r): the attitude text DGROUP:0x93e0.
     void attitude_text(int r);
     const std::string& text_93e0() const { return text_93e0_; }

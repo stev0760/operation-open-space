@@ -152,6 +152,11 @@ struct Runtime {
     UpdateHost* host = nullptr;
     bool settings_read = false;
     std::function<std::int32_t()> zoom;  // DGROUP:0xa6c's owner (M3 s2 fixer)
+    // The frames-per-second count of the wave tick (timing.md "Every 1000 ms"): the frames
+    // DGROUP:0x586, the deadline DGROUP:0x1e8c and the last second's count DGROUP:0x59a.
+    std::uint16_t frames_586 = 0;
+    std::uint32_t due_1e8c = 0;
+    std::int16_t actual_59a = 0;
 
     UpdateHost& h() { return host ? *host : default_host; }
     KeyActions& a() { return default_actions; }
@@ -240,10 +245,19 @@ UpdateCtx make_ctx(Runtime& r) {
 }
 
 // ISPACE.DLL ordinal 41 (seg10:0x6b54), which seg11:0x72b2 calls every 50 ms (world.md
-// "Joystick"): the port reads joystick 0 with winmm's joyGetPos (Win16's coordinates,
-// 0 ... 65535) and returns its result, so JOYERR_UNPLUGGED (0xa7) clears `JoyStick` in the
-// caller [BYTES seg11:0x72c9 seg11:0x72ce seg10:0x6b65] [DESIGN: what ordinal 41 does inside
-// ISPACE.DLL is not read; joyGetPos stands in for it].
+// "Joystick") with joystick 0 and the far pointer DGROUP:0x1e4c [BYTES seg10:0x6b5e seg10:0x6b60
+// seg10:0x6b65]. Ordinal 41 reads the PC game port itself: seg9:0x3ffe takes the buttons from
+// `in al, 0x201` and times axis bits 0 and 1 of port 0x201 with interrupts off; a count that
+// reaches 3 * 65536 (no stick, or no game port) returns 0, and ordinal 41 then calls
+// MessageBeep(0) and returns 0xa7, so the caller clears `JoyStick` [BYTES ISPACE.DLL seg9:0x4010
+// seg9:0x401f seg9:0x405d seg9:0x406f seg9:0x4079 seg9:0x4094 seg9:0x40c6 seg9:0x3ebf
+// seg9:0x3ec4 seg9:0x3ec9]. On success it stores the words x, y at info+0, +2 and the four
+// button bytes at info+4 ... +7; when ISPACE.DLL DGROUP:0x2294 = 3 the axes are rescaled to
+// 0 ... 0xffff from the calibration [BYTES ISPACE.DLL seg9:0x3ed4 seg9:0x3f03 seg9:0x3f4d
+// seg9:0x3f51 seg9:0x3f9b seg9:0x3fe8]. Win32 user mode cannot read port 0x201: the port reads
+// joystick 0 with winmm's joyGetPos, whose 0 ... 65535 axes stand for the calibrated range, and
+// any failure reads as the original's 0xa7 with its beep [DESIGN ADR 0013 decision 6,
+// win16-translation.md "joystick"].
 std::uint16_t DefaultHost::joy_read() {
     JOYINFO ji{};
     Runtime& r = rt();
@@ -251,7 +265,8 @@ std::uint16_t DefaultHost::joy_read() {
     if (rc != JOYERR_NOERROR) {
         r.joy = JoyState{};
         r.joy.x = r.joy.y = 0x8000;  // centred
-        return static_cast<std::uint16_t>(rc);
+        MessageBeep(0);              // [BYTES ISPACE.DLL seg9:0x3ec3 seg9:0x3ec4]
+        return 0xa7;                 // [BYTES ISPACE.DLL seg9:0x3ec9]
     }
     r.joy.x = static_cast<std::uint16_t>(ji.wXpos);
     r.joy.y = static_cast<std::uint16_t>(ji.wYpos);
@@ -261,7 +276,10 @@ std::uint16_t DefaultHost::joy_read() {
 }
 
 // Alt + and Alt - : seg10:0x7e1c's rate rule, the scheduler's rate (ADR 0001 decision 2), the
-// speed display (DGROUP:0xa76 = 4 for 5000 ms) and `FrameRateSet` in INSPACE.INI.
+// speed display (DGROUP:0xa76 = 4 for 5000 ms) and `FrameRateSet` in INSPACE.INI. The original
+// sets the display's deadline and mode and posts its WM_PAINT only while the left display
+// DGROUP:0xa7c exists [BYTES seg10:0x7e2a seg10:0x7e2f seg10:0x7e51]; in a wave it always
+// exists, and the port's key switch runs only in a wave [DESIGN].
 void DefaultActions::speed_step(int d) {
     Runtime& r = rt();
     const int rate = speed_step_rate(g.scheduler.rate(), d);
@@ -283,6 +301,25 @@ void DefaultActions::speed_step(int d) {
     }
 }
 
+// The wave tick's frame count: every wave frame increments DGROUP:0x586; once the game clock
+// DGROUP:0x1e50 passes the deadline DGROUP:0x1e8c (`jae` skips while deadline >= now, unsigned)
+// the deadline becomes now + 1000, the count goes to DGROUP:0x59a whatever DGROUP:0x592 and the
+// rate are, WM_PAINT goes to the left display DGROUP:0xa7c while DGROUP:0xa76 = 4 (the speed
+// display) and the count restarts [BYTES seg7:0xa60 seg7:0xa6c seg7:0xa71 seg7:0xa7b seg7:0xad9
+// seg7:0xadc seg7:0xadf seg7:0xaf2 seg7:0xaf7]. The threshold rule between (seg7:0xa7b-0xad5)
+// is the scheduler's (ADR 0001) and stays there. The screen states' writer of the same words
+// (seg7:0x232c) is not ported, so before the wave's first second DGROUP:0x59a reads 0
+// [OPEN seg7:0x232c].
+void frame_count(Runtime& r) {
+    ++r.frames_586;  // [BYTES seg7:0xa60]
+    if (r.due_1e8c >= r.g.now) return;  // [BYTES seg7:0xa6c seg7:0xa71]
+    r.due_1e8c = r.g.now + 1000u;       // [BYTES seg7:0xa7b]
+    r.actual_59a = static_cast<std::int16_t>(r.frames_586);  // [BYTES seg7:0xad9 seg7:0xadc]
+    if (r.f.info_mode == 4 && default_actions_hud())          // [BYTES seg7:0xadf seg7:0xaf2]
+        default_actions_hud()->info_repaint();
+    r.frames_586 = 0;  // [BYTES seg7:0xaf7]
+}
+
 // The state-1 frame hook: the pass, then the frame.
 void wave_hook(shell::GameState& s) {
     Runtime& r = rt();
@@ -294,6 +331,7 @@ void wave_hook(shell::GameState& s) {
     sync_in(r, s);
     UpdateCtx c = make_ctx(r);
     wave_pass(c, g.scheduler.rate() > shell::kMaxRateThreshold);
+    frame_count(r);
     wave_frame(c);
     sync_out(r);
 }
@@ -337,6 +375,7 @@ void set_key_actions(KeyActions* actions) { rt().default_actions.hud = actions; 
 WaveLinks& wave_links() { return g_links; }
 void set_zoom_source(std::function<std::int32_t()> zoom) { rt().zoom = std::move(zoom); }
 void wave_started() { rt().keys.clear_pressed(); }
+int frame_rate_actual() { return rt().actual_59a; }
 WaveGlobals& flight_globals() { return rt().g; }
 FrameGlobals& frame_globals() { return rt().f; }
 ViewState& flight_view() { return rt().view; }

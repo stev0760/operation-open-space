@@ -4,6 +4,7 @@
 #include <cstring>
 #include <ctime>
 #include <fstream>
+#include <set>
 #include <system_error>
 
 #include "assets/game_files.h"
@@ -12,6 +13,7 @@
 #include "formats/ne.h"
 #include "formats/sha256.h"
 #include "formats/szdd.h"
+#include "formats/zip.h"
 #include "settings/ini_location.h"
 #include "settings/settings.h"
 #include "shell/edition.h"
@@ -84,7 +86,108 @@ bool same_dir(const fs::path& a, const fs::path& b) {
     return eq && !ec;
 }
 
+// The directory under `root` holding INSTALL.INI (any case): `root` itself, else the one
+// subdirectory that holds it (a zip made of the set's folder). Empty when there is none or
+// more than one.
+std::optional<fs::path> ini_dir_under(const fs::path& root) {
+    const auto want = assets::name_key(fs::path("INSTALL.INI"));
+    const auto has_ini = [&](const fs::path& d) {
+        std::error_code ec;
+        for (const auto& e : fs::directory_iterator(d, ec))
+            if (e.is_regular_file() && assets::name_key(e.path().filename()) == want) return true;
+        return false;
+    };
+    if (has_ini(root)) return root;
+    std::optional<fs::path> found;
+    std::error_code ec;
+    for (const auto& e : fs::recursive_directory_iterator(root, ec)) {
+        if (!e.is_directory() || !has_ini(e.path())) continue;
+        if (found) return std::nullopt;
+        found = e.path();
+    }
+    return found;
+}
+
 }  // namespace
+
+std::optional<fs::path> unpack_zip(const fs::path& zip, const fs::path& work_root, std::string* why) {
+    const auto fail = [&](const std::string& m) -> std::optional<fs::path> {
+        if (why) *why = m;
+        return std::nullopt;
+    };
+    fmt::ZipArchive z;
+    try {
+        z = fmt::ZipArchive::load(zip);  // read whole before the target is emptied
+    } catch (const std::exception& x) {
+        return fail("Cannot read the zip install set " + fmt::path_utf8(zip) + ": " + x.what());
+    }
+    // Every name is checked, and the total size bounded, before anything is removed or written
+    // [DESIGN]: a refused set leaves the working root as it was.
+    struct Item {
+        const fmt::ZipEntry* e;
+        fs::path rel;
+    };
+    std::vector<Item> items;
+    std::set<std::u16string> seen;  // names folded: Win32 has one file for "A" and "a"
+    std::uint64_t total = 0;
+    for (const fmt::ZipEntry& e : z.entries()) {
+        const fs::path rel = fmt::zip_entry_path(e.name, e.utf8);
+        if (rel.empty()) {
+            if (e.is_dir()) continue;  // a directory entry such as "./" creates nothing
+            return fail("The zip install set " + fmt::path_utf8(zip) + " names an unsafe path: " + e.name);
+        }
+        if (!e.is_dir() && !seen.insert(fmt::fold_name(rel.generic_u16string())).second)
+            return fail("The zip install set " + fmt::path_utf8(zip) + " names one file twice: " + e.name);
+        total += e.usize;
+        if (total > fmt::kZipMaxBytes)
+            return fail("The zip install set " + fmt::path_utf8(zip) + " unpacks to more than " +
+                        std::to_string(fmt::kZipMaxBytes >> 20) + " MB");
+        items.push_back(Item{&e, rel});
+    }
+    // The set's own folder under the working root: the zip's stem, or SET when the stem could
+    // name the root itself or another place ("..zip" has the stem ".") [DESIGN].
+    fs::path stem = zip.stem();
+    {
+        const fs::path checked = fmt::zip_entry_path(fmt::path_utf8(stem), true);
+        if (stem.empty() || checked.empty() || checked != stem) stem = fs::path("SET");
+    }
+    const fs::path to = work_root / stem;
+    std::error_code ec;
+    fs::remove_all(to, ec);
+    fs::create_directories(to, ec);
+    if (ec) return fail("Cannot create " + fmt::path_utf8(to) + ": " + ec.message());
+    const fs::path root = fs::weakly_canonical(to, ec);
+    // A target must stay under the set's folder, component by component, once joined [DESIGN].
+    const auto inside = [&root](const fs::path& target) {
+        std::error_code e2;
+        const fs::path t = fs::weakly_canonical(target, e2);
+        if (e2) return false;
+        auto a = root.begin(), b = t.begin();
+        for (; a != root.end(); ++a, ++b)
+            if (b == t.end() || *a != *b) return false;
+        return true;
+    };
+    try {
+        for (const Item& it : items) {
+            const fs::path target = to / it.rel;
+            if (!inside(target))
+                return fail("The zip install set " + fmt::path_utf8(zip) + " names an unsafe path: " + it.e->name);
+            if (it.e->is_dir()) {
+                fs::create_directories(target, ec);
+                if (ec) return fail("Cannot create " + fmt::path_utf8(target) + ": " + ec.message());
+                continue;
+            }
+            fs::create_directories(target.parent_path(), ec);
+            if (ec) return fail("Cannot create " + fmt::path_utf8(target.parent_path()) + ": " + ec.message());
+            write_file(target, z.extract(*it.e));
+        }
+    } catch (const std::exception& x) {
+        return fail("Cannot unpack the zip install set " + fmt::path_utf8(zip) + ": " + x.what());
+    }
+    const std::optional<fs::path> dir = ini_dir_under(to);
+    if (!dir) return fail("The zip install set " + fmt::path_utf8(zip) + " holds no INSTALL.INI");
+    return dir;
+}
 
 const fs::path* SourceSet::find(const std::string& name) const {
     const auto it = files.find(assets::name_key(assets::path_from_cp1252(name)));
@@ -97,14 +200,24 @@ OpenResult open_source(const fs::path& given_in, const fs::path& work_root, cons
     s.given = given_in;
     std::error_code ec;
     fs::path src = given_in;
+    bool zipped = false;
     if (fs::is_regular_file(src, ec)) {
         std::string ext = fmt::fold_name(fmt::path_utf8(src.extension()));
         if (ext == ".ZIP") {
-            // [OPEN] the zip reader is not written yet.
-            out.message = "A .zip install set must be unpacked first: " + fmt::path_utf8(src);
-            return out;
+            // ADR 0008 decision 1: a zip is unpacked into a directory of its own first, the
+            // working copy a directory set is copied to, and the step goes on from there.
+            std::string why;
+            const std::optional<fs::path> dir = unpack_zip(src, work_root, &why);
+            if (!dir) {
+                out.message = why;
+                return out;
+            }
+            if (log) log("install: set " + fmt::path_utf8(src) + " unpacked to " + fmt::path_utf8(*dir));
+            src = *dir;
+            zipped = true;
+        } else {
+            src = src.parent_path();  // INSTALL.INI itself
         }
-        src = src.parent_path();  // INSTALL.INI itself
     }
     if (!fs::is_directory(src, ec)) {
         out.message = "No install set at " + fmt::path_utf8(given_in);
@@ -114,7 +227,9 @@ OpenResult open_source(const fs::path& given_in, const fs::path& work_root, cons
     // copies the set into a working directory of its own first, so the write test and
     // SECURE.DAT never touch the user's files [DESIGN].
     fs::path work = work_root / (src.filename().empty() ? fs::path("SET") : src.filename());
-    if (fs::exists(work, ec) && fs::equivalent(work, src, ec)) {
+    if (zipped) {
+        s.dir = src;  // the unpacked copy is the port's own already
+    } else if (fs::exists(work, ec) && fs::equivalent(work, src, ec)) {
         s.dir = src;
     } else {
         fs::remove_all(work, ec);

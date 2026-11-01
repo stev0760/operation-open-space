@@ -27,6 +27,9 @@ enum class Img : int {
     kDamage,      // DGROUP:0x503c: the damage panel, 84 x 61, composed by seg11:0x344
     kFuelPanel,   // DGROUP:0x503e: the fuel gauge background, 30 x 85, composed by seg11:0x344
     kWeapon,      // DGROUP:0x5040: the weapon picture of the weapon display
+    // DGROUP:0x3a02 (image slot 13 of DGROUP:0x39e8): the icon strip the briefing entry built,
+    // the source of seg13:0x5c22's pool-0 pictures (M3 stage 4).
+    kIconStrip,
     kCount
 };
 
@@ -96,6 +99,11 @@ public:
     virtual void rectangle(Img dst, const Pen& pen, const Brush& brush, int l, int t, int r,
                            int b) = 0;
     virtual void set_pixel(Img dst, int x, int y, Colour c) = 0;
+    // SetStretchBltMode(dst, COLORONCOLOR) and StretchBlt(dst, x, y, w, h, src, sx, sy, sw, sh,
+    // rop): seg13:0x5c22's picture [BYTES seg13:0x5c93-0x5c98 seg13:0x60e1]. A canvas without
+    // the call draws nothing (the default).
+    virtual void stretch_blt(Img /*dst*/, int /*x*/, int /*y*/, int /*w*/, int /*h*/, Img /*src*/,
+                             int /*sx*/, int /*sy*/, int /*sw*/, int /*sh*/, std::uint32_t /*rop*/) {}
     // seg10:0x949c, ISPACE.DLL ordinal 34: the bevelled frame of `style`.
     virtual void frame(Img dst, int x, int y, int w, int h, int style) = 0;
     // seg10:0x94c4, ISPACE.DLL ordinal 33: the bitmap font on the window DC.

@@ -167,9 +167,11 @@ void spin(FlightCtx& c, int ship) {
     c.host.player_sprite();
 }
 
-// seg11:0x592a [BYTES seg11:0x5938-0x5aa7]. A 0.3 s Left press turns the port 3 sectors where
-// the oracle's turned 4 (90 degrees) [ORACLE wave-0001]; whether the press timing, the frame
-// cadence or the start heading accounts for it is [OPEN Start heading, turn cadence].
+// seg11:0x592a [BYTES seg11:0x5938-0x5aa7]. It runs only on the cadence's add frames (move_ships,
+// seg13:0x616-0x688), and the accumulator +0x16 runs whether a key is held or not, so with the
+// player's turn word 21 a key held 10 ... 12 frames (a 0.3 s press at 36 frames per second)
+// turns 3 or 4 steps by +0x16 at key-down: the oracle turned 4 for Left and 3 for Right in one
+// run [BYTES seg13:0x61b seg13:0x654 seg13:0x688] [ORACLE wave-0001] (tests/test_world_flight.cpp).
 void turn_input(FlightCtx& c) {
     WaveGlobals& g = c.g;
     if (g.dg_1034 == 0) return;

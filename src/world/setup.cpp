@@ -3,6 +3,8 @@
 // the readings that go beyond world.md are listed in the stage report for a verifier. Portable.
 #include "world/setup.h"
 
+#include "world/draw.h"
+
 #include <cstdio>
 #include <string>
 
@@ -1618,6 +1620,12 @@ void place(World& w, SetupHost& h) {
     w.w9510 = 0x65;
     for (int i = 0; i < p.allocated(6); ++i) p.rec(6, i).state = 1;  // DGROUP:0x66ec + 0x1c i = 0x191
     for (int i = 0; i < p.allocated(10); ++i) p.rec(10, i).state = 1;
+    // The link slots DGROUP:0x65cc + 0x20 k, k < DGROUP:0x9300: both ends' pools -1 (M3 s4 DRAW)
+    // [BYTES seg9:0x66ce seg9:0x66dd seg9:0x66e1].
+    for (int k = 0; k < p.allocated(10) && k < kLinkSlots; ++k) {
+        w.links[static_cast<std::size_t>(k)].pool_a = -1;
+        w.links[static_cast<std::size_t>(k)].pool_b = -1;
+    }
     w.w226c.fill(-1);
     w.w9456 = 0;
     w.w9430 = 0;
@@ -1634,6 +1642,10 @@ void place(World& w, SetupHost& h) {
         q.y = -100;
     }
     w.w9e49 = 10;
+    // The beam brush index DGROUP:0x9492 and its step DGROUP:0x9494 (M3 s4 DRAW) [BYTES
+    // seg9:0x67f4 seg9:0x67f7 seg9:0x67fa].
+    w.beam_step = 1;
+    w.beam_index = 1;
     for (int i = 0; i < p.in_use(kPoolRocks); ++i) place_rock(w, h.rng, i);  // [BYTES seg9:0x6807]
     for (int i = 0; i < p.in_use(kPool9); ++i) place_pool9(w, h.rng, i);     // [BYTES seg9:0x6822]
     w.w9600 = 1;
@@ -1660,6 +1672,10 @@ void place(World& w, SetupHost& h) {
     }
     // A race's seg9:0x6db0 and its sounds are M6 [OPEN].
     w.w1e6c = w.clock + 10000;
+    // seg11:0xae94 and seg11:0x2f8c (the weapon picture) run only for wave 1 or a restored game;
+    // the program runs them at the wave start (src/hud/wave_win32.cpp) [BYTES seg9:0x6951
+    // seg9:0x6958 seg9:0x695c seg9:0x695e seg9:0x6963] (M3 s4 fixer, review M6).
+    w.picture_due = w.wave == 1 || w.restored != 0;
     w.restored = 0;
     say(h, "world: placement seg9:0x6624 wave " + std::to_string(w.wave) + ", gate 0 at (" +
                std::to_string(p.rec(kPoolGatePosts, 0).x) + ", " + std::to_string(p.rec(kPoolGatePosts, 0).y) +
@@ -1732,7 +1748,10 @@ void start_wave(World& w, SetupHost& h) {
     // seg9:0x60bc [BYTES seg9:0x60ff seg9:0x6320]
     w.w0a76 = 2;
     w.w9e49 = 10;
-    // seg8:0x190e (the stars) and seg13:0x2dcc (the radar brushes) belong to the drawing.
+    // seg8:0x190e at seg9:0x6117: the stars, six rand() each before the chance block (M3 s4
+    // DRAW) [BYTES seg9:0x6117]. seg13:0x2dcc (the radar brushes, called at seg9:0x611c) is
+    // unread and not ported [OPEN seg13:0x2dcc] [BYTES seg9:0x611c].
+    init_stars(w, h.rng);
     w.w913e = 0;
     ShipRecord& me = w.ships[static_cast<std::size_t>(w.player)];
     const int16_t since = sub16(w.wave, w.w93ac);
@@ -1740,8 +1759,10 @@ void start_wave(World& w, SetupHost& h) {
     // [BYTES seg9:0x6126 seg9:0x612c].
     if (4 < w.score_level && w.handover.demons_gate == 0 && w.kind != 6 && w.kind != 7 &&
         w.w920c != 0 && w.w920c != 3 && (add16(w.w992, 30) < w.budget || 15 < since)) {
-        // The weapon-slot count below is the implementer's reading of seg9:0x612c-0x6219, landed
-        // in world.md but not yet confirmed by a verifier [OPEN weapon-slot count].
+        // The count loop k = 0 ... n - 1 and the chance's second loop k = 1 ... n (one slot later)
+        // [BYTES seg9:0x617d seg9:0x61bb seg9:0x61cf seg9:0x61dd seg9:0x6217 seg9:0x6229], read by
+        // the M3 s4 input analyst and implementer; an independent verifier is still due [OPEN
+        // weapon-slot count].
         int16_t heavy = 0;
         const int n = static_cast<std::int8_t>(ship_byte(me, 0xcb));
         for (int k = 0; k < n; ++k) {
@@ -1804,9 +1825,18 @@ void start_wave(World& w, SetupHost& h) {
         }
         // Ship byte +0xcd = 0xff unless its design type is 7 (M5) [OPEN].
     }
-    // seg8:0x4d94, seg3:0x45a(2) and seg11:0x3cc2(player, 0) (the HUD, whose seg11:0xafe seeds
-    // rand) follow [BYTES seg9:0x64a7 seg9:0x64ae seg9:0x64ba]: hud::wave_start() runs
-    // seg3:0x45a(2); seg8:0x4d94 is not ported [OPEN seg8:0x4d94] (M3 s3 fixer).
+    // seg8:0x4d94(&ship[player].+0x88, &ship[0].+0x88) at seg9:0x64a7, after the ship loop:
+    // the two dwords swap, so the player's entry time is ship 0's (now + 0) and the gate test
+    // seg12:0x1f7a compares that (s4-draw.md 4) (M3 s4 DRAW) [BYTES seg8:0x4da1 seg8:0x4dbe
+    // seg8:0x4dce seg9:0x6498 seg9:0x649e seg9:0x64a4 seg9:0x64a7].
+    {
+        ShipRecord& s0 = w.ships[0];
+        const std::uint32_t t = me.d88.get();
+        me.d88.set(s0.d88.get());
+        s0.d88.set(t);
+    }
+    // seg3:0x45a(2) and seg11:0x3cc2(player, 0) (the HUD, whose seg11:0xafe seeds rand) follow
+    // [BYTES seg9:0x64ae seg9:0x64ba]: hud::wave_start() runs seg3:0x45a(2) (M3 s3 fixer).
     w.w0a76 = 2;
     if (w.wave < 2) {
         set_ship_byte(me, 0x5d, 2);

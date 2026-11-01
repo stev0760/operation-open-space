@@ -403,3 +403,47 @@ TEST_CASE("world: gate_post_live, seg3:0x65e's code-3 table test") {
     CHECK_FALSE(gate_post_live(w, -1));
     CHECK_FALSE(gate_post_live(w, kPool8Max));
 }
+
+TEST_CASE("world setup: seg8:0x4d94 swaps the player's and ship 0's entry times (M3 s4 DRAW)") {
+    // s4-draw.md 4 [BYTES seg8:0x4da1 seg8:0x4dbe seg8:0x4dce seg9:0x64a7]: in a new directory
+    // ship i enters at now + i·500000; after the swap the player (ship 1) enters first.
+    Rig r;
+    state1_load(r.w, r.host);
+    new_game(r.w);
+    enter_briefing(r.w, r.host);
+    r.w.added = 1;
+    r.w.last_ship = 1;
+    r.w.player = 1;
+    r.w.pools.resize(kPoolShips, 2);
+    start_wave(r.w, r.host);
+    CHECK(r.w.ships[1].d88.get() == 1000u);
+    CHECK(r.w.ships[0].d88.get() == 501000u);
+}
+
+TEST_CASE("world setup: the stars at the wave start and the placement's words (M3 s4 DRAW)") {
+    Rig r;
+    state1_load(r.w, r.host);
+    new_game(r.w);
+    enter_briefing(r.w, r.host);
+    // seg9:0x67f4: the beam brush index and step; seg9:0x66dd: the link slots without ends.
+    CHECK(r.w.beam_index == 1);
+    CHECK(r.w.beam_step == 1);
+    for (int k = 0; k < r.w.pools.allocated(10); ++k) {
+        CHECK(r.w.links[static_cast<std::size_t>(k)].pool_a == -1);
+        CHECK(r.w.links[static_cast<std::size_t>(k)].pool_b == -1);
+    }
+    // seg8:0x190e at seg9:0x6117: 18 stars draw 108 numbers before the rest of the wave start.
+    r.w.star_count = 18;
+    r.w.added = 1;
+    const std::uint32_t before = r.rng.state();
+    start_wave(r.w, r.host);
+    is::shell::Rng ref;
+    ref.set_state(before);
+    for (int k = 0; k < 108; ++k) ref.rand();
+    REQUIRE(r.w.stars.size() >= 18u);
+    is::shell::Rng first;
+    first.set_state(before);
+    CHECK(r.w.stars[0].x == first.rand() % r.w.W);
+    // Nothing else in this wave start draws rand() (no resident ship, no chance block).
+    CHECK(r.rng.state() == ref.state());
+}

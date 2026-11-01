@@ -47,6 +47,8 @@ public:
     void rectangle(Img dst, const Pen& pen, const Brush& brush, int l, int t, int r,
                    int b) override;
     void set_pixel(Img dst, int x, int y, Colour c) override;
+    void stretch_blt(Img dst, int x, int y, int w, int h, Img src, int sx, int sy, int sw, int sh,
+                     std::uint32_t rop) override;
     void frame(Img dst, int x, int y, int w, int h, int style) override;
     void font_text(int font, int align, Colour c, int x, int y, const std::string& text) override;
     void text_out(Img dst, int x, int y, unsigned align, Colour c,

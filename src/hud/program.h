@@ -41,7 +41,8 @@ struct Links {
     std::function<void()> bump_bad_index;       // DGROUP:0x9498
     std::function<std::string()> text_9628, text_8718, text_960a, text_8740, text_8768,
         text_87b8;
-    std::function<void(Canvas&)> draw_target_icon;  // seg13:0x58dc(hdc, 1)
+    std::function<bool(int, int, CellInputs&)> cell;  // seg13:0x5a6a's record fields
+    std::function<int()> game_mode;                   // DGROUP:0x9320
     std::function<void(Canvas&)> draw_race;         // seg11:0x41bc(hdc, 1, 1)
     std::function<int()> player_target_pool, player_target_rec;  // ship +0x3e, +0x40
     std::function<int()> next_target;                          // seg13:0x2206

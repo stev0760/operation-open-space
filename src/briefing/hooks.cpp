@@ -176,7 +176,15 @@ void enter_briefing(shell::GameState& s) {
         ClientToScreen(g.main, &p);
         SetCursorPos(g.start_cursor.x, p.y);
     }
-    if (s.hooks().play_area) s.hooks().play_area(s);  // seg2:0xba4
+    // seg2:0xba4 at seg9:0x5d14. The port runs seg2:0x1ac8's play-area hook for its client
+    // part, then seg2:0xca4 at seg2:0xc52: the clip region DGROUP:0x12 and the play rectangle
+    // DGROUP:0x1d30 with the Border and PlayMode insets, (68, 78, 956, 663) at 1024 x 768
+    // [BYTES seg2:0xc52 seg2:0xcb8-0xd69 seg9:0x5d14] (M3 s4 fixer, review M9). seg2:0xba4's
+    // player-square blackout with seg7:0x11cc / seg7:0x1208 (seg2:0xc08-0xc3d), the blackout of
+    // DGROUP:0x1d28 (seg2:0xc55-0xc86, under the PatBlt above) and its PostMessage(WM_PAINT)
+    // (seg2:0xc97) are not ported [OPEN].
+    if (s.hooks().play_area) s.hooks().play_area(s);
+    g.clip = shell::clip_rect(g.area, g.keys.border != 0, g.play_mode != 0);
     // seg9:0x22b4(1) draws nothing here: seg10:0x0's call has set DGROUP:0x92e6 = 1.
     todo_once("seg9:0x22b4(1) graphics and the wave resets of seg9:0x5cca", "seg9:0x5cca");
     // Its sound part runs whatever DGROUP:0x92e6 holds: seg10:0x744c(0x6e) [BYTES seg9:0x2768
@@ -213,7 +221,8 @@ std::string drive_text() {
 }
 
 void state1_setup(shell::GameState&) {
-    todo_once("state-1 set-up: palette scheme 8 and the wave's resources", "seg10:0x0");
+    // seg10:0x0's palette scheme 8 (seg10:0x37, seg10:0x3f) and the load run in src/world/hooks.cpp
+    // around this part (M3 s4).
     // DGROUP:0x380c: INI ThePlayer (default "", 12 bytes) outside the demo [BYTES seg10:0x8c];
     // the port has no demo yet.
     const std::string player =
@@ -271,9 +280,10 @@ void enter_wave(shell::GameState&) {
     todo_once("seg9:0x699e at the wave start", "seg9:0x699e");
     if (g.main) ShowWindow(g.main, SW_SHOW);
     PatBlt(g.gfx->dc(), 0, 0, g.area.w, g.area.h, BLACKNESS);  // seg9:0x60bc
-    // The ships of seg9:0x60bc are src/world's start_wave and its HUD repaint src/hud's (M3 s2
-    // fixer); the stars seg8:0x190e and the radar brushes seg13:0x2dcc are not ported [OPEN].
-    todo_once("wave start: the stars seg8:0x190e and the radar brushes seg13:0x2dcc", "seg9:0x60bc");
+    // The ships of seg9:0x60bc are src/world's start_wave (with the stars seg8:0x190e, M3 s4) and
+    // its HUD repaint src/hud's (M3 s2 fixer); the radar brushes seg13:0x2dcc are not ported
+    // [OPEN].
+    todo_once("wave start: the radar brushes seg13:0x2dcc", "seg9:0x60bc");
     g_wave_frames = 0;
     app::log("briefing: wave " + std::to_string(g_briefing->wave()) + " starts at " +
              std::to_string(app::now_tick()) + " ms");

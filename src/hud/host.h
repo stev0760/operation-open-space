@@ -10,6 +10,7 @@
 #include <string>
 
 #include "hud/canvas.h"
+#include "hud/target.h"
 #include "shell/geometry.h"
 
 namespace is::hud {
@@ -105,9 +106,14 @@ public:
     virtual std::string text_8740() const { return {}; }  // DGROUP:0x8740, the sender
     virtual std::string text_8768() const { return {}; }  // DGROUP:0x8768
     virtual std::string text_87b8() const { return {}; }  // DGROUP:0x87b8
-    // seg13:0x58dc(hdc, 1): the target's icon in the left panel [OPEN]; the canvas view is the
-    // panel's.
-    virtual void draw_target_icon(Canvas&) {}
+    // The fields seg13:0x5a6a and seg13:0x5c22 read for (pool, rec): the object record, the
+    // pool-0 icon record DGROUP:0x57a8 + 0x23·rec, seg13:0x371c, DGROUP:0x9324, DGROUP:0x9208
+    // and DGROUP:0x131c (Info::target_picture, M3 stage 4). Returns false when the record does
+    // not exist; the picture is then not drawn.
+    virtual bool cell(int /*pool*/, int /*rec*/, CellInputs& /*out*/) const { return false; }
+    // DGROUP:0x9320, the game mode: 6 suppresses the target display's picture [BYTES
+    // seg13:0x5902].
+    virtual int game_mode() const { return 0; }
     // seg11:0x41bc(hdc, 1, 1): the race display that replaces the target display [OPEN].
     virtual void draw_race(Canvas&) {}
 

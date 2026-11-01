@@ -239,8 +239,24 @@ DcId RecordingBlitter::load_graphic(int id, int /*mode*/, int /*arg*/) {
 }
 
 BrushId RecordingBlitter::create_solid_brush(std::uint32_t colorref) {
-    brushes.push_back(Brush{next_brush_, colorref});
+    brushes.push_back(Brush{next_brush_, colorref, {}});
     return next_brush_++;
 }
+
+BrushId RecordingBlitter::create_pattern_brush(const std::uint8_t (&rows)[8]) {
+    Brush b{next_brush_, 0, {}};
+    for (int i = 0; i < 8; ++i) b.rows[static_cast<std::size_t>(i)] = rows[i];
+    brushes.push_back(b);
+    return next_brush_++;
+}
+
+// ---- the window's Blitter
+
+namespace {
+Blitter* g_wave_blitter = nullptr;
+}  // namespace
+
+Blitter* wave_blitter() { return g_wave_blitter; }
+void set_wave_blitter(Blitter* b) { g_wave_blitter = b; }
 
 }  // namespace is::world

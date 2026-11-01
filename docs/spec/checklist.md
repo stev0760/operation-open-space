@@ -64,13 +64,13 @@ One row per binding. MAINACCEL and FACTACCEL are the accelerator tables in ENG_L
 | KEY-18 | Tab: change the current weapon | [MANUAL General] [BYTES ENG_LANG.DLL STRING 77] id 1230 | manual | none | todo | unknown |
 | KEY-19 | CapsLock: cloak or shield on/off | [MANUAL Special Ship Systems] [BYTES ENG_LANG.DLL STRING 77] id 1231 | manual | none | todo | unknown |
 | KEY-20 | P: perspective shift to a teammate and back | [MANUAL Special Ship Systems] [BYTES ENG_LANG.DLL STRING 76] id 1215 | manual | none | todo | unknown |
-| KEY-21 | B: show the game speed on the target display | [MANUAL Game Settings] [BYTES ENG_LANG.DLL STRING 76] id 1208 [BYTES seg11:0x71d4] | manual | located | wip | unknown |
+| KEY-21 | B: show the game speed on the target display | [MANUAL Game Settings] [BYTES ENG_LANG.DLL STRING 76] id 1208 [BYTES seg11:0x71d4] | manual | located | done | unknown |
 | KEY-22 | Alt+Plus / Alt+Minus (also Alt+=, Alt+-): game speed up/down (commands 401/411) | [MANUAL Game Settings] [BYTES ENG_LANG.DLL STRING 77] id 1221 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES seg10:0x7e1c] | manual | understood | wip | unknown |
 | KEY-23 | Ctrl+Plus / Ctrl+Minus: rescale the game (1/2x, 1x, 2x) | [MANUAL Game Settings] [BYTES ENG_LANG.DLL STRING 77] id 1220 [BYTES seg10:0x9a2a] [BYTES seg6:0xb07] | manual | understood | wip | unknown |
 | KEY-24 | Plus / Minus: radar zoom | [BYTES ENG_LANG.DLL STRING 77] id 1219 [BYTES ENG_LANG.DLL STRING 83] id 1319 [MANUAL General] [BYTES seg11:0x7215] [BYTES seg11:0x772e seg11:0x719c] | strings | verified | done | unknown |
 | KEY-25 | F12: toggle Action and Strategy modes | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 77] id 1222 [BYTES seg11:0x6d19] | manual | understood | todo | unknown |
 | KEY-26 | Alt+G: Game Settings dialog (command 192) | [MANUAL QuickStart] [BYTES ENG_LANG.DLL STRING 76] id 1209 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES seg10:0x7f18] | manual | understood | todo | unknown |
-| KEY-27 | Alt+I: open/close the Icon Watch (command 491) | [MANUAL Icons] [BYTES ENG_LANG.DLL STRING 76] id 1210 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES seg11:0x6e94] | manual | understood | todo | unknown |
+| KEY-27 | Alt+I: open/close the Icon Watch (command 491) | [MANUAL Icons] [BYTES ENG_LANG.DLL STRING 76] id 1210 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES seg11:0x6e94] | manual | understood | done | unknown |
 | KEY-28 | Alt+R: Ship Watch (command 471) | [BYTES ENG_LANG.DLL STRING 76] id 1211 [BYTES ENG_LANG.DLL STRING 82] id 1311 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES seg11:0x6ea0] | code | understood | todo | unknown |
 | KEY-29 | Alt+B: Boss Key (command 412) | [BYTES ENG_LANG.DLL STRING 76] id 1212 [BYTES ENG_LANG.DLL STRING 83] id 1312 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES seg2:0x1486] | code | understood | todo | unknown |
 | KEY-30 | Alt+X: exit the game (command 176) | [MANUAL QuickStart] [BYTES ENG_LANG.DLL STRING 76] id 1213 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [ORACLE smoke-0001] [BYTES seg2:0x1625] [BYTES seg2:0xe07] | oracle | understood | todo | demo |
@@ -170,7 +170,7 @@ One row per binding. MAINACCEL and FACTACCEL are the accelerator tables in ENG_L
 | WIN-34 | Ship Options (To Sell) dialog (#017a) | [MANUAL Resource Management] [BYTES ENG_LANG.DLL DIALOG 378] | manual | none | todo | unknown |
 | WIN-35 | New Ship Body dialog (#011e): body and cost | [MANUAL Resource Management] [BYTES ENG_LANG.DLL DIALOG 286] [BYTES ISPACE.DLL seg10:0xf9c] | manual | located | todo | unknown |
 | WIN-36 | Ambulance landing scene: "Incoming Jet", "Approaching Landing Pad.." | [MANUAL Game Settings] [BYTES ENG_LANG.DLL STRING 134] id 2137 [BYTES ENG_LANG.DLL STRING 134] id 2138 [BYTES seg7:0x5ce] | manual | understood | todo | unknown |
-| WIN-37 | Icon Watch window (IS_ICON): every icon in the wave | [MANUAL Icons] [BYTES DGROUP:0x52d] [BYTES seg11:0x6e94] | manual | understood | todo | unknown |
+| WIN-37 | Icon Watch window (IS_ICON): every icon in the wave | [MANUAL Icons] [BYTES DGROUP:0x52d] [BYTES seg11:0x6e94] | manual | understood | done | unknown |
 | WIN-38 | Ship Watch window (IS_WATCH): position, direction, actions; race time gaps | [MANUAL Dealing With Other Ships] [MANUAL Race Courses] [BYTES DGROUP:0x51f] [BYTES seg11:0x7127] | manual | understood | todo | unknown |
 | WIN-39 | Watch menu: Icons, One Ship, All Ships | [BYTES ENG_LANG.DLL MENU 101] [BYTES seg2:0x15e0] [BYTES seg11:0x6ea0] | code | understood | todo | unknown |
 | WIN-40 | IS_SMART window; purpose [OPEN] | [BYTES DGROUP:0x53a] [BYTES seg11:0x6ea0] | code | understood | todo | unknown |

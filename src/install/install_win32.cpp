@@ -397,17 +397,17 @@ bool choose_install_set(HWND owner, fs::path* ini) {
     // [DESIGN] (ADR 0008 decision 1): start-up without a game offers the install step.
     if (MessageBoxW(owner,
                     L"No Inner Space game directory was found.\n\nInstall the game now from its "
-                    L"install files (the folder holding INSTALL.INI)?",
+                    L"install files (the folder holding INSTALL.INI, or the install set's .zip)?",
                     L"Inner Space", MB_YESNO | MB_ICONQUESTION) != IDYES)
         return false;
     wchar_t file[MAX_PATH] = L"INSTALL.INI";
     OPENFILENAMEW of{};
     of.lStructSize = sizeof(of);
     of.hwndOwner = owner;
-    of.lpstrFilter = L"Install set (INSTALL.INI)\0INSTALL.INI\0";
+    of.lpstrFilter = L"Install set (INSTALL.INI, *.zip)\0INSTALL.INI;*.zip\0";
     of.lpstrFile = file;
     of.nMaxFile = MAX_PATH;
-    of.lpstrTitle = L"Choose the install set's INSTALL.INI";
+    of.lpstrTitle = L"Choose the install set's INSTALL.INI or .zip";
     of.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY;
     if (!GetOpenFileNameW(&of)) return false;
     *ini = fs::path(file);

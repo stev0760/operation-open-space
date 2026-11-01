@@ -40,9 +40,12 @@ std::int16_t design_mass(int design) {
 #include "nav/fs.h"
 #include "nav/nav.h"
 #include "nav/nav_draw.h"
+#include "shell/geometry.h"
 #include "shell/rng.h"
+#include "world/draw.h"
 #include "world/flight_hooks.h"
 #include "world/setup.h"
+#include "world/update.h"
 
 namespace is::world {
 
@@ -118,6 +121,13 @@ void ship_setup_player(World& w) {
     ObjectRecord& o = w.ship_object(w.player);
     s.roster_index = -1;
     s.design_index = 0;
+    // seg14 gives a ship record radar_draw seg11:0x37a0 and the radar brush of design word
+    // DGROUP:0x96fe + 0xad·n, which seg14:0x1e08 sets to 7 on every path (the player's own
+    // marker takes WHITE_BRUSH) [BYTES seg14:0x2141 seg14:0x20d7 seg14:0x1e08] (M3 s4 fixer:
+    // the radar's player marker, comparison item 6). Its on_damage seg8:0x45e0 and on_destroy
+    // seg16:0x8e4 are M4 [BYTES seg14:0x2158 seg14:0x212a].
+    o.radar_draw.set(kRadarShip);
+    o.radar_brush = 7;
     if (!g.store) return;
     try {
         std::string name = "EAGLE";
@@ -181,6 +191,21 @@ void read_inputs(World& w, bool new_entry) {
         if (c >= 'a' && c <= 'z') c = static_cast<char>(c - 'a' + 'A');
         w.drive_offset = static_cast<std::int16_t>(c - 'C');  // DGROUP:0x94ac
     }
+    if (g.ini) {
+        // DGROUP:0x8ff2 `Bright` and the star count DGROUP:0x9154 of seg6:0xe36; the copy into
+        // DGROUP:0x9152 (seg6:0xb0d) at the state-1 load [DESIGN: the port reads the INI at the
+        // wave's entries] (M3 s4 DRAW) [BYTES seg6:0xe36 seg6:0xe88 seg6:0xea3].
+        w.bright = static_cast<std::int16_t>(g.ini->get_int(settings::kGameSection, "Bright", 0));
+    }
+    // seg6:0xe36 runs once per INI read in the original; the port reads at every entry, so it
+    // starts each time from the count before its first run (a Detail outside 0 ... 3 keeps it,
+    // and Bright must not take one more each entry) [DESIGN] (M3 s4 fixer, review L5).
+    if (!w.star_base_set) {
+        w.star_base = w.star_wanted;
+        w.star_base_set = true;
+    }
+    w.star_wanted = star_count_for(w.detail, g.ini ? w.bright : std::int16_t{0}, w.star_base);
+    if (new_entry) w.star_count = w.star_wanted;
     if (w.size < 0 || w.size > 2) w.size = 1;
     w.shift = static_cast<std::int16_t>(4 - w.size);  // DGROUP:0x9150
     w.play_mode = static_cast<std::int16_t>(g.play_mode);
@@ -346,6 +371,13 @@ void briefing_entry() {
     g_briefed = true;
 }
 
+// The play rectangle DGROUP:0x1d30 (the stars' wrap) as seg2:0xca4 set it inside seg2:0xba4 at
+// seg9:0x5d14: the briefing's hook (src/briefing/hooks.cpp enter_briefing) computes g.clip
+// there; the World keeps its copy [BYTES seg2:0xd54 seg9:0x5d14] (M3 s4 DRAW, s4 fixer).
+void play_region(World& w) {
+    w.play_rect = rect16(g.clip.play.left, g.clip.play.top, g.clip.play.right, g.clip.play.bottom);
+}
+
 // seg9:0x60bc after the briefing's own part.
 void wave_start() {
     World& w = g_world;
@@ -371,12 +403,22 @@ void install_world_hooks(App& app) {
     g_walker = std::make_unique<nav::Walker>(*g_fs, [](const std::string& s) { app::log("world fs " + s); });
     g_icons = std::make_unique<Win32IconReader>(*g_fs);
     power_on(g_world);
+    set_frame_world(&g_world);  // the frame's own drawing reads this World (update.h, M3 s4 DRAW)
     auto& h = app.game.hooks();
     // The state-1 entry: seg10:0x0 (the greeting, then the load) or seg9:0x60bc after the
     // briefing (the briefing's part, then the ships).
     auto prev_wave = h.enter[shell::kWave];
     h.enter[shell::kWave] = [prev_wave](shell::GameState& s) {
         const bool start = g_briefed;
+        // seg10:0x0 for state 1: seg10:0x6e76(8, 0) at seg10:0x37 (scheme 8 in mode 0, which
+        // puts the ramps at 103 ... 192, so the border tiles' trace colour c3af00 is entry
+        // 126) and seg10:0x6e4c at seg10:0x3f, before the greeting and the load seg9:0x22b4 at
+        // seg10:0xad (s4-draw.md 3.2) (M3 s4 DRAW) [BYTES seg10:0x35 seg10:0x37 seg10:0x3f
+        // seg10:0xad].
+        if (!start && g.gfx) {
+            g.gfx->palette_scheme(8, 0);
+            g.gfx->palette_animate();
+        }
         if (prev_wave) prev_wave(s);
         if (start)
             wave_start();
@@ -389,6 +431,7 @@ void install_world_hooks(App& app) {
     h.enter[shell::kBriefing] = [prev_brief](shell::GameState& s) {
         briefing_entry();
         if (prev_brief) prev_brief(s);
+        play_region(g_world);
     };
     auto prev_teardown = h.teardown;
     h.teardown = [prev_teardown](shell::GameState& s) {

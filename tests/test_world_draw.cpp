@@ -3,7 +3,9 @@
 // products, the conditions and the effect skip of seg7:0x1208, its blit through seg8:0xb76, the
 // rock cell from the rotation, the dissolve's StretchBlt geometry and its last step, the frame
 // loop, and the ship image slots.
+#include <array>
 #include <cstdint>
+#include <vector>
 
 #include "doctest.h"
 #include "world/draw.h"
@@ -266,9 +268,49 @@ TEST_CASE("ship images: the body bitmap in the ship's slot") {
     set_ship_image(images, 3, s, 0x78);
 }
 
-TEST_CASE("frame draws: the stars and lines are stubs") {
-    Fixture f;
-    draw_stars(f.c, 0);
-    draw_lines(f.c);
-    CHECK(f.out.calls.empty());
+TEST_CASE("frame draws: the link lines draw nothing without a link (seg12:0x3778)") {
+    // The placement leaves every slot of DGROUP:0x65cc without ends (s4-draw.md 2.5) [BYTES
+    // seg9:0x66dd seg9:0x66e1]; the stars are tests/test_world_stars.cpp's.
+    World w;
+    w.pools.set_allocated(10, 3);
+    struct Hooks : LinkHooks {
+        int lines = 0;
+        void line(DcId, std::int16_t, std::int16_t, std::int16_t, std::int16_t) override { ++lines; }
+    } h;
+    draw_lines(w, kPoolShips, kDcWindow, &h);
+    CHECK(h.lines == 0);
+}
+
+TEST_CASE("frame draws: a link whose end left play breaks (seg12:0x3778) [BYTES seg12:0x3778-0x390c]") {
+    World w;
+    w.pools.set_allocated(10, 3);
+    w.pools.rec(10, 1).state = 0;
+    LinkSlot& l = w.links[1];
+    l.pool_a = 4, l.rec_a = 2, l.pool_b = 3, l.rec_b = 5, l.w08 = 9;
+    l.line = {1, 2, 3, 4, 5, 6, 7, 8};
+    w.pools.rec(4, 2).state = 0;
+    w.pools.rec(3, 5).state = 0;
+    struct Hooks : LinkHooks {
+        std::vector<std::array<int, 4>> lines;
+        int calls_2080 = 0;
+        void line(DcId, std::int16_t a, std::int16_t b, std::int16_t c, std::int16_t d) override {
+            lines.push_back({a, b, c, d});
+        }
+        void seg7_2080(int, int) override { ++calls_2080; }
+    } h;
+    draw_lines(w, kPoolShips, kDcWindow, &h);
+    CHECK(h.lines.empty());  // both ends in play
+    w.pools.rec(3, 5).state = 1;
+    draw_lines(w, kPoolShips, kDcWindow, &h);
+    REQUIRE(h.lines.size() == 1);
+    // seg12:0x7256(hdc, 0x65e8, 0x65ea, 0x65e0, 0x65e2): words 6, 7, 2, 3 of the slot's line.
+    CHECK(h.lines[0] == std::array<int, 4>{7, 8, 3, 4});
+    CHECK(h.calls_2080 == 1);
+    CHECK(l.pool_a == -1);
+    CHECK(l.pool_b == -1);
+    CHECK(l.w08 == 0);
+    CHECK(l.line == std::array<std::int16_t, 8>{1, 2, 1, 2, 5, 6, 5, 6});
+    CHECK(w.pools.rec(10, 1).state == 1);
+    CHECK(w.pools.rec(4, 2).owner_pool == -1);
+    CHECK(w.pools.rec(3, 5).w36 == -1);
 }

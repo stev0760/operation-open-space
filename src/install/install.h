@@ -119,9 +119,17 @@ struct OpenResult {
 // Start-up and validation (install.md "Start-up" steps 2-4 and "Validation"). `given` is a
 // directory holding INSTALL.INI, or that INSTALL.INI itself. The set is copied into
 // `work_root`/<its directory name> first (the port never writes into the user's files; the
-// original's write test then creates SECURE.DAT in that copy) [DESIGN]. A .zip is [OPEN]: it
-// fails with a message.
+// original's write test then creates SECURE.DAT in that copy) [DESIGN]. `given` may also be a
+// .zip install set: it is unpacked with unpack_zip and the step goes on from the unpacked
+// directory (ADR 0008 decision 1) [DESIGN].
 OpenResult open_source(const fs::path& given, const fs::path& work_root, const Log& log);
+
+// Unpacks the zip install set `zip` into `work_root`/<its file name without .zip> (emptied
+// first) and returns the directory holding its INSTALL.INI: that directory, or the one
+// subdirectory that holds it. Empty with *why (a message for the user) when the zip cannot be
+// read, names a path outside the target, or holds no INSTALL.INI. The files keep the names
+// the zip stores; their times are the unpack time, as a directory set's copy has [DESIGN].
+std::optional<fs::path> unpack_zip(const fs::path& zip, const fs::path& work_root, std::string* why);
 
 // ---- dialog 300 (install.md "Dialogs")
 

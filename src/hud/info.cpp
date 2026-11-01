@@ -118,7 +118,7 @@ void Info::target_display(int width) {
     // seg11:0x24e3-0x2514: an object that is no target and of kind 0 bumps DGROUP:0x9498.
     if (!h_.target_ok(m.pool, m.rec) && h_.target_kind(m.pool, m.rec) == 0) h_.bump_bad_index();
     draw_mark(0);             // seg11:0x251e: seg11:0x2ce6(hdc, 0)
-    h_.draw_target_icon(c_);  // seg11:0x2529: seg13:0x58dc(hdc, 1)
+    target_picture(1);        // seg11:0x2529: seg13:0x58dc(hdc, 1)
     const bool narrow = w_ < 0x2bc;  // seg11:0x2531: jge 700
     const int margin = narrow ? 0xc : 0xf;
     // The title: DGROUP:0xacb "" or string 930, then 931, 932 or 933, then DGROUP:0xacc ")".
@@ -149,7 +149,7 @@ void Info::target_display(int width) {
 void Info::message_display() {
     const Colour title = h_.monochrome() ? 0x00FFFFFF : 0x0000FF00;
     draw_mark(1);             // seg11:0x26f5: seg11:0x2ce6(hdc, 1)
-    h_.draw_target_icon(c_);  // seg11:0x2700: seg13:0x58dc(hdc, 1)
+    target_picture(1);        // seg11:0x2700: seg13:0x58dc(hdc, 1)
     c_.text_out(Img::kScreen, 1, 0, kTaLeft, title, h_.lang(0x3a1));  // seg11:0x2758: 929
     const Mark& m = marks_[1];
     if (m.pool == h_.ship_pool()) {  // seg11:0x2767
@@ -312,6 +312,48 @@ void Info::draw_mark(int d) {
         m.shown = m.dir;
     }
     segment(m.dir, m.lit != 0);  // seg11:0x2d3f-0x2d9d
+}
+
+// seg13:0x58dc(hdc, flag) [BYTES seg13:0x58e9-0x59af].
+void Info::target_picture(int flag) {
+    if (!exists_) return;  // seg13:0x58e9: DGROUP:0xa7c = 0
+    const int m = mode();
+    if (m != kModeTarget && m != kModeMessage) return;    // seg13:0x58f2-0x58fe
+    if (h_.game_mode() == 6 && m == kModeTarget) return;  // seg13:0x5902-0x590e
+    Mark& k = marks_[m - 2];                              // seg13:0x5912-0x5928
+    if (k.pool != 7 && k.pool != 0xc && !h_.target_ok(k.pool, k.rec)) {  // seg13:0x592b-0x5941
+        if (m == kModeMessage) {  // seg13:0x5943-0x595b: back to the target display
+            set_mode(kModeTarget);
+            invalidate(kInfoTarget);
+        }
+        return;
+    }
+    CellInputs in;
+    if (!h_.cell(k.pool, k.rec, in)) return;  // no such record in the port's pools [DESIGN]
+    // seg13:0x5996-0x59af: seg13:0x5a6a(hdc, origin +0x16/+0x18, pool, rec, mark, flag, 0).
+    in.x = k.ox;
+    in.y = k.oy;
+    in.pool = k.pool;
+    in.rec = k.rec;
+    in.flag = flag;
+    in.scale = 0;
+    const CellPlan p = plan_cell(in, k.glint);
+    if (p.clear) c_.pat_blt(Img::kScreen, p.clear_x, p.clear_y, p.clear_size, p.clear_size, kBlackness,
+                            Brush::none());
+    // The glint (seg13:0x5460, seg13:0x54da) and the pictures other than the icon strip's are
+    // not drawn [OPEN]; with flag 1 the glint never runs (seg13:0x5af3).
+    if (p.picture && p.slot == 0xd)
+        c_.stretch_blt(Img::kScreen, p.dx, p.dy, p.dw, p.dh, Img::kIconStrip, p.sx, p.sy, p.sw, p.sh,
+                       kSrcCopy);
+}
+
+void Info::target_picture_now() {
+    // GetDC(DGROUP:0xa7c) when hdc = 0 [BYTES seg13:0x5967-0x597b].
+    if (!exists_) return;
+    const shell::Box& b = rect_[0];
+    c_.set_view(b.x, b.y, b.cx, b.cy);
+    target_picture(1);
+    c_.clear_view();
 }
 
 void Info::attitude_text(int r) {

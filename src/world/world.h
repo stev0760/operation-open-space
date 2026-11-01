@@ -125,6 +125,12 @@ struct Rect16 {
     std::int16_t l = 0, t = 0, r = 0, b = 0;
 };
 struct GateRecord {
+    // The beam's screen position, the four words DGROUP:0x6670 + 0x1c·p ... 0x6676 before the
+    // rectangle: last frame's (+0x6670, +0x6672) and this frame's (+0x6674, +0x6676), written by
+    // seg12:0x1776 (work/analysis/m3/s4-draw.md 1.4) [BYTES seg12:0x1a21 seg12:0x1a35
+    // seg12:0x1a97 seg12:0x1aa9]. The port's record starts at the rectangle; these four are
+    // the port's own fields [DESIGN].
+    std::int16_t old_beam_x = 0, old_beam_y = 0, beam_x = 0, beam_y = 0;
     Rect16 beam;               // +0x00 DGROUP:0x6678
     std::int16_t width = 0;    // +0x0a DGROUP:0x6682, 1200
     std::int16_t w0c = 0;      // +0x0c DGROUP:0x6684 [OPEN]
@@ -173,6 +179,28 @@ struct Star {
     std::uint8_t speed = 0;    // DGROUP:0x91d4 + k: rand() % 3 + 1
     std::uint8_t phase = 0;    // DGROUP:0x91e6 + k: rand() % 40
     std::uint8_t on = 0;       // DGROUP:0x91c2 + k: 1
+};
+
+// A link slot of the 0x20-byte table DGROUP:0x65cc, DGROUP:0x9300 (the pool-10 allocated
+// count, 3 from the load) of them (s4-draw.md 2.5) [BYTES seg12:0x3778 seg9:0x2508]. The link
+// weapon that forms one is M4.
+struct LinkSlot {
+    std::int16_t pool_a = -1, rec_a = 0;  // DGROUP:0x65cc, 0x65ce: end A, pool -1 = none
+    std::int16_t pool_b = -1, rec_b = 0;  // DGROUP:0x65d0, 0x65d2: end B
+    std::int16_t w08 = 0;                 // DGROUP:0x65d4
+    // DGROUP:0x65dc ... 0x65ea: the line's coordinate words, by offset (0x65dc + 2k).
+    std::array<std::int16_t, 8> line{};
+};
+constexpr int kLinkSlots = 8;  // the port's bound on DGROUP:0x9300 [DESIGN]
+
+// A star of seg8:0x158a's moving pass is the Star above; its table and words:
+//   the current count DGROUP:0x9152 (World::star_count), the wanted count DGROUP:0x9154
+//   (World::star_wanted), Bright DGROUP:0x8ff2, the toggle DGROUP:0x6ae (s4-draw.md 2.1-2.2).
+
+// The pool-8 mover's hazard marks DGROUP:0x693c + 16k (x, y at +0, +2; the two words at +8,
+// +0xa), written only by the kind-2 routine seg12:0x5636 (M5) [BYTES seg12:0x6416 seg12:0x644a].
+struct HazardMark {
+    std::int16_t x = 0, y = 0, w8 = 0, wa = 0;
 };
 
 // The values Enter hands to the wave set-up (nav.md "Values handed to the wave set-up").
@@ -229,7 +257,22 @@ public:
     std::int16_t play_mode = 0;   // DGROUP:0x9134 PlayMode
     std::int16_t player_game = 1; // DGROUP:0x95bc
     std::int16_t restored = 0;    // DGROUP:0x92e4
-    std::int16_t star_count = 0;  // DGROUP:0x9152
+    // The placement's test at seg9:0x6951 (wave 1 or DGROUP:0x92e4 != 0) for its seg11:0xae94
+    // and seg11:0x2f8c calls, kept for the wave start's port of them [DESIGN] [BYTES seg9:0x6951].
+    bool picture_due = false;
+    std::int16_t star_count = 0;  // DGROUP:0x9152, the stars in the table
+    std::int16_t star_wanted = 0; // DGROUP:0x9154, the count by Detail (seg6:0xe36)
+    std::int16_t star_base = 0;   // DGROUP:0x9154 before the port's first seg6:0xe36 [DESIGN]
+    bool star_base_set = false;
+    std::int16_t bright = 0;      // DGROUP:0x8ff2 INI `Bright` (seg8:0x1320's starfield) [OPEN]
+    std::int16_t w06ae = 0;       // DGROUP:0x6ae, the stars' every-second-call toggle (0 in the image)
+    // DGROUP:0x1d30 (left, top, right, bottom): seg2:0xca4's play rectangle, the clip region
+    // DGROUP:0x12 and the stars' wrap (s4-draw.md 5) [BYTES seg2:0xd54].
+    Rect16 play_rect;
+    // DGROUP:0x1e5c: the player's cell inset by 2, written by seg7:0x1208 (DrawGlobals::
+    // player_rect, copied here after each player draw by src/hud/wave_win32.cpp); the stars skip
+    // it [BYTES seg8:0x17a0]. Zero until the player's sprite draws (M5).
+    Rect16 player_cell;
 
     // ---- the generator and the counts (world.md "Difficulty inputs", "Pool counts")
     std::int16_t wave = 0;        // DGROUP:0x91f8, completed waves
@@ -290,6 +333,22 @@ public:
 
     // ---- gates, pool-8 table, special places
     std::array<GateRecord, kMaxGates> gate{};
+    // The pool-8 mover seg12:0x633e and the gate routine seg12:0x1776 (s4-draw.md 1.2, 1.4):
+    std::int16_t beam_index = 0;  // DGROUP:0x9492, the beam brush index; 1 at the placement
+    std::int16_t beam_step = 0;   // DGROUP:0x9494, its step; 1 at the placement [BYTES seg9:0x67f4]
+    std::int16_t w1c32 = 0;       // DGROUP:0x1c32, seg12:0x7006's 0/1 toggle (0 in the image)
+    std::int16_t w0d06 = 1;       // DGROUP:0x0d06, the oscillator's step (1 in the image)
+    std::int16_t w0d08 = 2;       // DGROUP:0x0d08, the oscillator (2 in the image)
+    std::int16_t out_frame = 0;   // DGROUP:0x0d0a, the OUT sign's frame (0 in the image)
+    std::uint32_t out_due = 0;    // DGROUP:0x1928, the OUT sign's 400 ms deadline (0 in the image)
+    std::int16_t w94a0 = 0;       // DGROUP:0x94a0 = (Detail + 1) / 2 + 2, the marks' count
+    std::int16_t w949a = 0, w949c = 0, w949e = 0;  // DGROUP:0x949a, 0x949c, 0x949e
+    std::uint32_t w6988 = 0;      // DGROUP:0x6988 = now + 1000 when DGROUP:0x949a != 0
+    std::uint32_t w666c = 0;      // DGROUP:0x666c = frames + 3 or + 8 when DGROUP:0x949c != 0
+    std::uint32_t w1e80 = 0;      // DGROUP:0x1e80 = now + 1000 after the player's passage
+    std::array<HazardMark, 8> marks{};  // DGROUP:0x693c + 16k
+    // ---- link slots (seg12:0x3778)
+    std::array<LinkSlot, kLinkSlots> links{};
     std::array<Pool8Entry, kPool8Max> pool8{};
     std::array<SpecialPlace, 10> places{};
 

@@ -12,6 +12,7 @@
 // Portable, no Win32.
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -84,7 +85,21 @@ public:
     virtual DcId load_bitmap(const std::string& name) = 0;
     virtual DcId load_graphic(int id, int mode, int arg) = 0;
     virtual BrushId create_solid_brush(std::uint32_t colorref) = 0;
+    // CreateBitmap(8, 8, 1, 1, rows) + CreatePatternBrush: an 8 x 8 monochrome pattern brush
+    // from eight row bytes (shell.md "Pattern brushes"; the start-up's seg10:0xd8-0x10f). Not
+    // pure, so the HUD's fakes need not know it; the default makes none.
+    virtual BrushId create_pattern_brush(const std::uint8_t (&rows)[8]) {
+        (void)rows;
+        return kBrushNone;
+    }
 };
+
+// The window's Blitter, the one the wave pass clips (GdiBlitter registers itself on
+// construction and leaves on destruction): the wave's portable routines that draw beside
+// seg8:0xb76 (the gate beam, the stars, update.h) reach it through UpdateHost::blitter()
+// [DESIGN ADR 0013 decision 1] (M3 s4 DRAW). Null when there is none (host tests set their own).
+Blitter* wave_blitter();
+void set_wave_blitter(Blitter* b);
 
 // One recorded call (RecordingBlitter). Unused fields stay 0.
 struct BlitCall {
@@ -135,11 +150,13 @@ public:
     DcId load_bitmap(const std::string& name) override;
     DcId load_graphic(int id, int mode, int arg) override;
     BrushId create_solid_brush(std::uint32_t colorref) override;
+    BrushId create_pattern_brush(const std::uint8_t (&rows)[8]) override;
 
     // What the resource calls were given, by id.
     struct Image { DcId id; int w, h; std::string name; int graphic; };
     std::vector<Image> images;
-    struct Brush { BrushId id; std::uint32_t colorref; };
+    // A solid brush's COLORREF; a pattern brush has colorref 0 and its eight rows.
+    struct Brush { BrushId id; std::uint32_t colorref; std::array<std::uint8_t, 8> rows{}; };
     std::vector<Brush> brushes;
 
 private:
@@ -172,7 +189,7 @@ struct SpriteGlobals {
     std::int16_t dg_9e49 = 0;            // DGROUP:0x9e49: special-wave kind [OPEN]
     std::int16_t dg_913a = 0;            // DGROUP:0x913a [OPEN]
     std::int16_t dg_913c = 0;            // DGROUP:0x913c [OPEN]
-    BrushId player_mask_brush = 0;       // DGROUP:0x5ea8, the 0x00A000C9 PatBlt's brush [OPEN]
+    BrushId player_mask_brush = 0;       // DGROUP:0x5ea8, the 0x00A000C9 PatBlt's brush (WaveGraphics::mask)
 };
 
 // seg8:0xb76(pool*256 + rec, kind, srcDC, masked) [BYTES seg8:0xb76]: draws one object's cell on
@@ -238,6 +255,7 @@ public:
     DcId load_bitmap(const std::string& name) override;
     DcId load_graphic(int id, int mode, int arg) override;
     BrushId create_solid_brush(std::uint32_t colorref) override;
+    BrushId create_pattern_brush(const std::uint8_t (&rows)[8]) override;
 
 private:
     BrushId brush_id(HBRUSH h);

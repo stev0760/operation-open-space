@@ -168,6 +168,15 @@ void GdiCanvas::set_pixel(Img dst, int x, int y, Colour c) {
     if (HDC d = dc(dst)) SetPixel(d, x, y, gfx_.dc_colour(c));
 }
 
+void GdiCanvas::stretch_blt(Img dst, int x, int y, int w, int h, Img src, int sx, int sy, int sw,
+                            int sh, std::uint32_t rop) {
+    HDC d = dc(dst), s = dc(src);
+    if (!d || !s) return;
+    const int mode = SetStretchBltMode(d, COLORONCOLOR);  // seg13:0x5c98: mode 3
+    StretchBlt(d, x, y, w, h, s, sx, sy, sw, sh, rop);
+    SetStretchBltMode(d, mode);
+}
+
 void GdiCanvas::frame(Img dst, int x, int y, int w, int h, int style) {
     if (HDC d = dc(dst)) gfx::draw_frame(d, x, y, w, h, style, resolve, &gfx_);
 }

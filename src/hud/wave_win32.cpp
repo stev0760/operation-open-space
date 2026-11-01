@@ -13,6 +13,7 @@
 
 #include "app/app.h"
 #include "hud/gdi_canvas.h"
+#include "hud/icon_column.h"
 #include "hud/program.h"
 #include "hud/radar.h"
 #include "hud/status.h"
@@ -63,7 +64,9 @@ world::SpriteGlobals sprite_globals() {
     s.dg_9e49 = w().w9e49;
     s.dg_913a = w().w913a;
     s.dg_913c = w().w913c;
-    s.player_mask_brush = world::kBrushNone;  // DGROUP:0x5ea8: seg10:0x0's pattern brush [OPEN]
+    // DGROUP:0x5ea8, the start-up's sparse-dot pattern brush (rock_images.h WaveGraphics::mask)
+    // [BYTES seg10:0xe4 seg10:0xf2] (M3 s4 fixer, draw request 2).
+    s.player_mask_brush = world::wave_graphics().mask;
     return s;
 }
 
@@ -143,6 +146,10 @@ void player_sprite() {
     if (!ready()) return;
     world::DrawContext c = draw_context();
     world::draw_player_sprite(c);
+    // DGROUP:0x1e5c is one word set: the drawing's copy is the stars' exclusion box
+    // [BYTES seg7:0x12e4 seg8:0x17a0] (M3 s4 fixer, draw request 3; inert until the player's
+    // sprite draws, M5).
+    w().player_cell = g_draw.player_rect;
     after_draw(g_draw.sprite);
 }
 
@@ -191,10 +198,21 @@ void fuel_mass() {
 
 }  // namespace
 
+std::vector<std::pair<int, int>> wave_visible() {
+    std::vector<std::pair<int, int>> v;
+    const int n = g_vis.count < 0 ? 0 : (g_vis.count > world::kVisibleMax ? world::kVisibleMax : g_vis.count);
+    for (int k = 0; k < n; ++k)  // cbw of each byte [BYTES seg13:0x2271-0x2283]
+        v.emplace_back(static_cast<std::int8_t>(g_vis.pool[static_cast<std::size_t>(k)]),
+                       static_cast<std::int8_t>(g_vis.rec[static_cast<std::size_t>(k)]));
+    return v;
+}
+
 void load_wave_resources() {
     if (!ready()) return;
-    // seg9:0x22b4's rock images (seg10:0x3a2e) [BYTES seg9:0x22b4].
-    world::build_rock_images(*g_blit, g_images, w().w740);
+    // seg9:0x22b4's graphics chain: the rock images seg10:0x3a2e, the gate images seg10:0x3ea2
+    // (seg9:0x26e5) and the wave's brushes [BYTES seg9:0x22b4 seg9:0x26e5] (M3 s4 fixer, review
+    // H1).
+    world::build_wave_images(*g_blit, g_images, w().w740);
     // seg11:0x0's radar part: DGROUP:0x90f0 = 1 on the port's surface (ADR 0007) [BYTES seg11:0xd].
     if (!g_radar.created()) {
         const world::BrushId metal = g_blit->bind_brush(metal_brush());
@@ -205,6 +223,9 @@ void load_wave_resources() {
 
 void install_wave(app::App& app) {
     g_blit = std::make_unique<world::GdiBlitter>(*app.gfx);
+    // The gate test's list DGROUP:0x507c / 0x50e0 is the program's one visibility list (M3 s4
+    // fixer, review M7: a static, never a caller's local).
+    world::set_last_visibility(&g_vis);
     world::WaveLinks& l = world::wave_links();
     l.draw_sprite = draw_sprite;
     l.player_sprite = player_sprite;
@@ -258,8 +279,25 @@ void install_wave(app::App& app) {
     // seg9:0x6320 seg11:0x3e48 seg11:0xb22]. DGROUP:0x8f64 = (seg13:0x65f2(0) != 0) after it is
     // [OPEN]: the port leaves the repaint flag as it is.
     world::on_wave_start([](world::World& wd) {
+        refresh_player_design();  // the design words the panels read (M3 stage 4)
+        // seg9:0x695e-0x6963: seg11:0xae94 and seg11:0x2f8c (the weapon picture), only when the
+        // placement saw DGROUP:0x91f8 = 1 or DGROUP:0x92e4 != 0 (World::picture_due) [BYTES
+        // seg9:0x6951-0x695c] (M3 s4 fixer, review M6). seg11:0xae94 is unread [OPEN].
+        if (wd.picture_due) {
+            todo_once("seg11:0xae94 at the wave set-up", "seg11:0xae94");
+            weapon_picture_refresh();
+        }
         wave_start();
-        if (Hud* h = hud()) h->lamp_repaint(wd.player);
+        // seg11:0x3e48-0x3e5f: seg13:0x65f2(0) after the repaint, whose column part posts 0x9aa
+        // when IconWnd is set and the column does not exist (the IS_ICON column, M3 stage 4),
+        // and DGROUP:0x8f64 = 1 when it posted, else 0 [BYTES seg11:0x3e4d seg11:0x3e57
+        // seg11:0x3e5f seg13:0x66af-0x66ca]. The IS_SMART post 0x9b4 (SmWnd, seg13:0x66d4) is not
+        // ported [OPEN].
+        Hud* h = hud();
+        const bool repainted = h && h->lamp_repaint(wd.player);
+        if (repainted) g.hud_dirty = icon_column_wave_start();
+        app::log(std::string("hud: seg11:0x3cc2 at the wave start: ") +
+                 (h ? (repainted ? "repaint, seg13:0x65f2(0)" : "DGROUP:0x951a set") : "no HUD"));
     });
 }
 

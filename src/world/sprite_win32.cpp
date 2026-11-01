@@ -6,13 +6,20 @@
 #include <exception>
 
 #include "gfx/gfx.h"
+#include "world/rock_images.h"
 #include "world/sprite.h"
 
 namespace is::world {
 
-GdiBlitter::GdiBlitter(gfx::Gfx& gfx) : gfx_(gfx) {}
+GdiBlitter::GdiBlitter(gfx::Gfx& gfx) : gfx_(gfx) { set_wave_blitter(this); }
 
 GdiBlitter::~GdiBlitter() {
+    if (wave_blitter() == this) {
+        set_wave_blitter(nullptr);
+        // The brush and image ids of wave_graphics() are this Blitter's: none outlives it
+        // (M3 s4 fixer, review L4).
+        wave_graphics() = WaveGraphics{};
+    }
     // An owned brush may still be selected into the surface DC (the radar callbacks leave theirs
     // selected, as the original does): a stock brush goes back first (M3 s2 fixer, review L2).
     if (HDC d = gfx_.dc()) SelectObject(d, GetStockObject(WHITE_BRUSH));
@@ -148,6 +155,23 @@ DcId GdiBlitter::load_graphic(int id, int mode, int arg) {
 
 BrushId GdiBlitter::create_solid_brush(std::uint32_t colorref) {
     HBRUSH h = CreateSolidBrush(gfx_.dc_colour(colorref));
+    if (!h) return kBrushNone;
+    const BrushId id = next_brush_++;
+    brushes_[id] = Brush{h, true};
+    return id;
+}
+
+// CreateBitmap(8, 8, 1, 1, rows) and CreatePatternBrush, as seg10:0xd8-0x10f makes
+// DGROUP:0x3820 and DGROUP:0x5ea8: word-aligned rows, the byte then 0x00 (shell.md "Pattern
+// brushes") [BYTES seg10:0xe4 seg10:0x10a]. The bitmap is deleted at once: the brush keeps its
+// own copy of the pattern [REF Win32 SDK CreatePatternBrush].
+BrushId GdiBlitter::create_pattern_brush(const std::uint8_t (&rows)[8]) {
+    std::uint8_t bits[16] = {};
+    for (int i = 0; i < 8; ++i) bits[2 * i] = rows[i];
+    HBITMAP bm = CreateBitmap(8, 8, 1, 1, bits);
+    if (!bm) return kBrushNone;
+    HBRUSH h = CreatePatternBrush(bm);
+    DeleteObject(bm);
     if (!h) return kBrushNone;
     const BrushId id = next_brush_++;
     brushes_[id] = Brush{h, true};

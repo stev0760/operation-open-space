@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -160,5 +161,23 @@ const shell::Edition& run_edition_check(int arg);
 bool post(UINT msg, WPARAM wparam = 0, LPARAM lparam = 0);
 // A state request: DGROUP:0x968e = state, DGROUP:0x13de = 1 (shell::GameState::request).
 void request_state(int state);
+
+// The watch windows that 0x9aa and 0x9b4 toggle (seg2:0x4f0, seg2:0x513; Alt+I and Alt+R in a
+// wave, seg11:0x716c and seg11:0x718b). The window's owner fills the slots: exists() stands for
+// the handle DGROUP:0x9458 (IS_ICON) or DGROUP:0x95fe (IS_SMART) being non-zero, create() for
+// seg7:0x641a or seg13:0x638a, destroy() for seg7:0x63f2 or seg13:0x6362. The handler sets
+// IconWnd DGROUP:0x8f72 or SmWnd DGROUP:0x8f74 (App::keys) itself; an empty create or destroy
+// slot logs [BYTES seg2:0x4f0 seg2:0x4f7 seg2:0x4fd seg2:0x505 seg2:0x50b seg2:0x513 seg2:0x51a
+// seg2:0x520 seg2:0x528 seg2:0x52e].
+struct WatchToggle {
+    std::function<bool()> exists;
+    std::function<void()> create;
+    std::function<void()> destroy;
+};
+WatchToggle& icon_watch();   // IS_ICON, the icon column (world.md "Icon column")
+WatchToggle& smart_watch();  // IS_SMART, the All Ships watch (shell.md "Watch windows")
+// The surface-drawn child windows' WM_PAINT after the main window's emulated palette message
+// erased the client (ADR 0007 decision 5): the HUD fills it to mark its IS_INFO panels due.
+std::function<void()>& children_invalidated();
 
 }  // namespace is::app

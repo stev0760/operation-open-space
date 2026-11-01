@@ -48,4 +48,11 @@ struct VisibilityHost {
 void visibility(Pools& pools, const ViewState& view, VisibilityGlobals& g, shell::Rng& rng,
                 const VisibilityHost& host);
 
+// The program's visibility list DGROUP:0x507c / 0x50e0, for the routines later in the frame that
+// walk it (the gate test seg12:0x1f7a, update.h): registered once by the program
+// (src/hud/wave_win32.cpp registers its static); null until then. visibility() does not set it,
+// so no caller's local is remembered [DESIGN] (M3 s4 fixer).
+const VisibilityGlobals* last_visibility();
+void set_last_visibility(const VisibilityGlobals* g);
+
 }  // namespace is::world

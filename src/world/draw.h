@@ -6,10 +6,14 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 
 #include "formats/ships.h"
+#include "shell/rng.h"
 #include "world/records.h"
+#include "world/rock_images.h"
 #include "world/sprite.h"
+#include "world/world.h"
 
 namespace is::world {
 
@@ -97,18 +101,75 @@ void dissolve_pass(DrawContext& c);
 
 // ---- the frame's draw calls before the movers (ADR 0013 decision 8)
 
-// seg8:0x158a(0) at seg7:0xb87, the stars: what it draws is [OPEN] (world.md Open questions,
-// "Draw order"); the port draws nothing.
-void draw_stars(DrawContext& c, int arg);
-// seg12:0x3778 at seg7:0xbed, the lines: [OPEN] as the stars; the port draws nothing.
-void draw_lines(DrawContext& c);
+// ---- the stars seg8:0x158a and their set-up seg8:0x190e (s4-draw.md 2) (M3 s4 DRAW)
+
+// The star count DGROUP:0x9154 of the INI read seg6:0xe36: Detail 0, 1, 2, 3 give 4, 7, 13,
+// 18 (another Detail keeps `current`), one less when Bright != 0 [BYTES seg6:0xe36 seg6:0xe3b
+// seg6:0xe49 seg6:0xe57 seg6:0xe65 seg6:0xe88 seg6:0xe94].
+std::int16_t star_count_for(std::int16_t detail, std::int16_t bright, std::int16_t current);
+constexpr int kStarMax = 18;
+
+// seg8:0x190e, called at seg9:0x6117 in the wave start (before seg13:0x2dcc and the chance
+// block): for each of the DGROUP:0x9152 stars six rand() in this order, x % W, y % H, a colour
+// byte b % 255, a colour byte g % 255, the size % 3 + 1, the phase % 40; the drawn flag set
+// [BYTES seg8:0x1924 seg8:0x192a seg8:0x1940 seg8:0x1948 seg8:0x1957 seg8:0x196e seg8:0x1982
+// seg8:0x1994]. A W or H of 0 gives 0 for its coordinate, where the original faults [DESIGN].
+void init_stars(World& w, shell::Rng& rng);
+
+// The words seg8:0x158a reads beyond the World's.
+struct StarInputs {
+    DcId window_dc = kDcWindow;          // DGROUP:0x13dc
+    std::int16_t ship_pool = kPoolShips; // DGROUP:0x9324
+    std::int16_t player = 0;             // DGROUP:0x9646
+    std::int16_t size = 1;               // DGROUP:0x9156 `Size`
+    std::int16_t autopilot = 0;          // DGROUP:0x951a
+    std::int16_t auto_vx = 0, auto_vy = 0;  // DGROUP:0x2394, 0x2396, the 0x951a motion [OPEN]
+    std::int16_t shake = 0;              // DGROUP:0x238c
+    std::int16_t shake_x = 0, shake_y = 0;  // DGROUP:0x2390, 0x2392
+    std::int16_t demons_gate = 0;        // DGROUP:0x92e8
+};
+// seg8:0x1320, the Bright starfield, which seg8:0x158a calls instead while DGROUP:0x8ff2 != 0:
+// not read [OPEN]; the default draws nothing.
+using BrightStars = std::function<void(int arg)>;
+
+// seg8:0x158a(arg) [BYTES seg8:0x158a-0x19ae]: the body runs on every second call (the
+// toggle DGROUP:0x6ae; arg != 0 forces it); it zeroes the player's +0x0c, +0x0e when the
+// player's `state` is 1 or byte +0x54 and DGROUP:0x92e8 are set; per star it blacks the old
+// square, moves it against the player's velocity ((v << (Size + 1)) >> (6 - size), 16-bit),
+// wraps it in DGROUP:0x1d30 with rand(), and PATCOPYs it with brush DGROUP:0x3b4c[n] outside
+// DGROUP:0x1e5c; the side is min(size, 2 at Size 0 else 3).
+void draw_stars(World& w, const StarInputs& in, const WaveGraphics& wg, Blitter& out,
+                shell::Rng& rng, int arg, const BrightStars& bright = nullptr);
+// The brush index n of a star's phase (0 ... 40): v = phase / 5, n = v + 10 below 4, else
+// 18 - v [BYTES seg8:0x17b7 seg8:0x17cc seg8:0x17d7].
+int star_brush(std::uint8_t phase);
+
+// ---- the link lines seg12:0x3778 (s4-draw.md 2.5)
+
+// The calls seg12:0x3778 makes outside the drawing; the defaults do nothing.
+class LinkHooks {
+public:
+    virtual ~LinkHooks() = default;
+    // seg12:0x7256(hdc, x0, y0, x1, y1) with BLACK_PEN (GetStockObject(7)) selected: the old
+    // line's erase [OPEN: seg12:0x7256 is not read].
+    virtual void line(DcId dc, std::int16_t x0, std::int16_t y0, std::int16_t x1, std::int16_t y1) {
+        (void)dc, (void)x0, (void)y0, (void)x1, (void)y1;
+    }
+    virtual void seg7_2080(int a, int b) { (void)a, (void)b; }  // seg7:0x2080(10, -1) [OPEN]
+};
+// seg12:0x3778 [BYTES seg12:0x3778-0x390c]: each of the DGROUP:0x9300 (pool-10 allocated) slots
+// with an end A breaks when an end's `state` is not 0 or an end is a ship (pool DGROUP:0x9324)
+// whose byte +0xec is 0 or +0x147 is not 0: pool-10 record k's `state` = 1, A's +0x32 and B's
+// +0x36 = -1, the slot's pools -1 and +0x08 0, the old line erased and the coordinates rolled.
+// The placement leaves every slot without ends, so wave 1 draws nothing here.
+void draw_lines(World& w, std::int16_t ship_pool, DcId window_dc, LinkHooks* hooks);
 
 // The view, the visibility pass and the timer step are other parts' (world.h); the frame
 // calls these in this order, seg7:0xb87-0xc1a:
-//   draw_stars(c, 0)          seg7:0xb87  seg8:0x158a(0)          [OPEN] stub
+//   draw_stars(..., 0)        seg7:0xb87  seg8:0x158a(0)
 //   view                      seg7:0xb8c  seg8:0x0
 //   (seg7:0x1d0c when DGROUP:0x9140 != 0), visibility seg8:0x4e14 at seg7:0xba2
-//   draw_lines(c)             seg7:0xbed  seg12:0x3778            [OPEN] stub
+//   draw_lines(...)           seg7:0xbed  seg12:0x3778
 //   dissolve_pass(c)          seg7:0xbf2-0xc1a
 // and the movers from seg7:0xcd3 draw their own objects (seg8:0xb76, seg7:0x1208).
 

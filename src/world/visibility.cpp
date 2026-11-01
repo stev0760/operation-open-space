@@ -23,6 +23,13 @@ void list(VisibilityGlobals& g, int pool, int rec) {
 
 }  // namespace
 
+namespace {
+const VisibilityGlobals* g_last = nullptr;
+}  // namespace
+
+const VisibilityGlobals* last_visibility() { return g_last; }
+void set_last_visibility(const VisibilityGlobals* g) { g_last = g; }
+
 void visibility(Pools& pools, const ViewState& view, VisibilityGlobals& g, shell::Rng& rng,
                 const VisibilityHost& host) {
     if (g.dg_9130 == 0) {

@@ -121,12 +121,180 @@ void dissolve_pass(DrawContext& c) {
         if (c.pools.rec(kPoolIcons, i).race_status != 0) dissolve_icon(c, i);
 }
 
-void draw_stars(DrawContext& /*c*/, int /*arg*/) {
-    // seg8:0x158a [OPEN]: world.md documents no drawing for it yet.
+std::int16_t star_count_for(std::int16_t detail, std::int16_t bright, std::int16_t current) {
+    std::int16_t n = current;
+    switch (detail) {  // [BYTES seg6:0xe36 seg6:0xe3b seg6:0xe49 seg6:0xe57 seg6:0xe65]
+    case 0: n = 4; break;
+    case 1: n = 7; break;
+    case 2: n = 13; break;
+    case 3: n = 18; break;
+    default: break;
+    }
+    if (bright != 0) n = sub16(n, 1);  // [BYTES seg6:0xe88 seg6:0xe94]
+    return n;
 }
 
-void draw_lines(DrawContext& /*c*/) {
-    // seg12:0x3778 [OPEN]: world.md documents no drawing for it yet.
+namespace {
+
+// rand() % d as `cwd; idiv`; 0 for d = 0, where the original faults [DESIGN].
+std::int16_t rmod16(shell::Rng& rng, std::int16_t d) {
+    const std::int16_t r = static_cast<std::int16_t>(rng.rand());
+    return d == 0 ? std::int16_t{0} : imod16(r, d);
+}
+
+// The colour words DGROUP:0x2f04 (low) and 0x2f06 (high) of a star.
+std::uint32_t star_colour(std::uint16_t lo, std::uint16_t hi) {
+    return static_cast<std::uint32_t>(lo) | (static_cast<std::uint32_t>(hi) << 16);
+}
+
+// One wrap's re-draw: the other coordinate % span, the colour words and the size
+// [BYTES seg8:0x16cf seg8:0x16d5 seg8:0x16e9 seg8:0x16fa seg8:0x170f seg8:0x171f].
+void star_respawn(Star& s, std::int16_t& other, std::int16_t span, shell::Rng& rng) {
+    other = rmod16(rng, span);
+    const std::int16_t g = rmod16(rng, 255);
+    const std::int16_t b = rmod16(rng, 255);
+    // DGROUP:0x2f04 = (g << 8) | 0xff; DGROUP:0x2f06 = b & 0xff, no 0x02 here.
+    s.colour = star_colour(static_cast<std::uint16_t>(((g & 0xff) << 8) | 0xff),
+                           static_cast<std::uint16_t>(b & 0xff));
+    s.speed = static_cast<std::uint8_t>(rmod16(rng, 3) + 1);
+}
+
+}  // namespace
+
+void init_stars(World& w, shell::Rng& rng) {
+    if (w.star_count > kStarMax) w.star_count = kStarMax;  // the table's 18 [DESIGN bound]
+    if (w.stars.size() < static_cast<std::size_t>(kStarMax)) w.stars.resize(kStarMax);
+    for (int i = 0; i < w.star_count; ++i) {
+        Star& s = w.stars[static_cast<std::size_t>(i)];
+        s.x = rmod16(rng, w.W);   // [BYTES seg8:0x1924 seg8:0x192a]
+        s.y = rmod16(rng, w.H);   // [BYTES seg8:0x193a seg8:0x1940]
+        const std::int16_t b = rmod16(rng, 255);  // DGROUP:0x2f06 = 0x0200 | b [BYTES seg8:0x1953]
+        const std::int16_t g = rmod16(rng, 255);  // DGROUP:0x2f04 = (g << 8) | 0xff [BYTES seg8:0x1966]
+        s.colour = star_colour(static_cast<std::uint16_t>(((g & 0xff) << 8) | 0xff),
+                               static_cast<std::uint16_t>(0x0200 | (b & 0xff)));
+        s.speed = static_cast<std::uint8_t>(rmod16(rng, 3) + 1);  // [BYTES seg8:0x197e]
+        s.phase = static_cast<std::uint8_t>(rmod16(rng, 40));     // [BYTES seg8:0x1990]
+        s.on = 1;                                                 // [BYTES seg8:0x1994]
+    }
+}
+
+int star_brush(std::uint8_t phase) {
+    const int v = static_cast<std::int8_t>(phase) / 5;
+    return v < 4 ? v + 10 : 18 - v;
+}
+
+void draw_stars(World& w, const StarInputs& in, const WaveGraphics& wg, Blitter& out,
+                shell::Rng& rng, int arg, const BrightStars& bright) {
+    // The toggle [BYTES seg8:0x1599 seg8:0x15a4 seg8:0x15b0 seg8:0x15bb].
+    w.w06ae = add16(w.w06ae, 1);
+    if (w.w06ae > 1) w.w06ae = 0;
+    if (arg != 0) w.w06ae = 0;
+    if (w.w06ae != 0) return;
+    if (w.bright != 0) {  // [BYTES seg8:0x15bf seg8:0x15ca]
+        if (bright) bright(arg);
+        return;
+    }
+    const int max = in.size == 0 ? 2 : 3;  // [BYTES seg8:0x15d0 seg8:0x15de]
+    if (w.pools.records(in.ship_pool) > in.player) {
+        ObjectRecord& p = w.pools.rec(in.ship_pool, in.player);
+        // [BYTES seg8:0x15f5 seg8:0x15fc seg8:0x1603 seg8:0x161a seg8:0x1630]
+        if (p.state == 1 || (p.b54 != 0 && in.demons_gate != 0)) {
+            p.vx = 0;
+            p.vy = 0;
+        }
+    }
+    const Rect16& r = w.play_rect;  // DGROUP:0x1d30
+    if (w.stars.size() < static_cast<std::size_t>(kStarMax)) w.stars.resize(kStarMax);
+    const int count = w.star_count < kStarMax ? w.star_count : kStarMax;
+    for (int i = 0; i < count; ++i) {
+        Star& s = w.stars[static_cast<std::size_t>(i)];
+        const int side = static_cast<std::int8_t>(s.speed) > max ? max : static_cast<std::int8_t>(s.speed);
+        if (s.on != 0) out.pat_blt(in.window_dc, s.x, s.y, side, side, kBlackness);  // [BYTES seg8:0x186f seg8:0x189e]
+        if (arg == 0) {
+            // The shift counts are bytes: Size + 1 and 6 - size [BYTES seg8:0x18ab seg8:0x18bc
+            // seg8:0x18c4].
+            const int a = (in.size + 1) & 0x1f;
+            const int b = (6 - static_cast<std::int8_t>(s.speed)) & 0x1f;
+            auto move = [a, b](std::int16_t v) { return sar16(shl16(v, a & 15), b & 15); };
+            std::int16_t vx = in.auto_vx, vy = in.auto_vy;  // [BYTES seg8:0x18df seg8:0x18ef]
+            if (in.autopilot == 0 && w.pools.records(in.ship_pool) > in.player) {
+                const ObjectRecord& p = w.pools.rec(in.ship_pool, in.player);
+                vx = p.vx, vy = p.vy;  // [BYTES seg8:0x163e seg8:0x1664]
+            }
+            s.x = sub16(s.x, move(vx));
+            s.y = sub16(s.y, move(vy));
+            if (in.shake != 0) {  // [BYTES seg8:0x167f]
+                s.x = add16(s.x, move(in.shake_x));
+                s.y = add16(s.y, move(in.shake_y));
+            }
+            // The wraps: off the left to the right edge and back, then the same for y; the
+            // other coordinate is redrawn without the rectangle's origin [BYTES seg8:0x16a9
+            // seg8:0x16b2 seg8:0x1749 seg8:0x1799].
+            if (s.x < r.l || s.x > r.r) {
+                s.x = s.x < r.l ? r.r : r.l;
+                star_respawn(s, s.y, sub16(r.b, r.t), rng);
+            }
+            if (s.y < r.t || s.y > r.b) {
+                s.y = s.y < r.t ? r.b : r.t;
+                star_respawn(s, s.x, sub16(r.r, r.l), rng);
+            }
+        }
+        if (w.star_wanted == w.star_count) {  // [BYTES seg8:0x179d]
+            if (!pt_in_rect(w.player_cell, s.x, s.y)) {  // DGROUP:0x1e5c [BYTES seg8:0x17a0]
+                const int n = star_brush(s.phase);
+                const int side2 = static_cast<std::int8_t>(s.speed) > max ? max : static_cast<std::int8_t>(s.speed);
+                // [BYTES seg8:0x17fe seg8:0x1827 seg8:0x183b]
+                const BrushId old = out.select_brush(in.window_dc, wg.star[static_cast<std::size_t>(n)]);
+                out.pat_blt(in.window_dc, s.x, s.y, side2, side2, kPatCopy);
+                out.select_brush(in.window_dc, old);
+                // [BYTES seg8:0x1848 seg8:0x1850]
+                s.phase = static_cast<std::int8_t>(s.phase) < 40 ? static_cast<std::uint8_t>(s.phase + 1) : 0;
+                s.on = 1;
+            } else {
+                s.on = 0;  // [BYTES seg8:0x185a]
+            }
+        }
+    }
+    if (w.star_wanted != w.star_count) w.star_count = w.star_wanted;  // [BYTES seg8:0x18f6 seg8:0x18ff]
+}
+
+void draw_lines(World& w, std::int16_t ship_pool, DcId window_dc, LinkHooks* hooks) {
+    Pools& p = w.pools;
+    auto rec_ok = [&p](int pool, int rec) {
+        return pool >= 0 && pool < kPoolCount && rec >= 0 && rec < p.records(pool);
+    };
+    // The ship test of an end: byte +0xec = 0 or +0x147 != 0 [BYTES seg12:0x37a6-0x37f2].
+    auto ship_gone = [&w, ship_pool](int pool, int rec) {
+        if (pool != ship_pool || rec < 0 || rec >= kShipCount) return false;
+        const ShipRecord& s = w.ships[static_cast<std::size_t>(rec)];
+        return s.bec == 0 || sbyte_at(s, 0x147) != 0;
+    };
+    const int n = p.allocated(10);  // DGROUP:0x9300
+    for (int k = 0; k < n && k < kLinkSlots; ++k) {
+        LinkSlot& l = w.links[static_cast<std::size_t>(k)];
+        if (l.pool_a == -1) continue;  // [BYTES seg12:0x3792]
+        bool broken = ship_gone(l.pool_a, l.rec_a) || ship_gone(l.pool_b, l.rec_b);
+        // An end out of the port's pools counts as gone [DESIGN: the original reads on].
+        const bool a_ok = rec_ok(l.pool_a, l.rec_a), b_ok = rec_ok(l.pool_b, l.rec_b);
+        if (!a_ok || p.rec(l.pool_a, l.rec_a).state != 0) broken = true;
+        if (!b_ok || p.rec(l.pool_b, l.rec_b).state != 0) broken = true;
+        if (!broken) continue;
+        // [BYTES seg12:0x3832-0x390c]
+        if (k < p.records(10)) p.rec(10, k).state = 1;
+        if (a_ok) p.rec(l.pool_a, l.rec_a).owner_pool = -1;  // +0x32
+        if (b_ok) p.rec(l.pool_b, l.rec_b).w36 = -1;         // +0x36
+        l.pool_a = -1;
+        l.pool_b = -1;
+        l.w08 = 0;
+        // BLACK_PEN, seg12:0x7256(hdc, 0x65e8, 0x65ea, 0x65e0, 0x65e2), then 0x65e0/2 <- 0x65dc/e
+        // and 0x65e8/a <- 0x65e4/6 [BYTES seg12:0x38c0 seg12:0x38d5 seg12:0x38f9].
+        if (hooks) hooks->line(window_dc, l.line[6], l.line[7], l.line[2], l.line[3]);
+        l.line[2] = l.line[0];
+        l.line[3] = l.line[1];
+        l.line[6] = l.line[4];
+        l.line[7] = l.line[5];
+        if (hooks) hooks->seg7_2080(10, -1);
+    }
 }
 
 DcId load_ship_body(Blitter& out, const fmt::BodyRecord& body) {

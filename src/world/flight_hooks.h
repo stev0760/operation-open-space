@@ -55,6 +55,10 @@ void set_zoom_source(std::function<std::int32_t()> zoom);
 // The wave start (seg9:0x60bc): the latch's `pressed` bits are cleared (KeyLatch::clear_pressed).
 void wave_started();
 
+// DGROUP:0x59a: the wave frames of the last full second (the wave tick's count, seg7:0xadc), for
+// the B display's ACTUAL line (src/hud links HudLinks::frame_rate_actual to it).
+int frame_rate_actual();
+
 // The flight role's state, for the other roles' hooks.
 WaveGlobals& flight_globals();
 FrameGlobals& frame_globals();

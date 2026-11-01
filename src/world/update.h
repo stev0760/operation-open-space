@@ -13,9 +13,13 @@
 
 #include <cstdint>
 
+#include "world/draw.h"
 #include "world/flight.h"
 #include "world/input.h"
+#include "world/sprite.h"
 #include "world/view.h"
+#include "world/visibility.h"
+#include "world/world.h"
 
 namespace is::world {
 
@@ -76,7 +80,6 @@ struct FrameGlobals {
     std::uint32_t dg_5b8 = 0;           // DGROUP:0x5b8
     std::int16_t dg_943a = 0, dg_943c = 0;  // DGROUP:0x943a, 0x943c: the colliding pool, record
     std::int16_t dg_9454 = 0;           // DGROUP:0x9454
-    std::int16_t dg_668a = 0;           // DGROUP:0x668a, gate 0's word +0x12 (world.md "Gates")
 };
 
 class UpdateHost : public FlightHost {
@@ -125,15 +128,48 @@ public:
     virtual void ship_entered(int ship) { (void)ship; }  // seg12:0x2556 and seg7:0x13b2(2, 14, i)
     virtual void seg13_563c() {}
     virtual void set_design_word_22(int design, std::int16_t v) { (void)design, (void)v; }
-    // ---- the rock mover seg7:0x3bae
-    // SelectObject(DGROUP:0x13dc, DGROUP:0x3b74[b]) and back: the heated rock's brush.
-    virtual std::uint16_t select_rock_brush(int b) { return (void)b, 0; }
-    virtual void restore_brush(std::uint16_t old) { (void)old; }
+    // ---- the rock mover seg7:0x3bae and the gate posts seg12:0x1776
+    // SelectObject(DGROUP:0x13dc, DGROUP:0x3b74[b]) and back: the heated rock's or post's brush.
+    // The defaults select wave_graphics().heat[b] on blitter()'s window DC (M3 s4 DRAW).
+    virtual std::uint16_t select_rock_brush(int b);
+    virtual void restore_brush(std::uint16_t old);
     // seg8:0x50aa(pool * 256 + rec): the collision test; 0xFFFF for none (world.md "Collisions").
     virtual std::uint16_t collide(std::int16_t pool_rec) { return (void)pool_rec, 0xffffu; }
     // seg8:0x546c(...) then seg8:0x5df2(...): the collision's response [OPEN] M4.
     virtual void rock_hit(int rock, std::uint16_t hit) { (void)rock, (void)hit; }
+
+    // ---- the drawing the frame does itself (M3 s4 DRAW)
+    // The World whose pools the frame moves: the gates' records, the stars, the link slots and
+    // the pool-8 table live there, not in FlightCtx. The default is the World set_frame_world
+    // registered (the program's, src/world/hooks.cpp) when its pools are `pools`, else null;
+    // with null the frame calls stars(), lines() and mover(k12_633e) instead [DESIGN].
+    virtual World* frame_world(Pools& pools);
+    // The window's Blitter for the draws beside seg8:0xb76 (the beam, the stars); the default
+    // is wave_blitter(). With null the frame calls stars() and draws no beam.
+    virtual Blitter* blitter() { return wave_blitter(); }
+    // The list of the frame's visibility pass (DGROUP:0x507c / 0x50e0, count DGROUP:0x9146);
+    // the default is last_visibility().
+    virtual const VisibilityGlobals* visible_list() { return last_visibility(); }
+    // The routines seg12:0x633e calls for the hazards (M5): seg12:0x390e(i) (kind 1),
+    // seg12:0x5636(i) (kind 2), seg12:0x7006 (every other frame). The M5 port of seg12:0x5636
+    // must clear World::w949e (DGROUP:0x949e) as it does at seg12:0x5ef8, which gates the
+    // hazard marks' erase [BYTES seg12:0x5ef8 seg12:0x6408] (M3 s4 fixer, review L12).
+    virtual void hazard(int kind, int i) { (void)kind, (void)i; }
+    virtual void seg12_7006() {}
+    // seg8:0x546c(...) then seg8:0x5df2(8, r, pool, rec, ...): a post's collision response (M4).
+    virtual void post_hit(int rec, std::uint16_t hit) { (void)rec, (void)hit; }
+    // seg12:0x2288(pool, rec): a ship passes the gate, the gate exit [OPEN: not read].
+    virtual void gate_passed(int pool, int rec) { (void)pool, (void)rec; }
+    // seg13:0x2f30 after seg12:0x1f7a's AI words for ship k (M5).
+    virtual void gate_ai(int ship) { (void)ship; }
+    // seg12:0x3778's erase and its seg7:0x2080 call (draw.h LinkHooks); null draws nothing.
+    virtual LinkHooks* link_hooks() { return nullptr; }
+    // seg8:0x1320, the Bright starfield [OPEN].
+    virtual void bright_stars(int arg) { (void)arg; }
 };
+
+// The program's World for UpdateHost::frame_world (null: none) (M3 s4 DRAW).
+void set_frame_world(World* w);
 
 // What the pass and the frame touch.
 struct UpdateCtx {
@@ -154,5 +190,24 @@ void wave_frame(UpdateCtx& c);
 void ship_entry(UpdateCtx& c);
 // seg7:0x3bae: the rock mover.
 void move_rocks(UpdateCtx& c);
+
+// ---- the pool-8 mover seg12:0x633e (work/analysis/m3/s4-draw.md 1) (M3 s4 DRAW)
+
+// seg12:0x633e [BYTES seg12:0x633e-0x649f]: DGROUP:0x94a0, seg12:0x7006 every other frame, the
+// oscillator DGROUP:0x0d08, the kind dispatch of the in-use pool-8 records with `state` 0 (kind
+// 1 and 2 go to the host, kind 3 runs seg12:0x1776 for the pair and skips the second post), the
+// hazard marks' erase and the two deadlines.
+void move_pool8(UpdateCtx& c, World& w);
+// seg12:0x1776(p) [BYTES seg12:0x1776-0x1f75]: gate p's posts 2p, 2p + 1: the beam brush
+// index, the moving gate, the posts through seg8:0xb76 from slot 1 (heat <= 2, SRCCOPY) or
+// slot 2 under DGROUP:0x3b74 (MERGECOPY), the beam (r1 only: the erase of the old position,
+// then PATCOPY with DGROUP:0x3b88[index]), the OUT sign flash, the collisions and the passage.
+void move_gate(UpdateCtx& c, World& w, int p);
+// seg12:0x1f7a(p) [BYTES seg12:0x1f7a-0x2285]: the first listed object of `state` 0 whose square
+// (x, y, x + extent, y + extent) meets gate p's beam rectangle, not pool 7, mass not 0xdac, a
+// ship only after its dword +0x88 + 300 (the player) or + 3000, and byte +0x2e != 1 unless a
+// ship with word +0x2e = 2: pool << 8 | rec, else 0xffff. A computer ship on its way to the
+// gate stops and gets its AI words on the way.
+std::uint16_t gate_test(UpdateCtx& c, World& w, int p);
 
 }  // namespace is::world

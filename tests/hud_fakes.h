@@ -14,10 +14,10 @@ namespace hudtest {
 using namespace is::hud;
 
 struct Call {
-    enum Op { kPat, kBlt, kLines, kRect, kPixel, kFrame, kFont, kText, kView, kNoView, kCreate };
+    enum Op { kPat, kBlt, kLines, kRect, kPixel, kFrame, kFont, kText, kView, kNoView, kCreate, kStretch };
     Op op = kPat;
     Img dst = Img::kScreen, src = Img::kScreen;
-    int x = 0, y = 0, w = 0, h = 0, sx = 0, sy = 0;
+    int x = 0, y = 0, w = 0, h = 0, sx = 0, sy = 0, sw = 0, sh = 0;
     std::uint32_t rop = 0;
     Brush brush;
     Pen pen;
@@ -80,6 +80,13 @@ public:
         c.op = Call::kPixel, c.dst = dst, c.x = x, c.y = y, c.colour = col;
         calls.push_back(c);
     }
+    void stretch_blt(Img dst, int x, int y, int w, int h, Img src, int sx, int sy, int sw, int sh,
+                     std::uint32_t rop) override {
+        Call c;
+        c.op = Call::kStretch, c.dst = dst, c.x = x, c.y = y, c.w = w, c.h = h, c.src = src;
+        c.sx = sx, c.sy = sy, c.sw = sw, c.sh = sh, c.rop = rop;
+        calls.push_back(c);
+    }
     void frame(Img dst, int x, int y, int w, int h, int style) override {
         Call c;
         c.op = Call::kFrame, c.dst = dst, c.x = x, c.y = y, c.w = w, c.h = h, c.style = style;
@@ -131,7 +138,7 @@ public:
     WeaponView weapon_;
     int fr_set_ = 36, fr_actual_ = 35;
     std::vector<std::pair<int, int>> messages;
-    std::vector<std::string> trace;  // the dispatch and other calls, in order
+    mutable std::vector<std::string> trace;  // the dispatch and other calls, in order
     int bad_index = 0;
     std::map<int, int> in_use_;
     std::map<std::pair<int, int>, bool> not_ok;
@@ -188,7 +195,23 @@ public:
     std::string text_8740() const override { return "Ambulance"; }
     std::string text_8768() const override { return "GOOD ICON CAPTURE!"; }
     std::string text_87b8() const override { return "1.0 RESOURCE GAINED."; }
-    void draw_target_icon(Canvas&) override { trace.push_back("icon"); }
+    // seg13:0x5a6a's record fields: an icon of extent 256 for pool 0, nothing for other pools
+    // unless cells_ holds them.
+    std::map<std::pair<int, int>, CellInputs> cells_;
+    int game_mode_ = 0;
+    bool cell(int p, int r, CellInputs& out) const override {
+        trace.push_back("icon");
+        auto it = cells_.find({p, r});
+        if (it != cells_.end()) {
+            out = it->second;
+            return true;
+        }
+        if (p != 0) return false;
+        out = CellInputs{};
+        out.obj.extent = 256;
+        return true;
+    }
+    int game_mode() const override { return game_mode_; }
     void draw_race(Canvas&) override { trace.push_back("race"); }
     int player_target_pool() const override { return target_pool_; }
     int player_target_rec() const override { return target_rec_; }
