@@ -2,8 +2,10 @@
 #include "audio/audio.h"
 
 #include <chrono>
+#include <cstdio>
 #include <cstdlib>
 #include <memory>
+#include <string>
 
 #include "assets/asset_store.h"
 #include "audio/engine.h"
@@ -84,7 +86,13 @@ bool init(const Settings& in, assets::AssetStore& store, void* hwnd_notify) {
     // dump [DESIGN] test hook.
     int devices = WaveOut::device_count();
     if (devices == 0 && !dump.empty()) devices = 1;
-    (void)device;
+    {
+        const std::string line = "inspace: audio: waveOut " +
+            std::string(device ? "opened" : "did not open") + ", " + std::to_string(devices) +
+            " device(s)" + (dump.empty() ? "" : ", dump on") + "\n";
+        std::fputs(line.c_str(), stderr);
+        std::fflush(stderr);
+    }
     if (!dump.empty()) g->out.dump_to(dump);
 
     g->engine.on_music_volume = [](int) { glue::music_refresh_volume(); };
