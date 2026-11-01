@@ -92,6 +92,18 @@ public:
         (void)rows;
         return kBrushNone;
     }
+    // A memory image of w x h with its own DC holding the given top-down palette indices
+    // (`index` is w * h bytes, row by row): the bitmap ISPACE.DLL ordinal 2 returns with the
+    // ship sheet rendered in it, which seg10:0x6ee6 selects into a new CreateCompatibleDC
+    // (src/world/player_sheet.h) [BYTES seg10:0x6f7f seg10:0x6f89 seg10:0x6f8e]. The default
+    // makes a black image, for fakes that do not keep pixels (M5 s1 SPRITE).
+    virtual DcId create_image_from(int w, int h, const std::vector<std::uint8_t>& index) {
+        (void)index;
+        return create_image(w, h);
+    }
+    // seg10:0x552(slot, 0) and seg12:0x26a4: SelectObject back, DeleteDC and DeleteObject of an
+    // image the Blitter made; the id is unusable afterwards. The default forgets nothing.
+    virtual void delete_image(DcId id) { (void)id; }
 };
 
 // The window's Blitter, the one the wave pass clips (GdiBlitter registers itself on
@@ -151,10 +163,13 @@ public:
     DcId load_graphic(int id, int mode, int arg) override;
     BrushId create_solid_brush(std::uint32_t colorref) override;
     BrushId create_pattern_brush(const std::uint8_t (&rows)[8]) override;
+    DcId create_image_from(int w, int h, const std::vector<std::uint8_t>& index) override;
+    void delete_image(DcId id) override;
 
-    // What the resource calls were given, by id.
-    struct Image { DcId id; int w, h; std::string name; int graphic; };
+    // What the resource calls were given, by id. `pixels` holds create_image_from's indices.
+    struct Image { DcId id; int w, h; std::string name; int graphic; std::vector<std::uint8_t> pixels{}; };
     std::vector<Image> images;
+    std::vector<DcId> deleted;  // delete_image's ids in call order
     // A solid brush's COLORREF; a pattern brush has colorref 0 and its eight rows.
     struct Brush { BrushId id; std::uint32_t colorref; std::array<std::uint8_t, 8> rows{}; };
     std::vector<Brush> brushes;
@@ -256,6 +271,8 @@ public:
     DcId load_graphic(int id, int mode, int arg) override;
     BrushId create_solid_brush(std::uint32_t colorref) override;
     BrushId create_pattern_brush(const std::uint8_t (&rows)[8]) override;
+    DcId create_image_from(int w, int h, const std::vector<std::uint8_t>& index) override;
+    void delete_image(DcId id) override;
 
 private:
     BrushId brush_id(HBRUSH h);

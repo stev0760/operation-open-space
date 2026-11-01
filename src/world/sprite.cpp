@@ -228,6 +228,13 @@ DcId RecordingBlitter::create_image(int w, int h) {
     return next_dc_++;
 }
 
+DcId RecordingBlitter::create_image_from(int w, int h, const std::vector<std::uint8_t>& index) {
+    images.push_back(Image{next_dc_, w, h, {}, 0, index});
+    return next_dc_++;
+}
+
+void RecordingBlitter::delete_image(DcId id) { deleted.push_back(id); }
+
 DcId RecordingBlitter::load_bitmap(const std::string& name) {
     images.push_back(Image{next_dc_, 0, 0, name, 0});
     return next_dc_++;

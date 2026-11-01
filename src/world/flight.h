@@ -234,14 +234,17 @@ struct FlightDesign {
     std::int16_t turn_base = 0;  // DGROUP:0x96f2: body byte +0x1d (world.md "Turn word") [OPEN: its writer]
     std::int16_t mass = 0;       // DGROUP:0x9704 [BYTES seg14:0x1e35-0x1e8f]
     std::uint8_t has_flame = 1;  // DGROUP:0x9718: 0 for a Body Thrust body [BYTES seg14:0x1f41-0x1f4d]; 1 otherwise [OPEN]
+    std::uint8_t cloak = 0;   // DGROUP:0x971c: SHP +9 bit 0x08 [BYTES seg14:0x1fd6 seg14:0x1fe2 seg14:0x1fef]
+    std::uint8_t shield = 0;  // DGROUP:0x9779: BOD +0x20 bit 0x02 [BYTES seg14:0x1f9f seg14:0x1fab seg14:0x1fc8]
 };
-// SHP bytes +1 (Thruster) and +2 (Armor), body bytes +0x1b, +0x1c, +0x1d and the flags +0x20.
+// SHP bytes +1 (Thruster) and +2 (Armor), body bytes +0x1b, +0x1c, +0x1d and the flags +0x20,
+// and the SHP flags +9.
 FlightDesign flight_design(std::uint8_t shp_thruster, std::uint8_t shp_armor,
                            std::int8_t body_strength, std::int8_t body_1c, std::int8_t body_1d,
-                           std::uint8_t body_flags);
+                           std::uint8_t body_flags, std::uint8_t shp_flags = 0);
 // seg14:0x21a0-0x22f2's flight fields of ship record `s` and the object's mass (seg14:0x20bc):
 // +0xec = 1, +0x0c, +0x0e, +0x36 = 0, +0x1c = 1, the lock-out +0x84 = now, +0xe4, the animation
-// step 1 and frame 0, the turn word (3/4 of it for the player while DGROUP:0x95bc != 0).
+// step 1 and frame 0, +0xe7 (cloak) and +0xe9 (shield) [BYTES seg14:0x21ea-0x21f6], the turn word (3/4 of it for the player while DGROUP:0x95bc != 0).
 // `roster_byte` is the signed roster byte +0x33 when +0xd6 != -1.
 void apply_flight_design(ShipRecord& s, ObjectRecord& o, const FlightDesign& d,
                          bool player_game_player, std::uint32_t now, std::int16_t roster_byte);

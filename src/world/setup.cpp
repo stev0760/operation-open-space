@@ -1610,6 +1610,23 @@ void ship_setup_minimal(World& w) {
     r.frame = 0;  // seg14:0x15fa: heading 0 [BYTES seg14:0x15fa]
 }
 
+ShipCellRaw ship_cell_raw(int16_t body_height) {
+    // [bp-0xc] = 5 when ordinal 5's result has bit 0 set, else 6 [BYTES seg14:0x12e0-0x12f0]
+    return ShipCellRaw{body_height, static_cast<int16_t>((body_height & 1) != 0 ? 5 : 6)};
+}
+
+void ship_cell_sizes(ObjectRecord& o, ShipCellRaw raw, int16_t size) {
+    int16_t side = raw.side;  // [bp-0x24] from +0x22 [BYTES seg14:0xb97 seg14:0xb9b]
+    int16_t gap = raw.gap;    // [bp-0x88] from +0x24 [BYTES seg14:0xbad seg14:0xbb1]
+    if (size == 0 && (side & 1) != 0) {  // [BYTES seg14:0xbb5-0xbc5]
+        side = add16(side, 1);
+        gap = 4;
+    }
+    o.size = sar16(shl16(side, size), 1);  // [BYTES seg14:0xbcb-0xbe5]
+    o.gap = sar16(shl16(gap, size), 1);    // [BYTES seg14:0xbf8-0xc04]
+    o.extent = shl16(side, 3);             // [BYTES seg14:0xc2a-0xc30]
+}
+
 void place(World& w, SetupHost& h) {
     // seg9:0x6624 [BYTES seg9:0x6624 seg9:0x6633 seg9:0x663c]
     if (w.placed != 0) return;

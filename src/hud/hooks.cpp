@@ -51,6 +51,8 @@ std::unique_ptr<GdiCanvas> g_canvas;
 struct PlayerDesign {
     bool found = false;
     DesignPanels panels;
+    fmt::ShipRecord shp;   // the two records, for the player's sheet (wave_win32.cpp, M5 s1 SPRITE)
+    fmt::BodyRecord body;
 };
 PlayerDesign g_design;
 
@@ -84,9 +86,18 @@ void refresh_player_design() {
         if (!shp || !body) return;
         g_design.found = true;
         g_design.panels = design_panels(*shp, *body);
+        g_design.shp = *shp;
+        g_design.body = *body;
     } catch (const std::exception& x) {
         app::log(std::string("hud: the player's design: ") + x.what());
     }
+}
+
+bool player_design_records(fmt::ShipRecord& shp, fmt::BodyRecord& body) {
+    if (!g_design.found) return false;
+    shp = g_design.shp;
+    body = g_design.body;
+    return true;
 }
 
 namespace {
@@ -132,8 +143,8 @@ public:
     void set_wave_seconds(int s) override { w().w934e = static_cast<std::int16_t>(s); }
     // The ship record's fields, and for the player the design words the panels read
     // (refresh_player_design): the tank DGROUP:0x96f0, the lamp rows DGROUP:0x96f4 ... 0x96fa,
-    // and the cloak and shield flags that the ship entry copies to +0xe7 and +0xe9 (unported in
-    // the world set-up, so the HUD ORs them in) [BYTES seg14:0x1d1f seg14:0x1d3b-0x1dd6
+    // and the cloak and shield flags +0xe7 and +0xe9, which the world set-up copies
+    // (world/flight.cpp apply_flight_design) [BYTES seg14:0x1d1f seg14:0x1d3b-0x1dd6
     // seg14:0x21ea-0x21f6]. Other ships keep ShipView's design defaults until links().ship fills
     // them (M5) [OPEN].
     ShipView ship(int i) const override {
@@ -149,8 +160,6 @@ public:
             const DesignPanels& d = g_design.panels;
             for (int k = 0; k < 4; ++k) v.lamp_row[k] = d.lamp_row[k];
             v.fuel_max = d.tank;
-            v.b_e7 = v.b_e7 || d.cloak;   // seg14:0x21ea-0x21ee
-            v.b_e9 = v.b_e9 || d.shield;  // seg14:0x21f2-0x21f6
         }
         return v;
     }

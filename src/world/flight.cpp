@@ -678,7 +678,7 @@ void move_ships(FlightCtx& c) {
 // [BYTES seg14:0x1c8c-0x1caa seg14:0x1e35-0x1e8f seg14:0x1f41-0x1f4d]
 FlightDesign flight_design(std::uint8_t shp_thruster, std::uint8_t shp_armor,
                            std::int8_t body_strength, std::int8_t body_1c, std::int8_t body_1d,
-                           std::uint8_t body_flags) {
+                           std::uint8_t body_flags, std::uint8_t shp_flags) {
     FlightDesign d;
     d.thrust = static_cast<std::int16_t>(5 * static_cast<std::int8_t>(shp_thruster));  // imul byte
     d.drag = body_1c;
@@ -691,6 +691,8 @@ FlightDesign flight_design(std::uint8_t shp_thruster, std::uint8_t shp_armor,
                         100));
     // 0 for Body Thrust [BYTES seg14:0x1f41]; the 1 of the other bodies is [OPEN] (M3 s2 fixer).
     d.has_flame = (body_flags & 0x01) != 0 ? 0 : 1;
+    d.cloak = (shp_flags & 0x08) != 0 ? 1 : 0;   // SHP Cloak [BYTES seg14:0x1fd6]
+    d.shield = (body_flags & 0x02) != 0 ? 1 : 0;  // BOD Shield [BYTES seg14:0x1f9f]
     return d;
 }
 
@@ -704,6 +706,8 @@ void apply_flight_design(ShipRecord& s, ObjectRecord& o, const FlightDesign& d,
     s.thrust_mult = 1;
     s.lockout.set(now);
     s.has_flame = d.has_flame;
+    s.be7 = d.cloak;   // [BYTES seg14:0x21ea seg14:0x21ee]
+    s.be9 = d.shield;  // [BYTES seg14:0x21f2 seg14:0x21f6]
     s.anim_step = 1;
     s.anim_frame = 0;
     s.w52 = 0;

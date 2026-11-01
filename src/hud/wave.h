@@ -24,6 +24,15 @@ void load_wave_resources();
 std::vector<std::pair<int, int>> wave_visible();
 // The player's design words the panels read (src/hud/hooks.cpp), re-read at each wave start.
 void refresh_player_design();
+}  // namespace is::hud
+namespace is::fmt {
+struct ShipRecord;
+struct BodyRecord;
+}  // namespace is::fmt
+namespace is::hud {
+// The MASTER.SHP record and MASTER.BOD body refresh_player_design found (false before it found
+// them), for the player's sheet (M5 s1 SPRITE).
+bool player_design_records(fmt::ShipRecord& shp, fmt::BodyRecord& body);
 // seg11:0x2f8c: the weapon picture DGROUP:0x5040 of the player's weapon (src/hud/hooks.cpp).
 void weapon_picture_refresh();
 // The METAL pattern brush DGROUP:0x500a of the HUD's canvas (src/hud/hooks.cpp), null before

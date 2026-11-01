@@ -112,8 +112,9 @@ std::filesystem::path ship_dir() {
 // body. Which record seg14 reads for the player is [OPEN] (M5); the oracle's wave 1 flies
 // MainShip's TRANSFORMER [ORACLE wave-0001]. The fuel 40 x the SHP fuel-tank byte is the
 // oracle's DGROUP:0x70ae = 0x528 for TRANSFORMER's 33 [ORACLE probe-0001] [OPEN: its writer].
-// The roster index +0xd6 = -1 (no roster record) and the ship sheet (seg14:0x11a8 through
-// ISPACE.DLL ordinal 2) are [OPEN].
+// The roster index +0xd6 = -1 (no roster record) is [OPEN]. The ship sheet (seg14:0x11a8
+// through ISPACE.DLL ordinal 2) is built at the wave start by src/hud/wave_win32.cpp
+// build_player_sheet [DESIGN].
 void ship_setup_player(World& w) {
     ship_setup_minimal(w);
     g_design_mass.fill(0);
@@ -141,9 +142,22 @@ void ship_setup_player(World& w) {
             return;
         }
         const FlightDesign d = flight_design(shp->thruster, shp->armor, body->strength_base,
-                                             body->byte_1c, body->byte_1d, body->flags);
+                                             body->byte_1c, body->byte_1d, body->flags, shp->flags);
         apply_flight_design(s, o, d, w.player_game != 0, static_cast<std::uint32_t>(app::now_tick()), 0);
         g_design_mass[0] = d.mass;
+        // The cell sizes +0x20, +0x22, +0x24 (seg14:0x11a8's raw side and gap, seg14:0x0's
+        // scaling; setup.h ship_cell_raw, ship_cell_sizes). The raw side is the body DIB's
+        // height; TRANSFORMER's #4000 60 is 132 x 33, so Size 1 gives extent 264 and size 33,
+        // which the oracle's entry origin (2796, 11188 - 30 (F - 1)) and its cell box
+        // DGROUP:0x1e5c = (514, 343, 543, 372) need [ORACLE probe-0001] (M5 s1 VIEW). A body
+        // from a .DIB file (+0x21 = 0xffff, read from +0x23) is [OPEN] here.
+        if (body->bitmap_id != fmt::kBodyBitmapFromFile) {
+            const fmt::Dib dib = g.store->sprite(body->bitmap_id);
+            ship_cell_sizes(o, ship_cell_raw(static_cast<std::int16_t>(dib.height)), w.size);
+            o.src_y = o.gap;  // seg9:0x6624's +0x12 = +0x24 follows (setup.cpp place)
+        } else {
+            log("world: ship set-up: body " + body->name + " reads a .DIB file [OPEN]; no cell size");
+        }
         s.fuel = static_cast<std::int16_t>(40 * shp->fuel_tank);
         // The oracle's ship record 0 in wave 1 holds +0x0c = 205, +0x0e = 25 and +0x14 = 21 (the
         // values above), the system words +0x26 ... +0x2c = 100 (thrust and the go flag need

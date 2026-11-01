@@ -107,6 +107,25 @@ Rect16 centre_exclusion(const World& w);
 // set-ups without the ship set-up of seg14 [DESIGN] [OPEN: seg14:0x0 is M5].
 void ship_setup_minimal(World& w);
 
+// The raw cell of a ship's sheet as seg14:0x11a8 writes it to the ship's object +0x22 and +0x24
+// before seg14:0x0 scales it [BYTES seg14:0x12d8-0x12f0 seg14:0x1337 seg14:0x134d]: the side is
+// ISPACE.DLL ordinal 5 (seg10:0x86ca) after the sheet's render, the word +8 (biHeight) of the
+// body DIB that ISPACE.DLL seg6:0x26a stores at seg6:0x2ae in ISPACE.DLL DGROUP:0x1c72 [BYTES
+// ISPACE.DLL seg6:0x266 seg6:0x26a seg6:0x2ae seg6:0xba]; the gap is 5 for an odd side, else 6
+// [BYTES seg14:0x12e0 seg14:0x12e4 seg14:0x12eb]. The writes happen only for a ship without a
+// roster record (+0xd6 = -1) whose image slot 0x28 + i was empty [BYTES seg14:0x12f5
+// seg14:0x1322].
+struct ShipCellRaw {
+    std::int16_t side = 0, gap = 0;
+};
+ShipCellRaw ship_cell_raw(std::int16_t body_height);
+// seg14:0x0's size step for one ship [BYTES seg14:0xb97-0xc30]: at Size 0 an odd side is raised
+// by 1 with gap 4; then +0x22 = (side << Size) >> 1, +0x24 = (gap << Size) >> 1 and the extent
+// +0x20 = side << 3 (16-bit). The design words DGROUP:0x96fc, 0x96d2, 0x96d4, 0x96d6 + 0xad·n
+// and the frame count +0x5b (from the sheet's GetObject at seg14:0xd59) are not written here
+// [OPEN: the sheet is the sprite track's].
+void ship_cell_sizes(ObjectRecord& o, ShipCellRaw raw, std::int16_t size);
+
 // ---- the entries
 // seg10:0x0 -> seg9:0x22b4(0): the state-1 load before the briefing.
 void state1_load(World& w, SetupHost& h);

@@ -137,6 +137,26 @@ void GdiBlitter::frame_rect(DcId dc, const Rect16& r, BrushId brush) {
 
 DcId GdiBlitter::create_image(int w, int h) { return bind(gfx_.create_image(w, h)); }
 
+// Surface::index8 and the indices row by row into its DIB section (stride (w + 3) & ~3); the
+// DIB section is the bitmap, so GDI sees the pixels at once [DESIGN ADR 0013] (M5 s1 SPRITE).
+DcId GdiBlitter::create_image_from(int w, int h, const std::vector<std::uint8_t>& index) {
+    if (w <= 0 || h <= 0) return kDcNone;
+    auto s = std::make_shared<gfx::Surface>(gfx::Surface::index8(w, h));
+    if (s->empty() || !s->pixels()) return kDcNone;
+    GdiFlush();
+    const std::size_t need = static_cast<std::size_t>(w) * static_cast<std::size_t>(h);
+    for (int y = 0; y < h; ++y) {
+        std::uint8_t* row = s->pixels() + static_cast<std::size_t>(y) * s->stride();
+        for (int x = 0; x < w; ++x) {
+            const std::size_t k = static_cast<std::size_t>(y) * w + x;
+            row[x] = k < need && k < index.size() ? index[k] : 0;
+        }
+    }
+    return bind(std::move(s));
+}
+
+void GdiBlitter::delete_image(DcId id) { images_.erase(id); }
+
 DcId GdiBlitter::load_bitmap(const std::string& name) {
     try {
         return bind(gfx_.load_bitmap(name));

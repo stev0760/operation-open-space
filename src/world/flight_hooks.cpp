@@ -18,6 +18,7 @@
 
 #include "app/app.h"
 #include "shell/rng.h"
+#include "world/player_sheet.h"
 #include "world/world.h"
 
 namespace is::world {
@@ -93,6 +94,14 @@ public:
         char buf[64];
         std::snprintf(buf, sizeof buf, "wave: ship %d enters", ship);
         app::log(buf);
+        // seg12:0x2556 + seg7:0x13b2, the entry materialise (src/hud wave_win32.cpp install_wave)
+        if (sprite_links().ship_entered) sprite_links().ship_entered(ship);
+    }
+    void seg7_158e() override {
+        if (sprite_links().entry_step) sprite_links().entry_step();
+    }
+    void flame_tail(int on, int ship) override {
+        if (sprite_links().flame_tail) sprite_links().flame_tail(on, ship);
     }
 };
 

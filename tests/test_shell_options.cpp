@@ -16,7 +16,13 @@ TEST_CASE("options: --game and --ini") {
     REQUIRE(r.options.game_dir);
     CHECK(*r.options.game_dir == fs::path("C:/games/is"));
     REQUIRE(r.options.ini);
+#ifdef _WIN32
+    // A relative path is completed to a full DOS path (src/shell/options.cpp full_path).
+    CHECK(r.options.ini->is_absolute());
+    CHECK(*r.options.ini == fs::absolute(fs::path("x/INSPACE.INI")));
+#else
     CHECK(*r.options.ini == fs::path("x/INSPACE.INI"));
+#endif
 
     r = parse_options({"--ini", "a.ini"});
     CHECK(r.error.empty());
