@@ -41,6 +41,9 @@ std::filesystem::path full_path(const std::filesystem::path& p) {
                     return r;
                 }
             }
+        // No drive maps the path (a prefix without `Z:`): keep it as given, which Wine's
+        // file functions accept, rather than put it on the current drive.
+        return p;
     }
     wchar_t buf[MAX_PATH * 4];
     const DWORD n = GetFullPathNameW(w.c_str(), MAX_PATH * 4, buf, nullptr);
