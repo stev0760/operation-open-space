@@ -1,6 +1,11 @@
 #include "shell/options.h"
 
 #include <exception>
+#include <string>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 #include "assets/asset_store.h"
 #include "assets/game_files.h"
@@ -11,6 +16,39 @@ namespace is::shell {
 namespace {
 bool same(const std::filesystem::path& a, const char* b) {
     return a.native() == std::filesystem::path(b).native();
+}
+
+// An option's path in the form the INI keeps (ADR 0004 decision 4 writes it as `Path`,
+// `SndPath` and the rest): a full DOS path with its drive. A relative or drive-less argument
+// is completed by GetFullPathNameW; under Wine a Unix path (`/home/...`) goes through
+// kernel32's `wine_get_dos_file_name`, which maps it to its drive (`Z:\home\...`), where
+// GetFullPathNameW would put it on the current drive and the sound and music files would not
+// open [DESIGN] [REF Wine dlls/kernel32/path.c wine_get_dos_file_name]. Host builds keep the
+// argument as given.
+std::filesystem::path full_path(const std::filesystem::path& p) {
+#ifdef _WIN32
+    const std::wstring w = p.wstring();
+    if (w.empty()) return p;
+    if (w[0] == L'/') {
+        using Fn = LPWSTR(CDECL*)(LPCSTR);
+        if (HMODULE k = GetModuleHandleW(L"kernel32.dll"))
+            if (FARPROC raw = GetProcAddress(k, "wine_get_dos_file_name")) {
+                const Fn fn = reinterpret_cast<Fn>(reinterpret_cast<void*>(raw));
+                const std::string u8 = fmt::path_utf8(p);
+                if (LPWSTR dos = fn(u8.c_str())) {
+                    std::filesystem::path r(dos);
+                    HeapFree(GetProcessHeap(), 0, dos);
+                    return r;
+                }
+            }
+    }
+    wchar_t buf[MAX_PATH * 4];
+    const DWORD n = GetFullPathNameW(w.c_str(), MAX_PATH * 4, buf, nullptr);
+    if (n == 0 || n >= MAX_PATH * 4) return p;
+    return std::filesystem::path(buf);
+#else
+    return p;
+#endif
 }
 }  // namespace
 
@@ -44,7 +82,7 @@ OptionsResult parse_options(const std::vector<std::filesystem::path>& args) {
             r.error = std::string(name) + " given twice";
             return r;
         }
-        *slot = args[++i];
+        *slot = full_path(args[++i]);
     }
     if (r.options.to && !r.options.install) r.error = "--to needs --install";
     else if (r.options.install && r.options.game_dir) r.error = "--install and --game exclude each other";

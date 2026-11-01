@@ -1,5 +1,7 @@
 // Standard MIDI File reader (midi_file.h) [REF Standard MIDI Files 1.0].
 #include "audio/midi_file.h"
+
+#include "assets/game_files.h"
 #include "formats/bytes.h"  // path_utf8 for the log lines (M7 s3 fixer)
 
 #include <algorithm>
@@ -69,11 +71,23 @@ struct RawTempo {
 
 }  // namespace
 
+// A distribution directory (ADR 0002 decision 2) holds the file as ANTHEM.MI1 (SZDD): when
+// the installed name is not on disk, the directory's GameFiles gives the expanded bytes
+// under the installed name [DESIGN].
 bool MidiFile::load(const std::filesystem::path& path, std::string* why) {
     std::ifstream in(path, std::ios::binary);
-    if (!in) return fail(why, "cannot open " + fmt::path_utf8(path));
-    std::vector<std::uint8_t> b((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    return parse(b.data(), b.size(), why);
+    if (in) {
+        std::vector<std::uint8_t> b((std::istreambuf_iterator<char>(in)),
+                                    std::istreambuf_iterator<char>());
+        return parse(b.data(), b.size(), why);
+    }
+    try {
+        const assets::GameFiles files(path.parent_path());
+        const std::vector<std::uint8_t> b = files.read(fmt::path_utf8(path.filename()));
+        return parse(b.data(), b.size(), why);
+    } catch (const std::exception&) {
+        return fail(why, "cannot open " + fmt::path_utf8(path));
+    }
 }
 
 bool MidiFile::parse(const std::uint8_t* data, std::size_t size, std::string* why) {

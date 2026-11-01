@@ -4,7 +4,9 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <memory>
+#include <system_error>
 #include <string>
 
 #include "assets/asset_store.h"
@@ -57,9 +59,13 @@ int g_mix_920a = 1;                  // DGROUP:0x920a, default 1 [BYTES seg6:0xc
 // game directory for the modules, the custom WAVs and the MIDI files alike [DESIGN] ADR 0011
 // decision 5. A SndPath that becomes empty on a reread goes back to the game directory. The
 // result carries the directory the music opens its files in (M7 s3 fixer).
+// A SndPath that names a subdirectory which does not exist (a flat distribution directory's
+// SOUNDS\) reads from the game directory instead, ADR 0004 decision 4 [DESIGN].
 Settings use_snd_path(assets::AssetStore& store, const Settings& in) {
-    if (store.sound_dir() != in.snd_path) store.set_sound_dir(in.snd_path);
     Settings s = in;
+    std::error_code ec;
+    if (!s.snd_path.empty() && !std::filesystem::is_directory(s.snd_path, ec)) s.snd_path.clear();
+    if (store.sound_dir() != s.snd_path) store.set_sound_dir(s.snd_path);
     if (s.snd_path.empty()) s.snd_path = store.files().dir();
     return s;
 }
