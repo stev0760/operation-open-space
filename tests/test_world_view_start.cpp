@@ -102,7 +102,12 @@ TEST_CASE("view start: seed 37816's entry origin is the oracle's (2796, 11188) [
     state1_load(r.w, r.host);
     new_game(r.w);
     enter_briefing(r.w, r.host);
+    // The start heading (M5 s2 BRIEFING): seg14:0x1430 stores object +0x28 = 0 at the
+    // briefing's placement, with no rand() [BYTES seg14:0x15bc seg14:0x15fa seg9:0x688a].
+    CHECK(r.w.pools.rec(kPoolShips, r.w.player).frame == 0);
     start_wave(r.w, r.host);
+    // seg9:0x60bc writes no +0x28 [BYTES seg9:0x60bc-0x6623].
+    CHECK(r.w.pools.rec(kPoolShips, r.w.player).frame == 0);
     REQUIRE(r.w.pools.rec(kPoolGatePosts, 0).x == 6152);
     REQUIRE(r.w.pools.rec(kPoolGatePosts, 0).y == 13920);
     REQUIRE(r.w.pools.rec(kPoolGatePosts, 1).x == 7624);
@@ -137,6 +142,9 @@ TEST_CASE("view start: seed 37816's entry origin is the oracle's (2796, 11188) [
     CHECK(view.x0 == 2796);
     CHECK(view.y0 == 11188);
     CHECK(me.vy == -30);  // the entry writes no velocity [BYTES seg7:0x1e2b-0x1e54]
+    // Nor a heading: seg7's only store to +0x28 is the rocks' seg7:0x3d5f, so wave 1 starts
+    // facing up [BYTES seg7:0x3d5f].
+    CHECK(me.frame == 0);
 
     // The drift: the frames after the entry move y by vy (seg8:0x1b54 through integrate), and
     // seg8:0x0 recentres each frame (seg7:0xb8c).
@@ -155,4 +163,5 @@ TEST_CASE("view start: seed 37816's entry origin is the oracle's (2796, 11188) [
     drift(4);    // F = 302
     CHECK(view.x0 == 2796);
     CHECK(view.y0 == 2158);
+    CHECK(me.frame == 0);  // the drift turns nothing without input or a tumble
 }

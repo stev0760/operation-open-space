@@ -318,7 +318,7 @@ Every hazard ENG_LANG names: strings 2170–2181 (plurals 12170–12181), plus r
 | SHIP-15 | Damage to ships is scaled by 7/8; damage to the player's ship then by (DGROUP:0x9000 + 6)/8 | [BYTES seg8:0x45e0] | code | understood | todo | unknown |
 | SHIP-16 | One special ability per ship, by precedence: pull-off wings (3, body flag 0x04), else cloak (4, SHP +0x09 bit 0x08), else shield (5, body flag 0x02), else none (0xffff) | [BYTES seg14:0x1d8c] | code | understood | todo | unknown |
 | SHIP-17 | Design values from MASTER.SHP and MASTER.BOD: Fuel Tank × 40, Thruster × 5, strength = body base × 10 × (armor/4 + 100)/100 (also pool word +0x44, and / 22 into +0x48) | [BYTES seg14:0x1e50] [BYTES seg14:0x1d1c] | code | understood | wip | unknown |
-| SHIP-18 | The ship's picture: the body bitmap of IGRAPHIC.DLL #4000 rendered by ISPACE.DLL ordinal 2 into a 16-heading sheet of two rows, scaled by Size; the materialise effect at the wave entry; the thrust flame pasted into the sheet [OPEN] | [BYTES ISPACE.DLL seg6:0x11c seg5:0x66ea] [BYTES seg14:0x11a8 seg7:0x1208 seg7:0x158e] [ORACLE wave-0001] | oracle | understood | wip | unknown |
+| SHIP-18 | The ship's picture: the body bitmap of IGRAPHIC.DLL #4000 rendered by ISPACE.DLL ordinal 2 into a 16-heading sheet of two rows, scaled by Size; the materialise effect at the wave entry; the thrust flame (ISPACE.DLL ordinal 18) pasted into the sheet; Size ≠ 1 and the SHP 0x20 flame row [OPEN] | [BYTES ISPACE.DLL seg6:0x11c seg5:0x66ea seg6:0x5e76] [BYTES seg14:0x11a8 seg7:0x1208 seg7:0x158e seg11:0xb09c] [ORACLE wave-0001] [ORACLE win98-0001] | oracle | understood | wip | unknown |
 
 ## TEAM: Teams and attitudes
 

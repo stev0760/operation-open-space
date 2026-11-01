@@ -689,7 +689,8 @@ FlightDesign flight_design(std::uint8_t shp_thruster, std::uint8_t shp_armor,
     d.mass = lo16(div32(static_cast<std::int32_t>(static_cast<std::uint32_t>(m1) *
                                                   static_cast<std::uint32_t>(q + 100)),
                         100));
-    // 0 for Body Thrust [BYTES seg14:0x1f41]; the 1 of the other bodies is [OPEN] (M3 s2 fixer).
+    // 0 for Body Thrust, 1 otherwise [BYTES seg14:0x1f41 seg14:0x1f4d seg14:0x1f55 seg14:0x1f5a]
+    // (work/analysis/m5/s2-claims-verify.md).
     d.has_flame = (body_flags & 0x01) != 0 ? 0 : 1;
     d.cloak = (shp_flags & 0x08) != 0 ? 1 : 0;   // SHP Cloak [BYTES seg14:0x1fd6]
     d.shield = (body_flags & 0x02) != 0 ? 1 : 0;  // BOD Shield [BYTES seg14:0x1f9f]

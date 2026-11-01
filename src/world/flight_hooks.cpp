@@ -45,6 +45,9 @@ public:
         if (prev_frame && state) prev_frame(*state);
     }
     std::uint16_t joy_read() override;
+    // Roster byte +0x33 from the World's roster, the record seg13:0x33d6 reads too (rating.h
+    // RosterRecord::b33) [BYTES seg11:0x6644] (M5 s2 fixer, review M4).
+    std::int16_t roster_byte_33(int roster) override;
     void mover(Mover m) override { todo_once("wave mover", mover_address(m)); }
     // The calls src/hud's integration links (WaveLinks, M3 s2 fixer); a missing link logs.
     void fuel_mass() override {
@@ -267,6 +270,12 @@ UpdateCtx make_ctx(Runtime& r) {
 // joystick 0 with winmm's joyGetPos, whose 0 ... 65535 axes stand for the calibrated range, and
 // any failure reads as the original's 0xa7 with its beep [DESIGN ADR 0013 decision 6,
 // win16-translation.md "joystick"].
+std::int16_t DefaultHost::roster_byte_33(int roster) {
+    const World* w = rt().world;
+    if (!w || roster < 0 || roster >= static_cast<int>(w->roster.size())) return 0;
+    return w->roster[static_cast<std::size_t>(roster)].b33[0];
+}
+
 std::uint16_t DefaultHost::joy_read() {
     JOYINFO ji{};
     Runtime& r = rt();

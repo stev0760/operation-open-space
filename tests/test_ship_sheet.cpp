@@ -319,8 +319,9 @@ TEST_CASE("ship sheet: TRANSFORMER against the wave-0001 oracle (golden)") {
     const std::vector<std::uint32_t> rgb = sheet_rgb(sh, *pm.working(pal));
     // 05 (wave start) and 07 (after Left 0.3 s) show the coasting cells untouched: every pixel
     // of the 33 x 33 cell matches. 06 (thrust) and 08 (after Right) differ only inside the
-    // 9 x 9 box where seg11:0xb09c pastes the flame-on and flame-off cells of slot 0x22 into the
-    // sheet DC, which is not ordinal 2's work [BYTES seg11:0xb09c] [ORACLE wave-0001].
+    // 9 x 9 box where seg11:0xb09c pastes the flame-on and flame-off cells of the strip DC
+    // DGROUP:0x3a2c into the sheet DC, which is not ordinal 2's work; tests/test_ship_flame.cpp
+    // checks those cells [BYTES seg11:0xb09c] [ORACLE wave-0001].
     struct Expect {
         const char* name;
         int heading;
@@ -360,7 +361,7 @@ TEST_CASE("ship sheet: TRANSFORMER against the wave-0001 oracle (golden)") {
                         sh.cell_x(m.heading) + x];
                 const std::uint32_t pb = crop.at(m.ox + x, m.oy + y);
                 if (pa == pb) continue;
-                if (x < 5 || x > 13 || y < 6 || y > 14) ++outside;  // the flame box of heading 6
+                if (x < 4 || x > 12 || y < 4 || y > 12) ++outside;  // heading 6's paste box (4, 4) + 9 x 9
                 char buf[80];
                 std::snprintf(buf, sizeof buf, "(%d,%d) port %06x oracle %06x\n",
                               static_cast<int>(x), static_cast<int>(y), pa, pb);

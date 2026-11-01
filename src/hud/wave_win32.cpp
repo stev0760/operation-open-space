@@ -17,6 +17,7 @@
 #include "formats/ships.h"
 #include "gfx/gfx.h"
 #include "gfx/palette.h"
+#include "gfx/ship_flame.h"
 #include "gfx/ship_sheet.h"
 #include "hud/gdi_canvas.h"
 #include "hud/icon_column.h"
@@ -254,9 +255,13 @@ bool render_sheet(const world::SheetRequest& req, world::SheetPixels& px) {
 
 // seg16:0x3468(player, 3)'s sheet: seg14:0x11a8 into slot 0x28 + player, object +0x3a, and
 // seg14:0x0's ship byte +0x5b from the sheet's height [BYTES seg16:0x3621 seg16:0x362b
-// seg16:0x3645 seg14:0xd59 seg14:0xc3e]. The original builds it in the placement seg9:0x6624
-// (seg14:0x0(-1)); the port builds it at the wave start, before the first frame, from the
-// records the HUD reads (player_design_records) [DESIGN]. The object's size, gap and extent are
+// seg16:0x3645 seg14:0xd59 seg14:0xc3e]. It runs in the placement seg9:0x6624 (seg14:0x0(-1))
+// at the briefing entry (world::on_briefing_placement, install_wave) [BYTES seg9:0x688a
+// seg14:0xd32], from the records the HUD reads (player_design_records) [DESIGN: the player's
+// sheet only; the port places no other ship at the briefing]. After the sheet seg14:0x0 builds
+// the flame strip (seg10:0x5c42, seg10:0x5d3c(i)) [BYTES seg14:0xc7e]: seg10:0x5c42 calls
+// seg10:0x7032 on every call (s2-claims-verify.md sprite 27), so the flame's headings are made
+// again each time on the palette in force. The object's size, gap and extent are
 // the ship set-up's (src/world/hooks.cpp ship_setup_player, setup.h ship_cell_sizes); a raw
 // side that disagrees with them is logged.
 void build_player_sheet(world::World& wd) {
@@ -290,6 +295,18 @@ void build_player_sheet(world::World& wd) {
         // The sheet's cell is ordinal 5's side << the scale flag; the object's size comes from
         // seg14:0x0's step. They part at Size 0, where seg10:0x6308's rescale of the sheet is
         // not ported (review M3) [OPEN].
+        // seg10:0x5c42 + seg10:0x5d3c(i) [BYTES seg14:0xc7e seg10:0x5c80 seg10:0x7041-0x7051].
+        try {
+            const int f = gfx::flame_cell(wd.size);
+            const gfx::FlameHeadings fh = gfx::flame_headings(
+                gfx::flame_bitmap_for(g.store->sprite(gfx::kFlameGraphic), g.gfx->palettes(), g.gfx->palette()), f);
+            world::ship_flame_after_sheet(*g_blit, fh, i, b, o, s,
+                                          world::flame_design(shp.flags, body.flags, body.byte_19), wd.size);
+            app::log("hud: seg10:0x5d3c flame strip for ship " + std::to_string(i) + ", f " + std::to_string(f) +
+                     ", +0xe4 " + std::to_string(s.has_flame));
+        } catch (const std::exception& x) {
+            app::log(std::string("hud: flame strip: ") + x.what());
+        }
         const int cell = b.side << req.scale, cell_gap = b.gap << req.scale;
         if (cell != o.size || cell_gap != o.gap)
             todo_once("ship sheet cell " + std::to_string(cell) + " gap " + std::to_string(cell_gap) +
@@ -423,15 +440,37 @@ void install_wave(app::App& app) {
         world::EntryContext c = entry_context();
         world::entry_step(c);
     };
+    // seg11:0xb105 to the end of seg11:0xb09c(i, on): the flame pastes into the sheet DC
+    // DGROUP:0x39e8[0x28 + i] (world/player_sheet.h ship_flame_tail); the caller's seg13:0x6716
+    // redraws [BYTES seg11:0xb105-0xb302] (M5 s2 FLAME).
+    sl.flame_tail = [](int on, int ship) {
+        if (!ready() || ship < 0 || ship >= world::kShipCount || w().pools.records(w().roles.ships) <= ship) return;
+        world::ship_flame_tail(*g_blit, g_images, ship, on, w().ship(ship), w().ship_object(ship));
+    };
     g_radar.set_scroll_pos = [](int pos) { set_scroll_pos(pos); };
     world::set_zoom_source([] { return g_radar.zoom; });
     // seg9:0x60bc's tail: seg11:0x3cc2(player), whose full repaint seeds rand() [BYTES
     // seg9:0x6320 seg11:0x3e48 seg11:0xb22]. DGROUP:0x8f64 = (seg13:0x65f2(0) != 0) after it is
     // [OPEN]: the port leaves the repaint flag as it is.
+    // The image table DGROUP:0x39e8 for the briefing's phase 11 (world.h slot_image): the image
+    // behind slot n on the blitter, the ships' sheets 0x28 + i among them [BYTES
+    // seg17:0x2109-0x211a] (M5 s2 BRIEFING).
+    world::set_slot_images([](int slot) -> std::shared_ptr<gfx::Surface> {
+        if (!g_blit || slot < 0 || slot >= world::kImageSlots) return nullptr;
+        const world::DcId dc = g_images[static_cast<std::size_t>(slot)];
+        return dc == world::kDcNone ? nullptr : g_blit->image(dc);
+    });
+    // seg9:0x6624's seg14:0x0(-1) at the briefing entry builds the sheets and the flame strip
+    // (seg16:0x3784 -> seg16:0x3468 -> seg14:0x11a8, seg14:0xc7e) [BYTES seg9:0x688a seg14:0xd32
+    // seg16:0x362b] (M5 s2 BRIEFING). Nothing rebuilds them at the wave start, so phase 11's
+    // flame pastes stay in the sheet [BYTES seg9:0x60bc] (s2-briefing.md, "Flame pastes").
+    world::on_briefing_placement([](world::World& wd) {
+        refresh_player_design();
+        build_player_sheet(wd);    // seg14:0x11a8 for the player (M5 s1 SPRITE)
+    });
     world::on_wave_start([](world::World& wd) {
         refresh_player_design();  // the design words the panels read (M3 stage 4)
         clear_entries(g_entries);  // [DESIGN] (world/entry_effect.h)
-        build_player_sheet(wd);    // seg14:0x11a8 for the player (M5 s1 SPRITE)
         // seg9:0x695e-0x6963: seg11:0xae94 and seg11:0x2f8c (the weapon picture), only when the
         // placement saw DGROUP:0x91f8 = 1 or DGROUP:0x92e4 != 0 (World::picture_due) [BYTES
         // seg9:0x6951-0x695c] (M3 s4 fixer, review M6). seg11:0xae94 is unread [OPEN].
@@ -443,8 +482,10 @@ void install_wave(app::App& app) {
         // seg11:0x3e48-0x3e5f: seg13:0x65f2(0) after the repaint, whose column part posts 0x9aa
         // when IconWnd is set and the column does not exist (the IS_ICON column, M3 stage 4),
         // and DGROUP:0x8f64 = 1 when it posted, else 0 [BYTES seg11:0x3e4d seg11:0x3e57
-        // seg11:0x3e5f seg13:0x66af-0x66ca]. The IS_SMART post 0x9b4 (SmWnd, seg13:0x66d4) is not
-        // ported [OPEN].
+        // seg11:0x3e5f seg13:0x66af-0x66ca]. The column's creation reactivates main, whose erase
+        // the port follows with a second repaint, so the full status display stands from the
+        // first frame (icon_column_win32.cpp) [ORACLE win98-0001] [DESIGN ADR 0013 decision 3].
+        // The IS_SMART post 0x9b4 (SmWnd, seg13:0x66d4) is not ported [OPEN].
         Hud* h = hud();
         const bool repainted = h && h->lamp_repaint(wd.player);
         if (repainted) g.hud_dirty = icon_column_wave_start();

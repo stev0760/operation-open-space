@@ -128,8 +128,9 @@ void palette_message() {
     if (done && children_invalidated()) children_invalidated()();
     // UpdateWindow (seg2:0x607) handled the whole client region, so no WM_PAINT for main was
     // left pending: one that was (a ShowWindow's) would run seg2:0x970 again without its erase
-    // and bring the wiped HUD back. The port validates main to the same effect [DESIGN ADR 0013
-    // decision 3] [BYTES seg2:0x5ff seg2:0x607].
+    // and bring the erased HUD back. The port validates main to the same effect [DESIGN ADR 0013
+    // decision 3] [BYTES seg2:0x5ff seg2:0x607]. The wave start's repaint after the erase is the
+    // IS_ICON column's (src/hud/icon_column_win32.cpp) [ORACLE win98-0001] [DESIGN].
     if (done && g.main) {
         ValidateRect(g.main, nullptr);
         g.gfx->present(g.main, true);
@@ -545,8 +546,10 @@ LRESULT handle(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
         // logical cover of that box [DESIGN]: in state 0, which draws only what changes, before
         // the repaint seg11:0xafe that 0x978 runs; in states 1 and 7 after it, as seg2:0x7ac runs
         // seg2:0x970 before DefWindowProc's BeginPaint [BYTES seg2:0x7c4 seg2:0x7c7 seg6:0x14a8]
-        // (ADR 0013 decisions 1 and 3; this is what wipes the HUD at the wave start, [ORACLE
-        // wave-0001 05-12]); the IS_INFO children paint again after it (children_invalidated).
+        // (ADR 0013 decisions 1 and 3); the IS_INFO children paint again after it
+        // (children_invalidated). At the wave start the IS_ICON column's reactivation of main
+        // is followed by a second repaint, so the full status display stands from the first
+        // frame (src/hud/icon_column_win32.cpp) [ORACLE win98-0001] [DESIGN].
         // Other states black the play area in the paint routine until they draw.
         const int erase_state = g.game.state();
         const bool wave_states = erase_state == shell::kWave || erase_state == shell::kHelp;

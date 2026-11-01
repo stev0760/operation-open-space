@@ -15,6 +15,7 @@ The oracle is the original v1.29.08 demo running under Wine. Scripts in `oracle/
 | [wave-0001](../../oracle/digests/wave-0001.md) | old WoW64 + ExtractIcon patch | the patch, relay profiles, play inside wave 1 |
 | [depth8-0002](../../oracle/digests/depth8-0002.md) | old WoW64 + ExtractIcon patch, depth 8 | palette calls and colours from title to wave 1 |
 | [dialogs-0001](../../oracle/digests/dialogs-0001.md) | old WoW64 + ExtractIcon patch; port under new WoW64 | the port's 22 converted dialogs against the 13 the original opened: equal client sizes |
+| [win98-0001](../../oracle/digests/win98-0001.md) | Windows 98, CRT (a photograph) | the full status display during play, the icon column, the Ship Watch window, the weapon picture |
 
 ## Running the oracle
 Usage lives in each script's header: `oracle/env.sh`, `oracle/trace.sh`, `oracle/scenarios/common.sh`, `newgame.sh`, `wave.sh`, `oracle/relay_digest.py`, `oracle/probe/isprobe.c` and `oracle/probe/probe_run.sh`. [DESIGN]

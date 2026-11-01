@@ -1,5 +1,7 @@
 #include "briefing/gdi_canvas.h"
 
+#include "world/world.h"
+
 #ifdef _WIN32
 #include <exception>
 #include <string>
@@ -110,8 +112,11 @@ void GdiCanvas::icon(int x, int y, int w, int h, int sx, int sy, int sw, int sh)
     SetStretchBltMode(dc(), old);
 }
 
-bool GdiCanvas::has_slot(int slot) {
-    if (slot != kSlotStrip) return false;
+gfx::ImagePtr GdiCanvas::slot_image(int slot) {
+    // A ship's sheet, slot 0x28 + i of DGROUP:0x39e8, comes from the wave's image table
+    // (src/world/world.h slot_image) [BYTES seg17:0x2109-0x211a seg17:0x255e-0x2563].
+    if (slot >= kSlotShipBase) return world::slot_image(slot);
+    if (slot != kSlotStrip) return {};
     if (!strip_tried_) {
         strip_tried_ = true;
         try {
@@ -120,15 +125,20 @@ bool GdiCanvas::has_slot(int slot) {
             strip_.reset();
         }
     }
-    return strip_ != nullptr;
+    return strip_;
 }
 
+bool GdiCanvas::has_slot(int slot) { return slot_image(slot) != nullptr; }
+
+bool GdiCanvas::ship_sheets_linked() { return world::slot_images_linked(); }
+
 void GdiCanvas::slot_blit(int slot, int x, int y, int w, int h, int sx, int sy, int sw, int sh) {
-    if (!has_slot(slot)) return;
+    const gfx::ImagePtr img = slot_image(slot);
+    if (!img) return;
     // SetStretchBltMode(3) and seg10:0x9962's stretch with SRCCOPY [BYTES seg17:0x1c9e
-    // seg17:0x1cde].
+    // seg17:0x1cde seg17:0x253a-0x2581].
     const int old = SetStretchBltMode(dc(), COLORONCOLOR);
-    StretchBlt(dc(), x, y, w, h, strip_->hdc(), sx, sy, sw, sh, SRCCOPY);
+    StretchBlt(dc(), x, y, w, h, img->hdc(), sx, sy, sw, sh, SRCCOPY);
     SetStretchBltMode(dc(), old);
 }
 

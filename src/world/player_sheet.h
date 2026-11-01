@@ -7,6 +7,7 @@
 // SheetRenderer. Portable, no Win32 (M5 s1 SPRITE).
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -18,6 +19,7 @@
 namespace is::gfx {
 struct SheetArgs;
 struct ShipSheet;
+struct FlameHeadings;
 }  // namespace is::gfx
 
 namespace is::world {
@@ -128,6 +130,9 @@ struct SheetBuild {
     std::int16_t side = 0, gap = 0;
     bool to_object = false;
     std::int16_t bm_height = 0;
+    // The pixels the render put in the slot (empty when it did not render): the sheet DC as
+    // seg10:0x5d3c reads it right after the build (build_flame_strip) [DESIGN] (M5 s2 FLAME).
+    SheetPixels pixels;
 };
 
 // seg14:0x11a8(i) [BYTES seg14:0x11a8-0x1427]:
@@ -159,6 +164,147 @@ SheetBuild rebuild_ship_sheet(Blitter& out, ImageSlotTable& images, ShipRecord& 
 // scaled object words +0x22 and +0x24, 16-bit signed division [BYTES seg14:0xd3f-0xd66
 // seg14:0xc3e]. 0 when size + gap is 0 [DESIGN: the original divides by 0].
 std::uint8_t sheet_last_row(std::int16_t bm_height, std::int16_t size, std::int16_t gap);
+
+// ---- the thrust flame (M5 s2 FLAME; work/analysis/m5/s2-flame.md, verified in
+// s2-flame-verify.md)
+//
+// ISPACE.DLL ordinal 18 draws the flame in 5 directions and seg10:0x7032 mirrors them to 16
+// headings (src/gfx/ship_flame.h). seg10:0x5d3c(i) composites them over ship i's sheet patches
+// into the strip DC DGROUP:0x3a2c, and seg11:0xb09c(i, on) pastes strip row 2i + on into the
+// ship's sheet in place. The paste is an edge event (flame on at thrust start, off at release or
+// brake; src/world/flight.cpp), so the flame stays in the sheet in between, and since the
+// "off" patches of headings 5 ... 15 are mirrors of headings 1 ... 4's, the first flame-off
+// changes those cells for good, as the original's do [BYTES seg10:0x5e36-0x5eb6
+// seg10:0x6104-0x6263] [ORACLE wave-0001 08-fly-right].
+
+// The design words the flame reads [BYTES seg14:0x1d55-0x1d69 seg14:0x1ed6-0x1f09
+// seg14:0x1c7f-0x1c88]:
+//  - type, design word +0x44 (DGROUP:0x9716): 0 when SHP +0x09 bit 0x01 is set, else 1, OR 0x20
+//    when SHP +0x09 bit 0x20 is set. seg10:0x5d3c uses the whole word as the flame row, so with
+//    0x20 the row lies outside the 2-row flame bitmap [OPEN: what Win16 GDI blits from there;
+//    the port leaves the destination as it is, as a clipped source does] [DESIGN];
+//  - behind, design word +0x48 (DGROUP:0x971a): BOD +0x20 bit 0x08 (Thrust Behind Ship);
+//  - radius, BOD byte +0x19 (signed), negated into design word +0x04 (DGROUP:0x96d6).
+struct FlameDesign {
+    std::int16_t type = 0;
+    bool behind = false;
+    std::int8_t radius = 0;
+};
+FlameDesign flame_design(std::uint8_t shp_flags, std::uint8_t bod_flags, std::int8_t bod_19);
+
+// Design word +0x04 after seg14:0x0: -(BOD +0x19) from seg14:0x1c88, then, when negative,
+// 4 - v - side / 2 (truncating) with `side` the raw cell side seg14:0x0 holds in [bp - 0x24]
+// (one more at Size 0 for an odd side) [BYTES seg14:0xbb5-0xbc2 seg14:0xc42-0xc68].
+std::int16_t flame_radius_word(std::int8_t bod_19, std::int16_t side);
+
+// seg10:0x16ba(n)'s anchors, design words +0x50 + 4k (DGROUP:0x9722, x then y), k = 0 ... 4: the
+// top-left of the flame's f x f box in heading k's cell, in normal mode (DGROUP:0x9130 = 0)
+// [BYTES seg10:0x16ea-0x170a seg10:0x1715-0x17f8 seg10:0x17fa-0x185a seg10:0x1861-0x18a4]:
+//   half = (side2a << Size) >> 1, c2 = half / 2 (truncating), r = 2 (r04 + 1), less 1 for
+//   k = 0, 3, 4 and 1 more for k = 0; cl = 2 - Size;
+//   D.x = (trunc(Cx[k] r / 256) >> cl) - (wx >> cl) + c2,
+//   D.y = c2 - (trunc(Cy[k] r / 256) >> cl) - (wy >> cl),
+// with Cx = DGROUP:0x6d6, Cy = DGROUP:0x6e0, (wx, wy) = (9,9), (7,9), (9,9), (9, side2a > 0x1d ? 10
+// : 9), (Size >= 2 ? 8 : 6, 9), 16-bit products and arithmetic shifts. `side2a` is design word
+// +0x2a, the raw side seg14:0x0 reads from object +0x22 before its size step [BYTES seg14:0xb97
+// seg14:0xba9]. The seg18 branch (DGROUP:0x9130 != 0) is not ported [OPEN M6]. Size outside
+// 0 ... 2 shifts by (2 - Size) & 0x1f as a 386 does [DESIGN].
+extern const std::array<std::int16_t, 5> kFlameCx;  // DGROUP:0x6d6
+extern const std::array<std::int16_t, 5> kFlameCy;  // DGROUP:0x6e0
+struct FlameAnchors {
+    std::array<Point16, 5> d{};
+};
+FlameAnchors flame_anchors(std::int16_t side2a, std::int16_t r04, int size_level);
+
+// The strip DC DGROUP:0x3a2c and its bitmap DGROUP:0x3b14: 16 f x 16 f, black, two rows of 16
+// cells per ship (row 2i the sheet patches under the anchors, row 2i + 1 the same with the
+// flame), as seg10:0x5c42 creates it once [BYTES seg10:0x5c94-0x5cf2]. The pixels are logical
+// palette indices, 0 black (the port's BLACKNESS index, ADR 0007 decision 2). `anchors` holds
+// each ship's seg10:0x16ba result: the original keeps them in the design record [DESIGN: per
+// ship, the design record is not modelled]. `dc` is the strip as the Blitter's image, uploaded
+// after each build (upload_flame_strip) [DESIGN].
+struct FlameStrip {
+    int f = 0;
+    int w = 0, h = 0;
+    std::vector<std::uint8_t> px;
+    std::array<FlameAnchors, 8> anchors{};
+    DcId dc = kDcNone;
+    std::uint8_t at(int x, int y) const { return px[static_cast<std::size_t>(y) * w + x]; }
+    bool ok() const { return w > 0; }
+};
+// seg10:0x5c42's strip part: creates the black 16 f x 16 f strip when there is none (f =
+// gfx::flame_cell). A strip of another f (Ctrl +/- changes Size) keeps the original's: it is
+// created once [BYTES seg10:0x5c8f]; the port remakes it at the new f [DESIGN].
+void flame_strip_create(FlameStrip& strip, int f);
+
+// seg10:0x5d3c(i) on the strip, given the flame's 16 headings (seg10:0x7032's DGROUP:0x3c60),
+// ship i's sheet as built (SheetBuild::pixels), the sheet's cell size h and gap g (object words
+// +0x22 and +0x24), and the design [BYTES seg10:0x5d3c-0x6263]:
+//  - has_flame (ship byte +0xe4) = 0: only the mirror step [BYTES seg10:0x5e1e-0x5e30];
+//  - row 2i, cells 0 ... 4: the f x f sheet patch at (g + k (h + g) + D.x, g + D.y), SRCCOPY;
+//  - row 2i + 1, cells 0 ... 4, design +0x48 = 0: row 2i, SRCAND the flame's mask, SRCPAINT the
+//    flame, both from (0, type f): the flame where it is not black [BYTES seg10:0x5fa2-0x6019];
+//    design +0x48 != 0: the flame, SRCAND the mask of the whole strip from (0, 0) (ship 0's row
+//    0 for every i, as the original reads it), SRCPAINT row 2i [BYTES seg10:0x5ecc-0x5f9b];
+//  - BLACKNESS on row 2i + 1's cells outside the ship's cell: top f x max(0, -D.y), left
+//    max(0, -D.x) x f, bottom at max(0, h - D.y) of height max(0, D.y - h + f), right at
+//    min(h - D.x - 1, f) of width max(0, D.x - h + f + 1) [BYTES seg10:0x601e-0x6100];
+//  - rows 2i and 2i + 1 mirrored to 16 headings as gfx::flame_headings does [BYTES
+//    seg10:0x6104-0x6263].
+// The ordinal-6 masks are 1 where a pixel is black; the port takes index 0 as black [DESIGN].
+// SRCAND / SRCPAINT work on the palette indices as an 8-bpp DC's raster operations do. Source
+// pixels outside a bitmap leave the destination as it is (a clipped source) [DESIGN].
+void build_flame_strip(FlameStrip& strip, const gfx::FlameHeadings& flame, int i,
+                       const SheetPixels& sheet, std::int16_t size, std::int16_t gap,
+                       const FlameDesign& design, const FlameAnchors& anchors,
+                       std::uint8_t has_flame);
+// The strip into the Blitter as an image (create_image_from), replacing the previous one.
+void upload_flame_strip(Blitter& out, FlameStrip& strip);
+
+// One f x f SRCCOPY of seg11:0xb09c: from the strip at (sx, sy) to the sheet at (dx, dy).
+struct FlamePaste {
+    int dx = 0, dy = 0, sx = 0, sy = 0;
+};
+// seg11:0xb105 to the end of seg11:0xb09c(i, on) [BYTES seg11:0xb105-0xb302]:
+//  - nothing when ship byte +0xe4 (has_flame) = 0 [BYTES seg11:0xb11d-0xb127];
+//  - the offsets (ox, oy) of heading h: D[h] for h < 5, (D[8-h].x, size - D[8-h].y - f) for
+//    5 ... 8, (size - D[h-8].x - f, size - D[h-8].y - f) for 9 ... 11 and (size - D[16-h].x - f,
+//    D[16-h].y) for 12 ... 15 [BYTES seg11:0xb152-0xb1bf seg11:0xb2d7-0xb2f7];
+//  - the source (f h, (2i + on) f) [BYTES seg11:0xb1c2-0xb1e7];
+//  - ship word +0x10 (`type`) <= 0 or >= 7: every heading, to (h (size + gap) + gap + ox,
+//    base + gap + oy), base = size + gap for type > 3, else 0 [BYTES seg11:0xb105-0xb118
+//    seg11:0xb266-0xb2ab];
+//  - type 1 ... 6: heading object +0x28 only, to column 16 at (16 size + 17 gap + ox, gap + oy)
+//    and (the same x, 2 gap + size + oy) [BYTES seg11:0xb1ed-0xb264 seg11:0xb2b9-0xb2d5].
+// It reads neither object +0x2f nor ship byte +0xe9 (s2-flame-verify.md claim 26).
+std::vector<FlamePaste> flame_pastes(int f, const FlameAnchors& anchors, int i, int on,
+                                     std::int16_t type, std::int16_t heading, std::int16_t size,
+                                     std::int16_t gap, std::uint8_t has_flame);
+// The pastes on a sheet's pixels (the tests' path and the port's own copy of the sheet).
+void apply_flame_pastes(SheetPixels& sheet, const FlameStrip& strip,
+                        const std::vector<FlamePaste>& pastes);
+// The pastes as the original makes them: BitBlt SRCCOPY from the strip's image to the sheet DC
+// DGROUP:0x39e8[0x28 + i] [BYTES seg11:0xb2a6].
+void paste_flame(Blitter& out, const ImageSlotTable& images, const FlameStrip& strip, int i,
+                 const std::vector<FlamePaste>& pastes);
+
+// The program's one strip DGROUP:0x3a2c.
+FlameStrip& flame_strip();
+
+// The two calls the drawing side makes on the program's strip:
+//  - after ship i's sheet build (seg14:0x0 at seg14:0xc7e, seg14:0x11a8's shared branch at
+//    seg14:0x1200, Ctrl +/- at seg10:0xa04c): seg10:0x5c42's strip (made once, f =
+//    gfx::flame_cell(Size)), seg10:0x5d3c(i) from the build's pixels and the upload. `flame` is
+//    seg10:0x7032's bitmap (gfx::flame_headings(gfx::flame_bitmap_for(graphic 280), f)); the
+//    anchors take design +0x2a = the build's raw side (SheetBuild::side) [BYTES seg14:0xb97
+//    seg14:0xba9]. Nothing without a rendered build [DESIGN];
+//  - SpriteLinks::flame_tail(on, i): flame_pastes and paste_flame with ship word +0x10, object
+//    +0x28, +0x22, +0x24 and ship byte +0xe4. The caller's seg13:0x6716 redraws (flight.cpp).
+void ship_flame_after_sheet(Blitter& out, const gfx::FlameHeadings& flame, int i,
+                            const SheetBuild& build, const ObjectRecord& obj,
+                            const ShipRecord& ship, const FlameDesign& design, int size_level);
+void ship_flame_tail(Blitter& out, const ImageSlotTable& images, int i, int on,
+                     const ShipRecord& ship, const ObjectRecord& obj);
 
 // ---- the calls into the sprite side from the frame (src/world/flight_hooks.cpp DefaultHost)
 

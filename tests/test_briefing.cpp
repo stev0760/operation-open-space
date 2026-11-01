@@ -67,7 +67,9 @@ public:
         put("icon %d %d %d %d %d %d %d %d", x, y, w, h, sx, sy, sw, sh);
     }
     bool slots = true;
+    bool linked = false;
     bool has_slot(int) override { return slots; }
+    bool ship_sheets_linked() override { return linked; }
     void slot_blit(int slot, int x, int y, int w, int h, int sx, int sy, int sw,
                    int sh) override {
         put("slot %d %d %d %d %d %d %d %d %d", slot, x, y, w, h, sx, sy, sw, sh);
@@ -89,7 +91,10 @@ public:
         {2522, "(%<this is you%>%<from %? team%>)"}, {2053, "YOU HAVE BEEN"},
         {3035, "WAVE %d%N%s%NSCORE : %l%N%NCAPTURED: %#%NDESTROYED : %#%NCREDIT : %s "
                "ICONS%NRESOURCES : %s ICONS"},
-        {12530, "Defenders"}};
+        {12530, "Defenders"}, {246, "LOYAL"}, {247, "HELPFUL"}, {252, "UNFRIENDLY"},
+        {541, " TO "}, {542, " IN "}, {2528, "%S %? ALLIES AND"}, {2524, "%S %? ENEMIES. "},
+        {3023, "%<YOUR%>%<THIS%> SHIP IS %S."}, {716, "TOUGH"}, {717, "RESPECTABLE"},
+        {722, "DEFENSELESS"}, {709, "BEYOND REASON"}};
     std::map<int, std::string> pages = {{300, "IF YOU CAPTURE AN ICON"}};
     std::vector<std::string> todos;
     std::vector<int> sounds;
@@ -98,6 +103,8 @@ public:
         return it == strings.end() ? std::string() : it->second;
     }
     void sound(int id) override { sounds.push_back(id); }
+    std::vector<std::pair<int, int>> flames;
+    void flame(int on, int ship) override { flames.emplace_back(on, ship); }
     void todo(const std::string& w, const char* a) override { todos.push_back(w + " " + a); }
     std::vector<std::uint8_t> page(int id) override {
         auto it = pages.find(id);
@@ -685,7 +692,7 @@ TEST_CASE("briefing: the ship page of phase 11") {
     // The init draws the first fly-in frame; the flight ends at (423, 255, 99 x 99) after the
     // 10-frame spin with cells 4, 3, 3, 2, 2, 2, 1, 1, 0, 0 (start-0001).
     while (r.s.briefing_skip() == 0) r.tick();
-    const auto blits = r.c.with("slot -1 ");
+    const auto blits = r.c.with("slot 40 ");
     REQUIRE(blits.size() > 10);
     const std::vector<std::string> spin(blits.end() - 10, blits.end());
     const char* sx[] = {"157", "119", "119", "81", "81", "81", "43", "43", "5", "5"};
@@ -699,23 +706,79 @@ TEST_CASE("briefing: the ship page of phase 11") {
     CHECK(r.c.count("text 15/10/0 02ffd600 0 231 218 REALITY CHECK") == 1);
     CHECK(r.c.count("text 15/10/0 02ffd600 0 231 238 (this is you)") == 1);
     CHECK(r.c.count("text 13/6/0 00ffff00 0 231 380 YOU HAVE BEEN") == 1);
+    CHECK(r.c.count("text 13/6/0 00ffff00 0 231 398 LOYAL  TO  ALLIES AND") == 1);
+    CHECK(r.c.count("text 13/6/0 00ffff00 0 231 416 UNFRIENDLY  TO  ENEMIES. ") == 1);
     // The page types, then the invisible spin and the fly-out; 1000 ms later phase 12.
     while (r.s.briefing_skip() == 1) r.tick();
-    const int before = r.c.count("slot -1 ");
+    const int before = r.c.count("slot 40 ");
     REQUIRE(r.until_phase(12));
-    const int out = r.c.count("slot -1 ") - before;
+    const int out = r.c.count("slot 40 ") - before;
     // 10 invisible frames and 46 fly-out frames to (793, 296, 3 x 16) (start-0001).
     CHECK(out == 10 + 46);
-    CHECK(r.c.with("slot -1 ").back() == "slot -1 793 296 3 16 157 5 33 33");
+    CHECK(r.c.with("slot 40 ").back() == "slot 40 793 296 3 16 157 5 33 33");
+    // seg11:0xb09c: (1) at the set-up, (0) at the arrival and the end of the hold, (1) before
+    // each sub-step-2 set-up [BYTES seg17:0x22fb seg17:0x25f2 seg17:0x2a32].
+    const std::vector<std::pair<int, int>> want = {{1, 0}, {0, 0}, {0, 0}, {1, 0}, {1, 0}};
+    CHECK(r.h.flames == want);
+}
+
+TEST_CASE("briefing: phase 11 skips the ship when its slot is empty") {
+    Rig r;
+    r.c.slots = false;
+    r.c.linked = true;
+    r.start();
+    REQUIRE(r.until_phase(11));
+    const int frames_before = r.c.count("slot ");
+    REQUIRE(r.until_phase(12, 3));  // seg17:0x23fc: 1 at the first frame [BYTES seg17:0x23f7-0x2401]
+    CHECK(r.c.count("slot ") == frames_before);
+    CHECK(r.c.count("REALITY CHECK") == 0);
+}
+
+TEST_CASE("briefing: seg6:0xf54 and seg6:0x1010 print the hundredths unpadded") {
+    CHECK(hundredths_text(150, 2) == "1.50");
+    CHECK(hundredths_text(0, 2) == "0.0");
+    CHECK(hundredths_text(105, 2) == "1.5");
+    CHECK(hundredths_text(5, 2) == "0.5");
+    CHECK(hundredths_text(-250, 2) == "-2.50");
+    CHECK(hundredths_text(12345, 2) == "123.45");
+    CHECK(hundredths_text(199, 1) == "1.9");
+}
+
+TEST_CASE("briefing: seg17:0x4068's rank and sentence") {
+    CHECK(rank_string(32601) == 709);
+    CHECK(rank_string(32600) == 710);
+    CHECK(rank_string(25000) == 711);
+    CHECK(rank_string(14301) == 711);
+    CHECK(rank_string(14300) == 712);
+    CHECK(rank_string(7001) == 715);  // > 7000
+    CHECK(rank_string(7000) == 716);
+    CHECK(rank_string(6301) == 716);  // > 6300
+    CHECK(rank_string(5501) == 717);
+    CHECK(rank_string(5500) == 718);
+    CHECK(rank_string(2801) == 721);
+    CHECK(rank_string(2800) == 722);
+    CHECK(rank_string(-5) == 722);
+    FakeHost h;
+    CHECK(ship_sentence(h, true, 717) == "YOUR SHIP IS RESPECTABLE.");
+    CHECK(ship_sentence(h, false, 716) == "THIS SHIP IS TOUGH.");
+    const auto rel = relation_lines(h, 1, 2);
+    CHECK(rel[0] == "HELPFUL  TO  ALLIES AND");
+    CHECK(rel[1] == "UNFRIENDLY  TO  ENEMIES. ");
 }
 
 TEST_CASE("briefing: the 3035 page text") {
     FakeHost h;
     ShipStats st;
     st.credit = 150;
-    const std::string t = ship_page_text(h, 1, "D:\\GAMES\\", st);
+    const std::string t = ship_page_text(h, 1, "D:\\GAMES\\", st, 717);
+    // start-0001's page: 3035, two " \r\n" breaks and the sentence [ORACLE start-0001].
     CHECK(t == "WAVE 1\r\nD:\\GAMES\\\r\nSCORE : 0\r\n\r\nCAPTURED: 0 ICONS\r\nDESTROYED : 0 "
-               "ICONS\r\nCREDIT : 1.50 ICONS\r\nRESOURCES : 0.0 ICONS");
+               "ICONS\r\nCREDIT : 1.50 ICONS\r\nRESOURCES : 0.0 ICONS \r\n \r\nYOUR SHIP IS "
+               "RESPECTABLE.");
+    st.credit = 105;
+    st.resources = 5;
+    const std::string u = ship_page_text(h, 2, "D:\\", st, 717);
+    CHECK(u.find("CREDIT : 1.5 ICONS\r\nRESOURCES : 0.5 ICONS") != std::string::npos);
 }
 
 TEST_CASE("briefing: the load screen's greeting") {

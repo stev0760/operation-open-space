@@ -34,7 +34,8 @@ extern const std::array<std::int16_t, 16> kSheetCos;  // DGROUP:0x13a
 // seg5:0x61b2 and DGROUP:0x1dea take. Rows 12 and 0x12 and above have no case and return the
 // uninitialised local [BYTES ISPACE.DLL seg5:0x6f58]; the port returns -1 [DESIGN].
 int scheme_ramp_id(int scheme);
-// ISPACE.DLL seg5:0x66ea(r, g, b): the ramp id of a colour (0-13), for scheme 12's colour
+// ISPACE.DLL seg5:0x66ea(r, g, b): the ramp id of a colour (0-13 except 6 and 12:
+// s2-claims-verify.md note D), for scheme 12's colour
 // classes [BYTES ISPACE.DLL seg5:0x66ea-0x6b6f]. Pure: no palette state.
 int colour_ramp_id(Rgb c);
 

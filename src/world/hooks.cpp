@@ -10,10 +10,12 @@ namespace is::world {
 namespace {
 World g_world;
 std::function<void(World&)> g_on_wave_start;
+std::function<void(World&)> g_on_placement;
 std::array<std::int16_t, kShipCount> g_design_mass{};  // DGROUP:0x9704 + 0xad·design [OPEN]
 }  // namespace
 World& current() { return g_world; }
 void on_wave_start(std::function<void(World&)> f) { g_on_wave_start = std::move(f); }
+void on_briefing_placement(std::function<void(World&)> f) { g_on_placement = std::move(f); }
 std::int16_t design_mass(int design) {
     return design >= 0 && design < kShipCount ? g_design_mass[static_cast<std::size_t>(design)]
                                               : std::int16_t{0};
@@ -112,16 +114,48 @@ std::filesystem::path ship_dir() {
 // body. Which record seg14 reads for the player is [OPEN] (M5); the oracle's wave 1 flies
 // MainShip's TRANSFORMER [ORACLE wave-0001]. The fuel 40 x the SHP fuel-tank byte is the
 // oracle's DGROUP:0x70ae = 0x528 for TRANSFORMER's 33 [ORACLE probe-0001] [OPEN: its writer].
-// The roster index +0xd6 = -1 (no roster record) is [OPEN]. The ship sheet (seg14:0x11a8
-// through ISPACE.DLL ordinal 2) is built at the wave start by src/hud/wave_win32.cpp
-// build_player_sheet [DESIGN].
+// The player has roster record 0 (below). The ship sheet (seg14:0x11a8 through ISPACE.DLL
+// ordinal 2) belongs to the placement's seg14:0x0(-1) at the briefing entry: the drawing side
+// builds it in its on_briefing_placement hook (briefing_entry) [BYTES seg9:0x688a seg14:0xd32].
 void ship_setup_player(World& w) {
     ship_setup_minimal(w);
     g_design_mass.fill(0);
     ShipRecord& s = w.ship(w.player);
     ObjectRecord& o = w.ship_object(w.player);
-    s.roster_index = -1;
+    // seg14:0x0 at DGROUP:0x91f8 <= 1 (the first briefing's placement, the wave incremented
+    // around it): the player's roster record 0 with +2 = 15 and +4 = 0, DGROUP:0x931c =
+    // DGROUP:0x9646 = 0, and ship 0's +0xd6 = 0 and +0x4e = 0 [BYTES seg14:0x232 seg14:0x23e-0x243
+    // seg14:0x3cc seg14:0x3d8 seg14:0x42a-0x432]. A later wave keeps the record; its +2 and +4
+    // come back from the ship at the load (seg9:0x2cce-0x2d15: +4 = +0xce, +2 = min(+0xdc,
+    // 0x4fff6) / 10) [BYTES seg9:0x2cce seg9:0x2ce8 seg9:0x2d15] (M5 s2 BRIEFING); the port makes
+    // that update here in the placement, from the same ship words [DESIGN]; whether anything
+    // writes them between the load and the placement is [OPEN].
+    if (w.wave <= 1 || w.roster.empty()) {
+        w.roster.assign(1, RosterRecord{});
+        w.roster[0].credit10 = 15;
+        w.roster[0].resources = 0;
+    } else {
+        std::int32_t credit = static_cast<std::int32_t>(static_cast<std::uint16_t>(s.wdc)) |
+                              (static_cast<std::int32_t>(s.wde) << 16);
+        if (credit > 0x4fff6) credit = 0x4fff6;
+        w.roster[0].credit10 = lo16(credit / 10);
+        w.roster[0].resources = word_at(s, 0xce);
+    }
+    w.player_roster = 0;
+    s.roster_index = 0;
     s.design_index = 0;
+    // seg14:0xd0a: ship word +0x50 = the ship's own index, the image slot 0x28 + i of its sheet
+    // [BYTES seg14:0xd03-0xd0a].
+    s.sprite_slot = w.player;
+    // seg14:0x1430 with a roster record: credit dword +0xdc = 10 x roster word +2 and resources
+    // +0xce = roster word +4 [BYTES seg14:0x1997-0x19aa]; seg16:0x3784(i, 1) leaves them
+    // [BYTES seg16:0x3792-0x37a8 seg14:0xd2d-0xd32].
+    {
+        const std::int32_t credit = 10 * static_cast<std::int32_t>(w.roster[0].credit10);
+        s.wdc = static_cast<std::int16_t>(credit & 0xffff);
+        s.wde = static_cast<std::int16_t>(credit >> 16);
+        set_word_at(s, 0xce, w.roster[0].resources);
+    }
     // seg14 gives a ship record radar_draw seg11:0x37a0 and the radar brush of design word
     // DGROUP:0x96fe + 0xad·n, which seg14:0x1e08 sets to 7 on every path (the player's own
     // marker takes WHITE_BRUSH) [BYTES seg14:0x2141 seg14:0x20d7 seg14:0x1e08] (M3 s4 fixer:
@@ -145,6 +179,13 @@ void ship_setup_player(World& w) {
                                              body->byte_1c, body->byte_1d, body->flags, shp->flags);
         apply_flight_design(s, o, d, w.player_game != 0, static_cast<std::uint32_t>(app::now_tick()), 0);
         g_design_mass[0] = d.mass;
+        // seg14:0x1430: ship bytes +0x5d / +0x5e = design bytes DGROUP:0x9776 / 0x9777 + 0xad n,
+        // the SHP attitudes +4 / +5 [BYTES seg14:0x158e-0x15aa seg14:0x2040]; the design words
+        // of seg13:0x33d6 (rating.h) (M5 s2 BRIEFING).
+        set_byte_at(s, 0x5d, shp->to_friends);
+        set_byte_at(s, 0x5e, shp->to_enemies);
+        w.design_ratings[0] = design_rating(*shp, *body);
+        w.roster[0].shp = static_cast<std::int16_t>(shp - ships.ships.records.data());
         // The cell sizes +0x20, +0x22, +0x24 (seg14:0x11a8's raw side and gap, seg14:0x0's
         // scaling; setup.h ship_cell_raw, ship_cell_sizes). The raw side is the body DIB's
         // height; TRANSFORMER's #4000 60 is 132 x 33, so Size 1 gives extent 264 and size 33,
@@ -153,7 +194,12 @@ void ship_setup_player(World& w) {
         // from a .DIB file (+0x21 = 0xffff, read from +0x23) is [OPEN] here.
         if (body->bitmap_id != fmt::kBodyBitmapFromFile) {
             const fmt::Dib dib = g.store->sprite(body->bitmap_id);
-            ship_cell_sizes(o, ship_cell_raw(static_cast<std::int16_t>(dib.height)), w.size);
+            const ShipCellRaw raw = ship_cell_raw(static_cast<std::int16_t>(dib.height));
+            ship_cell_sizes(o, raw, w.size);
+            // With a roster record seg14:0x11a8 writes the raw side and gap to roster bytes
+            // +0x7a / +0x7b (s1-sprite.md claim 14), the class size of the briefing's ship page
+            // [BYTES seg14:0x131c seg14:0x1337 seg17:0x22b9-0x22e3] (M5 s2 BRIEFING).
+            w.roster[0].size = static_cast<std::uint8_t>(raw.side);
             o.src_y = o.gap;  // seg9:0x6624's +0x12 = +0x24 follows (setup.cpp place)
         } else {
             log("world: ship set-up: body " + body->name + " reads a .DIB file [OPEN]; no cell size");
@@ -380,6 +426,11 @@ void briefing_entry() {
     if (g_icons) g_icons->clear();
     auto h = make_host();
     enter_briefing(w, *h);
+    // seg9:0x6624's seg14:0x0(-1) builds every ship's sheet (seg16:0x3784 -> seg16:0x3468 ->
+    // seg14:0x11a8) and flame strip (seg10:0x5d3c) inside the briefing entry, before the text
+    // [BYTES seg9:0x5e5d seg9:0x688a seg14:0xc7e seg14:0xd32 seg16:0x362b]: the drawing side
+    // registers that work here (M5 s2 BRIEFING).
+    if (g_on_placement) g_on_placement(w);
     build_strip(w);
     bind_flight_world(&w);
     g_briefed = true;

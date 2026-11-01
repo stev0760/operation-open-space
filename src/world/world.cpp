@@ -2,6 +2,8 @@
 // The World's helpers (world.h). Portable.
 #include "world/world.h"
 
+#include "world/player_sheet.h"
+
 #include <cstring>
 
 namespace is::world {
@@ -51,6 +53,37 @@ std::int16_t distance_cells(std::int16_t x1, std::int16_t y1, std::int16_t x2, s
     if (e == 0) return 1;
     return lo16(((a * a + b * b) / e + e) >> 1);
 }
+
+const RosterRecord* roster_of(const World& w, int i) {
+    if (i < 0 || i >= kShipCount) return nullptr;
+    const int r = w.ships[static_cast<std::size_t>(i)].roster_index;
+    if (r < 0 || r >= static_cast<int>(w.roster.size())) return nullptr;
+    return &w.roster[static_cast<std::size_t>(r)];
+}
+
+std::int16_t rate_ship(World& w, int i) {
+    if (i < 0 || i >= kShipCount || w.pools.records(w.roles.ships) <= i) return 0;
+    ShipRecord& s = w.ship(i);
+    const int n = s.design_index;
+    const DesignRating d = n >= 0 && n < kShipCount ? w.design_ratings[static_cast<std::size_t>(n)]
+                                                    : DesignRating{};
+    s.kill_value = ship_rating(s, w.ship_object(i), d, roster_of(w, i));
+    return s.kill_value;
+}
+
+void briefing_flame(World& w, int on, int i) {
+    if (i < 0 || i >= kShipCount || w.pools.records(w.roles.ships) <= i) return;
+    ObjectRecord& o = w.ship_object(i);
+    o.flame = on != 0 ? static_cast<std::uint8_t>(idiv16(w.ship(i).thrust, 20)) : 0;
+    if (sprite_links().flame_tail) sprite_links().flame_tail(on, i);
+}
+
+namespace {
+std::function<std::shared_ptr<gfx::Surface>(int)> g_slot_images;
+}  // namespace
+void set_slot_images(std::function<std::shared_ptr<gfx::Surface>(int)> f) { g_slot_images = std::move(f); }
+std::shared_ptr<gfx::Surface> slot_image(int slot) { return g_slot_images ? g_slot_images(slot) : nullptr; }
+bool slot_images_linked() { return static_cast<bool>(g_slot_images); }
 
 bool gate_post_live(const World& w, int rec) {
     if (rec < 0 || rec >= kPool8Max) return false;  // [DESIGN] storage bound

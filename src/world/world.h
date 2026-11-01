@@ -13,11 +13,17 @@
 #include <array>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "formats/icon_source.h"
+#include "world/rating.h"
 #include "world/records.h"
+
+namespace is::gfx {
+class Surface;
+}  // namespace is::gfx
 
 namespace is::world {
 
@@ -232,6 +238,14 @@ public:
     EffectTable effects{};    // DGROUP:0x1e90
     std::int16_t player = 0;      // DGROUP:0x9646
     std::int16_t last_ship = 0;   // DGROUP:0x9316
+    // The roster DGROUP:0x6e24 (0x7c-byte records; the port keeps the bytes it reads, rating.h)
+    // and DGROUP:0x931c, the player's roster index. seg14:0x0 makes record 0 for the player at
+    // wave <= 1 [BYTES seg14:0x232-0x3d8 seg14:0x42a-0x432] (M5 s2 BRIEFING).
+    std::vector<RosterRecord> roster;
+    std::int16_t player_roster = 0;  // DGROUP:0x931c
+    // The design words seg13:0x33d6 reads, by design index (ship word +0x4e) [DESIGN: the port
+    // has no 0xad-byte design table yet; the ship set-up fills the player's design 0].
+    std::array<DesignRating, kShipCount> design_ratings{};
 
     // ---- hand-over and directory
     WaveHandover handover;
@@ -403,6 +417,27 @@ public:
     ObjectRecord& ship_object(int i) { return pools.rec(roles.ships, i); }
     ShipRecord& ship(int i) { return ships[static_cast<std::size_t>(i)]; }
 };
+
+// seg13:0x33d6(i) on the World: ship i's rating from its record, pool record, design words and
+// roster record (rating.h), stored in ship word +0xd8 (`kill_value`) and returned
+// [BYTES seg13:0x366a].
+std::int16_t rate_ship(World& w, int i);
+// Ship i's roster record (+0xd6), or null for -1 or an index the port does not hold.
+const RosterRecord* roster_of(const World& w, int i);
+// seg11:0xb09c(on, i) outside the wave frame (the briefing's phase 11): object byte +0x2f = ship
+// word +0x0c / 20 or 0 [BYTES seg11:0xb0db-0xb100], then the paste through SpriteLinks::flame_tail
+// (seg11:0xb105 on, src/world/player_sheet.h). The steps of flight.cpp `flame`, which needs the
+// frame's FlightCtx (M5 s2 BRIEFING).
+void briefing_flame(World& w, int on, int i);
+
+// The image table DGROUP:0x39e8 as the drawing side keeps it (src/hud/wave_win32.cpp g_images on
+// its GdiBlitter): the image behind slot n, null when the slot is empty or no source is set. The
+// briefing's phase 11 reads the ships' sheets, slots 0x28 + i, through it [BYTES
+// seg17:0x2109-0x211a] (M5 s2 BRIEFING).
+void set_slot_images(std::function<std::shared_ptr<gfx::Surface>(int slot)> f);
+std::shared_ptr<gfx::Surface> slot_image(int slot);
+// Whether a source is set: without one the briefing draws its stand-in outline [DESIGN].
+bool slot_images_linked();
 
 // The world's 16-bit Win16 rectangle tests (USER.PtInRect, USER.IntersectRect, USER.SetRect):
 // half-open, signed 16-bit [REF Win16 SDK].

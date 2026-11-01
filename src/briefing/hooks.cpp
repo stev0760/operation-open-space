@@ -49,6 +49,8 @@ public:
     // seg10:0x744c(id); the positional calls go through sound_at (briefing.h).
     void sound(int id) override { is::sound::play(id); }
     void sound_at(int id, int x, int y, int mode) override { is::sound::play_at(id, x, y, mode); }
+    // seg11:0xb09c(on, ship) of phase 11 on the program's World (src/world/hooks.h).
+    void flame(int on, int ship) override { world::briefing_flame(world::current(), on, ship); }
     void todo(const std::string& what, const char* address) override {
         if (todos_.insert(what + address).second) app::log_todo(what, address);
     }
@@ -126,6 +128,45 @@ gfx::ImagePtr icon_cells(int slots, int b) {
     return img;
 }
 
+// Phase 11's values for the player's ship from the ship records of the placement seg9:0x6624,
+// which the world's part of the entry has just run (src/world/hooks.cpp briefing_entry).
+void player_stats(Setup& st) {
+    world::World& w = world::current();
+    const int p = w.player;  // DGROUP:0x9646
+    if (p < 0 || p >= world::kShipCount || w.pools.records(w.roles.ships) <= p) return;
+    world::ShipRecord& s = w.ship(p);
+    const world::ObjectRecord& o = w.ship_object(p);
+    ShipStats& ps = st.player;
+    ps.score = static_cast<long>(w.score);                        // dword DGROUP:0x1e58
+    ps.captured = world::word_at(s, 0xd2);                        // DGROUP:0x7162
+    ps.destroyed = world::word_at(s, 0xd0);                       // DGROUP:0x7160
+    ps.credit = static_cast<long>(static_cast<std::uint16_t>(s.wdc)) |
+                (static_cast<long>(s.wde) << 16);                 // dword +0xdc DGROUP:0x716c
+    ps.resources = world::word_at(s, 0xce);                       // DGROUP:0x715e
+    // seg17:0x4068: ship word +0x26 = 100 around seg13:0x33d6(ship), which stores +0xd8, and
+    // +0x26 back [BYTES seg17:0x407b-0x4096]. The original runs it when the page is typed; the
+    // records do not change during the briefing, so the port runs it at the entry [DESIGN].
+    const std::int16_t saved = s.w26;
+    s.w26 = 100;
+    ps.rating = world::rate_ship(w, p);
+    s.w26 = saved;
+    ps.to_allies = world::sbyte_at(s, 0x5d);   // DGROUP:0x70ed
+    ps.to_enemies = world::sbyte_at(s, 0x5e);  // DGROUP:0x70ee
+    ps.sheet = s.sprite_slot;                  // ship word +0x50 (seg14:0xd0a)
+    // size: roster byte +0x7a, or object +0x22 when +0xd6 is -1; cell and gap: object +0x22 and
+    // +0x24 [BYTES seg17:0x22b9-0x22e3 seg17:0x24ca-0x24e2].
+    const world::RosterRecord* r = world::roster_of(w, p);
+    ps.size = r != nullptr ? r->size : o.size;
+    ps.cell = o.size;
+    ps.gap = o.gap;
+    st.ship_known = true;
+    app::log("briefing: phase 11 ship " + std::to_string(p) + ": rating " + std::to_string(ps.rating) +
+             ", credit " + std::to_string(ps.credit) + ", resources " + std::to_string(ps.resources) +
+             ", +0x5d " + std::to_string(ps.to_allies) + ", +0x5e " + std::to_string(ps.to_enemies) +
+             ", size " + std::to_string(ps.size) + ", cell " + std::to_string(ps.cell) + ", gap " +
+             std::to_string(ps.gap) + ", slot " + std::to_string(kSlotShipBase + ps.sheet));
+}
+
 Setup make_setup() {
     Setup st;
     st.W = g.area.w;
@@ -152,6 +193,7 @@ Setup make_setup() {
         st.names.push_back(w.icons[static_cast<std::size_t>(k)].name);
     }
     if (g_canvas) g_canvas->set_icon_cells(icon_cells(st.icons, st.size_level));
+    player_stats(st);
     return st;
 }
 
@@ -165,7 +207,9 @@ void trace_phase(const shell::GameState& s) {
 // ---- seg9:0x5cca: the state-3 entry
 
 void enter_briefing(shell::GameState& s) {
-    todo_once("seg9:0x8908 at the briefing entry", "seg9:0x8908");
+    // seg9:0x8908 frees the previous page block DGROUP:0x948e (seg17:0x306e) and deletes the
+    // page clip region DGROUP:0x93ae, and draws nothing; the port's page is a std::string and its
+    // clip a value, so nothing is left to do [BYTES seg9:0x8908-0x8933 seg17:0x306e-0x30ae].
     if (g.main) ShowWindow(g.main, SW_SHOW);
     PatBlt(g.gfx->dc(), 0, 0, g.area.w, g.area.h, BLACKNESS);
     // DGROUP:0x95bc: the port has no demo yet, so every game is a player game.

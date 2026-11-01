@@ -30,9 +30,10 @@ public:
     int text_width(const Font& f, const std::string& cp1252) override;
     void clip(bool on, int l, int t, int r, int b) override;
     void icon(int x, int y, int w, int h, int sx, int sy, int sw, int sh) override;
-    // Slot 5, the logo strip of seg10:0x39a8, from the renderer; the other slots are the wave
-    // set-up's (M3) and report false [OPEN].
+    // Slot 5, the logo strip of seg10:0x39a8, from the renderer; slots 0x28 + i, the ships'
+    // sheets, from the wave's image table (world::slot_image); the others report false [OPEN].
     bool has_slot(int slot) override;
+    bool ship_sheets_linked() override;
     void slot_blit(int slot, int x, int y, int w, int h, int sx, int sy, int sw, int sh) override;
 
     // The icon cells DGROUP:0x3a02 (an image of the renderer), or none.
@@ -41,6 +42,7 @@ public:
 private:
     HDC dc() const { return gfx_.dc(); }
     HFONT font(const Font& f);
+    gfx::ImagePtr slot_image(int slot);
 
     gfx::Gfx& gfx_;
     gfx::ImagePtr cells_;

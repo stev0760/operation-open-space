@@ -680,6 +680,11 @@ void generate(World& w, shell::Rng& rng) {
 
 // seg9:0x2828 as the load calls it, for wave 0 [BYTES seg9:0x241e seg9:0x2426], world.md
 // "seg9:0x2828" and "DGROUP:0x9346".
+// Its DGROUP:0x91f8 > 0 path (seg9:0x2b14-0x2b22) is not ported, and with it the loop
+// seg9:0x2b1d-0x2e69 that calls seg11:0xb09c(i, 0) for i = 0 ... DGROUP:0x9316: object byte
+// +0x2f = 0 and the flame-off paste for each ship [BYTES seg9:0x2b14-0x2b22 seg9:0x2e5c-0x2e69]
+// (s2-flame-verify.md). The placement's seg14:0x0(-1) rebuilds the sheets after it, so only
+// +0x2f outlives it [OPEN M5].
 void wave0_followups(World& w, SetupHost& h) {
     shell::Rng& rng = h.rng;
     auto type_of = [&h](const ShipRecord& s) -> int16_t {

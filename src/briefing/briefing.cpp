@@ -452,7 +452,7 @@ SlideKind slide_kind(int kind) {
     case 7: return {kSlotStrip, 0xbe, 0x0a, 0x28, 40, 6};
     // Kind 8: slot word DGROUP:0x3d6e + 0x34c and base byte DGROUP:0x4d98 + 0x14 * word
     // DGROUP:0x3d80 + 0x34c, both M3 [OPEN: seg17:0x1be9]; the port uses base 40.
-    case 8: return {kSlotShip, 0x70, 0x10, 40, 40, 6};
+    case 8: return {-1, 0x70, 0x10, 40, 40, 6};  // -1: no slot the port knows
     case 9: return {kSlotViruses, 0x66, 0x09, 0x26, 37, 5};
     default: return {};
     }
@@ -489,30 +489,90 @@ std::vector<GreetingLine> greeting_lines(Strings& s, int W, int H, int hour,
     };
 }
 
+std::string hundredths_text(long v, int digits) {
+    // [BYTES seg6:0xf54-0x100f seg6:0x1010-0x10a9]: the sign, seg6:0x10ce(v / 100) with its exact
+    // digit count, ".", and seg6:0x10ce(v % 100) without padding, cut to `digits` characters.
+    std::string t;
+    if (v < 0) {
+        t = "-";
+        v = -v;
+    }
+    t += std::to_string(v / 100) + ".";
+    std::string frac = std::to_string(v % 100);
+    if (digits >= 0 && static_cast<int>(frac.size()) > digits) frac.resize(static_cast<std::size_t>(digits));
+    return t + frac;
+}
+
 namespace {
-// seg6:0xf54 / seg6:0x1010 for (value, 100, digits) as start-0001 shows them [OPEN].
-std::string hundredths(long v, int digits) {
-    const bool neg = v < 0;
-    if (neg) v = -v;
-    std::string t = std::to_string(v / 100) + ".";
-    const long frac = v % 100;
-    char buf[8];
-    std::snprintf(buf, sizeof buf, "%02ld", frac);
-    t += digits >= 2 ? std::string(buf) : std::string(1, buf[0]);
-    return neg ? "-" + t : t;
+// The Formatter's %< %> %S %? as the ship page's strings use them (seg10:0xa332): %< opens a
+// group shown when its argument is non-zero, %S is the string of an id, %? the string of its
+// second id when the flag is set, else the first [ORACLE start-0001] [OPEN: seg10:0xa332's group
+// and %? code is unread].
+std::string format_ids(Strings& s, const std::string& f, const std::vector<int>& args) {
+    std::string out;
+    std::size_t a = 0;
+    auto next = [&]() { return a < args.size() ? args[a++] : 0; };
+    bool shown = true;
+    for (std::size_t i = 0; i < f.size(); ++i) {
+        if (f[i] == '%' && i + 1 < f.size()) {
+            const char k = f[++i];
+            if (k == '<') {
+                shown = next() != 0;
+            } else if (k == '>') {
+                shown = true;
+            } else if (k == 'S') {
+                const int id = next();
+                if (shown) out += s.lang(id);
+            } else if (k == '?') {
+                const int flag = next(), first = next(), second = next();
+                if (shown) out += s.lang(flag != 0 ? second : first);
+            } else if (k == 'N') {
+                if (shown) out += "\r\n";
+            } else if (shown) {
+                out.push_back('%');
+                out.push_back(k);
+            }
+            continue;
+        }
+        if (shown) out.push_back(f[i]);
+    }
+    return out;
 }
 }  // namespace
 
+int rank_string(int rating) {
+    const auto r = static_cast<std::int16_t>(rating);
+    if (r > 32600) return 709;
+    if (r > 25000) return 710;
+    // The words DGROUP:0x96a, 0x968, ... 0x956, each x 100 in a 16-bit imul [BYTES
+    // seg17:0x40bf-0x41c1 DGROUP:0x956-0x96b].
+    static constexpr int kBands[11] = {143, 114, 97, 80, 70, 63, 55, 48, 40, 34, 28};
+    for (int k = 0; k < 11; ++k)
+        if (r > kBands[k] * 100) return 711 + k;
+    return 722;
+}
+
+std::string ship_sentence(Strings& s, bool player, int rank) {
+    return format_ids(s, s.lang(3023), {player ? 1 : 0, player ? 0 : 1, rank});
+}
+
+std::vector<std::string> relation_lines(Strings& s, int to_allies, int to_enemies) {
+    return {format_ids(s, s.lang(2528), {246 + to_allies, to_allies > 2 ? 1 : 0, 541, 542}),
+            format_ids(s, s.lang(2524), {250 + to_enemies, to_enemies > 2 ? 1 : 0, 541, 542})};
+}
+
 std::string ship_page_text(Strings& s, int wave, const std::string& directory,
-                           const ShipStats& st) {
+                           const ShipStats& st, int rank) {
     const std::string f = s.lang(3035);
     // The arguments in order [BYTES seg17:0x341c-0x347c]: max(wave, 1), the directory, the
-    // score, the two counts with 2515, the credit and the resources.
+    // score, the two counts with 2515, and seg6:0xf54(credit, 100, 2) and seg6:0x1010(resources,
+    // 100, 2).
     std::vector<std::string> args = {std::to_string(std::max(wave, 1)), directory,
                                      std::to_string(st.score),
                                      count_text(s, st.captured, 2515),
                                      count_text(s, st.destroyed, 2515),
-                                     hundredths(st.credit, 2), hundredths(st.resources, 1)};
+                                     hundredths_text(st.credit, 2),
+                                     hundredths_text(st.resources, 2)};
     std::string out;
     std::size_t a = 0;
     for (std::size_t i = 0; i < f.size(); ++i) {
@@ -531,6 +591,10 @@ std::string ship_page_text(Strings& s, int wave, const std::string& directory,
         }
         out.push_back(f[i]);
     }
+    // seg17:0x42ea(1) twice: " " and "  " appended, the last two bytes overwritten by CR LF
+    // [BYTES seg17:0x42ea DGROUP:0xbb5 DGROUP:0xbb7], then seg17:0x4068's sentence (lstrcat).
+    out += " \r\n \r\n";
+    out += ship_sentence(s, true, rank);
     return out;
 }
 
@@ -849,12 +913,13 @@ int Briefing::defenders(int init) {
 // ---- phase 11, seg17:0x20fa
 
 namespace {
-// The player's ship before M3 [OPEN: seg17:0x2404 seg17:0x24d7]: start-0001's TRANSFORMER, a
-// 33-px cell with a 5-px gutter and size 33; m = 3, the value for DGROUP:0x90ee >= 8 (the
-// port's 8-bit surface).
-constexpr int kShipSize = 33, kShipCell = 33, kShipGutter = 5, kShipM = 3;
-constexpr int kLastShip = 0;  // DGROUP:0x9316: the port's roster is the player's ship
+// m = 2 when DGROUP:0x90ee < 8, else 3 [BYTES seg17:0x211d-0x212b]: 3 on the port's 8-bit
+// surface.
+constexpr int kShipM = 3;
+constexpr int kLastShip = 0;  // DGROUP:0x9316: the port's ships at the briefing are the player's
 }  // namespace
+
+int Briefing::ship_slot() const { return kSlotShipBase + setup_.player.sheet; }
 
 void Briefing::ship_setup() {
     // [BYTES seg17:0x22b9-0x23ee]
@@ -872,7 +937,10 @@ void Briefing::ship_setup() {
     f.cx = static_cast<int>(f.px10 / 10);
     f.cy = static_cast<int>(f.mid);
     h_.sound(0x13);  // seg10:0x754a(0x13, 100, DGROUP:0x90ec/2, 4): played as seg10:0x744c until the briefing has DGROUP:0x90ec [OPEN] (M7)
-    h_.todo("ship records: seg11:0xb09c, the class size and the slot (M3)", "seg11:0xb09c");
+    // seg11:0xb09c(1, ship) inside object +0x1a = 1 ... 0, which seg11:0xb09c never reads
+    // [BYTES seg17:0x22ef-0x230c seg11:0xb09c-0xb305].
+    h_.flame(1, ship_);
+    if (!setup_.ship_known) h_.todo("ship page: the ship records of the placement (src/world)", "seg9:0x6624");
 }
 
 int Briefing::ship(int init) {
@@ -882,7 +950,13 @@ int Briefing::ship(int init) {
         ship_ = 0;
         ship_setup();
     }
+    // No sheet in the slot: the phase returns 1 before anything is drawn [BYTES
+    // seg17:0x23f7-0x2401 seg17:0x22a4]. Without the program's sheet link the port draws its
+    // stand-in outline instead (Canvas::ship_sheets_linked) [DESIGN].
+    const bool sheet = c_.has_slot(ship_slot());
+    if (!sheet && c_.ship_sheets_linked()) return 1;
     if (f.end_at != 0) return f.end_at < now_ ? 1 : 0;  // [BYTES seg17:0x2405-0x241a]
+    const ShipStats& ps = setup_.player;
     // One flight frame at `pos` (px10 for the fly-in, DGROUP:0x18fe for the fly-out).
     auto fly = [&](long pos, bool out) {
         const long scale = f.scale0 + (f.end ? f.scale_d * pos / f.end : 0);
@@ -891,14 +965,16 @@ int Briefing::ship(int init) {
         const long k = f.frames == 0 ? f.cell0 / 100
                                      : (f.cell0 + f.cell_d * f.frame / f.frames) / 100;
         f.cy = static_cast<int>(f.mid + (f.end ? f.dy * pos / f.end : 0));
-        const int h = static_cast<int>(kShipSize * scale / 100);
+        // h = size scale% / 100, w = h width% / 100; the source cell (gap + (gap + cell) k, gap,
+        // cell, cell), row 0 [BYTES seg17:0x24ca-0x24e2 seg17:0x2503-0x2511 seg17:0x2545-0x255d].
+        const int h = static_cast<int>(ps.size * scale / 100);
         f.y = f.cy - h / 2;
         const int w = static_cast<int>(h * width / 100);
         f.x = f.cx - w / 2;
         f.h = h;
-        const int sx = kShipGutter + (kShipGutter + kShipCell) * static_cast<int>(k);
-        if (c_.has_slot(kSlotShip)) {
-            c_.slot_blit(kSlotShip, f.x, f.y, w, h, sx, kShipGutter, kShipCell, kShipCell);
+        const int sx = ps.gap + (ps.gap + ps.cell) * static_cast<int>(k);
+        if (sheet) {
+            c_.slot_blit(ship_slot(), f.x, f.y, w, h, sx, ps.gap, ps.cell, ps.cell);
         } else if (w > 0 && h > 0) {
             c_.black(f.x, f.y, w, h);
             c_.rectangle(kPlaceholder, false, f.x, f.y, f.x + w, f.y + h);
@@ -919,6 +995,9 @@ int Briefing::ship(int init) {
         // Fly-in and the 10-frame spin [BYTES seg17:0x2450-0x26b8].
         fly(f.px10, false);
         if (f.px10 >= f.end && f.frame >= f.frames) {
+            // The arrival block, at the arrival and at the end of the hold: seg11:0xb09c(0, ship)
+            // [BYTES seg17:0x25e7-0x25fb].
+            h_.flame(0, ship_);
             ++f.pass;
             f.width0 = 100, f.width_d = 0;
             f.scale0 = 100 * kShipM, f.scale_d = 0;
@@ -935,14 +1014,12 @@ int Briefing::ship(int init) {
                 set_sub(1);
                 pages_ox_ = f.h + f.x + 0x27;
                 pages_oy_ = (box_.pt - box_.pb) / 2 + box_.pb - 0x56;
-                const bool player = true;  // DGROUP:0x9464 = DGROUP:0x9646 [OPEN: M3 roster]
+                // DGROUP:0x9464 = DGROUP:0x9646: the port's only ship at the briefing is the
+                // player's (kLastShip).
+                const bool player = true;
                 const Tick hold = (wave_ != 0 && player) ? 3500 : 5000;
-                ShipStats st;
-                h_.todo("ship page: score, counts, credit and resources of the roster (M3)",
-                        "seg17:0x33ee");
-                h_.todo("ship page: seg17:0x4068's sentence and the allies/enemies lines",
-                        "seg17:0x4068");
-                std::string text = ship_page_text(h_, wave_, setup_.directory, st);
+                std::string text = ship_page_text(h_, wave_, setup_.directory, ps,
+                                                  rank_string(ps.rating));
                 pages_.set_page(std::move(text), page_wraps(cur_phase_), hold);
                 pages_.set_origin(pages_ox_, pages_oy_, box_.pr);
                 pages_.step(now_, 1, 0, cur_phase_);
@@ -962,6 +1039,8 @@ int Briefing::ship(int init) {
         const long step = fly(f.out, true);
         f.out += step;
         if (f.out >= f.end && f.frame >= f.frames) {
+            // seg11:0xb09c(1, ship) before the fly-out's set-up [BYTES seg17:0x2a1f-0x2a3b].
+            h_.flame(1, ship_);
             f.motion = 1;
             f.width0 = 100, f.width_d = -80;
             f.scale0 = 100 * kShipM, f.scale_d = 50 - 100 * kShipM;
@@ -978,6 +1057,9 @@ int Briefing::ship(int init) {
                 if (++ship_ > kLastShip) {
                     f.end_at = now_ + 1000;
                 } else {
+                    // seg11:0xb09c(1, next ship) before the next ship's set-up, wrapped in
+                    // object +0x1a = 1 ... 0, which it never reads [BYTES seg17:0x2b1e-0x2b4c].
+                    h_.flame(1, ship_);
                     set_sub(0);
                     ship_setup();
                 }
@@ -1003,10 +1085,17 @@ void Briefing::ship_labels() {
         t = t.substr(0, a) + first + rest;
     }
     c_.text(f, 0x02FFD600, kTaLeft, x, pages_oy_ + 20, t);
-    // seg17:0x3ba6(0): Arial 13 x 6 in 0x00FFFF00 from DGROUP:0x5002 + 0xa2, 18 px apart. The
-    // choice among 2051-2053 and the allies/enemies bytes are M3: the port draws 2053, as
-    // start-0001 shows for wave 1 [OPEN: seg17:0x3ba6].
-    c_.text(Font{13, 6, 0}, 0x00FFFF00, kTaLeft, x, pages_oy_ + 0xa2, h_.lang(2053));
+    // seg17:0x3ba6(0): Arial 13 x 6 in 0x00FFFF00, TA_LEFT, transparent, from DGROUP:0x5002 +
+    // 0xa2, 18 px apart: 2053 "YOU HAVE BEEN" and the two relation lines. The 2051/2052 variant
+    // needs wave 0 (or wave < 2 with the help window open), which state 3 never has [BYTES
+    // seg17:0x3ba6-0x3c10 seg17:0x3d8b-0x3e4c seg17:0x3e52-0x4027].
+    const Font lf{13, 6, 0};
+    const int y0 = pages_oy_ + 0xa2;
+    c_.text(lf, 0x00FFFF00, kTaLeft, x, y0, h_.lang(2053));
+    const std::vector<std::string> rel =
+        relation_lines(h_, setup_.player.to_allies, setup_.player.to_enemies);
+    c_.text(lf, 0x00FFFF00, kTaLeft, x, y0 + 18, rel[0]);
+    c_.text(lf, 0x00FFFF00, kTaLeft, x, y0 + 36, rel[1]);
 }
 
 void Briefing::icon_label(int k, int x, int y) {

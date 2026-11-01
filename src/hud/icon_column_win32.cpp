@@ -17,6 +17,8 @@
 #include "gfx/present.h"
 #include "gfx/surface.h"
 #include "hud/target.h"
+#include "hud/wave_start_repaint.h"
+#include "shell/game_state.h"
 #include "world/hooks.h"
 #include "world/world.h"
 
@@ -36,6 +38,10 @@ HMENU g_sys = nullptr;        // DGROUP:0x945a
 int g_left = 0, g_top = 0;    // DGROUP:0x1de4 / 0x1de6 (IconLeft, IconTop)
 bool g_pos_read = false;
 bool g_pos_dirty = false;     // DGROUP:0x8fee
+// Set by icon_column_wave_start's post, taken by the column creation it causes: the wave
+// start's reactivation of main, after which the port repaints the full status display
+// (hud/wave_start_repaint.h) [ORACLE win98-0001] [DESIGN ADR 0013 decision 3].
+WaveStartRepaint g_wave_start;
 // The row marks DGROUP:0x6e38 + 0x1e·(i + 3): +0x14, the glint counter of seg13:0x5a6a.
 std::array<int, world::kIconRecords> g_glint{};
 gfx::ImagePtr g_image;
@@ -232,11 +238,9 @@ void icon_column_create() {
     // CreateWindow("IS_ICON", "", 0x10CC0000, IconLeft, IconTop, 50, 150, main, 0) [BYTES
     // seg7:0x646e-0x6496]: visible, captioned, a system menu and a sizing frame; an owned
     // top-level window. Its activation takes it from main, and seg7:0x649b gives it back: the
-    // main window's emulated WM_QUERYNEWPALETTE then wipes the HUD strip to black as the
-    // original's did on a 256-colour Windows and under the Wine oracle (world.md "Status display
-    // at wave start" [OPEN]; analyst reading of seg2:0x5cb, seg2:0x7ac and the class brush
-    // seg6:0x14a8; ADR 0007 decision 5) [BYTES seg7:0x649b seg2:0x5ff seg2:0x607 seg6:0x14a8]
-    // [ORACLE wave-0001 05-12].
+    // main window's emulated WM_QUERYNEWPALETTE then runs the repaint and blacks the client
+    // (ADR 0007 decision 5) [BYTES seg7:0x649b seg2:0x5ff seg2:0x607 seg6:0x14a8]. At the wave
+    // start the port then repaints once more, below.
     HWND h = CreateWindowExW(0, kClass, L"", WS_VISIBLE | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME, g_left,
                              g_top, 0x32, 0x96, g.main, nullptr, g.instance, nullptr);
     app::log(h ? "hud: seg7:0x641a: IS_ICON at (" + std::to_string(g_left) + ", " + std::to_string(g_top) +
@@ -252,6 +256,23 @@ void icon_column_create() {
     // [DESIGN ADR 0013 decision 3] [ORACLE wave-0001 05-12].
     if (h && !took_activation && g.main && GetActiveWindow() == g.main)
         SendMessageW(g.main, WM_ACTIVATE, MAKEWPARAM(WA_ACTIVE, 0), reinterpret_cast<LPARAM>(h));
+    // The status display from the first frame of the wave [ORACLE win98-0001] [DESIGN ADR 0013
+    // decision 3]: on real Windows the full display (border, bevel, SCORE, fuel, clock, lamps,
+    // weapon panel) stands during play with no dialog having opened, which the Wine oracle's bare
+    // display after this reactivation (wave-0001 shots 05-12) does not show [ORACLE wave-0001];
+    // why is [OPEN] (ADR 0013 decision 3). So when the
+    // column comes from the wave start's post, the port runs the paint routine once more after
+    // the erase, through the original's own path: message 0x978 runs seg2:0x970, which with
+    // DGROUP:0x8f64 set (seg11:0x3e57) runs seg11:0xafe, the HUD block and the state dispatch
+    // seg11:0x15b3, as a dialog's return does [BYTES seg2:0x7a6 seg2:0x970 seg11:0xafe
+    // seg11:0x15b3]. The column's other creations (the watch toggle) keep the erase.
+    // The repaint seeds rand() again and recreates the IS_INFO panels (seg11:0xafe), one run
+    // more than the original makes (ADR 0013 decision 3) [BYTES seg11:0xb22].
+    if (g_wave_start.take(h != nullptr && g.main != nullptr, g.game.state())) {
+        g.hud_dirty = true;  // DGROUP:0x8f64 = 1, as seg11:0x3e57 left it after the post
+        SendMessageW(g.main, app::kMsgPaint, 0, 0);
+        app::log("hud: the wave start's status display repainted after the reactivation (ADR 0013 decision 3)");
+    }
 }
 
 void register_icon_column(HINSTANCE instance) {
@@ -278,6 +299,7 @@ bool icon_column_wave_start() {
     // handler seg2:0x4f0 (src/app/wndproc.cpp, app::icon_watch) runs seg7:0x641a.
     if (g.keys.icon_wnd == 0 || g_wnd || !g.main) return false;
     PostMessageW(g.main, app::kMsgIconWatch, 0, 0);
+    g_wave_start.posted();  // [DESIGN ADR 0013 decision 3]
     return true;
 }
 
@@ -294,6 +316,7 @@ void icon_column_row(int rec) {
 }
 
 void icon_column_destroy() {
+    g_wave_start.drop();  // a post whose handler destroyed the column instead (review L6) [DESIGN]
     if (!g_wnd) return;  // seg7:0x63fc
     HWND h = g_wnd;
     g_wnd = nullptr;  // seg7:0x640c

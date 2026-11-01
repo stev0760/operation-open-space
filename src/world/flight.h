@@ -126,7 +126,8 @@ public:
     virtual ~FlightHost() = default;
     // seg7:0x1208, the player's sprite.
     virtual void player_sprite() {}
-    // seg11:0xb105 to the end of seg11:0xb09c: the flame's image work after +0x2f [OPEN].
+    // seg11:0xb105 to the end of seg11:0xb09c: the paste of strip row 2 ship + on into the ship's
+    // sheet after +0x2f (world/player_sheet.h flame_pastes, paste_flame) [BYTES seg11:0xb105-0xb302].
     virtual void flame_tail(int on, int ship) { (void)on, (void)ship; }
     // seg10:0x754a(id, pool, rec, arg): a sound (M7's engine; not wired in this stage).
     virtual void sound(int id, int pool, int rec, int arg) { (void)id, (void)pool, (void)rec, (void)arg; }
@@ -233,7 +234,7 @@ struct FlightDesign {
     std::int16_t drag = 0;       // DGROUP:0x9712: signed body byte +0x1c [BYTES seg14:0x1ca1-0x1caa]
     std::int16_t turn_base = 0;  // DGROUP:0x96f2: body byte +0x1d (world.md "Turn word") [OPEN: its writer]
     std::int16_t mass = 0;       // DGROUP:0x9704 [BYTES seg14:0x1e35-0x1e8f]
-    std::uint8_t has_flame = 1;  // DGROUP:0x9718: 0 for a Body Thrust body [BYTES seg14:0x1f41-0x1f4d]; 1 otherwise [OPEN]
+    std::uint8_t has_flame = 1;  // DGROUP:0x9718: 0 for a Body Thrust body, 1 otherwise [BYTES seg14:0x1f41-0x1f5a]
     std::uint8_t cloak = 0;   // DGROUP:0x971c: SHP +9 bit 0x08 [BYTES seg14:0x1fd6 seg14:0x1fe2 seg14:0x1fef]
     std::uint8_t shield = 0;  // DGROUP:0x9779: BOD +0x20 bit 0x02 [BYTES seg14:0x1f9f seg14:0x1fab seg14:0x1fc8]
 };

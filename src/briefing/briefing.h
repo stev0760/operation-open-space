@@ -148,6 +148,11 @@ public:
     virtual void icon(int x, int y, int w, int h, int sx, int sy, int sw, int sh) = 0;
     // Whether the image slot DGROUP:0x39e8[slot] holds a picture the port can draw.
     virtual bool has_slot(int /*slot*/) { return false; }
+    // Whether the program hands the ship sheets (slots 0x28 + i) to the canvas at all. Without
+    // that link phase 11 draws the port's stand-in outline instead of skipping the ship as the
+    // original does for an empty slot [DESIGN: a canvas with no slot source, as the unit tests'
+    // canvases; the game's src/hud/wave_win32.cpp registers it].
+    virtual bool ship_sheets_linked() { return false; }
     // SetStretchBltMode(3) and seg10:0x9962(0, dc, x, y, w, h, DGROUP:0x39e8[slot], sx, sy,
     // sw, sh, SRCCOPY).
     virtual void slot_blit(int /*slot*/, int /*x*/, int /*y*/, int /*w*/, int /*h*/, int /*sx*/,
@@ -156,9 +161,9 @@ public:
 
 // The image slots the briefing draws from (DGROUP:0x39e8[n], shell.md "Image slots"): slot 5
 // is the logo strip of seg10:0x39a8 (14 cells of 40 x 40 at x 6 + 46k), slot 7 the rocks and
-// slot 0x16 the viruses' slot. kSlotShip stands for the player ship's slot, whose index comes
-// from the roster (word DGROUP:0x70e0 + 0x15a * ship + 0x28, M3) [OPEN].
-constexpr int kSlotStrip = 5, kSlotRocks = 7, kSlotViruses = 0x16, kSlotShip = -1;
+// slot 0x16 the viruses' slot. A ship's sheet is slot 0x28 + ship word +0x50 (DGROUP:0x70e0 +
+// 0x15a * ship), the ship's own index (seg14:0xd0a) [BYTES seg17:0x2109-0x211a seg14:0xd0a].
+constexpr int kSlotStrip = 5, kSlotRocks = 7, kSlotViruses = 0x16, kSlotShipBase = 0x28;
 // The colour of the placeholder outline the port draws where a slot's picture is not loaded
 // yet [OPEN: the pools' images come with the wave set-up, M3].
 constexpr Colour kPlaceholder = 0x02808080;
@@ -173,6 +178,9 @@ public:
         (void)x, (void)y, (void)mode;
         sound(id);
     }
+    // seg11:0xb09c(on, ship): the flame cells pasted into the ship's sheet (phase 11's calls,
+    // [BYTES seg17:0x22fb seg17:0x25f2 seg17:0x2a32]). The default does nothing.
+    virtual void flame(int on, int ship) { (void)on, (void)ship; }
     // An unimplemented path, once per address is the host's choice.
     virtual void todo(const std::string& what, const char* address) = 0;
     // ENG_LANG.DLL #5000 id; empty when absent.
@@ -301,20 +309,50 @@ constexpr int kGreetingSounds[3] = {0x69, 0x6e, 0x6f};
 
 // ---- the ship page (phase 11)
 
-// The values of seg17:0x33ee's 3035 page for the player's ship. The port has no ship records
-// before M3: they stay 0 and the host logs them [OPEN].
+// The values of phase 11 for the player's ship (the ship records of the placement seg9:0x6624,
+// src/world): seg17:0x33ee's 3035 page, seg17:0x4068's rank, seg17:0x3ba6's relation lines and
+// the picture's measures. The defaults are start-0001's TRANSFORMER at wave 1.
 struct ShipStats {
     long score = 0;      // dword DGROUP:0x1e58
-    int captured = 0;    // word DGROUP:0x7162 + 0x15a * DGROUP:0x9646
-    int destroyed = 0;   // word DGROUP:0x7160 + 0x15a * DGROUP:0x9646
-    long credit = 0;     // dword DGROUP:0x716c + 0x15a * ship, in hundredths
-    int resources = 0;   // word DGROUP:0x715e + 0x15a * ship, in hundredths
+    int captured = 0;    // word DGROUP:0x7162 + 0x15a * DGROUP:0x9646 (ship +0xd2)
+    int destroyed = 0;   // word DGROUP:0x7160 + 0x15a * DGROUP:0x9646 (ship +0xd0)
+    long credit = 150;   // dword DGROUP:0x716c + 0x15a * ship (+0xdc), in hundredths
+    int resources = 0;   // word DGROUP:0x715e + 0x15a * ship (+0xce), in hundredths
+    // The rating +0xd8 that seg13:0x33d6 gives with ship word +0x26 = 100 (seg17:0x4068)
+    // [BYTES seg17:0x407b-0x4096]. The default is the shipped TRANSFORMER's (test_briefing_rating)
+    // [DESIGN].
+    int rating = 5900;
+    int to_allies = 0;   // signed ship byte +0x5d (DGROUP:0x70ed)
+    int to_enemies = 2;  // signed ship byte +0x5e (DGROUP:0x70ee)
+    int sheet = 0;       // ship word +0x50: the picture is image slot 0x28 + sheet
+    // The class size (roster byte +0x7a, or object +0x22 without a roster record) and the cell
+    // side and gap (object +0x22, +0x24) [BYTES seg17:0x22b9-0x22e3 seg17:0x24ca-0x24e2].
+    int size = 33, cell = 33, gap = 5;
 };
-// String 3035 formatted as seg10:0xa332 does for the player's ship [BYTES seg17:0x341c-0x347c].
-// %N is a CR LF [OPEN: the Formatter's %N bytes]; seg6:0xf54 and seg6:0x1010 print hundredths
-// as "1.50" and "0.0" (start-0001) [OPEN: their digit rules].
+// seg6:0xf54 (dword) / seg6:0x1010 (word) with (v, 100, digits): "-" and the negation for a
+// negative v, v / 100 in decimal, ".", then v % 100 in decimal without leading zeros, cut to
+// `digits` characters: 150 -> "1.50", 0 -> "0.0", 105 -> "1.5" [BYTES seg6:0xf54-0x100f
+// seg6:0x1010-0x10a9 seg6:0x10ce-0x11e9].
+std::string hundredths_text(long v, int digits);
+// seg17:0x4068's rank string for a rating +0xd8 (signed, strictly greater than): 709 above
+// 32600, 710 above 25000, then 711 ... 721 above 100 x the words DGROUP:0x96a down to
+// DGROUP:0x956 (143, 114, 97, 80, 70, 63, 55, 48, 40, 34, 28), else 722 [BYTES
+// seg17:0x409a-0x41c6 DGROUP:0x956-0x96b].
+int rank_string(int rating);
+// seg17:0x4068's sentence 3023 "%<YOUR%>%<THIS%> SHIP IS %S." with (ship = player, ship !=
+// player, rank) [BYTES seg17:0x41c6-0x41f8]. `rank` is the string id (rank_string).
+std::string ship_sentence(Strings& s, bool player, int rank);
+// seg17:0x3ba6(0)'s two relation lines for the player: 2528 "%S %? ALLIES AND" with (246 + byte
+// +0x5d, byte +0x5d > 2, 541, 542) and 2524 "%S %? ENEMIES. " with (250 + byte +0x5e, byte +0x5e
+// > 2, 541, 542) [BYTES seg17:0x3e52-0x4027]. %? takes its second id when the flag is set
+// [ORACLE start-0001] [OPEN: seg10:0xa332's %? code is unread].
+std::vector<std::string> relation_lines(Strings& s, int to_allies, int to_enemies);
+// seg17:0x33ee's page for the player with the help window closed: string 3035 formatted as
+// seg10:0xa332 does [BYTES seg17:0x341c-0x347c], two seg17:0x42ea(1) breaks " \r\n" [BYTES
+// seg17:0x42ea DGROUP:0xbb5 DGROUP:0xbb7] and the sentence of seg17:0x4068 [BYTES
+// seg17:0x3482-0x349a seg17:0x371d-0x3745]. %N is a CR LF [OPEN: the Formatter's %N bytes].
 std::string ship_page_text(Strings& s, int wave, const std::string& directory,
-                           const ShipStats& st);
+                           const ShipStats& st, int rank);
 
 // What the entry gets from the program.
 struct Setup {
@@ -329,6 +367,9 @@ struct Setup {
     // The label of each record (the 35-byte record DGROUP:0x57b4 + 0x23k, seg17:0xc2e).
     std::vector<std::string> names;
     WaveFlags flags;
+    // Phase 11's player ship, and whether the program gave it (else the ShipStats defaults).
+    ShipStats player;
+    bool ship_known = false;
 };
 
 // The briefing: entry drawing, frame and repaint.
@@ -375,6 +416,7 @@ private:
     int race(int init);                         // seg17:0x13ca
     int defenders(int init);                    // seg17:0x193c
     int ship(int init);                         // seg17:0x20fa(init, 0, 0)
+    int ship_slot() const;                      // 0x28 + ship word +0x50
     void ship_setup();                          // seg17:0x22b0-0x23ee
     void ship_labels();                         // seg17:0x4354 and seg17:0x3ba6(0)
     void icon_label(int k, int x, int y);       // seg17:0xc2e
