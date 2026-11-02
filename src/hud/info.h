@@ -108,6 +108,12 @@ public:
     void show_messages();
     // seg7:0xadf: the frame rate was measured; mode 4 repaints.
     void frame_rate_measured();
+    // seg7:0x119c(mode, 0): DGROUP:0xa76 = mode, and WM_PAINT to the left panel while it
+    // exists [BYTES seg7:0x11a6-0x11bf] (M4 s1 SCREENS).
+    void set_mode_119c(int m);
+    // seg11:0x3e6e: unless the mode is 4, GetDC, PatBlt(0, 0, client, WHITENESS), ReleaseDC and
+    // WM_PAINT to the left panel [BYTES seg11:0x3e7b-0x3ecb] (M4 s1 SCREENS).
+    void flash();
 
     std::uint32_t deadline() const { return deadline_; }
 

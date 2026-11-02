@@ -40,8 +40,8 @@ bool player_sprite_drawn(const DrawContext& c) {
     if (c.ships[static_cast<std::size_t>(player)].bec == 0) {
         for (int k = 0; k <= g.last_effect && k < kEffectCount; ++k) {
             const EffectEntry& e = c.effects[static_cast<std::size_t>(k)];
-            const std::int16_t kind = static_cast<std::int16_t>(e.kind);
-            if (e.pool == 0xe && e.rec == player && kind > 0 && kind < 9) return false;
+            const std::int16_t frame = static_cast<std::int16_t>(e.frame);  // +0x00, the frame counter
+            if (e.pool == 0xe && e.rec == player && frame > 0 && frame < 9) return false;
         }
     }
     return true;

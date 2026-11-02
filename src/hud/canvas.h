@@ -30,6 +30,9 @@ enum class Img : int {
     // DGROUP:0x3a02 (image slot 13 of DGROUP:0x39e8): the icon strip the briefing entry built,
     // the source of seg13:0x5c22's pool-0 pictures (M3 stage 4).
     kIconStrip,
+    // DGROUP:0x39e8[5]: the logo strip of seg10:0x39a8, the source of seg13:0x5c22's pool-7
+    // pictures (the SD logo of "MESSAGE from / Ambulance") (M4 s1 SCREENS).
+    kLogoStrip,
     kCount
 };
 

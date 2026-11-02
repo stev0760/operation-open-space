@@ -157,6 +157,8 @@ public:
     void enter_wave();                 // seg9:0x60bc
     void enter_game_over();            // seg9:0xd6c
     void enter_high_scores(bool from_ending);  // seg6:0x5d58
+    // DGROUP:0x94cc: 1 when state 5 was entered from state 9 (seg6:0x5d65-0x5d74).
+    bool from_ending() const { return from_ending_; }
 
 private:
     void run(const Hook& h) {

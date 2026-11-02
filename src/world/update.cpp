@@ -3,6 +3,8 @@
 
 #include "world/rock_images.h"
 
+#include "world/damage.h"
+
 namespace is::world {
 
 const char* mover_address(Mover m) {
@@ -50,6 +52,93 @@ std::uint16_t UpdateHost::select_rock_brush(int b) {
 
 void UpdateHost::restore_brush(std::uint16_t old) {
     if (Blitter* out = blitter(); out && old != 0) out->select_brush(kDcWindow, old);
+}
+
+// ---- the collisions (M4 s1 COLLIDE)
+
+namespace {
+
+// The frame's context on the host while a mover runs; nested scopes keep the outer one.
+struct FrameScope {
+    UpdateHost& h;
+    UpdateCtx* prev;
+    FrameScope(UpdateHost& host, UpdateCtx& c) : h(host), prev(host.frame_ctx) {
+        if (!prev) h.frame_ctx = &c;
+    }
+    ~FrameScope() { h.frame_ctx = prev; }
+    FrameScope(const FrameScope&) = delete;
+    FrameScope& operator=(const FrameScope&) = delete;
+};
+
+CollideCtx collide_ctx(UpdateHost& h, UpdateCtx& c, World& w) {
+    return CollideCtx{w,        c.flight.g,     h.collide_globals(), h.collide_host(),
+                      c.view,   h.visible_list(), c.flight.rng,      c.f.dg_943a,
+                      c.f.dg_943c, c.f.dg_9454};
+}
+
+}  // namespace
+
+void UpdateHost::Forward::flame_off(int ship) {
+    if (u->frame_ctx) ship_touched(u->frame_ctx->flight, ship);  // seg13:0x6716
+}
+
+void UpdateHost::Forward::erase(int x, int y, int w, int h) {
+    if (Blitter* out = u->blitter()) out->pat_blt(kDcWindow, x, y, w, h, kBlackness);
+}
+
+std::uint16_t UpdateHost::collide(std::int16_t pool_rec) {
+    if (!frame_ctx) return 0xffffu;
+    World* w = frame_world(frame_ctx->flight.pools);
+    if (!w) return 0xffffu;
+    CollideCtx x = collide_ctx(*this, *frame_ctx, *w);
+    return find_pair(x, pool_rec);
+}
+
+void UpdateHost::rock_hit(int rock, std::uint16_t hit) {
+    if (!frame_ctx) return;
+    World* w = frame_world(frame_ctx->flight.pools);
+    if (!w) return;
+    CollideCtx x = collide_ctx(*this, *frame_ctx, *w);
+    const int pool = x.g.rock_pool;
+    ObjectRecord& o = obj(*w, pool, rock);
+    // seg8:0x546c(+0x44, +0x20 + 2, &+0x0e, &+0x0c, hit) [BYTES seg7:0x4014-0x4049]
+    const std::int16_t amount = respond(x, o.mass, add16(o.extent, 2), &o.vy, &o.vx, hit);
+    // seg8:0x5df2(DGROUP:0x934a, i, hit pool, hit rec, amount) [BYTES seg7:0x404e-0x4065]; the
+    // site passes a separating response's -1 on as it is, and the dispatcher ends it for every
+    // attacker but a seg18 one (collide.cpp dispatch) [BYTES seg7:0x404e seg8:0x5e93].
+    dispatch(x, pool, rock, hit >> 8, hit & 0xff, amount);
+}
+
+void UpdateHost::post_hit(int rec, std::uint16_t hit) {
+    if (!frame_ctx) return;
+    World* w = frame_world(frame_ctx->flight.pools);
+    if (!w) return;
+    CollideCtx x = collide_ctx(*this, *frame_ctx, *w);
+    ObjectRecord& o = obj(*w, kPoolGatePosts, rec);
+    // [BYTES seg12:0x1d79-0x1da9]; the post site leaves DGROUP:0x9454 at 0 (s1-hit-verify.md 36)
+    const std::int16_t amount = respond(x, o.mass, add16(o.extent, 2), &o.vy, &o.vx, hit);
+    dispatch(x, kPoolGatePosts, rec, hit >> 8, hit & 0xff, amount);  // [BYTES seg12:0x1dae-0x1dc3]
+}
+
+void UpdateHost::ship_collide(int i) {
+    if (!frame_ctx) return;
+    World* w = frame_world(frame_ctx->flight.pools);
+    if (!w) return;
+    UpdateCtx& c = *frame_ctx;
+    const int ships = c.flight.g.ship_pool;
+    ObjectRecord& o = obj(*w, ships, i);
+    if (o.on_screen == 0) return;  // [BYTES seg13:0xb69]
+    c.f.dg_943c = static_cast<std::int16_t>(i);  // [BYTES seg13:0xb75 seg13:0xb7d]
+    c.f.dg_943a = static_cast<std::int16_t>(ships);
+    const std::uint16_t hit = collide(pool_rec(ships, i));  // [BYTES seg13:0xb8a]
+    if (hit == 0xffffu) return;                              // to seg13:0xc95 [OPEN]
+    CollideCtx x = collide_ctx(*this, c, *w);
+    ObjectRecord& s = obj(*w, ships, i);
+    // [BYTES seg13:0xb97-0xbd1] (s1-hit.md claim 37, unchecked) [OPEN]
+    const std::int16_t amount = respond(x, s.mass, add16(s.extent, 2), &s.vy, &s.vx, hit);
+    // The touch branches seg13:0xbee-0xc77 are M4 stage 2 [OPEN]; the dispatch
+    // [BYTES seg13:0xc79-0xc92]
+    dispatch(x, ships, i, hit >> 8, hit & 0xff, amount);
 }
 
 namespace {
@@ -144,14 +233,18 @@ void wave_pass(UpdateCtx& c, bool max_rate) {
         for (int j = 0; add16(f.beam_b, f.beam_a) > j; ++j) f.beam_result = h.beam(i, j);
         ++f.beam_passes;
     }
-    // 5. Effects and the particle burst [BYTES seg7:0x972-0x993].
-    if (f.effects_on > 0)
-        for (int k = 0; k <= f.last_effect; ++k) h.effect(k);
+    // 5. Effects and the particle burst [BYTES seg7:0x972-0x993]. DGROUP:0x9430 is tested once;
+    // the loop bound DGROUP:0x9434 is read again on every iteration (`mov ax,[0x9434]` inside the
+    // loop at seg7:0x98b), so the entries a finished death entry starts run in the same pass
+    // (s1-death.md 1) [BYTES seg7:0x972 seg7:0x98b]. Both words are the World's.
+    if (World* w = h.frame_world(c.flight.pools); w && w->w9430 > 0)
+        for (int k = 0; k <= w->w9434 && k < kEffectCount; ++k) h.effect(k);
     h.burst();
 }
 
 // seg7:0x9ce-0x118d [BYTES seg7:0x9d6-0x118d]
 void wave_frame(UpdateCtx& c) {
+    FrameScope scope(c.host, c);
     WaveGlobals& g = c.flight.g;
     FrameGlobals& f = c.f;
     UpdateHost& h = c.host;
@@ -254,7 +347,7 @@ void wave_frame(UpdateCtx& c) {
     h.mover(Mover::k12_0);
     h.mover(Mover::k6_73f6);
     h.mover(Mover::k6_7c14);
-    if (f.dg_9456 > 0) h.mover(Mover::k7_5e04);
+    if (World* w = h.frame_world(c.flight.pools); w && w->w9456 > 0) h.mover(Mover::k7_5e04);
     h.mover(Mover::k12_3148);
     h.mover(Mover::k12_6b1e);
     if (f.dg_9600 != 0) h.mover(Mover::k12_ae4);
@@ -343,6 +436,7 @@ void ship_entry(UpdateCtx& c) {
 
 // seg7:0x3bae [BYTES seg7:0x3bbd-0x40ba]
 void move_rocks(UpdateCtx& c) {
+    FrameScope scope(c.host, c);
     WaveGlobals& g = c.flight.g;
     FrameGlobals& f = c.f;
     Pools& pools = c.flight.pools;
@@ -473,6 +567,7 @@ void move_pool8(UpdateCtx& c, World& w) {
 }
 
 void move_gate(UpdateCtx& c, World& w, int p) {
+    FrameScope scope(c.host, c);
     WaveGlobals& g = c.flight.g;
     FrameGlobals& f = c.f;
     UpdateHost& h = c.host;

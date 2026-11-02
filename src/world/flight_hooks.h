@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <functional>
 
+#include "world/damage.h"
 #include "world/input.h"
 #include "world/update.h"
 #include "world/view.h"
@@ -47,6 +48,12 @@ struct WaveLinks {
     std::function<void(int)> stars;        // seg8:0x158a(arg)
     std::function<void()> lines;           // seg12:0x3778
     std::function<void()> select_clip;     // SelectClipRgn(DGROUP:0x13dc, DGROUP:0x12) at seg7:0x84a
+    // M4 s1 fixer: the image table DGROUP:0x39e8 of the effects' and the debris' drawing
+    // (seg8:0x3fbe, seg13:0x447a, seg13:0x4710); null draws nothing.
+    std::function<const ImageSlotTable*()> images;
+    // seg7:0x119c(2, 0), the information display back to the target at the end of the speed or
+    // message display [BYTES seg7:0xbe5].
+    std::function<void()> info_target;
 };
 WaveLinks& wave_links();
 // DGROUP:0xa6c's owner (the radar, src/hud/radar.h): the key switch reads the zoom through it,
@@ -58,6 +65,27 @@ void wave_started();
 // DGROUP:0x59a: the wave frames of the last full second (the wave tick's count, seg7:0xadc), for
 // the B display's ACTUAL line (src/hud links HudLinks::frame_rate_actual to it).
 int frame_rate_actual();
+
+// The collisions' calls into the HUD (M4 s1 COLLIDE): the message display seg3:0x6ec and the
+// in-use counts seg7:0x2080; an empty slot logs once. The destroy handlers (seg12:0x274a,
+// seg16:0x8e4) and the wing debris (DGROUP:0x9176) are the world's own (effects.h, debris.h) and
+// run on the program's World without a link (M4 s1 fixer).
+struct CollideLinks {
+    std::function<void(int ship, int pool, int rec, int code)> message;  // seg3:0x6ec
+    std::function<void(int pool, int rec)> in_use;                       // seg7:0x2080
+};
+CollideLinks& collide_links();
+// seg12:0x274a(pool, rec), the generic destroy handler (effects.h object_destroyed), on the
+// program's World with the flight role's words (the gate exit's dead ship, M4 s1 fixer).
+void destroy_object(int pool, int rec);
+// The collision DGROUP words (collide.h CollideGlobals) and the auto-repair's words of the
+// program. wave_started() (seg9:0x60bc) resets the pair orientation (ADR 0015 decision 1) and
+// the repair deadline, which the placement seg9:0x6624 clears with the frame count
+// [BYTES seg9:0x6689 seg9:0x668d].
+CollideGlobals& collide_globals();
+RepairState& repair_state();
+// seg11:0x1d7c on the bound World, for the status tick's StatusHooks::seg11_1d7c (src/hud).
+void repair_tick();
 
 // The flight role's state, for the other roles' hooks.
 WaveGlobals& flight_globals();

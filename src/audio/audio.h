@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <string>
 
 // Settings lives in its own header so music.h's namespace is::audio::music and the function
@@ -58,5 +59,14 @@ void audio_ok(const Settings&);
 // ISPACE.DLL DGROUP:0x219e, the session's channel count: 0 when command 0 opened no session
 // (sound system 0), which Audio init selects as count - 1 [BYTES ISPACE.DLL seg9:0x2fdf].
 int channels();
+
+// ---- M4 stage 1 fixer additions to the contract.
+// seg10:0x754a's sources in a wave (sound.md "INSPACE wrappers" steps 3 and 4): `source` gives
+// the world point of mode 1 (pool a, record b: object words +4, +6) or mode 3 (the dword
+// DGROUP:0x5144), false for none; `to_view` is seg8:0x29ea, a world point to the play area;
+// `pool_count` is DGROUP:0x9324 (a mode-1 pool above it plays nothing). Empty functions unbind
+// (the screens outside a wave play every source from the stand-in point). Kept across init.
+void set_world_source(std::function<bool(int mode, int a, int b, int& x, int& y)> source,
+                      std::function<void(int& x, int& y)> to_view, int pool_count);
 
 }  // namespace is::audio

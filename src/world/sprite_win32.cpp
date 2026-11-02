@@ -157,6 +157,14 @@ DcId GdiBlitter::create_image_from(int w, int h, const std::vector<std::uint8_t>
 
 void GdiBlitter::delete_image(DcId id) { images_.erase(id); }
 
+// seg10:0x6ec6 -> ordinal 6 on the image behind `src` (Gfx::mask): a monochrome Surface in its
+// own DC (M4 s1 DEATH).
+DcId GdiBlitter::create_mask(DcId src) {
+    const std::shared_ptr<gfx::Surface> img = image(src);
+    if (!img || img->empty()) return kDcNone;
+    return bind(gfx_.mask(*img));
+}
+
 DcId GdiBlitter::load_bitmap(const std::string& name) {
     try {
         return bind(gfx_.load_bitmap(name));

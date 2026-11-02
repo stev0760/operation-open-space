@@ -914,3 +914,296 @@ def test_play_rectangle(ins):
     off = _trunc(0x3A - W_ % 0x3A, 2)
     left = 0x4E - off
     assert (left, 0x4E, W_ - left, H_ - 0x14) == (68, 78, 956, 663)
+
+
+# ------------------------------------------------------------------ M4 stage 1: collision, damage, the wave end
+
+
+def _rets(m, func: str) -> set[str]:
+    return {i.text for i in m.func_insns(func) if i.mnem in ("ret", "retf")}
+
+
+def test_collision_routine_frames(ins, isp):
+    """core.md Response, Pair test, Hit dispatcher; world.md Effect frame and Ships;
+    ispace.md 29: the return sizes of the collision and effect routines."""
+    expect = {"seg8:0x698a": {"retf 2"}, "seg8:0x6a44": {"retf 2"}, "seg8:0x3fbe": {"retf 2"},
+              "seg8:0x50aa": {"retf 2"}, "seg8:0x6afa": {"retf 4"}, "seg13:0x100c": {"retf 4"},
+              "seg8:0x546c": {"retf 0xe"}, "seg8:0x5df2": {"retf"}, "seg8:0x8a6": {"retf 2"}}
+    assert {f: _rets(ins, f) for f in expect} == expect
+    isp_expect = {"seg2:0x3c": {"retf 0x30"}, "seg3:0xfe": {"retf 8"}, "seg3:0x130": {"retf 8"},
+                  "seg2:0x802": {"retf"}, "seg2:0x824": {"retf"}, "seg2:0x850": {"retf"}}
+    assert {f: _rets(isp, f) for f in isp_expect} == isp_expect
+    assert 0x30 == 24 * 2                              # 10 far pointers and 4 words
+
+
+def test_hit_dispatcher_entry_and_tumble(ins):
+    """core.md Hit dispatcher: below −1 negated, pools above 14 jump to the handler call,
+    2000 < a; the tumble's lock-out max(25a, 900), max(6a, 300), max(12a, 600) with the seg18
+    scaling by (b + 3)/6 or /12; the pool-8 deadline 200a or 140a."""
+    expect = {"seg8:0x5e46": "cmp word ptr [bp + 0xe], -1", "seg8:0x5e4a": "jge seg8:0x5e54",
+              "seg8:0x5e4c": "mov word ptr [bp - 0xa], 1", "seg8:0x5e51": "neg word ptr [bp + 0xe]",
+              "seg8:0x5e5a": "jle seg8:0x5e5f", "seg8:0x5e5c": "jmp seg8:0x642c",
+              "seg8:0x5e5f": "cmp word ptr [bp + 0xe], 0x7d0",
+              "seg8:0x68bf": "mov word ptr es:[bx + si + 0x26], 1",
+              "seg8:0x68cb": "imul ax, word ptr [bp + 0xe], 0x19", "seg8:0x68d4": "mov ax, 0x384",
+              "seg8:0x68e5": "mov word ptr [bx + 0x7114], ax",
+              "seg8:0x68fa": "cmp word ptr [bx + 0x3d5a], -3",
+              "seg8:0x6901": "imul ax, word ptr [bp + 0xe], 6", "seg8:0x690a": "mov ax, 0x12c",
+              "seg8:0x690f": "imul ax, word ptr [bp + 0xe], 0xc", "seg8:0x6918": "mov ax, 0x258",
+              "seg8:0x691e": "cmp word ptr [0x9130], 0", "seg8:0x6925": "cmp word ptr [0x90f4], 1",
+              "seg8:0x6934": "add bx, 3", "seg8:0x693b": "mov cx, 6", "seg8:0x694a": "mov cx, 0xc",
+              "seg8:0x694d": "cdq", "seg8:0x6952": "cmp word ptr [bp + 6], 8",
+              "seg8:0x695e": "imul ax, word ptr [bp + 0xe], 0xc8",
+              "seg8:0x6965": "imul ax, word ptr [bp + 0xe], 0x8c",
+              "seg8:0x6977": "mov word ptr [bx + 0x3d54], ax"}
+    assert _texts(ins, expect) == expect
+    assert (0x7D0, 0x19, 0x384, 0x12C, 0x258, 0xC8, 0x8C) == (2000, 25, 900, 300, 600, 200, 140)
+    assert 0x7114 - 0x7090 == 0x84
+
+
+def test_overthruster_message(ins):
+    """core.md Hit dispatcher rule 3: message 0xd plays 0x67 at most every 4000 ms and formats
+    string 350 with the pilot name."""
+    expect = {"seg3:0xd12": "mov word ptr [0x1cb4], ax", "seg3:0xd22": "push 0x380c"}
+    assert _texts(ins, expect) == expect
+    assert ins.switches["seg3:0x1351"]["targets"][0xD - 1] == "seg3:0xcfd"
+    assert _eng(350) == "Be More Careful, %s. Avoid Dangerous Hazards."
+
+
+def test_collision_sites_drop_the_result(ins):
+    """core.md The three sites: the rock mover, the gate post and the ship mover call seg8:0x5df2
+    and pop its five words without reading AX; seg8:0x698a and seg8:0x6a44 call it too, and
+    DGROUP:0x9454 has only the rock mover's two writers."""
+    for call, pop in (("seg7:0x4060", "seg7:0x4065"), ("seg12:0x1dbe", "seg12:0x1dc3"),
+                      ("seg13:0xc8d", "seg13:0xc92")):
+        assert ins.at(call).text == "call far seg8:0x5df2", call
+        assert ins.at(pop).text == "add sp, 0xa", pop
+    assert {"seg8:0x6a34", "seg8:0x6aea"} <= set(_callers(ins, "seg8:0x5df2"))
+    assert [w.addr for w in ins.writers(0x9454, 0x9455)] == ["seg7:0x4011", "seg7:0x4068"]
+
+
+def test_collision_damage_word_writers(ins):
+    """core.md Response (pool-5 parties), globals.md DGROUP:0x9436/0x9438: the only direct
+    stores are the heat additions, the halving at seg8:0x7abb and seg18's floor; ordinal 29
+    writes them through pointers."""
+    assert [w.addr for w in ins.writers(0x9436, 0x9437)] == ["seg8:0x5a96"]
+    assert [w.addr for w in ins.writers(0x9438, 0x9439)] == ["seg8:0x5860", "seg8:0x7abb", "seg18:0x2dee"]
+
+
+def test_rock_and_post_hit_sound(ins):
+    """core.md Hit dispatcher (core-0001's slot 0x08) and The three sites: the rock template
+    and the gate post template both set hit_sound +0x42 = 8, and the post's on_damage is
+    seg7:0x5090."""
+    assert ins.at("seg10:0xe8e").text == "mov word ptr es:[bx + si + 0x42], 8"
+    assert ins.at("seg10:0xe94").text == "les bx, ptr [0x1e04]" and 0x1DF8 + 4 * 3 == 0x1E04
+    assert ins.at("seg9:0x120e").text == "mov word ptr es:[bx + si + 0x42], 8"
+    assert ins.at("seg9:0x1232").text == "mov word ptr es:[bx + si + 0x5e], 0x5090"
+
+
+def test_effect_frame_offsets(ins, dgroup):
+    """world.md Effect frame: DGROUP:0xb70 holds the running sums of the sides 6f + 10, the
+    widths of IGRAPHIC graphic 170 (248 × 52); slot 10 takes graphic 0xaa; graphic 230 is
+    160 × 32, five 32-pixel cells."""
+    from test_re_facts import _dib, _resource
+
+    table = list(struct.unpack_from("<8h", dgroup, 0xB70))
+    assert table == [0, 10, 26, 48, 76, 110, 150, 196]
+    assert table == [sum(6 * f + 10 for f in range(k)) for k in range(8)]
+    assert _dib(_resource("IGRAPHIC.DL1", 4000, 170))[:3] == (248, 52, 4)
+    assert table[7] + 6 * 7 + 10 == 248
+    assert _dib(_resource("IGRAPHIC.DL1", 4000, 230))[:3] == (160, 32, 4) and 160 == 5 * 32
+    expect = {"seg10:0x51de": "mov word ptr [bp - 0x10], 0xa", "seg10:0x51e3": "mov word ptr [bp - 0x14], 0xaa"}
+    assert _texts(ins, expect) == expect
+    assert (0xAA, 0xAF, 0xE6) == (170, 175, 230)
+
+
+def test_effect_entry_fields(ins):
+    """structs.md Effect table: +0x00 is 1 at creation, raised once at seg8:0x4190 and 0xffff
+    when freed; seg16:0x8e4 writes type 5 for entry 0 and 1 for the others; the rescan starts
+    at 44."""
+    expect = {"seg16:0x91e": "mov word ptr [bx + 0x1e90], 1", "seg16:0x9f1": "mov word ptr [bx + 0x1e9a], 5",
+              "seg16:0x914": "mov word ptr [bx + 0x1e9a], 1", "seg8:0x4190": "inc word ptr [bx + 0x1e90]",
+              "seg8:0x41aa": "mov word ptr [bx + 0x1e90], 0xffff", "seg8:0x41b0": "mov word ptr [bp - 4], 0x2c"}
+    assert _texts(ins, expect) == expect
+    assert (0x1E9A - 0x1E90, 0x2C) == (0x0A, 44)
+    assert _callers(ins, "seg8:0x3fbe") == ["seg7:0x983", "seg18:0x2c0"]
+
+
+def test_effect_count_writers(ins):
+    """globals.md DGROUP:0x9430 and DGROUP:0x9434, structs.md Effect table Counts: their
+    writers; seg16:0x8e4 writes DGROUP:0x9430 but not DGROUP:0x9434."""
+    w30 = [w.addr for w in ins.writers(0x9430, 0x9431)]
+    assert w30 == ["seg7:0x2f6f", "seg8:0x456e", "seg8:0x8171", "seg8:0x93d0", "seg9:0x670d",
+                   "seg11:0x8b77", "seg11:0x8c02", "seg11:0x8c8d", "seg11:0x8d16", "seg11:0x8da1",
+                   "seg11:0x8e2c", "seg11:0x8eb7", "seg11:0x8f42", "seg11:0x9053",
+                   "seg12:0xaba", "seg12:0x2a3c", "seg12:0x2d5f", "seg16:0x9c1"]
+    assert sum(a.startswith("seg11:") for a in w30) == 9
+    w34 = [w.addr for w in ins.writers(0x9434, 0x9435)]
+    assert w34 == ["seg8:0x4552", "seg8:0x4560", "seg8:0x80ea", "seg8:0x813d", "seg8:0x9381",
+                   "seg8:0x93bd", "seg9:0x5de5", "seg11:0x9018", "seg12:0xa7a", "seg12:0xab7",
+                   "seg12:0x28e9", "seg12:0x2c43"]
+    assert not any(ins.owners(*A(a)) == {"seg16:0x8e4"} for a in w34)
+
+
+def test_death_deadlines(ins):
+    """core.md The player's death timing: seg16:0x8e4 sets DGROUP:0x1e84 = now + 8000 and the
+    explosion seg12:0x274a sets now + 1500 in a player game."""
+    expect = {"seg16:0xabc": "cmp word ptr [0x95bc], 0", "seg16:0xac7": "add eax, 0x1f40",
+              "seg16:0xacd": "mov dword ptr [0x1e84], eax", "seg12:0x2aad": "cmp word ptr [0x95bc], 0",
+              "seg12:0x2abb": "add ax, 0x5dc", "seg12:0x2ac1": "mov word ptr [0x1e84], ax"}
+    assert _texts(ins, expect) == expect
+    assert (0x1F40, 0x5DC) == (8000, 1500)
+
+
+def test_wing_debris(ins):
+    """core.md Wings torn off, structs.md Other wave tables: the entry starts with counter 1 and
+    end 70 at DGROUP:0x9176; the mover seg13:0x447a draws with seg8:0x8a6, moves and drags
+    by >> 4; neither calls the pair finder."""
+    expect = {"seg8:0x2f1d": "mov dword ptr [bx - 0x6e8a], 0x460001",
+              "seg13:0x463d": "cmp word ptr [bx - 0x6e8a], 0", "seg13:0x4642": "jle seg13:0x462e",
+              "seg13:0x4649": "call far seg8:0x8a6", "seg13:0x4652": "add word ptr [si - 0x6ea4], ax",
+              "seg13:0x465a": "add word ptr [si - 0x6ea2], ax", "seg13:0x4662": "sar ax, 4",
+              "seg13:0x4665": "sub word ptr [si - 0x6e9c], ax"}
+    assert _texts(ins, expect) == expect
+    assert [0x10000 - d for d in (0x6E8A, 0x6EA4, 0x6EA2, 0x6E9C)] == [0x9176, 0x915C, 0x915E, 0x9164]
+    assert (0x460001 & 0xFFFF, 0x460001 >> 16) == (1, 70)
+    assert _callers(ins, "seg13:0x447a") == ["seg7:0x118d", "seg18:0x33e"]
+    assert _callers(ins, "seg8:0x8a6") == ["seg13:0x4649"]
+    owners = {f for c in ins.call_sites("seg8:0x50aa") for f in ins.owners(*A(c))}
+    assert not owners & {"seg13:0x447a", "seg8:0x8a6"}
+
+
+def test_vanish_award(ins):
+    """core.md The vanish, globals.md Scoring: pools 14, 6, 7 and 2 skip; the history search
+    stops at the first entry outside 0 … 19 tens of frames; the match plays 0x73, raises 0x70
+    and adds 800; seg8:0x81f8 has two callers."""
+    expect = {"seg7:0x18cd": "cmp word ptr [si + 0x226c], 0xe", "seg7:0x18d6": "cmp word ptr [si + 0x226c], 6",
+              "seg7:0x18df": "cmp word ptr [si + 0x226c], 7", "seg7:0x18e8": "cmp word ptr [si + 0x226c], 2",
+              "seg7:0x18fb": "cmp word ptr [bp - 6], 8", "seg7:0x1903": "push 0xa",
+              "seg7:0x1916": "mov ax, word ptr [bx - 0x6c86]", "seg7:0x1923": "jne seg7:0x1973",
+              "seg7:0x1925": "cmp cx, 0x14", "seg7:0x1928": "jae seg7:0x1973",
+              "seg7:0x192d": "mov al, byte ptr [bx - 0x6c76]", "seg7:0x193c": "mov al, byte ptr [bx - 0x6c6e]",
+              "seg7:0x194e": "push 0x73", "seg7:0x1958": "push 0x70",
+              "seg7:0x196a": "add dword ptr [0x1e58], 0x320"}
+    assert _texts(ins, expect) == expect
+    assert [0x10000 - d for d in (0x6C86, 0x6C76, 0x6C6E)] == [0x937A, 0x938A, 0x9392]
+    assert (0x14, 0x320) == (20, 800)
+    assert _callers(ins, "seg8:0x81f8") == ["seg8:0x6259", "seg8:0x7290"]
+
+
+def test_debriefing_box(ins):
+    """shell.md State 2: the box is (W/2 ∓ 290, H/2 ∓ 173) with truncating halves, the page
+    starts with seg17:0x30b0(11, 3500); at 1024 × 768 the frame is (216, 196)–(808, 563)."""
+    expect = {"seg9:0x6e2c": "cdq", "seg9:0x6e2f": "sar ax, 1", "seg9:0x6e33": "sub ax, 0x122",
+              "seg9:0x6e41": "sub ax, 0xad", "seg9:0x6e45": "add cx, 0x122", "seg9:0x6e4a": "add dx, 0xad",
+              "seg9:0x6f82": "push 0xdac", "seg9:0x6f85": "push 0xb", "seg9:0x6f87": "call far seg17:0x30b0",
+              "seg9:0x6f91": "push 1", "seg9:0x6f93": "push 1", "seg9:0x6f95": "call far seg17:0x2c5a"}
+    assert _texts(ins, expect) == expect
+    assert "SetRect" in ins.at("seg9:0x6e4f").text
+    L, T, R, B = 512 - 0x122, 384 - 0xAD, 512 + 0x122, 384 + 0xAD
+    assert (L, T, R, B) == (222, 211, 802, 557)
+    assert (L - 6, T - 15, R + 6, B + 6, L + 14, T + 18) == (216, 196, 808, 563, 236, 229)
+
+
+def test_bounce_listing_constants(isp):
+    """ispace.md 29: the slow contact needs |DVX|, |DVY| ≤ 40; only the low word of c is
+    tested; the separating thresholds 3, 7, 11 and factors 2, 4/3, 7/6, 11/10; the step and
+    strip divide by −10000 and −1000; seg2:0x850 returns 1 for g = 0."""
+    expect = {"seg2:0xea": "cmp ax, 0x28", "seg2:0xed": "jg seg2:0x14c", "seg2:0xf7": "cmp ax, 0x28",
+              "seg2:0xfc": "imul ax, word ptr [bp - 0x1a], 5",
+              "seg2:0x1b9": "or ax, ax", "seg2:0x1bb": "jg seg2:0x1c0",
+              "seg2:0x1cb": "cmp ax, 3", "seg2:0x1d3": "shl word ptr es:[bx], 1", "seg2:0x1e3": "cmp ax, 7",
+              "seg2:0x1ee": "shl ax, 2", "seg2:0x1f1": "mov cx, 3", "seg2:0x201": "cmp ax, 0xb",
+              "seg2:0x209": "imul ax, word ptr es:[bx], 7", "seg2:0x20d": "mov cx, 6",
+              "seg2:0x215": "imul ax, word ptr es:[bx], 0xb", "seg2:0x219": "mov cx, 0xa",
+              "seg2:0x4d5": "push -1", "seg2:0x4d7": "push 0xd8f0", "seg2:0x4f1": "add word ptr es:[bx], ax",
+              "seg2:0x654": "push -1", "seg2:0x656": "push 0xfc18",
+              "seg2:0x8b8": "je seg2:0x8fb", "seg2:0x8f5": "sar dx, 1", "seg2:0x8f7": "rcr ax, 1",
+              "seg2:0x8fb": "mov ax, 1"}
+    assert _texts(isp, expect) == expect
+    assert (0x28, s16(0xD8F0), s16(0xFC18)) == (40, -10000, -1000)
+
+
+def _o29(mA, mB, eA, eB, A, Av, B, Bv):
+    """ispace.md 29, The sequence, as a model of the listing (int16/int32 wrap, truncation)."""
+    i16 = lambda v: ((v + 0x8000) & 0xFFFF) - 0x8000
+    i32 = lambda v: ((v + 0x80000000) & 0xFFFFFFFF) - 0x80000000
+    div = lambda n, d: i32(abs(n) // abs(d) * (1 if (n < 0) == (d < 0) else -1))
+
+    def hyp(a, b):
+        a, b = abs(a), abs(b)
+        g = a + (b >> 1) if a >= b else b + (a >> 1)
+        return 1 if g == 0 else (div(i32(a * a + b * b), g) + g) >> 1
+
+    Ax, Ay = A; Avx, Avy = Av; Bx, By = B; Bvx, Bvy = Bv
+    h = i16(_trunc(eB, 2) - _trunc(eA, 2))
+    DX, DY = i16(10 * (h - Ax + Bx)), i16(10 * (h - Ay + By))
+    R = i16(5 * (eA + eB) + 18)
+    DVX, DVY = i16(10 * (Bvx - Avx)), i16(10 * (Bvy - Avy))
+    D = i16(hyp(DX, DY))
+    if abs(DVX) <= 40 and abs(DVY) <= 40:
+        Bvx, Bvy = i16(Avx - _trunc(i16(5 * DX), D)), i16(Avy - _trunc(i16(5 * DY), D))
+        DVX, DVY = i16(10 * (Bvx - Avx)), i16(10 * (Bvy - Avy))
+    V = i16(hyp(DVX, DVY))
+    c = div(i32(100 * i32(DX * DVX + DY * DVY)), V * D)
+    if i16(c) > 0:
+        return 0
+    WX, WY = div(1000 * DVX, V), div(1000 * DVY, V)
+    TY = div(1000 * i16(DY + R if DVY > 0 else R - DY), max(1, abs(WY)))
+    TX = div(1000 * i16(DX + R if DVX > 0 else R - DX), max(1, abs(WX)))
+    T = TX if abs(TY) > abs(TX) else TY
+    Bx, By = i16(Bx + div(i32(WX * T), -10000)), i16(By + div(i32(WY * T), -10000))
+    DX, DY = i16(10 * (h - Ax + Bx)), i16(10 * (h - Ay + By))
+    D2 = i16(hyp(DX, DY))
+    NX, NY = div(-DX * 1000, D2), div(-DY * 1000, D2)
+    uB = i16(div(NY * Bvy, 1000) + div(NX * Bvx, 1000))
+    uA = i16(div(NY * Avy, 1000) + div(NX * Avx, 1000))
+    Bvx, Bvy = i16(Bvx + div(uB * NX, -1000)), i16(Bvy + div(uB * NY, -1000))
+    Avx, Avy = i16(Avx + div(uA * NX, -1000)), i16(Avy + div(uA * NY, -1000))
+    vA = i16(div((mA - mB) * uA + 2 * (uB * mB), mA + mB))
+    vB = i16(vA - uB + uA)
+    Bvx, Bvy = i16(Bvx + div(vB * NX, 1000)), i16(Bvy + div(vB * NY, 1000))
+    Avx, Avy = i16(Avx + div(vA * NX, 1000)), i16(Avy + div(vA * NY, 1000))
+    return 1, (Avx, Avy), (Bvx, Bvy), (Bx, By), _trunc(abs(i16(vB - uB)), 2), _trunc(abs(i16(vA - uA)), 2)
+
+
+def test_bounce_example():
+    """ispace.md 29, Example: the head-on vector gives A (0, 0), B (8, 0) at (123, 105),
+    dB 7 and dA 1; a separating pair returns 0."""
+    assert _o29(1400, 160, 22, 12, (100, 100), (2, 0), (120, 105), (-6, 0)) == \
+        (1, (0, 0), (8, 0), (123, 105), 7, 1)
+    assert _o29(1400, 160, 22, 12, (100, 100), (-2, 0), (120, 105), (4, 1)) == 0
+
+
+def test_debriefing_strings():
+    """core.md The debriefing, shell.md State 2 and State 4, core.md Death: the ENG_LANG.DLL
+    strings the page, the box, GAME OVER and the death MessageBox use; 2311-2313 are absent."""
+    expect = {
+        318: "DIRECTORY", 545: ": ", 2238: "PRESS 'ESC' TO CONTINUE", 2239: "RACE TRACK", 2146: "DUEL",
+        3003: "WAVE %d MISSION DEBRIEFING", 3004: "%<SCORE: %l%N%>%N",
+        3005: "YOU HAVE FINISHED %s, %s! %<%?%>",
+        3006: "%<OF ITS %#, %>%# CAPTURED AND %# DESTROYED. ",
+        3007: "THUS FAR, %# CAPTURED AND %# DESTROYED. %? %# REMAINING. ",
+        3010: "%? %<%#, %>%#",
+        3012: ", %<CAPTURING %#%<DESTROYING %#%>%<BUT HAVE NO ICONS TO SHOW FOR IT%>. ",
+        3014: "%<YOUR TEAMMATE, %>%s%<,%> ", 3017: "YOU %S%<YOUR TEAMMATE, %>%s%< FROM THE %s TEAM%>. ",
+        2242: "WHEW! THAT WAS A MONSTER DIRECTORY! ", 2243: "THAT WAS A BIG DIRECTORY! ",
+        2506: "ICON WAS", 2507: "ICON HAS BEEN", 2508: "THERE IS", 2509: "THERE ARE",
+        2510: "MINUTE", 2511: "SECOND", 2515: "ICON", 870: "YOU PLAYED FOR", 1997: "YOU FOUGHT FOR",
+        879: "WAS KILLED BY ", 885: "YOU ", 893: "KILLED ", 900: "FOUGHT WITH ",
+        789: "RELATIONS WITH OTHER TEAMS HAVE NOT CHANGED.", 629: " WOULD LIKE TO MEET YOU IN DODGE CITY.",
+        325: "GAME OVER", 2532: "LAST WAVE: %d", 2533: "ICONS:", 2534: "CAPTURED: %d",
+        2535: "DESTROYED: %d", 2536: "SCORE: %l",
+        1422: "Trying To Hide Eh? Well I'll Sniff You Out!"}
+    assert {k: _eng(k) for k in expect} == expect
+    assert [_eng(i) for i in range(901, 908)] == [
+        "HELPED ", "ORDERED AN ATTACK ON ", "ATTACKED A FRIEND OF ", "KILLED A FRIEND OF ",
+        "ATTACKED AN ENEMY OF ", "STOLE ICON(S) FROM ", "CAME TO THE AID OF "]
+    assert _eng(2328).startswith("I'm afraid you're history") and "package" in _eng(2329)
+    for missing in (2311, 2312, 2313):
+        try:
+            _eng(missing)
+        except KeyError:
+            continue
+        raise AssertionError(missing)
+    assert _eng(2310) and _eng(2314)

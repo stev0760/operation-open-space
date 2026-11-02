@@ -1,6 +1,8 @@
 // seg10:0x3a2e, the rock images (rock_images.h). (M3 s2 fixer)
 #include "world/rock_images.h"
 
+#include "world/effects.h"
+
 namespace is::world {
 
 namespace {
@@ -78,7 +80,12 @@ void build_rock_images(Blitter& out, ImageSlotTable& images, std::int16_t& dg_74
     build_rocks(out, images, dg_740);
 }
 
-void build_wave_images(Blitter& out, ImageSlotTable& images, std::int16_t& dg_740) {
+void build_wave_images(Blitter& out, ImageSlotTable& images, std::int16_t& dg_740,
+                       std::int16_t enhance) {
+    // At 8 bpp and above the chain runs seg10:0x5102 (the explosion images, slots 10 and 11)
+    // before seg10:0x3a2e (shell.md "Wave set-up", the graphics chain) [BYTES seg9:0x267e
+    // seg9:0x26cd] (M4 s1 DEATH).
+    build_effect_images(out, images, enhance);
     build_rocks(out, images, dg_740);
     build_gate_images(out, images, wave_graphics());  // seg9:0x26e5 [BYTES seg9:0x26e5]
     create_wave_brushes(out, wave_graphics());

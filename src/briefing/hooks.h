@@ -4,6 +4,7 @@
 // briefing takes the INI Drive root and wave 0.
 #pragma once
 
+#include <functional>
 #include <string>
 
 namespace is::briefing {
@@ -18,5 +19,11 @@ void set_handover(int demons_gate, int race, int duel);
 // DGROUP:0x91f8 before the next briefing entry (0 for a new game).
 void set_wave(int wave);
 int wave();
+
+struct DebriefBox;
+// The debriefing box's drawing (seg9:0x6dec steps 4 and 5): src/hud sets it (hud::draw_debrief_box
+// on the briefing's canvas); unset, the briefing's canvas draws it with the same routines
+// seg11:0x1774 and seg9:0x8bec (M4 s1 END).
+void set_debrief_box_hook(std::function<void(const DebriefBox&)> f);
 
 }  // namespace is::briefing

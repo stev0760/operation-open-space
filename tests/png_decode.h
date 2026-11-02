@@ -1,5 +1,6 @@
 // A small PNG reader for the tests that compare the port's pixels with the oracle's
-// screenshots: 8-bit greyscale, RGB, RGBA and palette images, non-interlaced, with the zlib
+// screenshots: 8-bit greyscale, RGB, RGBA and palette images and 1-, 2- and 4-bit greyscale
+// and palette images (ImageMagick writes the GAME OVER shot as a 2-bit colormap), non-interlaced, with the zlib
 // inflate (stored, fixed and dynamic Huffman blocks) of RFC 1950/1951 [REF RFC 1951, PNG 1.2].
 #pragma once
 
@@ -201,12 +202,17 @@ inline Image read(const std::string& path) {
         }
         pos += 12 + len;
     }
-    if (depth != 8 || interlace != 0) return img;
+    if (interlace != 0) return img;
+    // Sub-byte samples: greyscale or palette at 1, 2 or 4 bits, packed from the high bit; the
+    // filters work on whole bytes (bpp 1) [REF PNG 1.2 sections 2.3, 6.3].
+    const bool packed = (ctype == 0 || ctype == 3) && (depth == 1 || depth == 2 || depth == 4);
+    if (depth != 8 && !packed) return img;
     const int bpp = ctype == 0 ? 1 : ctype == 2 ? 3 : ctype == 3 ? 1 : ctype == 4 ? 2 : ctype == 6 ? 4 : 0;
     if (bpp == 0) return img;
     std::vector<std::uint8_t> raw;
     if (!detail::inflate(z, raw)) return img;
-    const std::size_t stride = static_cast<std::size_t>(w) * bpp;
+    const std::size_t stride = packed ? (static_cast<std::size_t>(w) * depth + 7) / 8
+                                      : static_cast<std::size_t>(w) * bpp;
     if (raw.size() < (stride + 1) * static_cast<std::size_t>(h)) return img;
     std::vector<std::uint8_t> cur(stride), prev(stride, 0);
     img.w = w;
@@ -234,6 +240,23 @@ inline Image read(const std::string& path) {
             default: break;
             }
             cur[i] = static_cast<std::uint8_t>(v);
+        }
+        if (packed) {
+            const int per = 8 / depth, mask = (1 << depth) - 1;
+            for (int x = 0; x < w; ++x) {
+                const int shift = 8 - depth * (x % per + 1);
+                int v = (cur[static_cast<std::size_t>(x / per)] >> shift) & mask;
+                std::uint32_t c = 0;
+                if (ctype == 3) {
+                    c = static_cast<std::size_t>(v) < pal.size() ? pal[static_cast<std::size_t>(v)] : 0;
+                } else {
+                    v = v * 255 / mask;
+                    c = (static_cast<std::uint32_t>(v) << 16) | (v << 8) | v;
+                }
+                img.rgb[static_cast<std::size_t>(y) * w + x] = c;
+            }
+            std::swap(cur, prev);
+            continue;
         }
         for (int x = 0; x < w; ++x) {
             const std::uint8_t* px = &cur[static_cast<std::size_t>(x) * bpp];

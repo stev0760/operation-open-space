@@ -361,6 +361,47 @@ public:
     std::uint32_t w666c = 0;      // DGROUP:0x666c = frames + 3 or + 8 when DGROUP:0x949c != 0
     std::uint32_t w1e80 = 0;      // DGROUP:0x1e80 = now + 1000 after the player's passage
     std::array<HazardMark, 8> marks{};  // DGROUP:0x693c + 16k
+
+    // ---- M4 stage 1: the wave end (src/world/wave_end.h). The pair orientation word (ADR
+    // 0015) and DGROUP:0x9436 / 0x9438 are the collision words' (collide.h CollideGlobals
+    // orientation, dB, dA), reset at the wave start by flight_hooks.h wave_started.
+    // DGROUP:0x1e84, the death deadline of the wave case (seg7:0x6ac): = now at seg7:0x6f7,
+    // now + 1500 at seg12:0x2ac1 (the player destroyed in a player game), now + 8000 at
+    // seg16:0xacd; due → the history MessageBox and seg6:0x5d58 (shell.md "Wave deadlines").
+    // The same DGROUP word serves state 9 (seg7:0x1c5), which the port keeps in
+    // shell::Deadlines::scores_due; the world's writers use this one [DESIGN].
+    std::uint32_t w1e84 = 0;
+    // DGROUP:0x93a4 = 1: the wave ends into the Hall of Justice (seg12:0x2472, seg12:0x24b1);
+    // cleared at seg9:0x6111 [BYTES seg12:0x2472 seg12:0x24b1 seg9:0x6111].
+    std::int16_t w93a4 = 0;
+    // DGROUP:0x93b6: the roster index of the ship that wants the duel in Dodge City (string
+    // 629), -1 for none; written by seg12:0x236a and seg9:0x65ab [BYTES seg12:0x236a].
+    std::int16_t w93b6 = -1;
+    // DGROUP:0x93b2 = DGROUP:0x9332 at seg9:0x6d82, its only writer; no reader is known [OPEN].
+    std::int16_t w93b2 = 0;
+    // DGROUP:0x94c4 = 1 and DGROUP:0x9330 = 0 at seg9:0x6d8f / 0x6d95; meanings [OPEN].
+    std::int16_t w94c4 = 0, w9330 = 0;
+    // DGROUP:0x9370 / DGROUP:0x9372: the player's captured (+0xd2) and destroyed (+0xd0)
+    // counts at the wave start, copied by seg9:0x60bc [BYTES seg9:0x6514 seg9:0x651f].
+    std::int16_t w9370 = 0, w9372 = 0;
+    // The 8-entry hit history of seg8:0x81f8: frame#/10 of the hit (word DGROUP:0x937a + 2k,
+    // the array w937a below), pool (byte DGROUP:0x938a + k) and record (byte DGROUP:0x9392 + k);
+    // entry 0 is the newest [BYTES seg8:0x820f seg8:0x8240 seg8:0x8246 seg8:0x824c].
+    std::array<std::uint8_t, 8> hit_pool{}, hit_rec{};
+    // DGROUP:0x5c0 (now + 1200) and DGROUP:0x58c = 1 of a vanished target ship (seg7:0x186a);
+    // DGROUP:0x8630, the message buffer string 1422 goes to [BYTES seg7:0x186a seg7:0x187e].
+    std::uint32_t w05c0 = 0;
+    std::int16_t w058c = 0;
+    std::string w8630;
+    // The weapon-slot words of pool 6 that the vanish's end resets: DGROUP:0x66e4 + 0x1c·rec
+    // (the weapon, -1 = none) and DGROUP:0x66ec + 0x1c·rec [BYTES seg7:0x1983 seg7:0x1990].
+    std::array<std::int16_t, 16> w66e4{}, w66ec{};
+    // The other words of the tick's deadline block seg7:0x5ce-0x6ac (wave_end.h): the ambulance
+    // deadline DGROUP:0x1e88 (set by seg16:0x568, M6), DGROUP:0x951a, DGROUP:0x9516 (the demo's
+    // save test) and DGROUP:0xd26 (the demo's seg6:0x92b8 test) [BYTES seg7:0x5ce seg7:0x5f3
+    // seg7:0x646 seg7:0x67c] [OPEN: meanings].
+    std::uint32_t w1e88 = 0;
+    std::int16_t w951a = 0, w9516 = 0, w0d26 = 0;
     // ---- link slots (seg12:0x3778)
     std::array<LinkSlot, kLinkSlots> links{};
     std::array<Pool8Entry, kPool8Max> pool8{};

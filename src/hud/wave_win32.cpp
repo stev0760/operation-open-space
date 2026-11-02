@@ -14,6 +14,7 @@
 
 #include "app/app.h"
 #include "assets/asset_store.h"
+#include "dialogs/audio_options.h"
 #include "formats/ships.h"
 #include "gfx/gfx.h"
 #include "gfx/palette.h"
@@ -203,7 +204,7 @@ void fuel_mass() {
     h.seg11_4c72 = [](int) { todo_once("fuel-out damage", "seg11:0x4c72"); };
     h.seg3_332e = [](std::uint32_t) { todo_once("status message", "seg3:0x332e"); };
     h.seg13_2dcc = [] { todo_once("radar brushes", "seg13:0x2dcc"); };
-    h.seg11_1d7c = [] { todo_once("seg11:0x1d7c after seg11:0x1bcc", "seg11:0x1d7c"); };
+    h.seg11_1d7c = [] { world::repair_tick(); };  // the auto-repair (world/damage.h auto_repair) (M4 s1 fixer)
     status_tick(w(), world::flight_globals().now, g_status, h);
 }
 
@@ -321,18 +322,15 @@ void build_player_sheet(world::World& wd) {
                          : std::string("none")));
 }
 
-// The effect's calls outside the drawing (world/entry_effect.h). The sounds go through no
-// engine yet (the sound track) and seg2:0x170e's menu state is the shell's [OPEN].
+// The effect's calls outside the drawing (world/entry_effect.h): the sounds through M7's
+// seg10:0x754a and the vanish's end (world/gate_exit.h vanish_end) (M4 s1 fixer); seg2:0x170e's
+// menu state is the shell's [OPEN].
 class WaveEntryHooks final : public world::EntryHooks {
 public:
-    void sound(int id, int pool, int rec, int arg) override {
-        (void)pool, (void)rec, (void)arg;
-        todo_once("entry sound " + std::to_string(id), "seg10:0x754a");
-    }
+    void sound(int id, int pool, int rec, int arg) override { is::sound::play_at(id, pool, rec, arg); }
     void menu_refresh() override { todo_once("menu state after the entry", "seg2:0x170e"); }
     void vanished(int pool, int rec) override {
-        (void)pool, (void)rec;
-        todo_once("the vanish's end", "seg7:0x181e");
+        world::run_vanish_end(pool, rec, world::flight_globals().now);  // [BYTES seg7:0x181e-0x19ff]
     }
 };
 WaveEntryHooks g_entry_hooks;
@@ -400,6 +398,29 @@ void install_wave(app::App& app) {
     l.direction_mark = [](int d) {
         if (Hud* h = hud()) h->info().update_mark(d);  // seg13:0x24aa(d)
     };
+    // ---- M4 s1 fixer: the stage's links into the HUD
+    // The image table DGROUP:0x39e8 for the effects, the burnt sheet and the debris.
+    l.images = []() -> const world::ImageSlotTable* { return &g_images; };
+    // seg7:0x119c(2, 0) at the speed or message display's end [BYTES seg7:0xbe3-0xbe7].
+    l.info_target = [] { info_mode_119c(2); };
+    // seg3:0x6ec from the collisions and the damage (hud/messages.h).
+    world::collide_links().message = [](int ship, int pool, int rec, int code) {
+        post_message(ship, pool, rec, code);
+    };
+    // The gate exit's and the vanish's entry effect, and the wave end's calls into the HUD and
+    // the shell (world/hooks.h WaveEndLinks).
+    world::set_entry_context([] { return entry_context(); });
+    world::WaveEndLinks& e = world::wave_end_links();
+    e.close_hud = [] { close(); };  // seg11:0x2f0
+    // seg13:0x65f2(1)'s seg7:0x63f2, the IS_ICON column [BYTES seg13:0x669b]; seg13:0x5850 and
+    // seg13:0x6362 (the watch and IS_SMART windows) have no port [OPEN].
+    e.close_watch_windows = [] {
+        if (icon_column_exists()) icon_column_destroy();
+    };
+    e.message = [](int ship, int id) { post_message(ship, 7, 0, id); };  // seg3:0x6ec(ship, 7, 0, id)
+    // seg16:0x68d6(main, 2328, 2329) at seg7:0x6c8 [BYTES seg7:0x6c8 seg16:0x68ed seg16:0x6904
+    // seg16:0x691b].
+    e.history_box = [] { app::message_box_ids(g.main, 2328, 2329); };
     Links& k = links();
     k.radar = [] {
         if (ready() && g_radar.created()) g_radar.repaint(radar_inputs(), *g_blit);  // seg11:0x33cc

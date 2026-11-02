@@ -17,8 +17,15 @@
 #include <string>
 
 #include "app/app.h"
+#include "audio/audio.h"
+#include "dialogs/audio_options.h"
 #include "shell/rng.h"
+#include "world/debris.h"
+#include "world/effects.h"
+#include "world/gate_exit.h"
+#include "world/hooks.h"
 #include "world/player_sheet.h"
+#include "world/visibility.h"
 #include "world/world.h"
 
 namespace is::world {
@@ -106,6 +113,67 @@ public:
     void flame_tail(int on, int ship) override {
         if (sprite_links().flame_tail) sprite_links().flame_tail(on, ship);
     }
+    // seg10:0x754a(id, pool, rec, mode) through M7's engine (src/dialogs/audio_options.h
+    // is::sound) (M4 s1 COLLIDE).
+    void sound(int id, int pool, int rec, int mode) override { is::sound::play_at(id, pool, rec, mode); }
+    CollideHost& collide_host() override;
+    CollideGlobals& collide_globals() override;
+    // ---- M4 s1 fixer: the stage's calls on the program's World
+    // seg8:0x3fbe(k) at the pass's step 5 (effects.h effect_frame).
+    void effect(int k) override;
+    // seg13:0x447a at the frame's end (debris.h move_debris).
+    void seg13_447a() override;
+    // seg12:0x2288(pool, rec): the gate exit (world/hooks.h run_gate_exit, gate_exit.h).
+    void gate_passed(int pool, int rec) override;
+    // seg12:0x274a(pool, rec) at the tumble's end of a dead ship [BYTES seg13:0x181] and from
+    // CollideHost::destroy (effects.h object_destroyed).
+    void seg12_274a(int pool, int rec) override;
+    // The speed or message display's end [BYTES seg7:0xba7-0xbea]: seg3:0x6ec(player, 14,
+    // player word +0x58, 2) while DGROUP:0x9608 != 0, else seg7:0x119c(2, 0).
+    void speed_display_end_3_6ec() override;
+    void speed_display_end_7_119c() override;
+};
+
+CollideLinks g_collide_links;
+
+// The program's collision calls out (M4 s1 COLLIDE).
+class ProgramCollideHost final : public CollideHost {
+public:
+    UpdateHost* u = nullptr;
+    void sound(int id, int pool, int rec, int mode) override { u->sound(id, pool, rec, mode); }
+    void message(int ship, int pool, int rec, int code) override {
+        if (g_collide_links.message) return g_collide_links.message(ship, pool, rec, code);
+        todo_once("message " + std::to_string(code), "seg3:0x6ec");
+    }
+    // seg12:0x274a and seg16:0x8e4 on the program's World (effects.h) (M4 s1 fixer).
+    void destroy(int pool, int rec) override;
+    void ship_destroyed(int pool, int ship) override;
+    // seg8:0x2cd8's debris: the free entry of DGROUP:0x915c (debris.h debris_start). The wing's
+    // strip image seg10:0x7370 and its mask are not read: the entry has no picture, so only its
+    // erase squares show [OPEN seg10:0x7370].
+    bool wing_debris(int ship, int side) override;
+    // seg8:0x81f8(pool, rec): the hit history DGROUP:0x937a the 800 award searches (gate_exit.h
+    // push_hit) [BYTES seg8:0x820f seg8:0x8240 seg8:0x8246 seg8:0x824c]; seg8:0x81f8's other
+    // work, if any, is [OPEN].
+    void seg8_81f8(int pool, int rec) override;
+    void seg7_2080(int pool, int rec) override {
+        if (g_collide_links.in_use) return g_collide_links.in_use(pool, rec);
+        todo_once("in-use counts", "seg7:0x2080");
+    }
+    void flame_off(int ship) override;
+    void erase(int x, int y, int w, int h) override {
+        if (Blitter* out = u->blitter()) out->pat_blt(kDcWindow, x, y, w, h, kBlackness);
+    }
+    void seg13_b6f2(int, int) override { todo_once("pilot goal", "seg13:0xb6f2"); }
+    void seg11_947a(int, int, int) override { todo_once("tether end", "seg11:0x947a"); }
+    void wing_design(int) override { todo_once("wing design words", "seg14:0x3eda"); }
+    void wing_taunts(int, int) override { todo_once("wing taunts", "seg8:0x2da6"); }
+    std::int16_t other_damage(std::uint32_t id, int pool, int, std::int16_t) override {
+        char buf[64];
+        std::snprintf(buf, sizeof buf, "on_damage seg%u:0x%x pool %d", id >> 16, id & 0xffffu, pool);
+        todo_once(buf, "seg8:0x647c");
+        return 0;
+    }
 };
 
 // The switch's actions: the posts, the speed and the rescale are the flight role's; the target
@@ -161,6 +229,13 @@ struct Runtime {
     JoyButtons jb;
     DefaultHost default_host;
     DefaultActions default_actions;
+    ProgramCollideHost collide_host;
+    CollideGlobals collide;
+    RepairState repair;
+    // The wing debris DGROUP:0x915c and the smoke table DGROUP:0x58c4 (debris.h); the placement
+    // seg9:0x6624 frees them at the wave start (wave_started) [BYTES seg9:0x6624].
+    DebrisTable debris{};
+    SmokeTable smoke{};
     UpdateHost* host = nullptr;
     bool settings_read = false;
     std::function<std::int32_t()> zoom;  // DGROUP:0xa6c's owner (M3 s2 fixer)
@@ -180,6 +255,143 @@ Runtime& rt() {
 }
 
 KeyActions* default_actions_hud() { return rt().default_actions.hud; }
+
+UpdateCtx make_ctx(Runtime& r);
+
+CollideHost& DefaultHost::collide_host() {
+    Runtime& r = rt();
+    r.collide_host.u = &r.h();
+    return r.collide_host;
+}
+CollideGlobals& DefaultHost::collide_globals() { return rt().collide; }
+
+void ProgramCollideHost::flame_off(int ship) {
+    Runtime& r = rt();
+    if (!r.world) return;
+    UpdateCtx c = make_ctx(r);
+    ship_touched(c.flight, ship);  // seg13:0x6716
+}
+
+// ---- M4 s1 fixer: the effects, the death, the debris and the gate on the program's World
+
+// The far call of a record's `on_destroy` (+0x66) [BYTES seg13:0x4a1d]: the two handlers the
+// port has, seg16:0x8e4 (a ship) and seg12:0x274a (the generic one); any other logs [OPEN].
+void call_on_destroy(EffectCtx& c, int pool, int rec) {
+    const std::uint32_t id = obj(c.w, pool, rec).on_destroy.get();
+    if (id == kDestroyShip) return ship_destroyed(c, pool, rec);
+    if (id == kDestroyGeneric) return object_destroyed(c, pool, rec);
+    char buf[64];
+    std::snprintf(buf, sizeof buf, "on_destroy seg%u:0x%x pool %d", id >> 16, id & 0xffffu, pool);
+    todo_once(buf, "seg13:0x4a1d");
+}
+
+// The collision words of the program for a call outside the movers (the blast of seg8:0x5ab0
+// runs in the pass): the pass's own view, visibility list and DGROUP:0x943a / 0x943c / 0x9454.
+CollideCtx program_collide_ctx(Runtime& r) {
+    return CollideCtx{*r.world, r.g,           r.h().collide_globals(), r.h().collide_host(),
+                      r.view,   last_visibility(), shell::game_rng(),      r.f.dg_943a,
+                      r.f.dg_943c, r.f.dg_9454};
+}
+
+class ProgramEffectHost final : public EffectHost {
+public:
+    void sound(int id, int pool, int rec, int mode) override { rt().h().sound(id, pool, rec, mode); }
+    void player_sprite() override { rt().h().player_sprite(); }
+    // seg8:0x5df2 from the blast (COLLIDE's dispatcher; a negative amount is its `neg` path).
+    void hit(int pool, int rec, int sp, int sr, std::int16_t amount) override {
+        Runtime& r = rt();
+        if (!r.world) return;
+        r.collide_host.u = &r.h();
+        CollideCtx x = program_collide_ctx(r);
+        dispatch(x, pool, rec, sp, sr, amount);
+    }
+    std::int16_t design_kind(int design) override { return rt().h().design_kind(design); }
+    void destroy(int pool, int rec) override;
+    void seg7_2080(int pool, int arg) override { rt().collide_host.seg7_2080(pool, arg); }
+};
+
+ProgramEffectHost g_effect_host;
+
+// seg8:0x29ea for the effects and the debris.
+Point16 effect_to_screen(std::int16_t x, std::int16_t y) {
+    const ScreenPoint p = flight_to_screen(x, y);
+    return Point16{p.x, p.y};
+}
+
+// Runs f on the effects' context of the program's World: the image table from the HUD's link,
+// the wave Blitter, DGROUP:0x1e50, DGROUP:0x951a and DGROUP:0x1318 (0 in the image, its writer
+// [OPEN]) [BYTES DGROUP:0x1318].
+template <typename F>
+void with_effects(F f) {
+    Runtime& r = rt();
+    if (!r.world) return;
+    r.collide_host.u = &r.h();
+    const EffectWords in{r.g.now, r.g.autopilot, 0};
+    EffectCtx c{*r.world,         effect_state(),
+                in,               g_effect_host,
+                shell::game_rng(), wave_blitter(),
+                g_links.images ? g_links.images() : nullptr,
+                effect_to_screen, &r.f.dg_943a,
+                &r.f.dg_943c};
+    f(c);
+}
+
+void ProgramEffectHost::destroy(int pool, int rec) {
+    with_effects([&](EffectCtx& c) { call_on_destroy(c, pool, rec); });
+}
+
+void DefaultHost::effect(int k) {
+    with_effects([k](EffectCtx& c) { effect_frame(c, k); });
+}
+
+void DefaultHost::seg13_447a() {
+    Runtime& r = rt();
+    if (!r.world) return;
+    World& w = *r.world;
+    // W, H: DGROUP:0x90ea, 0x90ec
+    DebrisCtx c{r.debris,       r.smoke,         w.w9456,           w.pools,
+                shell::game_rng(), r.g.size,     r.g.dg_9130,       w.W,
+                w.H,            r.g.detail,      wave_blitter(),    effect_to_screen,
+                last_visibility(), [] { rt().h().player_sprite(); }};
+    move_debris(c);
+}
+
+void DefaultHost::gate_passed(int pool, int rec) { run_gate_exit(pool, rec, rt().g.now); }
+
+void DefaultHost::seg12_274a(int pool, int rec) {
+    with_effects([&](EffectCtx& c) { object_destroyed(c, pool, rec); });
+}
+
+void DefaultHost::speed_display_end_3_6ec() {
+    Runtime& r = rt();
+    if (!r.world) return;
+    const int p = r.g.player;
+    r.collide_host.message(p, r.g.ship_pool, ship_at(*r.world, p).w58, 2);  // [BYTES seg7:0xbcc-0xbdf]
+}
+
+void DefaultHost::speed_display_end_7_119c() {
+    if (g_links.info_target) return g_links.info_target();
+    todo_once("the information display back to the target", "seg7:0x119c");
+}
+
+void ProgramCollideHost::destroy(int pool, int rec) {
+    with_effects([&](EffectCtx& c) { object_destroyed(c, pool, rec); });  // seg12:0x274a
+}
+
+void ProgramCollideHost::ship_destroyed(int pool, int ship) {
+    with_effects([&](EffectCtx& c) { ::is::world::ship_destroyed(c, pool, ship); });  // seg16:0x8e4
+}
+
+bool ProgramCollideHost::wing_debris(int ship, int side) {
+    (void)side;  // the side picks the strip's offsets of seg8:0x2cd8 [OPEN]
+    Runtime& r = rt();
+    if (!r.world) return false;
+    return debris_start(r.debris, obj(*r.world, r.g.ship_pool, ship)) >= 0;
+}
+
+void ProgramCollideHost::seg8_81f8(int pool, int rec) {
+    if (rt().world) push_hit(*rt().world, pool, rec);
+}
 
 // The INI keys the flight model reads (seg6:0xb3e: `Braking` DGROUP:0x8ff6, `JoyStick`
 // DGROUP:0x8ff4, `JBtn0` ... `JBtn3` DGROUP:0x1dcc) and the remap strings 2900 and 2901
@@ -346,6 +558,9 @@ void wave_hook(shell::GameState& s) {
         return;
     }
     if (!r.settings_read) read_settings(r);
+    // The tick's deadline block seg7:0x5ce-0x707 before the pass: a deadline that fires ends
+    // the tick there (the wave end, the history MessageBox, state 5) [DESIGN ADR 0001] (wave_end.h).
+    if (run_wave_deadlines(s) == DeadlineResult::kEndPass) return;
     sync_in(r, s);
     UpdateCtx c = make_ctx(r);
     wave_pass(c, g.scheduler.rate() > shell::kMaxRateThreshold);
@@ -380,9 +595,42 @@ bool route_wave(shell::GameState& s, const shell::Input& in) {
 
 }  // namespace
 
+// seg10:0x754a's mode-1 and mode-3 points (sound.md "INSPACE wrappers" step 3): object words
+// +4, +6 of record b of pool a, and the dword DGROUP:0x5144 (effects.h EffectState::dg_5144);
+// mode 2's shot slots are M4 stage 2 [OPEN]. Step 4's seg8:0x29ea is the flight view's
+// (M4 s1 fixer, review M14) [BYTES seg10:0x76d9-0x775c seg10:0x778b].
+bool sound_source(int mode, int a, int b, int& x, int& y) {
+    const World* w = rt().world;
+    if (!w) return false;
+    if (mode == 1) {
+        if (a < 0 || a >= kPoolCount || b < 0 || b >= w->pools.records(a)) return false;
+        const ObjectRecord& o = w->pools.rec(a, b);
+        x = o.x;
+        y = o.y;
+        return true;
+    }
+    if (mode == 3) {
+        x = effect_state().dg_5144;
+        y = effect_state().dg_5146;
+        return true;
+    }
+    return false;
+}
+
 void bind_flight_world(World* w) {
     Runtime& r = rt();
     r.world = w;
+    if (w)
+        audio::set_world_source(
+            sound_source,
+            [](int& x, int& y) {
+                const ScreenPoint p = flight_to_screen(static_cast<std::int16_t>(x), static_cast<std::int16_t>(y));
+                x = p.x;
+                y = p.y;
+            },
+            w->roles.ships);  // DGROUP:0x9324
+    else
+        audio::set_world_source(nullptr, nullptr, -1);
     // The flight globals stand for DGROUP words and live for the run, as DGROUP does (the 0 ... 8
     // cycle DGROUP:0x95f6 runs on across waves); the INI keys are read again for the new wave
     // [DESIGN].
@@ -392,7 +640,26 @@ void set_update_host(UpdateHost* host) { rt().host = host; }
 void set_key_actions(KeyActions* actions) { rt().default_actions.hud = actions; }
 WaveLinks& wave_links() { return g_links; }
 void set_zoom_source(std::function<std::int32_t()> zoom) { rt().zoom = std::move(zoom); }
-void wave_started() { rt().keys.clear_pressed(); }
+void wave_started() {
+    Runtime& r = rt();
+    r.keys.clear_pressed();
+    reset_collide_wave(r.collide);  // [DESIGN ADR 0015] decision 1
+    r.repair.due = 0;               // [BYTES seg9:0x668d], the port at the wave start [DESIGN]
+    // The placement seg9:0x6624 frees the smoke entries (DGROUP:0x58cc = -1) [BYTES seg9:0x6624];
+    // the debris table's reset at the wave start is the port's [DESIGN].
+    r.smoke = SmokeTable{};
+    r.debris = DebrisTable{};
+}
+CollideLinks& collide_links() { return g_collide_links; }
+void destroy_object(int pool, int rec) { rt().default_host.seg12_274a(pool, rec); }
+CollideGlobals& collide_globals() { return rt().collide; }
+RepairState& repair_state() { return rt().repair; }
+void repair_tick() {
+    Runtime& r = rt();
+    if (!r.world) return;
+    r.collide_host.u = &r.h();
+    auto_repair(*r.world, r.repair, r.h().collide_host());  // seg11:0x1d7c
+}
 int frame_rate_actual() { return rt().actual_59a; }
 WaveGlobals& flight_globals() { return rt().g; }
 FrameGlobals& frame_globals() { return rt().f; }

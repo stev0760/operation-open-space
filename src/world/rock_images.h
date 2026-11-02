@@ -33,8 +33,11 @@ void build_rock_images(Blitter& out, ImageSlotTable& images, std::int16_t& dg_74
 // The seg9:0x22b4 graphics chain as the port has it: seg10:0x3a2e (build_rock_images), the gate
 // images seg10:0x3ea2 (seg9:0x26e5) and the wave's brush tables (create_wave_brushes) into
 // wave_graphics() [DESIGN: one call for the chain's images] (M3 s4 DRAW). The integration's
-// load (src/hud/wave_win32.cpp load_wave_resources) calls it.
-void build_wave_images(Blitter& out, ImageSlotTable& images, std::int16_t& dg_740);
+// load (src/hud/wave_win32.cpp load_wave_resources) calls it. The chain also loads the explosion
+// images seg10:0x5102 (effects.h build_effect_images) with `enhance`, INI `Enhance`
+// (DGROUP:0x8fe8, 1 by default, formats.md) (M4 s1 DEATH).
+void build_wave_images(Blitter& out, ImageSlotTable& images, std::int16_t& dg_740,
+                       std::int16_t enhance = 1);
 
 // ---- the gate images seg10:0x3ea2 (work/analysis/m3/s4-draw.md 1.3)
 

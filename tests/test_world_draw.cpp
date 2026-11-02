@@ -108,9 +108,9 @@ TEST_CASE("player sprite: the conditions") {
     CHECK_FALSE(drawn([](Fixture& f) { f.g.sprite.dg_9e49 = 4, f.g.sprite.dg_952e = 2; }));
     CHECK(drawn([](Fixture& f) { f.g.sprite.dg_9e49 = 7, f.g.sprite.dg_952e = 2; }));
     CHECK(drawn([](Fixture& f) { f.g.sprite.dg_9e49 = 4, f.g.sprite.dg_952e = 1; }));
-    // An effect of kind 1..8 on the player's ship hides it while ship byte +0xec is 0.
-    auto effect = [](Fixture& f, std::uint16_t kind, int k, int last) {
-        f.effects[static_cast<std::size_t>(k)].kind = kind;
+    // An effect at frame +0x00 = 1..8 on the player's ship hides it while ship byte +0xec is 0.
+    auto effect = [](Fixture& f, std::uint16_t frame, int k, int last) {
+        f.effects[static_cast<std::size_t>(k)].frame = frame;
         f.effects[static_cast<std::size_t>(k)].pool = 0xe;
         f.effects[static_cast<std::size_t>(k)].rec = 2;
         f.g.last_effect = static_cast<std::int16_t>(last);

@@ -52,6 +52,27 @@ std::unique_ptr<System> g;
 // The INSPACE globals the setters keep while no session exists (M7 fixer).
 int g_area_w = 640, g_area_h = 480;  // DGROUP:0x90ea, DGROUP:0x90ec until the first set_area
 int g_mix_920a = 1;                  // DGROUP:0x920a, default 1 [BYTES seg6:0xc9c]
+// The wave's sources (set_world_source), kept across init (M4 s1 fixer).
+std::function<bool(int, int, int, int&, int&)> g_source;
+std::function<void(int&, int&)> g_to_view;
+int g_pool_count = -1;
+
+void apply_world_source(World& w) {
+    w.pool_count = g_pool_count;
+    if (g_source) {
+        w.source = [](int mode, int a, int b, Point& p) { return g_source(mode, a, b, p.x, p.y); };
+    } else {
+        w.source = nullptr;
+    }
+    if (g_to_view) {
+        w.to_view = [](Point p) {
+            g_to_view(p.x, p.y);
+            return p;
+        };
+    } else {
+        w.to_view = nullptr;
+    }
+}
 
 // ISPACE.DLL seg9:0xba opens SndPath + the module name (with a `\` appended, seg9:0x162)
 // [BYTES ISPACE.DLL seg9:0x152 seg9:0x162 seg9:0x1fe]: the asset store's sound directory.
@@ -106,6 +127,7 @@ bool init(const Settings& in, assets::AssetStore& store, void* hwnd_notify) {
     g->engine.world().mix_channels = g_mix_920a;
     g->engine.world().area_w = g_area_w;
     g->engine.world().area_h = g_area_h;
+    apply_world_source(g->engine.world());
     // INSPACE's argument DGROUP:0x5a0 (3200, 3200) [BYTES ISPACE.DLL seg9:0x455] (ispace.md).
     const bool ok = g->engine.command0(s, devices, 3200, 3200);
 
@@ -158,6 +180,14 @@ void set_area(int w, int play_h) {
     if (!g) return;
     g->engine.world().area_w = w;
     g->engine.world().area_h = play_h;
+}
+
+void set_world_source(std::function<bool(int mode, int a, int b, int& x, int& y)> source,
+                      std::function<void(int& x, int& y)> to_view, int pool_count) {
+    g_source = std::move(source);
+    g_to_view = std::move(to_view);
+    g_pool_count = pool_count;
+    if (g) apply_world_source(g->engine.world());
 }
 
 void set_inspace_mix_channels(int n) {

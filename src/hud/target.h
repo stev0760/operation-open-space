@@ -85,7 +85,8 @@ struct CellPlan {
     // seg13:0x5a99-0x5b1d seg13:0x5bfe].
     bool glint = false;
     // seg13:0x5c22's StretchBlt(SRCCOPY) of image slot `slot` (13 is the icon strip DGROUP:0x3a02,
-    // slot 14 + rec a captured icon's own image) after SetStretchBltMode(COLORONCOLOR).
+    // slot 14 + rec a captured icon's own image, 5 the logo strip of pool 7) after
+    // SetStretchBltMode(COLORONCOLOR).
     bool picture = false;
     int slot = 0;
     int dx = 0, dy = 0, dw = 0, dh = 0;
@@ -95,7 +96,7 @@ struct CellPlan {
     // Pool 0 with +0x18 != 0 and DGROUP:0x57c1 != 0: the four 20 x 20 sub-cells of
     // seg13:0x5f49-0x606d [OPEN: not drawn by the port].
     bool sub_cells = false;
-    // A pool other than 0 [OPEN: M4/M5].
+    // A pool other than 0 and 7 [OPEN: M4/M5].
     bool other_pool = false;
 };
 
@@ -108,6 +109,9 @@ struct CellInputs {
     int ship_pool = 14;   // DGROUP:0x9324
     int detail = 3;       // DGROUP:0x9208
     int dg_131c = 0;      // DGROUP:0x131c
+    // Pool 7: word +0x10 of pool 7's record 0 (far pointer DGROUP:0x1e14), the source x of a
+    // live pool-7 object [BYTES seg13:0x5d2f-0x5d37].
+    int pool7_w10 = 0;
     CellObject obj;
     CellIcon icon;
 };

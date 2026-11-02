@@ -345,6 +345,10 @@ void Info::target_picture(int flag) {
     if (p.picture && p.slot == 0xd)
         c_.stretch_blt(Img::kScreen, p.dx, p.dy, p.dw, p.dh, Img::kIconStrip, p.sx, p.sy, p.sw, p.sh,
                        kSrcCopy);
+    // Pool 7's slot 5, the logo strip [BYTES seg13:0x5d3a seg13:0x60cd-0x60e1] (M4 s1 SCREENS).
+    if (p.picture && p.slot == 5 && c_.has(Img::kLogoStrip))
+        c_.stretch_blt(Img::kScreen, p.dx, p.dy, p.dw, p.dh, Img::kLogoStrip, p.sx, p.sy, p.sw, p.sh,
+                       kSrcCopy);
 }
 
 void Info::target_picture_now() {
@@ -491,6 +495,21 @@ void Info::show_messages() {
 
 void Info::frame_rate_measured() {
     if (mode() == kModeFrameRate) invalidate(kInfoTarget);  // seg7:0xadf-0xaf2
+}
+
+void Info::set_mode_119c(int m) {
+    set_mode(m);                          // [BYTES seg7:0x11a6-0x11a9]
+    if (exists_) invalidate(kInfoTarget);  // [BYTES seg7:0x11ac-0x11bf]
+}
+
+void Info::flash() {
+    if (mode() == kModeFrameRate) return;  // [BYTES seg11:0x3e7b-0x3e80]
+    if (!exists_) return;                  // the caller tests DGROUP:0xa7c [BYTES seg3:0x771]
+    const shell::Box& b = rect_[0];
+    c_.set_view(b.x, b.y, b.cx, b.cy);
+    c_.pat_blt(Img::kScreen, 0, 0, b.cx, b.cy, kWhiteness, Brush::none());  // [BYTES seg11:0x3eae]
+    c_.clear_view();
+    invalidate(kInfoTarget);  // [BYTES seg11:0x3ecb]
 }
 
 }  // namespace is::hud

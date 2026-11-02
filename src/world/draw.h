@@ -76,7 +76,7 @@ PlayerCell player_cell(std::int16_t type, std::int16_t heading, std::int16_t siz
                        std::int16_t gap, std::uint8_t ship_be9);
 
 // The conditions of seg7:0x1208: state 1, the player in play, DGROUP:0x951a, 0x9130 and
-// 0x3a38, the special-wave skip, and the effect-table skip (an entry of kind 1..8 on the
+// 0x3a38, the special-wave skip, and the effect-table skip (an entry at frame +0x00 = 1..8 on the
 // player's ship while ship byte +0xec is 0).
 bool player_sprite_drawn(const DrawContext& c);
 

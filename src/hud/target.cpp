@@ -131,12 +131,36 @@ CellPlan plan_cell(const CellInputs& in, int& glint_counter) {
         c.special = true;
         return c;
     }
+    int a = in.obj.extent >> 3;                   // seg13:0x5c40-0x5c47: sar 3
+    const int size = in.obj.size, gap = in.obj.gap;
+    if (in.pool == 7) {
+        // seg13:0x5dac case 7 [BYTES seg13:0x5d05-0x5d4b]: slot 5, the logo strip (shell.md "Image
+        // slots"); a dead record (+0x18 != 0) shows the cell at 6·gap + 5·size, y gap, a live one
+        // the source x of record 0's +0x10 with its own +0x12; the extent is halved (idiv 2).
+        // Then seg13:0x5dcf (seg13:0x371c = 0 here, tested above) and seg13:0x5f1e-0x5f46 /
+        // seg13:0x6070-0x6074 lead every pool-7 call to the draw at seg13:0x6096 (M4 s1 SCREENS).
+        c.slot = 5;
+        if (in.obj.state != 0) {
+            c.sx = w16(w16(gap * 6) + w16(size * 5));
+            c.sy = gap;
+        } else {
+            c.sx = in.pool7_w10;
+            c.sy = in.obj.src_y;
+        }
+        a = a / 2;
+        c.sw = c.sh = size;
+        const int off = half(0x2b - a);  // seg13:0x6096-0x60e1
+        a = a >> s;
+        c.dx = w16(off + in.x) >> s;
+        c.dy = w16(off + in.y) >> s;
+        c.dw = c.dh = a;
+        c.picture = true;
+        return c;
+    }
     if (in.pool != 0) {
         c.other_pool = true;
         return c;
     }
-    int a = in.obj.extent >> 3;                   // seg13:0x5c40-0x5c47: sar 3
-    const int size = in.obj.size, gap = in.obj.gap;
     if (in.obj.state != 0) {                      // seg13:0x5f1e-0x5f46
         if (in.icon.w19 != 0) {
             c.sub_cells = true;

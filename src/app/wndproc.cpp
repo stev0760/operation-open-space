@@ -43,6 +43,19 @@ void set_caption(std::uint16_t id) {
     SetWindowTextW(g.main, s.c_str());
 }
 
+}  // namespace
+
+int message_box_ids(HWND owner, int id1, int id2) {
+    std::wstring text = lang_string(static_cast<std::uint16_t>(id1));  // seg9:0x955c
+    if (id2 != -1) text += lang_string(static_cast<std::uint16_t>(id2));  // seg9:0x9580
+    log("seg16:0x68d6: MessageBox " + std::to_string(id1) + " " + std::to_string(id2));
+    // DGROUP:0x9690 is the program's name, "Inner Space" (the caption the oracle shows) [ORACLE
+    // core-0001].
+    return MessageBoxW(owner, text.c_str(), L"Inner Space", MB_ICONEXCLAMATION | MB_OK);
+}
+
+namespace {
+
 // seg2:0x9c4: pause [BYTES seg2:0x9d1-0x9f9]. DGROUP:0x592 (the frames-per-second hold of the
 // adaptive thresholds) has no port equivalent (ADR 0001 decision 7).
 void pause_game() {

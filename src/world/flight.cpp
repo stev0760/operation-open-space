@@ -526,13 +526,13 @@ void move_ships(FlightCtx& c) {
             if (s.be2 == 0) return;  // seg13:0xe1: the remaining ships are skipped
             o.angle = 1;
             if (s.turn_acc < 1) {
-                o.frame = c.host.seg13_100c(i, o.frame);
+                o.frame = turn_step(s, o, o.frame);
                 ship_touched(c, i);
                 s.turn_acc = 1;
             } else {
                 s.turn_acc = sub16(s.turn_acc, 1);
             }
-            if (s.bec == 0 && s.lockout.get() < g.now) {  // [BYTES seg13:0x146-0x181]
+            if (s.bec == 0 && lockout_passed(s, g.now)) {  // [BYTES seg13:0x146-0x181]
                 s.be2 = 0;
                 o.angle = 0;
                 c.host.seg12_274a(g.ship_pool, i);
@@ -540,9 +540,9 @@ void move_ships(FlightCtx& c) {
             goto tail;  // jmp seg13:0x68d
         }
         if (s.be2 != 0) {  // [BYTES seg13:0x18c-0x221]
-            o.frame = c.host.seg13_100c(i, o.frame);
+            o.frame = turn_step(s, o, o.frame);
             ship_touched(c, i);
-            if (s.lockout.get() < g.now) {
+            if (lockout_passed(s, g.now)) {
                 s.be2 = 0;
                 o.angle = 0;
             } else if (g.wave_kind == 6) {
@@ -673,6 +673,16 @@ void move_ships(FlightCtx& c) {
         }
         if (o.on_screen != 0) c.host.ship_collide(i);  // seg13:0xb5a-0xcf9 [OPEN] M4
     }
+}
+
+// seg13:0x100c [BYTES seg13:0x1017-0x1069]
+std::int16_t turn_step(const ShipRecord& s, const ObjectRecord& o, std::int16_t h) {
+    if (s.beb != 0) return h;                    // [BYTES seg13:0x101c]
+    if (s.type > 0 && s.type < 7) return h;      // [BYTES seg13:0x102d-0x1039]
+    h = add16(h, o.angle);                       // object +0x26 [BYTES seg13:0x104a-0x104e]
+    if (h >= 16) return 0;                       // [BYTES seg13:0x1051-0x1057]
+    if (h <= 0) return 15;                       // [BYTES seg13:0x105e]
+    return h;
 }
 
 // [BYTES seg14:0x1c8c-0x1caa seg14:0x1e35-0x1e8f seg14:0x1f41-0x1f4d]

@@ -175,6 +175,10 @@ void new_game(World& w) {
     }
     w.w986.fill(1);
     w.w986[5] = 2;  // DGROUP:0x990
+    // The death and the passage deadlines, on every path (M4 s1 END) [BYTES seg9:0xd28
+    // seg9:0xd2b seg9:0xd2f].
+    w.w1e84 = 0;
+    w.w1e80 = 0;
 }
 
 // ---------------------------------------------------------------- the generator seg9:0x3202
@@ -1770,6 +1774,7 @@ void start_wave(World& w, SetupHost& h) {
     // seg9:0x60bc [BYTES seg9:0x60ff seg9:0x6320]
     w.w0a76 = 2;
     w.w9e49 = 10;
+    w.w93a4 = 0;  // the Hall of Justice flag [BYTES seg9:0x6111]
     // seg8:0x190e at seg9:0x6117: the stars, six rand() each before the chance block (M3 s4
     // DRAW) [BYTES seg9:0x6117]. seg13:0x2dcc (the radar brushes, called at seg9:0x611c) is
     // unread and not ported [OPEN seg13:0x2dcc] [BYTES seg9:0x611c].
@@ -1867,7 +1872,11 @@ void start_wave(World& w, SetupHost& h) {
         set_ship_word(me, 0xd0, 0);
     }
     if (w.kind == 7) w.gate[0].w12 = 0;
-    w.w934e = 0;
+    // The player's captured and destroyed counts at the wave start, for the debriefing's string
+    // 3012 (s1-end.md claim 58) [BYTES seg9:0x6514 seg9:0x6518 seg9:0x651b seg9:0x651f].
+    w.w9370 = ship_word(me, 0xd2);
+    w.w9372 = ship_word(me, 0xd0);
+    w.w934e = 0;  // [BYTES seg9:0x6524]
     say(h, "world: wave start seg9:0x60bc wave " + std::to_string(w.wave) + ", player at (" +
                std::to_string(p.rec(kPoolShips, w.player).x) + ", " +
                std::to_string(p.rec(kPoolShips, w.player).y) + ") heading " +

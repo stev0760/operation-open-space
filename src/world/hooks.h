@@ -7,6 +7,9 @@
 #include <cstdint>
 #include <functional>
 
+#include "shell/game_state.h"
+#include "world/entry_effect.h"
+#include "world/wave_end.h"
 #include "world/world.h"
 
 #ifdef _WIN32
@@ -43,5 +46,34 @@ void on_briefing_placement(std::function<void(World&)> f);
 // The design mass DGROUP:0x9704 + 0xad·design of the ship set-up, for seg11:0x1bcc (0 for a
 // design the set-up did not make) (M3 s2 fixer).
 std::int16_t design_mass(int design);
+
+// ---- M4 stage 1, track END: the gate exit and the wave end on the program's World
+// The calls to other parts these need; an empty slot logs a TODO once. The program fills them
+// (the fixer's wiring, see work/world/m4s1/end-report.md).
+struct WaveEndLinks {
+    std::function<void()> clear_restored;       // DGROUP:0x92e4 = 0 in the game-start session
+    std::function<void()> close_hud;            // seg11:0x2f0 (src/hud close_hud)
+    std::function<void()> close_watch_windows;  // seg13:0x65f2(1)
+    std::function<void()> history_box;          // seg16:0x68d6(main, 2328, 2329), modal
+    std::function<void(int pool, int rec)> column_row;  // seg7:0x65aa
+    std::function<void(int ship, int id)> message;      // seg3:0x6ec(ship, 7, 0, id)
+    std::function<void(int rec, int arg)> icon_counted; // seg7:0x5ae8(rec, arg)
+    std::function<std::int16_t(int design)> design_type;  // DGROUP:0x970a + 0xad·design
+};
+WaveEndLinks& wave_end_links();
+// The entry effect's context of the wave's drawing side (src/hud wave_win32.cpp entry_context),
+// for seg12:0x2556, seg7:0x13b2 and seg12:0x26a4 (SCREENS sets it in install_wave).
+void set_entry_context(std::function<EntryContext()> f);
+// The state-2 screen's start, set by the briefing (src/briefing/hooks.cpp): called after
+// seg9:0x6cc4 with the World whose values the page reads.
+void on_debriefing(std::function<void(World&)> f);
+
+// UpdateHost::gate_passed(pool, rec): seg12:0x2288 on the program's World (gate_exit.h).
+void run_gate_exit(int pool, int rec, std::uint32_t now);
+// EntryHooks::vanished(pool, rec): the end of a mode-1 vanish (gate_exit.h vanish_end).
+void run_vanish_end(int pool, int rec, std::uint32_t now);
+// The state-1 frame hook's first step: the tick's deadline block seg7:0x5ce-0x707 on the
+// program's World (wave_end.h); kEndPass: run no wave pass and frame [DESIGN ADR 0001].
+DeadlineResult run_wave_deadlines(shell::GameState& s);
 
 }  // namespace is::world

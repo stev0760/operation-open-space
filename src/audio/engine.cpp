@@ -27,8 +27,8 @@ constexpr int kCentre = -6000;             // [BYTES ISPACE.DLL seg9:0x7a9]
 // [BYTES ISPACE.DLL seg2:0x850].
 unsigned loudness_of(unsigned a, unsigned b) {
     const unsigned hi = std::max(a, b), lo = std::min(a, b);
-    unsigned x = hi + lo / 2;
-    if (x == 0) x = 1;
+    const unsigned x = hi + lo / 2;
+    if (x == 0) return 1;  // [BYTES ISPACE.DLL seg2:0x8b8 seg2:0x8fb] (s1-bounce.md claim 20)
     const unsigned n = a * a + b * b;
     return (x + n / x) / 2;
 }

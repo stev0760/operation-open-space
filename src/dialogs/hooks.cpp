@@ -26,6 +26,7 @@
 #include "nav/pilot.h"
 #include "shell/edition.h"
 #include "shell/rng.h"
+#include "world/hooks.h"
 
 namespace is::dialogs {
 
@@ -240,6 +241,7 @@ public:
         header.resize(got);
         const auto h = parse_save_header(header);
         g_session.wave = h ? h->wave : 0;  // DGROUP:0x91f8 = +0x24 [BYTES seg6:0x9637]
+        briefing::set_wave(g_session.wave);  // the briefing's copy is the word's one home (M4 s1 fixer)
         g_session.restored = 1;            // DGROUP:0x92e4 [BYTES seg6:0x98c4]
         todo_once("saved-game loader: roster, directory records and the header's globals",
                   "seg6:0x930a");
@@ -272,7 +274,10 @@ public:
     int quick_intro() override { return ini_int("QuickIntro", 0); }
     void clear_restored() override { g_session.restored = 0; }
     void clear_wave_if_new() override {
-        if (g_session.restored == 0) g_session.wave = 0;
+        if (g_session.restored == 0) {
+            g_session.wave = 0;
+            briefing::set_wave(0);
+        }
     }
     std::string drive_text() override {  // seg15:0x6558
         const char letter = static_cast<char>('C' + g_session.drive);
@@ -523,8 +528,14 @@ void install_dialog_hooks(App& app) {
             present_frame();
         }
     };
-    h.wave = [] { return g_session.wave; };
+    // DGROUP:0x91f8 is the briefing's counter (briefing::wave), which seg9:0x5cca raises at each
+    // briefing [BYTES seg9:0x5fbf]: Navigation in state 2 after a played wave reads it, arms the
+    // debriefing's deadline and keeps the game (M4 s1 fixer, review H7).
+    h.wave = [] { return briefing::wave(); };
     h.restored = [] { return g_session.restored; };
+    // seg9:0x6cc4's DGROUP:0x92e4 = 0 [BYTES seg9:0x6ceb] in the game-start flow's copy (M4 s1
+    // fixer).
+    world::wave_end_links().clear_restored = [] { g_session.restored = 0; };
     h.play_mode = [] { return g.play_mode; };
     h.player = [] { return player(); };
     h.request_state = [](int s) { request_state(s); };
@@ -533,10 +544,9 @@ void install_dialog_hooks(App& app) {
         g.game.deadlines().debrief_next = now_tick();
     };
     // Enter hands the directory DGROUP:0x38c8 and the wave DGROUP:0x91f8 to the briefing.
-    h.entered = [](const std::string& dir) {
-        briefing::set_selection(dir);
-        briefing::set_wave(g_session.wave);
-    };
+    // The wave reached the briefing when the game-start flow wrote it (the restore, the new
+    // game's clear) (M4 s1 fixer).
+    h.entered = [](const std::string& dir) { briefing::set_selection(dir); };
     // seg2:0x190a(5, 0): the main window's command 0xcb runs it (shell::command_table) [DESIGN].
     h.help = [] { post(WM_COMMAND, 0xcb, 0); };
     h.torn_down = [] { return g.torn_down; };

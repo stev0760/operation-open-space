@@ -58,6 +58,8 @@ constexpr std::uint32_t kBlackness = 0x00000042;  // BLACKNESS
 constexpr std::uint32_t kWhiteness = 0x00FF0062;  // WHITENESS
 constexpr std::uint32_t kPatCopy = 0x00F00021;    // PATCOPY
 constexpr std::uint32_t kDpa = 0x00A000C9;        // DPa: destination AND brush (the player mask)
+constexpr std::uint32_t kSrcAnd = 0x008800C6;     // SRCAND: source AND destination
+constexpr std::uint32_t kDsna = 0x00220326;       // DSna: destination AND NOT source
 constexpr int kColorOnColor = 3;                  // SetStretchBltMode COLORONCOLOR
 
 // The GDI calls of the wave's drawing, with the original's arguments. Colours are COLORREFs as
@@ -104,6 +106,15 @@ public:
     // seg10:0x552(slot, 0) and seg12:0x26a4: SelectObject back, DeleteDC and DeleteObject of an
     // image the Blitter made; the id is unusable afterwards. The default forgets nothing.
     virtual void delete_image(DcId id) { (void)id; }
+    // seg10:0x6ec6 (ISPACE.DLL ordinal 6) on the bitmap behind `src`, in a new DC: a monochrome
+    // image of the same size, 1 where the source is black (gfx/gfx.h Gfx::mask). Its bits reach
+    // an index image as index 255 (1) and 0 (0) through the DC colours of gfx/surface.cpp, so
+    // SRCAND keeps where the source was black [BYTES seg13:0x4762 seg13:0x47cb seg13:0x469f]
+    // (M4 s1 DEATH). The default makes none.
+    virtual DcId create_mask(DcId src) {
+        (void)src;
+        return kDcNone;
+    }
 };
 
 // The window's Blitter, the one the wave pass clips (GdiBlitter registers itself on
@@ -165,6 +176,8 @@ public:
     BrushId create_pattern_brush(const std::uint8_t (&rows)[8]) override;
     DcId create_image_from(int w, int h, const std::vector<std::uint8_t>& index) override;
     void delete_image(DcId id) override;
+    // Recorded as an image named "mask" whose `graphic` is the source id.
+    DcId create_mask(DcId src) override;
 
     // What the resource calls were given, by id. `pixels` holds create_image_from's indices.
     struct Image { DcId id; int w, h; std::string name; int graphic; std::vector<std::uint8_t> pixels{}; };
@@ -273,6 +286,7 @@ public:
     BrushId create_pattern_brush(const std::uint8_t (&rows)[8]) override;
     DcId create_image_from(int w, int h, const std::vector<std::uint8_t>& index) override;
     void delete_image(DcId id) override;
+    DcId create_mask(DcId src) override;
 
 private:
     BrushId brush_id(HBRUSH h);

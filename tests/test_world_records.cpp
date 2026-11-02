@@ -61,14 +61,17 @@ TEST_CASE("world records: object fields quoted in world.md") {
 }
 
 TEST_CASE("world records: effect entry fields") {
-    CHECK(offsetof(EffectEntry, kind) == 0x00);
+    // +0x00 is the frame counter and +0x0a the type (s1-death.md section 0, verified claims 1-3).
+    CHECK(offsetof(EffectEntry, frame) == 0x00);
+    CHECK(offsetof(EffectEntry, end) == 0x02);
     CHECK(offsetof(EffectEntry, pool) == 0x06);
     CHECK(offsetof(EffectEntry, rec) == 0x08);
-    CHECK(offsetof(EffectEntry, w0a) == 0x0a);
-    CHECK(offsetof(EffectEntry, time) == 0x10);
+    CHECK(offsetof(EffectEntry, type) == 0x0a);
+    CHECK(offsetof(EffectEntry, start) == 0x10);
+    CHECK(kEffectTypeFF06 == static_cast<std::int16_t>(0xff06));
     EffectTable t{};
     clear_effects(t);
-    for (const EffectEntry& e : t) CHECK(e.kind == 0xffff);
+    for (const EffectEntry& e : t) CHECK(e.frame == 0xffff);
 }
 
 TEST_CASE("world records: ship record 0 at the DGROUP addresses of structs.md") {
@@ -213,17 +216,19 @@ TEST_CASE("world records: pool store") {
     CHECK(p.in_use(kPoolIcons) == 10);
     CHECK(p.in_use(kPool4) == 5);
 
-    // seg12:0x274a's index test.
+    // seg12:0x274a's index test: the count rises for every index at or above in_use, also when
+    // the routine goes on [BYTES seg12:0x2765 seg12:0x2767].
     p.resize(kPoolShips, 4);
     p.set_in_use(kPoolShips, 2);
     CHECK(p.destroy_index_ok(kPoolShips, 1, 14, 3));
-    CHECK(p.destroy_index_ok(kPoolShips, 3, 14, 3));
     CHECK(p.bad_index_count == 0);
-    CHECK_FALSE(p.destroy_index_ok(kPoolShips, 4, 14, 3));
+    CHECK(p.destroy_index_ok(kPoolShips, 3, 14, 3));
     CHECK(p.bad_index_count == 1);
+    CHECK_FALSE(p.destroy_index_ok(kPoolShips, 4, 14, 3));
+    CHECK(p.bad_index_count == 2);
     p.resize(kPoolShips, 8);
     CHECK_FALSE(p.destroy_index_ok(kPoolShips, 5, 14, 3));
-    CHECK(p.bad_index_count == 2);
+    CHECK(p.bad_index_count == 3);
 }
 
 TEST_CASE("world records: roles, operands and image slots") {

@@ -82,6 +82,22 @@ void set_scroll_pos(int pos);
 // seg11:0x2f0: the HUD's windows go (the scrollbar control and the IS_INFO panels).
 void close();
 
+// ---- M4 stage 1, track SCREENS: bound by src/hud/hooks.cpp (Win32); without the binding (the
+// host build) they do nothing. src/world cannot link src/hud (ishud links isworld), so the world
+// reaches them through a world-side slot that install_wave fills.
+// seg3:0x6ec(recipient, pool, rec, code): the message dispatcher (hud/messages.h) on the
+// program's left IS_INFO panel. The damage, death, capture and repair paths call it: 0xd (the
+// OverThruster ram, string 350, sound 0x67 at most every 4 s), 0x5b / 0x5e (strings 687 / 692),
+// 0x70 (string 1064), 0x54 (the ambulance's "Repairs Complete", string 138). The lamp messages
+// 0xa, 0xb, 0xc, 0x52, 0x53 come from the damage panel itself (Panels::lamps -> Host::message).
+void post_message(int recipient, int pool, int rec, int code);
+// seg7:0x119c(mode, 0): DGROUP:0xa76 = mode (the World's word and the flight role's frame copy)
+// and a repaint of the left panel. The frame's step 16 calls it with 2 when the message's end
+// time DGROUP:0x870c has passed and DGROUP:0x9608 = 0 (world/update.cpp, UpdateHost::
+// speed_display_end_7_119c) [BYTES seg7:0xbe3-0xbe7 seg7:0x11a6-0x11bf].
+void info_mode_119c(int mode);
+void bind_messages(std::function<void(int, int, int, int)> post, std::function<void(int)> mode);
+
 // src/hud/hooks.cpp binds the program's HUD and its scrollbar calls here.
 void bind_program(Hud* hud, std::function<void(int)> scroll_pos, std::function<void()> close);
 

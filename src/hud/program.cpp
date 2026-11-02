@@ -7,7 +7,22 @@ Links g_links;
 Hud* g_hud = nullptr;
 std::function<void(int)> g_scroll_pos;
 std::function<void()> g_close;
+std::function<void(int, int, int, int)> g_post;  // seg3:0x6ec
+std::function<void(int)> g_mode;                 // seg7:0x119c
 }  // namespace
+
+void bind_messages(std::function<void(int, int, int, int)> post, std::function<void(int)> mode) {
+    g_post = std::move(post);
+    g_mode = std::move(mode);
+}
+
+void post_message(int recipient, int pool, int rec, int code) {
+    if (g_post) g_post(recipient, pool, rec, code);
+}
+
+void info_mode_119c(int mode) {
+    if (g_mode) g_mode(mode);
+}
 
 Links& links() { return g_links; }
 Hud* hud() { return g_hud; }

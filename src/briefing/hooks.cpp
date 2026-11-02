@@ -22,7 +22,9 @@
 #include "audio/audio.h"
 #include "dialogs/audio_options.h"  // is::sound (M7 audio rewiring)
 #include "shell/geometry.h"
+#include "shell/rng.h"
 #include "briefing/briefing.h"
+#include "briefing/debriefing.h"
 #include "briefing/gdi_canvas.h"
 #include "formats/ne.h"
 #include "world/hooks.h"
@@ -75,6 +77,8 @@ private:
 std::unique_ptr<BriefingHost> g_host;
 std::unique_ptr<GdiCanvas> g_canvas;
 std::unique_ptr<Briefing> g_briefing;
+std::unique_ptr<Debriefing> g_debrief;  // state 2 (M4 s1 END)
+Debriefing::BoxHook g_debrief_box_hook;
 std::string g_selection;        // DGROUP:0x38c8 as the game-start flow set it
 WaveFlags g_handover;           // DGROUP:0x92e8, 0x94e, 0x950 as Navigation's Enter set them
 bool g_handoff = false;         // state 3 is live: the next state-1 entry is seg9:0x60bc
@@ -346,6 +350,65 @@ void set_wave(int wave) {
 }
 int wave() { return g_briefing ? g_briefing->wave() : 0; }
 
+void set_debrief_box_hook(std::function<void(const DebriefBox&)> f) {
+    g_debrief_box_hook = std::move(f);
+    if (g_debrief) g_debrief->set_box_hook(g_debrief_box_hook);
+}
+
+// The values seg9:0x6fee reads, from the program's World (M4 s1 END).
+DebriefInputs debrief_inputs(const world::World& w) {
+    DebriefInputs in;
+    in.kind = w.kind;                      // DGROUP:0x9320
+    in.directory = w.handover.directory;   // DGROUP:0x38c8
+    in.race = w.handover.race;             // DGROUP:0x94e
+    in.score = w.score;                    // DGROUP:0x1e58
+    in.icons = w.w94a6;                    // DGROUP:0x94a6
+    if (static_cast<std::size_t>(w.record) < w.records.size()) {
+        const world::DirRecord& d = w.records[static_cast<std::size_t>(w.record)];
+        in.destroyed = d.word(0x14e);
+        in.captured = d.word(0x150);
+        in.dir_state = d.byte(0x1d0);
+    }
+    // DGROUP:0x380c: INI ThePlayer, as the state-1 set-up reads it [BYTES seg10:0x8c].
+    in.pilot = g.ini ? g.ini->get_string(settings::kGameSection, "ThePlayer", "", 12) : std::string();
+    in.seconds = w.w934e;                  // DGROUP:0x934e
+    in.player = w.player;
+    if (w.player >= 0 && w.player < world::kShipCount) {
+        const world::ShipRecord& p = w.ships[static_cast<std::size_t>(w.player)];
+        in.cap = static_cast<std::int16_t>(world::word_at(p, 0xd2) - w.w9370);
+        in.des = static_cast<std::int16_t>(world::word_at(p, 0xd0) - w.w9372);
+    }
+    // The ships' paragraphs: the names (seg3:0x1542), teams and relation bytes of the computer
+    // ships are M5 [OPEN]; the player alone is listed, alive.
+    for (int i = 0; i <= w.last_ship && i < world::kShipCount; ++i) {
+        DebriefShip sh;
+        const world::ShipRecord& r = w.ships[static_cast<std::size_t>(i)];
+        sh.alive = r.bec != 0;
+        sh.killer_pool = r.w06;
+        sh.killer_rec = r.w08;
+        sh.relation = r.bee[static_cast<std::size_t>(w.player & 7)];
+        in.ships.push_back(sh);
+    }
+    in.dodge_city = w.w93b6 != -1;  // the name of seg14:0x4520's ship is M5 [OPEN]
+    return in;
+}
+
+// seg9:0x6cc4's start of state 2: the page is built and the next frame draws the box.
+void start_debriefing(world::World& w) {
+    if (!g_debrief || !g_host) return;
+    Debriefing::Setup st;
+    st.W = g.area.w;  // DGROUP:0x90ea
+    st.H = g.area.h;  // DGROUP:0x10
+    st.wave = g_briefing ? g_briefing->wave() : w.wave;  // DGROUP:0x91f8
+    st.play_mode = w.play_mode;      // DGROUP:0x9134 after the tick's clamp (seg7:0x6e4)
+    st.player_game = w.player_game != 0;
+    const std::string text = debrief_text(
+        debrief_inputs(w), [](int id) { return g_host->lang(id); }, shell::kBriefingLastPhase,
+        [] { return shell::game_rng().rand(); });
+    g_debrief->start(st, text);
+    app::log("state 2: seg9:0x6cc4, the debriefing page of " + std::to_string(text.size()) + " bytes");
+}
+
 }  // namespace is::briefing
 
 namespace is::app {
@@ -357,6 +420,31 @@ void install_briefing_hooks(App& app) {
     g_canvas = std::make_unique<GdiCanvas>(*app.gfx);
     g_briefing = std::make_unique<Briefing>(*g_canvas, *g_host);
 
+    g_debrief = std::make_unique<Debriefing>(*g_canvas, *g_host);
+    if (g_debrief_box_hook) g_debrief->set_box_hook(g_debrief_box_hook);
+    world::on_debriefing([](world::World& w) { start_debriefing(w); });
+    // State 2: seg9:0x6dec(0) as the frame, seg9:0x6dec(1) as the repaint seg11:0x168f [BYTES
+    // seg7:0x3e9 seg11:0x168f] (M4 s1 END).
+    h.frame[shell::kDebriefing] = [](shell::GameState& s) {
+        g_debrief->frame(s, 0);
+    };
+    h.repaint[shell::kDebriefing] = [](shell::GameState& s) {
+        g_debrief->frame(s, 1);
+    };
+    // State 5's entry seg6:0x5d58 [BYTES seg6:0x5d58-0x5f78]: sound 0x6e unless from state 9,
+    // the music track 5, or 11 for a score of 200000 or more with DGROUP:0x93a2 <= 3 or from
+    // state 9 [BYTES seg6:0x5d7c seg6:0x5e03-0x5e25], the black client. The score list
+    // seg6:0x6576, the particle effects and the table seg6:0x5f7a / seg6:0x62b6 are [OPEN]; the
+    // .ded save seg6:0x885c(1, 1) is ADR 0014's (the trial refuses it silently).
+    h.enter[shell::kHighScores] = [](shell::GameState& s) {
+        // DGROUP:0x90f4 = 9 sets DGROUP:0x94cc = 1 and skips the sound [BYTES seg6:0x5d65
+        // seg6:0x5d6c seg6:0x5d7a seg6:0x5d7c] (M4 s1 fixer, review M13).
+        if (!s.from_ending()) g_host->sound(0x6e);
+        const world::World& w = world::current();
+        is::sound::music(w.score >= 200000u ? 11 : 5, 1);  // DGROUP:0x93a2 is not kept [OPEN]
+        if (g.gfx && !g.gfx->surface().empty()) PatBlt(g.gfx->dc(), 0, 0, g.area.w, g.area.h, BLACKNESS);
+        todo_once("the high-score table", "seg6:0x5f7a");
+    };
     h.enter[shell::kBriefing] = [](shell::GameState& s) { enter_briefing(s); };
     h.frame[shell::kBriefing] = [](shell::GameState& s) {
         g_briefing->frame(s);

@@ -140,7 +140,6 @@ public:
     // The computer pilots and the special paths of seg13:0x0, M5 [OPEN]; each gets the ship.
     virtual void seg13_3748(int ship) { (void)ship; }   // the move of ship DGROUP:0x952e
     virtual void seg13_3b88() {}                        // the alternate player move
-    virtual std::int16_t seg13_100c(int ship, std::int16_t heading) { return (void)ship, heading; }
     virtual void seg12_274a(int pool, int ship) { (void)pool, (void)ship; }
     virtual void seg4_277a() {}
     virtual void seg4_144c(int ship, int arg) { (void)ship, (void)arg; }
@@ -222,8 +221,26 @@ Dv thrust_dv(std::int16_t heading, std::int16_t t, std::int16_t k, std::int16_t 
 // The Detail >= 3 drag of seg11:0x6117-0x6282.
 Dv drift_dv(std::int16_t heading, std::int16_t drag, std::int16_t mass, std::int16_t vx,
             std::int16_t vy, bool autopilot);
-// seg13:0x0: the ship mover, once per wave frame [BYTES seg13:0x0-0xd67].
+// seg13:0x0: the ship mover, once per wave frame [BYTES seg13:0x0-0xd67]. A dead ship
+// (`alive` +0xec = 0) with `tumbling` +0xe2 set gets the drift (seg8:0x1b54), object +0x26 = 1
+// and a heading step through seg13:0x100c every second frame (ship word +0x16 as the counter),
+// then skips the input and flight block (seg13:0x224) to the smoke, the sprite draw and the
+// collisions; once the lock-out +0x84 passes it explodes through seg12:0x274a
+// (FlightHost::seg12_274a) (s1-death.md section 3, verified claims 30-32) [BYTES seg13:0xd7-0x189
+// seg13:0x68d seg13:0xa57].
 void move_ships(FlightCtx& c);
+
+// seg13:0x100c(h, ship) [BYTES seg13:0x100c-0x1074] (verified claim 31): h + object word +0x26,
+// >= 16 -> 0 and <= 0 -> 15 (the test on the sum: a step of -1 from 1 gives 15), when ship byte
+// +0xeb = 0 and ship word +0x10 (`type`) is < 1 or > 6; else h unchanged.
+std::int16_t turn_step(const ShipRecord& s, const ObjectRecord& o, std::int16_t h);
+
+// The control lock-out +0x84 (`cmp dword, now; jb`): passed when it lies before now, unsigned.
+// seg16:0x8e4 sets now + 6000 at death; the tumble ends, the turn keys and the fire poll act
+// only once it has passed [BYTES seg13:0x14b seg11:0x5938 seg11:0x4dba seg16:0xa2d]. The
+// collision tumble of the damage track sets it through set_lockout.
+inline bool lockout_passed(const ShipRecord& s, std::uint32_t now) { return s.lockout.get() < now; }
+inline void set_lockout(ShipRecord& s, std::uint32_t until) { s.lockout.set(until); }
 
 // --- The flight values of the ship set-up (world.md "Mass, thrust and drag", "Turn word") ----
 // The design record's words (DGROUP:0x96f2 + 0xad n) that flight reads, from the ship's MASTER.SHP

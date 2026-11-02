@@ -161,6 +161,14 @@ const shell::Edition& run_edition_check(int arg);
 bool post(UINT msg, WPARAM wparam = 0, LPARAM lparam = 0);
 // A state request: DGROUP:0x968e = state, DGROUP:0x13de = 1 (shell::GameState::request).
 void request_state(int state);
+// seg16:0x68d6(hwnd, id1, id2): string id1, then string id2 appended unless id2 = -1, in
+// MessageBox(hwnd, text, DGROUP:0x9690 "Inner Space", 0x30 = MB_ICONEXCLAMATION) [BYTES
+// seg16:0x68e4-0x691b]. The wave's death path passes (DGROUP:0x16, 2328, 2329), the main
+// window [BYTES seg7:0x6c8-0x6d2]. While the box is up, WM_TIMER's focus test finds the box
+// active and pauses: the caption reads "Inner Space - PAUSED.." (string 2044), and the first
+// timer after OK resumes [BYTES seg2:0x1327 seg2:0x1341] [ORACLE core-0001]. Returns the
+// MessageBox result (M4 s1 SCREENS).
+int message_box_ids(HWND owner, int id1, int id2);
 
 // The watch windows that 0x9aa and 0x9b4 toggle (seg2:0x4f0, seg2:0x513; Alt+I and Alt+R in a
 // wave, seg11:0x716c and seg11:0x718b). The window's owner fills the slots: exists() stands for

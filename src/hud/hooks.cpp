@@ -6,6 +6,7 @@
 #ifdef _WIN32
 #include <windows.h>
 
+#include <cstdio>
 #include <exception>
 #include <memory>
 #include <set>
@@ -13,13 +14,18 @@
 
 #include "app/app.h"
 #include "assets/asset_store.h"
+#include "audio/audio.h"
+#include "briefing/debriefing.h"
+#include "briefing/hooks.h"
 #include "formats/ships.h"
 #include "hud/design.h"
 #include "hud/gdi_canvas.h"
 #include "hud/hooks.h"
 #include "hud/hud.h"
 #include "hud/icon_column.h"
+#include "hud/messages.h"
 #include "hud/program.h"
+#include "hud/screens.h"
 #include "hud/scrollbar.h"
 #include "hud/target.h"
 #include "hud/wave.h"
@@ -102,6 +108,91 @@ bool player_design_records(fmt::ShipRecord& shp, fmt::BodyRecord& body) {
 
 namespace {
 
+// The dispatcher's words (DGROUP:0x8740, 0x8768, 0x87b8, 0x8db0, 0x1cb0 ... 0x1cb6).
+MessageState g_msg;
+
+std::string lang_text(int id) {
+    try {
+        if (g.store)
+            if (auto s = g.store->find_string(static_cast<std::uint16_t>(id))) return *s;
+    } catch (const std::exception& x) {
+        app::log("hud: string " + std::to_string(id) + ": " + x.what());
+    }
+    return {};
+}
+
+// seg3:0x6ec's surroundings for the program (messages.h): the World, the flight role's frame
+// words DGROUP:0x870c / 0x9608 / 0xa76, the left IS_INFO panel and the sound engine.
+class AppMessageHost final : public MessageHost {
+public:
+    int player() const override { return w().player; }
+    std::uint32_t now() const override { return g.game.now(); }  // DGROUP:0x1e50
+    int width() const override { return g.area.w; }               // DGROUP:0x90ea
+    bool race() const override { return w().handover.race != 0; }  // DGROUP:0x94e
+    // DGROUP:0x380c is INI ThePlayer after the game-start command (src/dialogs session); the HUD
+    // reads the INI key, the same text [DESIGN].
+    std::string pilot() const override {
+        try {
+            if (g.ini) return g.ini->get_string(settings::kGameSection, "ThePlayer", "", 0x1e);
+        } catch (const std::exception&) {
+        }
+        return {};
+    }
+    std::string lang(int id) override { return lang_text(id); }
+    int rand() override { return shell::game_rng().rand(); }  // seg5:0xdc
+    int ship_goal_pool(int rec) const override {
+        return rec >= 0 && rec < world::kShipCount ? world::word_at(w().ship(rec), 0x32) : -1;
+    }
+    int ship_word_06(int rec) const override {
+        return rec >= 0 && rec < world::kShipCount ? world::word_at(w().ship(rec), 0x06) : -1;
+    }
+    void set_sender(int pool, int rec) override {  // DGROUP:0x6e70 / 0x6e72
+        if (Hud* h = hud()) {
+            h->info().mark(1).rec = rec;
+            h->info().mark(1).pool = pool;
+        }
+    }
+    int info_mode() const override { return w().w0a76; }
+    // seg7:0x119c(m, 0). The flight role keeps its own copy of DGROUP:0xa76 for the frame and
+    // writes it back after the frame (world/flight_hooks.cpp sync_out), so both are set.
+    void set_info_mode(int m) override { info_mode_119c(m); }
+    bool info_exists() const override { return hud() && hud()->info().exists(); }
+    void info_flash() override {
+        if (Hud* h = hud()) h->info().flash();
+    }
+    // seg3:0x1542(0, pool, rec, ..., 0) for the dispatcher's senders 7 and 2 (core.md "Names":
+    // 347 "Ambulance", 154 "Defender"). A ship's name (pool 14) is the ship track's [OPEN].
+    std::string name(int pool, int rec) override {
+        if (pool == 7) return cut_name_code(lang_text(0x15b));
+        if (pool == 2) return cut_name_code(lang_text(0x9a));
+        app::log_todo("seg3:0x1542 for a ship sender " + std::to_string(rec), "seg3:0x1542");
+        return {};
+    }
+    void set_end(std::uint32_t t) override {
+        world::FrameGlobals& f = world::frame_globals();
+        f.speed_shown = t;  // DGROUP:0x870c
+        f.dg_9608 = 0;      // DGROUP:0x9608
+    }
+    void sound(int id) override {  // seg10:0x744c
+        const int r = audio::play(id);
+        app::log("sound 0x" + hex(id) + " seg10:0x744c (seg3:0x6ec) -> " + std::to_string(r));
+    }
+    void todo(int code) override {
+        if (logged_.insert(code).second)
+            app::log_todo("message code " + std::to_string(code) + " of seg3:0x1351", "seg3:0x1351");
+    }
+
+private:
+    static world::World& w() { return world::current(); }
+    static std::string hex(int v) {
+        char b[16];
+        std::snprintf(b, sizeof b, "%x", v);
+        return b;
+    }
+    std::set<int> logged_;
+};
+AppMessageHost g_msg_host;
+
 // hud::Host for the program: the shell's globals from app::g, the rest through links().
 class AppHost final : public Host {
 public:
@@ -182,8 +273,10 @@ public:
         }
         return weapon_view(*table_, wpn, count);
     }
+    // seg3:0x6ec(ship, 7, 0, id), the lamp and fuel routines' messages (messages.h).
     void message(int ship, int id) override {
-        if (links().message) links().message(ship, id);
+        if (links().message) return links().message(ship, id);
+        post_message(ship, 7, 0, id);
     }
     int frame_rate_set() const override {
         return links().frame_rate_set ? links().frame_rate_set() : g.scheduler.rate();
@@ -205,9 +298,9 @@ public:
     std::string text_9628() const override { return call(links().text_9628, t9628_); }
     std::string text_8718() const override { return call(links().text_8718, t8718_); }
     std::string text_960a() const override { return call(links().text_960a, t960a_); }
-    std::string text_8740() const override { return call(links().text_8740, std::string()); }
-    std::string text_8768() const override { return call(links().text_8768, std::string()); }
-    std::string text_87b8() const override { return call(links().text_87b8, std::string()); }
+    std::string text_8740() const override { return call(links().text_8740, g_msg.sender); }
+    std::string text_8768() const override { return call(links().text_8768, g_msg.line1); }
+    std::string text_87b8() const override { return call(links().text_87b8, g_msg.line2); }
     // seg13:0x5a6a's record fields (Info::target_picture): the object record, the pool-0 icon
     // record DGROUP:0x57a8 + 0x23·rec, seg13:0x371c, DGROUP:0x9324, DGROUP:0x9208. DGROUP:0x131c
     // is not ported: 0 [OPEN]. The canvas's icon strip is the briefing entry's DGROUP:0x3a02.
@@ -231,7 +324,19 @@ public:
             out.icon.w02 = ic.w02;
             out.icon.w19 = ic.w19;
         }
-        if (g_canvas) g_canvas->set_image(Img::kIconStrip, world::icon_strip());
+        // Pool 7: record 0's word +0x10 (seg13:0x5d2f) and the logo strip DGROUP:0x39e8[5]
+        // (M4 s1 SCREENS).
+        if (p == 7 && w().pools.records(7) > 0) out.pool7_w10 = world::word_at(w().pools.rec(7, 0), 0x10);
+        if (g_canvas) {
+            g_canvas->set_image(Img::kIconStrip, world::icon_strip());
+            // The wave's slot 5 when the world holds one, else the renderer's seg10:0x39a8 strip
+            // (650 x 52, 14 logo cells), as the briefing's canvas takes it [DESIGN].
+            if (p == 7) {
+                gfx::ImagePtr strip = world::slot_image(5);
+                if (!strip && g.gfx) strip = g.gfx->logo_strip();
+                g_canvas->set_image(Img::kLogoStrip, strip);
+            }
+        }
         return true;
     }
     int game_mode() const override { return call(links().game_mode, int{w().kind}); }
@@ -487,6 +592,30 @@ void weapon_picture_refresh() {
 
 namespace {
 
+void post_message_now(int recipient, int pool, int rec, int code) {
+    dispatch_message(g_msg, g_msg_host, recipient, pool, rec, code);
+}
+
+void info_mode_now(int mode) {
+    world::current().w0a76 = static_cast<std::int16_t>(mode);
+    world::frame_globals().info_mode = static_cast<std::int16_t>(mode);
+    if (g_hud) g_hud->info().set_mode_119c(mode);
+}
+
+// seg9:0x6a12's inputs from the program: DGROUP:0x91f8 is the briefing's wave counter, the
+// player's words +0xd2 and +0xd0, the score dword DGROUP:0x1e58. DGROUP:0x95bc (a player game)
+// is taken as set: state 4 follows a player's game [OPEN: the demo's path to state 4].
+std::vector<briefing::GameOverLine> game_over_lines_now() {
+    world::World& wd = world::current();
+    int captured = 0, destroyed = 0;
+    if (wd.player >= 0 && wd.player < world::kShipCount) {
+        captured = world::word_at(wd.ship(wd.player), 0xd2);
+        destroyed = world::word_at(wd.ship(wd.player), 0xd0);
+    }
+    return briefing::game_over_lines(g.area.w, g.area.h, briefing::wave(), captured, destroyed, wd.score,
+                                     true, [](int id) { return lang_text(id); });
+}
+
 void close_hud() {
     if (g_scroll) g_scroll->destroy();       // seg11:0x2fa-0x30a: DGROUP:0xa7a
     if (g_hud) g_hud->info().close();         // seg11:0x310-0x336: DGROUP:0xa7c, DGROUP:0xa7e
@@ -510,6 +639,7 @@ void install_hud_hooks(App& app) {
     bind_program(
         g_hud.get(), [](int pos) { g_scroll->set_pos(pos); }, [] { close_hud(); });
 
+    bind_messages(post_message_now, info_mode_now);  // seg3:0x6ec, seg7:0x119c (M4 s1 SCREENS)
     world::set_key_actions(&g_actions);
     // The 0x9aa handler seg2:0x4f0 (Alt+I and the wave-start post): the IS_ICON column (M3
     // stage 4).
@@ -568,6 +698,30 @@ void install_hud_hooks(App& app) {
             if (prev) prev(s);
         };
     }
+    // State 4, GAME OVER (M4 s1 SCREENS): seg9:0xd6c's blackout and seg9:0x6a12 at the entry
+    // (GameState::enter_game_over runs the hook only with no request pending, so the blackout of
+    // a call with DGROUP:0x13de = 1 is not drawn [OPEN]), and seg11:0xafe's case 4, seg9:0x6a12
+    // alone [BYTES seg9:0xdcc-0xde9 seg11:0x16af].
+    // State 5's entry seg6:0x5d58 calls seg13:0x65f2(1) and seg11:0x2f0 [BYTES seg6:0x5d9e
+    // seg6:0x5da4]: the IS_ICON column goes with the HUD (M4 s1 fixer).
+    auto prev_scores = h.enter[shell::kHighScores];
+    h.enter[shell::kHighScores] = [prev_scores](shell::GameState& s) {
+        if (icon_column_exists()) icon_column_destroy();
+        if (prev_scores) prev_scores(s);
+    };
+    auto prev_over = h.enter[shell::kGameOver];
+    h.enter[shell::kGameOver] = [prev_over](shell::GameState& s) {
+        if (prev_over) prev_over(s);
+        if (!g_canvas || !g.gfx || g.gfx->surface().empty()) return;
+        game_over_entry(*g_canvas, g.area.w, g.area.h, s.change_pending(), game_over_lines_now());
+        app::log("hud: seg9:0xd6c GAME OVER drawn");
+    };
+    auto prev_over_paint = h.repaint[shell::kGameOver];
+    h.repaint[shell::kGameOver] = [prev_over_paint](shell::GameState& s) {
+        if (prev_over_paint) prev_over_paint(s);
+        if (!g_canvas || !g.gfx || g.gfx->surface().empty()) return;
+        draw_game_over(*g_canvas, game_over_lines_now());
+    };
 }
 
 }  // namespace is::app

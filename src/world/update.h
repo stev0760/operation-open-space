@@ -13,6 +13,7 @@
 
 #include <cstdint>
 
+#include "world/collide.h"
 #include "world/draw.h"
 #include "world/flight.h"
 #include "world/input.h"
@@ -48,8 +49,8 @@ struct FrameGlobals {
     std::uint32_t info_due = 0;         // DGROUP:0x17b8, the information displays' deadline
     std::uint32_t joy_due = 0;          // DGROUP:0x2388, the joystick read's deadline
     std::int16_t dg_9142 = 0;           // DGROUP:0x9142, the 0 ... 54 frame counter
-    std::int16_t effects_on = 0;        // DGROUP:0x9430
-    std::int16_t last_effect = 0;       // DGROUP:0x9434
+    // DGROUP:0x9430, 0x9434 and 0x9456 are the World's (World::w9430, w9434, w9456): the pass
+    // reads them through UpdateHost::frame_world.
     std::int16_t beam_a = 3;            // DGROUP:0x594 (seg11:0x4e19 sets 7)
     std::int16_t beam_b = 2;            // DGROUP:0x598, no writer
     std::uint32_t beam_passes = 0;      // DGROUP:0x5cc
@@ -64,7 +65,6 @@ struct FrameGlobals {
     std::uint32_t dg_6da8 = 0;          // DGROUP:0x6da8
     std::int16_t dg_5d2 = 0;            // DGROUP:0x5d2, toggled each frame
     std::int16_t dg_1016 = 0;           // DGROUP:0x1016
-    std::int16_t dg_9456 = 0;           // DGROUP:0x9456
     std::int16_t dg_9600 = 0;           // DGROUP:0x9600
     std::uint32_t music_due = 0;        // DGROUP:0x2384
     std::int16_t dg_950 = 0;            // DGROUP:0x950
@@ -81,6 +81,8 @@ struct FrameGlobals {
     std::int16_t dg_943a = 0, dg_943c = 0;  // DGROUP:0x943a, 0x943c: the colliding pool, record
     std::int16_t dg_9454 = 0;           // DGROUP:0x9454
 };
+
+struct UpdateCtx;
 
 class UpdateHost : public FlightHost {
 public:
@@ -133,10 +135,14 @@ public:
     // The defaults select wave_graphics().heat[b] on blitter()'s window DC (M3 s4 DRAW).
     virtual std::uint16_t select_rock_brush(int b);
     virtual void restore_brush(std::uint16_t old);
-    // seg8:0x50aa(pool * 256 + rec): the collision test; 0xFFFF for none (world.md "Collisions").
-    virtual std::uint16_t collide(std::int16_t pool_rec) { return (void)pool_rec, 0xffffu; }
-    // seg8:0x546c(...) then seg8:0x5df2(...): the collision's response [OPEN] M4.
-    virtual void rock_hit(int rock, std::uint16_t hit) { (void)rock, (void)hit; }
+    // seg8:0x50aa(pool * 256 + rec): the collision test; 0xFFFF for none (core.md "Who tests
+    // whom"). The default runs collide.h find_pair on the frame's World (frame_world), 0xffff
+    // without one (M4 s1 COLLIDE).
+    virtual std::uint16_t collide(std::int16_t pool_rec);
+    // seg7:0x4014-0x4060: amount = seg8:0x546c(rock mass, extent + 2, &vy, &vx, hit), then
+    // seg8:0x5df2(DGROUP:0x934a, rock, hit pool, hit rec, amount), its result ignored
+    // (s1-hit.md 4) [BYTES seg7:0x4049 seg7:0x404e seg7:0x4060 seg7:0x4065].
+    virtual void rock_hit(int rock, std::uint16_t hit);
 
     // ---- the drawing the frame does itself (M3 s4 DRAW)
     // The World whose pools the frame moves: the gates' records, the stars, the link slots and
@@ -156,8 +162,10 @@ public:
     // hazard marks' erase [BYTES seg12:0x5ef8 seg12:0x6408] (M3 s4 fixer, review L12).
     virtual void hazard(int kind, int i) { (void)kind, (void)i; }
     virtual void seg12_7006() {}
-    // seg8:0x546c(...) then seg8:0x5df2(8, r, pool, rec, ...): a post's collision response (M4).
-    virtual void post_hit(int rec, std::uint16_t hit) { (void)rec, (void)hit; }
+    // seg12:0x1d79-0x1dc3: seg8:0x546c(post mass, extent + 2, &vy, &vx, hit), then
+    // seg8:0x5df2(8, r, hit pool, hit rec, amount), its result ignored (s1-hit.md 4)
+    // [BYTES seg12:0x1da9 seg12:0x1dae seg12:0x1dbe seg12:0x1dc3].
+    virtual void post_hit(int rec, std::uint16_t hit);
     // seg12:0x2288(pool, rec): a ship passes the gate, the gate exit [OPEN: not read].
     virtual void gate_passed(int pool, int rec) { (void)pool, (void)rec; }
     // seg13:0x2f30 after seg12:0x1f7a's AI words for ship k (M5).
@@ -166,6 +174,38 @@ public:
     virtual LinkHooks* link_hooks() { return nullptr; }
     // seg8:0x1320, the Bright starfield [OPEN].
     virtual void bright_stars(int arg) { (void)arg; }
+
+    // ---- the collisions (collide.h, damage.h) (M4 s1 COLLIDE)
+    // seg13:0xb5a-0xc92 for an on-screen ship i: DGROUP:0x943c = i, DGROUP:0x943a = 14, the
+    // pair finder, the response and the dispatch (s1-hit.md 4; claim 37 unchecked [OPEN]).
+    // The touch branches seg13:0xbee-0xc77 (a capturable hit object, a kind-6 missile) are M4
+    // stage 2: the port goes on to the dispatcher [OPEN]. The weapon tail seg13:0xc95-0xcf6
+    // (seg18:0x551a, seg18:0x59ec) is [OPEN].
+    void ship_collide(int ship) override;
+    // The collision routines' calls out; the default forwards sound(), seg12_274a() (the
+    // destroy), the flame-off (flight.h ship_touched) and the erase (blitter()) and leaves the
+    // rest to CollideHost's defaults.
+    virtual CollideHost& collide_host() { return forward_; }
+    // The collision DGROUP words; the default is this host's own.
+    virtual CollideGlobals& collide_globals() { return collide_globals_; }
+    // The frame's context while the movers run (set by wave_frame, move_rocks, move_gate).
+    UpdateCtx* frame_ctx = nullptr;
+
+    UpdateHost() { forward_.u = this; }
+    UpdateHost(const UpdateHost&) = delete;
+    UpdateHost& operator=(const UpdateHost&) = delete;
+
+private:
+    class Forward final : public CollideHost {
+    public:
+        UpdateHost* u = nullptr;
+        void sound(int id, int pool, int rec, int mode) override { u->sound(id, pool, rec, mode); }
+        void destroy(int pool, int rec) override { u->seg12_274a(pool, rec); }
+        void flame_off(int ship) override;
+        void erase(int x, int y, int w, int h) override;
+    };
+    Forward forward_;
+    CollideGlobals collide_globals_;
 };
 
 // The program's World for UpdateHost::frame_world (null: none) (M3 s4 DRAW).

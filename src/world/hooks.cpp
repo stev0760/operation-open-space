@@ -6,6 +6,8 @@
 
 #include <array>
 
+#include "world/gate_exit.h"
+
 namespace is::world {
 namespace {
 World g_world;
@@ -20,7 +22,34 @@ std::int16_t design_mass(int design) {
     return design >= 0 && design < kShipCount ? g_design_mass[static_cast<std::size_t>(design)]
                                               : std::int16_t{0};
 }
+WaveEndLinks& wave_end_links() {
+    static WaveEndLinks l;
+    return l;
+}
 }  // namespace is::world
+
+#ifndef _WIN32
+namespace is::world {
+// The host build has no program: the END entry points run on the World with the default hosts.
+void set_entry_context(std::function<EntryContext()>) {}
+void on_debriefing(std::function<void(World&)>) {}
+void run_gate_exit(int pool, int rec, std::uint32_t now) {
+    GateExitHost h;
+    GateExitCtx c{g_world, now, h, nullptr};
+    gate_exit(c, pool, rec);
+}
+void run_vanish_end(int pool, int rec, std::uint32_t now) {
+    GateExitHost h;
+    GateExitCtx c{g_world, now, h, nullptr};
+    vanish_end(c, pool, rec);
+}
+DeadlineResult run_wave_deadlines(shell::GameState& s) {
+    WaveEndHost h;
+    WaveEndCtx c{g_world, s, h, nullptr};
+    return wave_deadlines(c);
+}
+}  // namespace is::world
+#endif
 
 #ifdef _WIN32
 #include <windows.h>
@@ -30,11 +59,14 @@ std::int16_t design_mass(int design) {
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
 #include "app/app.h"
+#include "audio/audio.h"
 #include "briefing/hooks.h"
+#include "dialogs/audio_options.h"
 #include "assets/asset_store.h"
 #include "formats/icon_source.h"
 #include "formats/ships.h"
@@ -159,10 +191,12 @@ void ship_setup_player(World& w) {
     // seg14 gives a ship record radar_draw seg11:0x37a0 and the radar brush of design word
     // DGROUP:0x96fe + 0xad·n, which seg14:0x1e08 sets to 7 on every path (the player's own
     // marker takes WHITE_BRUSH) [BYTES seg14:0x2141 seg14:0x20d7 seg14:0x1e08] (M3 s4 fixer:
-    // the radar's player marker, comparison item 6). Its on_damage seg8:0x45e0 and on_destroy
-    // seg16:0x8e4 are M4 [BYTES seg14:0x2158 seg14:0x212a].
+    // the radar's player marker, comparison item 6), its on_damage seg8:0x45e0 and its
+    // on_destroy seg16:0x8e4 [BYTES seg14:0x2158 seg14:0x212a] (M4 s1 fixer).
     o.radar_draw.set(kRadarShip);
     o.radar_brush = 7;
+    o.on_damage.set(kDamageShip);
+    o.on_destroy.set(kDestroyShip);
     if (!g.store) return;
     try {
         std::string name = "EAGLE";
@@ -182,6 +216,11 @@ void ship_setup_player(World& w) {
         // seg14:0x1430: ship bytes +0x5d / +0x5e = design bytes DGROUP:0x9776 / 0x9777 + 0xad n,
         // the SHP attitudes +4 / +5 [BYTES seg14:0x158e-0x15aa seg14:0x2040]; the design words
         // of seg13:0x33d6 (rating.h) (M5 s2 BRIEFING).
+        // seg14:0x1b84 stores SHP +0x1f, the ship's hit sound, in the design word DGROUP:0x9700
+        // + 0xad n and in object word +0x42, which seg8:0x45e0 plays through seg10:0x7944 on every
+        // hit (0x07 for TRANSFORMER) [BYTES seg14:0x1e18 seg14:0x1e2d seg14:0x20c0 seg14:0x20d3]
+        // [ORACLE core-0001] (M4 s1 fixer).
+        o.hit_sound = static_cast<std::int16_t>(shp->hit_sound);
         set_byte_at(s, 0x5d, shp->to_friends);
         set_byte_at(s, 0x5e, shp->to_enemies);
         w.design_ratings[0] = design_rating(*shp, *body);
@@ -271,6 +310,9 @@ void read_inputs(World& w, bool new_entry) {
     w.play_mode = static_cast<std::int16_t>(g.play_mode);
     w.w920c = static_cast<std::int16_t>(g.edition.edition);  // DGROUP:0x920c (shell.md "Editions")
     w.player_game = 1;  // DGROUP:0x95bc: the port has no demo yet
+    // DGROUP:0x94a6, the icon count of Navigation's last selection (seg6:0x4368's sum), which
+    // the generator and the debriefing read (M4 s1 END) [BYTES seg6:0x589b seg9:0x70e7].
+    w.w94a6 = static_cast<std::int16_t>(nav::selection().pane.icons);
     nav::Handover v = nav::enter_state().handover;
     if (v.directory.empty()) {
         // No Enter yet: the IS_TEST_BRIEFING directory of the briefing's test hook, else the INI
@@ -454,7 +496,158 @@ void wave_start() {
     if (g_on_wave_start) g_on_wave_start(w);
 }
 
+// ---- M4 stage 1, track END: the hosts of the gate exit and the wave end
+
+std::function<EntryContext()> g_entry_ctx;
+std::function<void(World&)> g_on_debriefing;
+
+void todo_once(const std::string& what, const char* address) {
+    static std::set<std::string> seen;
+    if (seen.insert(what + address).second) app::log_todo(what, address);
+}
+
+// seg10:0x754a(id, pool, rec, mode) through M7's one wrapper (dialogs/audio_options.h); the
+// mode-1 point is the flight role's audio source (flight_hooks.cpp sound_source).
+void play_object(int id, int pool, int rec, int mode) { is::sound::play_at(id, pool, rec, mode); }
+
+class ProgramGateHost final : public GateExitHost {
+public:
+    void sound(int id, int pool, int rec, int arg) override { play_object(id, pool, rec, arg); }
+    void destroy(int pool, int rec) override { destroy_object(pool, rec); }  // seg12:0x274a
+    void pool5_slot(int rec) override {
+        todo_once("pool-5 slot words of record " + std::to_string(rec), "seg12:0x22cf");
+    }
+    void removed(int pool, int rec) override {
+        if (pool == 0 || pool == 14) return;  // a no-op for pools 0 and 14 (s1-end.md 1c.6)
+        todo_once("seg7:0x2080 for pool " + std::to_string(pool) + " record " + std::to_string(rec), "seg7:0x2080");
+    }
+    void icon_counted(int rec, int arg) override {
+        if (wave_end_links().icon_counted) return wave_end_links().icon_counted(rec, arg);
+        todo_once("icon counters", "seg7:0x5ae8");
+    }
+    std::int16_t design_type(int design) override {
+        return wave_end_links().design_type ? wave_end_links().design_type(design) : std::int16_t{0};
+    }
+    void column_row(int pool, int rec) override {
+        if (wave_end_links().column_row) return wave_end_links().column_row(pool, rec);
+        todo_once("icon column row", "seg7:0x65aa");
+    }
+    void message(int ship, int id) override {
+        if (wave_end_links().message) return wave_end_links().message(ship, id);
+        todo_once("message " + std::to_string(id), "seg3:0x6ec");
+    }
+    void lines() override { todo_once("the link lines after a vanish", "seg12:0x3778"); }
+    void menu_refresh() override { todo_once("menu state after the vanish", "seg2:0x170e"); }
+    std::int16_t weapon_word_1e(int weapon) override {
+        todo_once("weapon table word +0x1e of " + std::to_string(weapon), "seg7:0x1988");
+        return 0;
+    }
+    std::string lang(int id) override {
+        try {
+            if (g.store) return g.store->find_string(static_cast<std::uint16_t>(id)).value_or("");
+        } catch (const std::exception&) {
+        }
+        return {};
+    }
+};
+
+class ProgramWaveEndHost final : public WaveEndHost {
+public:
+    void music(int code, int arg) override {
+        audio::music(code, arg);
+        log("music seg10:0x7480(" + std::to_string(code) + ", " + std::to_string(arg) + ") at the wave end");
+    }
+    void reset_sounds() override {
+        audio::reset_slots();
+        log("sound reset: ISPACE ordinal 7 command 2 (seg10:0x7db8) at the wave end");
+    }
+    void close_watch_windows() override {
+        if (wave_end_links().close_watch_windows) return wave_end_links().close_watch_windows();
+        todo_once("watch windows", "seg13:0x65f2");
+    }
+    void clear_restored() override {
+        if (wave_end_links().clear_restored) return wave_end_links().clear_restored();
+        todo_once("DGROUP:0x92e4 in the session", "seg9:0x6ceb");
+    }
+    void delete_wave_objects() override { todo_once("the 32 objects DGROUP:0x4e94", "seg9:0x1092"); }
+    void free_buffer(int pool, int rec) override {
+        if (!g_entry_ctx) return;
+        EntryContext c = g_entry_ctx();
+        entry_buffer_free(c, pool, rec);  // seg12:0x26a4
+    }
+    void close_hud() override {
+        if (wave_end_links().close_hud) return wave_end_links().close_hud();
+        todo_once("the HUD windows", "seg11:0x2f0");
+    }
+    void release_wave_dcs() override { todo_once("the 8 wave DCs", "seg7:0x49b6"); }
+    void black_client() override {
+        if (g.gfx && !g.gfx->surface().empty())
+            PatBlt(g.gfx->dc(), 0, 0, g.area.w, g.area.h, BLACKNESS);  // [BYTES seg9:0x6d7a]
+    }
+    void free_blocks() override {}  // seg6:0x7266: the port holds no such blocks [DESIGN]
+    void flame_off(int ship) override { briefing_flame(g_world, 0, ship); }  // seg11:0xb09c(0, i)
+    void meal_check() override { todo_once("the meal re-check", "seg10:0x9672"); }
+    void save_lastgame() override {
+        todo_once("LASTGAME (stage 3, ADR 0014)", "seg6:0x885c");
+    }
+    void debriefing_started() override {
+        if (g_on_debriefing) g_on_debriefing(g_world);
+    }
+    void history_box() override {
+        if (wave_end_links().history_box) return wave_end_links().history_box();
+        // seg16:0x68d6(main, 2328, 2329): string 2328 + 2329, caption "Inner Space"
+        // (DGROUP:0x9690), MB_ICONEXCLAMATION [BYTES seg16:0x68ed seg16:0x6904 seg16:0x691b].
+        ProgramGateHost h;
+        const std::string text = h.lang(2328) + h.lang(2329);
+        log("history MessageBox seg16:0x68d6: " + text);
+        MessageBoxA(g.main, text.c_str(), "Inner Space", MB_ICONEXCLAMATION);
+    }
+    void hall_of_justice() override { todo_once("the Hall of Justice", "seg9:0x6c62"); }
+    void race_credit() override { todo_once("the race credit", "seg9:0x6be3"); }
+    void race_refuel() override { todo_once("the race refuel", "seg9:0x6db0"); }
+    void ambulance_enter() override { todo_once("the ambulance's state 6", "seg7:0x5fa"); }
+    void seg16_32a0() override { todo_once("seg16:0x32a0", "seg7:0x60b"); }
+    void demo_seg6_92b8() override { todo_once("the demo's seg6:0x92b8", "seg7:0x64d"); }
+    void roster_ratings() override { todo_once("the roster rating loop", "seg9:0x2e97"); }
+};
+
+ProgramGateHost g_gate_host;
+ProgramWaveEndHost g_wave_end_host;
+
 }  // namespace
+
+void set_entry_context(std::function<EntryContext()> f) { g_entry_ctx = std::move(f); }
+void on_debriefing(std::function<void(World&)> f) { g_on_debriefing = std::move(f); }
+
+void run_gate_exit(int pool, int rec, std::uint32_t now) {
+    if (g_entry_ctx) {
+        EntryContext e = g_entry_ctx();
+        GateExitCtx c{g_world, now, g_gate_host, &e};
+        gate_exit(c, pool, rec);
+    } else {
+        GateExitCtx c{g_world, now, g_gate_host, nullptr};
+        gate_exit(c, pool, rec);
+    }
+}
+
+void run_vanish_end(int pool, int rec, std::uint32_t now) {
+    if (g_entry_ctx) {
+        EntryContext e = g_entry_ctx();
+        GateExitCtx c{g_world, now, g_gate_host, &e};
+        vanish_end(c, pool, rec);
+    } else {
+        GateExitCtx c{g_world, now, g_gate_host, nullptr};
+        vanish_end(c, pool, rec);
+    }
+}
+
+DeadlineResult run_wave_deadlines(shell::GameState& s) {
+    auto h = make_host();
+    WaveEndCtx c{g_world, s, g_wave_end_host, h.get()};
+    const DeadlineResult r = wave_deadlines(c);
+    if (r == DeadlineResult::kEndPass) log("wave: the tick's deadline block ended the pass (seg7:0x5ce-0x707)");
+    return r;
+}
 
 gfx::ImagePtr icon_strip() { return g_strip; }
 

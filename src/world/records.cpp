@@ -70,15 +70,15 @@ IS_AT(ObjectRecord, d6a, 0x6a);
 IS_AT(ObjectRecord, w6e, 0x6e);
 
 // Effect entry.
-IS_AT(EffectEntry, kind, 0x0);
-IS_AT(EffectEntry, w02, 0x2);
-IS_AT(EffectEntry, w04, 0x4);
+IS_AT(EffectEntry, frame, 0x0);
+IS_AT(EffectEntry, end, 0x2);
+IS_AT(EffectEntry, step, 0x4);
 IS_AT(EffectEntry, pool, 0x6);
 IS_AT(EffectEntry, rec, 0x8);
-IS_AT(EffectEntry, w0a, 0xa);
-IS_AT(EffectEntry, w0c, 0xc);
-IS_AT(EffectEntry, w0e, 0xe);
-IS_AT(EffectEntry, time, 0x10);
+IS_AT(EffectEntry, type, 0xa);
+IS_AT(EffectEntry, side, 0xc);
+IS_AT(EffectEntry, brush, 0xe);
+IS_AT(EffectEntry, start, 0x10);
 
 // Ship record; DGROUP:0x7090 + offset for record 0.
 IS_AT(ShipRecord, w00, 0x0);

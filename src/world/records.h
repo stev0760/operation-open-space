@@ -169,26 +169,44 @@ struct ObjectRecord {
 constexpr std::size_t kObjectRecordSize = 0x70;
 
 // --- Effect table entry (0x14 bytes; structs.md "Effect table") ------------------------------
+// Word +0x00 is a frame counter, not a kind: every creator writes 1, the frame routine
+// seg8:0x3fbe adds 1 per call and frees the entry (0xffff) once it reaches word +0x02; the
+// entry's type is word +0x0a (work/analysis/m4/s1-death.md section 1, verified claims 1-3)
+// [BYTES seg16:0x91e seg12:0x28d8 seg8:0x4190 seg8:0x419c seg8:0x41aa]. The entry's screen
+// centre and world point sit in the side arrays DGROUP:0x5170 and DGROUP:0x5224 (EffectSides).
 struct EffectEntry {
-    std::uint16_t kind;   // +0x00 0xffff = free; destroy writes 1 [BYTES seg18:0x9b2 seg12:0x28d8]
-    std::int16_t w02;     // +0x02 destroy writes 10 [BYTES seg12:0x291b]
-    std::int16_t w04;     // +0x04 [OPEN]
-    std::int16_t pool;    // +0x06 pool of the destroyed object [BYTES seg12:0x2958]
-    std::int16_t rec;     // +0x08 record of the destroyed object [BYTES seg12:0x2963]
-    std::int16_t w0a;     // +0x0a 4 for the first fragment, 1 for the others [BYTES seg12:0x2a6f]
-    std::int16_t w0c;     // +0x0c [OPEN]
-    std::int16_t w0e;     // +0x0e [OPEN]
-    Dword time;           // +0x10 a time on the DGROUP:0x1e50 clock [BYTES seg12:0x2913]
+    std::uint16_t frame;  // +0x00 1 at creation, +1 per seg8:0x3fbe call; 0xffff = free [BYTES seg16:0x91e seg12:0x28d8 seg8:0x4190 seg8:0x41aa]
+    std::int16_t end;     // +0x02 the frame count: the entry ends when +0x00 >= +0x02 [BYTES seg16:0x939 seg12:0x291b seg8:0x419c]
+    std::int16_t step;    // +0x04 step of the 5 x 5 piece loops (types >= 6) [BYTES seg8:0x4523]
+    std::int16_t pool;    // +0x06 source pool [BYTES seg16:0x942 seg12:0x295f]
+    std::int16_t rec;     // +0x08 source record [BYTES seg16:0x949 seg12:0x2966]
+    std::int16_t type;    // +0x0a 1 secondary blast, 4 first fragment, 5 ship death entry 0, 3, 6/7 pieces, 0xff06 [BYTES seg16:0x914 seg16:0x9f1 seg12:0x28ce seg12:0x2a6f]
+    std::int16_t side;    // +0x0c piece side (types >= 6) [BYTES seg8:0x4326]
+    std::int16_t brush;   // +0x0e piece brush index (types >= 6) [BYTES seg8:0x42f5]
+    Dword start;          // +0x10 start time on the DGROUP:0x1e50 clock; types 1 and < 0 wait for it [BYTES seg16:0x931 seg12:0x2913 seg8:0x3ffe]
 };
 constexpr std::size_t kEffectEntrySize = 0x14;
 constexpr int kEffectCount = 45;
 constexpr std::uint16_t kDgEffectTable = 0x1e90;  // DGROUP:0x1e90
 constexpr std::uint16_t kEffectFree = 0xffff;
+// The type word 0xff06 (-250) of seg11:0x9007: no blackout on its last frame, and its blast
+// hits its own source [BYTES seg8:0x407b seg11:0x9007].
+constexpr std::int16_t kEffectTypeFF06 = static_cast<std::int16_t>(-250);
 using EffectTable = std::array<EffectEntry, kEffectCount>;
 // seg18:0x8bc and the placement seg9:0x6624 mark all 45 entries free [BYTES seg18:0x9b2 seg9:0x6624].
 inline void clear_effects(EffectTable& t) {
-    for (EffectEntry& e : t) e.kind = kEffectFree;
+    for (EffectEntry& e : t) e.frame = kEffectFree;
 }
+// The side arrays of the effect table, indexed 4e: DGROUP:0x5170 + 4e the screen centre
+// (x, y), fixed at creation, and DGROUP:0x5224 + 4e the world point, the sound position and the
+// blast's centre [BYTES seg16:0x99c seg16:0x9b2 seg12:0x298a seg12:0x2a34].
+struct EffectPoint {
+    std::int16_t x = 0, y = 0;
+};
+struct EffectSides {
+    std::array<EffectPoint, kEffectCount> centre{};  // DGROUP:0x5170
+    std::array<EffectPoint, kEffectCount> point{};   // DGROUP:0x5224
+};
 
 // --- Ship record (0x15a bytes; structs.md "Ship records") ------------------------------------
 struct ShipRecord {
@@ -230,7 +248,7 @@ struct ShipRecord {
     std::array<std::int16_t, 8> r62;   // +0x62..+0x71 [OPEN]
     std::array<std::int16_t, 8> w72;   // +0x72 one word per other ship j [BYTES seg4:0x7060]
     std::int16_t w82;             // +0x82 [OPEN]
-    Dword lockout;                // +0x84 control lock-out time [BYTES seg11:0x5938 seg11:0x5c03]
+    Dword lockout;                // +0x84 control lock-out time; seg16:0x8e4 sets now + 6000 at death, the tumble ends when it passes (locked_out) [BYTES seg11:0x5938 seg11:0x5c03 seg16:0xa2d seg13:0x14b]
     Dword d88;                    // +0x88 [OPEN] wave-start time [BYTES seg9:0x60bc]
     Dword d8c;                    // +0x8c [OPEN]
     Dword flame_until;            // +0x90 end of the 250 ms flame window [BYTES seg11:0x63e2]
@@ -243,7 +261,7 @@ struct ShipRecord {
     std::int16_t kill_value;      // +0xd8 [BYTES seg8:0x7c50]
     std::int16_t laps;            // +0xda [BYTES seg4:0x8bb7]
     std::int16_t wdc, wde, we0;   // +0xdc..+0xe1 [OPEN]
-    std::uint8_t be2;             // +0xe2 [OPEN] skips action-mode flight [BYTES seg13:0x224 seg11:0x600d]
+    std::uint8_t be2;             // +0xe2 `tumbling`: seg16:0x8e4 sets 1, the mover steps the heading while set; skips action-mode flight [BYTES seg16:0x9ff seg13:0xdc seg13:0x224 seg11:0x600d]
     std::uint8_t be3;             // +0xe3 [OPEN]
     std::uint8_t has_flame;       // +0xe4 0 for a body-thrust ship [BYTES seg14:0x1f41 seg11:0xb122]
     std::uint8_t be5;             // +0xe5 [OPEN]
@@ -253,7 +271,7 @@ struct ShipRecord {
     std::uint8_t be9;             // +0xe9 [OPEN] lamp row 5, sprite row [BYTES seg11:0x3db2 seg7:0x1371]
     std::uint8_t bea;             // +0xea [OPEN]
     std::uint8_t beb;             // +0xeb [OPEN] turn input ignored while set [BYTES seg11:0x5938]
-    std::uint8_t bec;             // +0xec [OPEN] [BYTES seg4:0x8c3f seg7:0x1266]
+    std::uint8_t bec;             // +0xec `alive`: 1 from seg14:0x21a0, 0 from seg16:0x8e4 (dead) [BYTES seg16:0xa3d seg4:0x8c3f seg7:0x1266]
     std::uint8_t bed;             // +0xed [OPEN]
     std::array<std::uint8_t, 8> bee;     // +0xee one byte per other ship j [BYTES seg4:0x704d]
     std::array<std::uint8_t, 0x51> rf6;  // +0xf6..+0x146 [OPEN]
@@ -261,6 +279,18 @@ struct ShipRecord {
     std::uint8_t checkpoint;      // +0x148 [BYTES seg4:0x215c]
     std::array<std::uint8_t, 13> r149;   // +0x149..+0x155 [OPEN]
     Dword due156;                 // +0x156 [OPEN] due time, 1500 ms ahead [BYTES seg7:0xdbc]
+
+    // Byte +0xcb: the weapon slots in use + 1 (seg13:0x4ba0 copies slots 1 ... +0xcb - 1 and
+    // sets 1) [BYTES seg13:0x4c10 seg13:0x4c51], and word +0xce, the resources the pod takes
+    // [BYTES seg13:0x4c49 seg13:0x4c84]. Both sit in the reserved block rc2 (+0xc2 ... +0xd5).
+    std::uint8_t& slots_cb() { return rc2[0xcb - 0xc2]; }
+    std::int16_t resources() const {
+        return static_cast<std::int16_t>(rc2[0xce - 0xc2] | (rc2[0xcf - 0xc2] << 8));
+    }
+    void set_resources(std::int16_t v) {
+        rc2[0xce - 0xc2] = static_cast<std::uint8_t>(v & 0xff);
+        rc2[0xcf - 0xc2] = static_cast<std::uint8_t>((static_cast<std::uint16_t>(v) >> 8) & 0xff);
+    }
 
     // The four sign-extended roster words +0x26..+0x2c by index 0..3 [BYTES seg18:0x4a7].
     std::int16_t& roster_word(int i) {
@@ -410,16 +440,14 @@ public:
         for (int p = 0; p <= last_pool; ++p)
             if (in_use(p) < 0 || in_use(p) > allocated(p)) set_in_use(p, allocated(p));
     }
-    // The index test at the head of seg12:0x274a: false (and bad_index_count + 1) when i is at or
-    // above in_use and (i >= allocated, or pool = ships and i > last_ship) [BYTES seg12:0x2761
-    // seg12:0x2765 seg12:0x2771 seg12:0x277f seg12:0x2784].
+    // The index test at the head of seg12:0x274a: bad_index_count + 1 whenever i is at or above
+    // in_use, and false when then i >= allocated, or pool = ships and i > last_ship [BYTES
+    // seg12:0x2761 seg12:0x2765 seg12:0x2767 seg12:0x276b seg12:0x2777 seg12:0x277f].
     bool destroy_index_ok(int pool, std::int16_t i, std::int16_t ship_pool,
                           std::int16_t last_ship) {
         if (i < in_use(pool)) return true;
-        if (i >= allocated(pool) || (pool == ship_pool && i > last_ship)) {
-            bad_index_count = add16(bad_index_count, 1);
-            return false;
-        }
+        bad_index_count = add16(bad_index_count, 1);
+        if (i >= allocated(pool) || (pool == ship_pool && i > last_ship)) return false;
         return true;
     }
 
