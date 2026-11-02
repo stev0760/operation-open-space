@@ -18,7 +18,6 @@
 #include "dialogs/audio_options.h"
 #include "dialogs/hooks.h"
 #include "formats/bytes.h"
-#include "gfx/palette_message.h"
 #include "help/help.h"
 #include "hud/program.h"  // the HUD scrollbar (M3 stage 2, the HUD)
 #include "intro/intro.h"
@@ -119,35 +118,6 @@ void paint_routine() {
         PatBlt(g.gfx->dc(), 0, 0, g.area.w, g.area.h, BLACKNESS);
     g.game.repaint();
     g.gfx->present(g.main, true);
-}
-
-// The palette messages, emulated (ADR 0007 decision 5) [DESIGN]: WM_QUERYNEWPALETTE seg2:0x5cb
-// reached the main window at each of its activations on a 256-colour Windows, the first one
-// and the return from every dialog or child window (the game-start dialogs, the Navigation
-// window, Help, Notepad); start-0001 saw it there 8 times. With a palette (DGROUP:0x920e) its
-// InvalidateRect(NULL, TRUE) + UpdateWindow ran WM_PAINT seg2:0x7ac at once: the paint routine
-// in states 1 and 7, the post of 0x978 elsewhere, and the black erase of the class brush. The
-// port runs that sequence on the surface (src/gfx/palette_message.h) and presents it at once,
-// as UpdateWindow did, so the black is on the screen before the next dialog draws.
-void palette_message() {
-    const bool done = gfx::emulate_query_new_palette(
-        *g.gfx, g.game.state(), g.timer_seen, [] { paint_routine(); },
-        [] { PostMessageW(g.main, kMsgPaint, 0, 0); });
-    // InvalidateRect(main, NULL, TRUE) also invalidates the child windows, as main has no
-    // WS_CLIPCHILDREN (style 0x80CF0000 or WS_POPUP) [REF Win32 SDK RedrawWindow] [BYTES
-    // seg6:0x180e seg6:0x1816]: the IS_INFO panels, drawn on the surface (ADR 0013 decision 4),
-    // paint again after the erase as the oracle's do [ORACLE wave-0001 35-watch-icons-on.png]
-    // (M3 s4 fixer).
-    if (done && children_invalidated()) children_invalidated()();
-    // UpdateWindow (seg2:0x607) handled the whole client region, so no WM_PAINT for main was
-    // left pending: one that was (a ShowWindow's) would run seg2:0x970 again without its erase
-    // and bring the erased HUD back. The port validates main to the same effect [DESIGN ADR 0013
-    // decision 3] [BYTES seg2:0x5ff seg2:0x607]. The wave start's repaint after the erase is the
-    // IS_ICON column's (src/hud/icon_column_win32.cpp) [ORACLE win98-0001] [DESIGN].
-    if (done && g.main) {
-        ValidateRect(g.main, nullptr);
-        g.gfx->present(g.main, true);
-    }
 }
 
 // seg6:0x19bc: the teardown, once [BYTES seg6:0x19c9-0x1a5a].
@@ -524,12 +494,14 @@ LRESULT handle(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
             }
         }
         break;
-    case WM_ACTIVATE:  // DefWindowProc, then the emulated WM_QUERYNEWPALETTE [DESIGN]
-        // Windows sends WM_QUERYNEWPALETTE to the window being activated, once per activation;
-        // WM_ACTIVATEAPP precedes the WM_ACTIVATE of the same activation, so this one point
-        // covers both (ADR 0007 decision 5).
+    case WM_ACTIVATE:  // DefWindowProc only [DESIGN]
+        // A 256-colour Windows sent WM_QUERYNEWPALETTE to the window being activated, and the
+        // original's handler seg2:0x5cb then erased and repainted the client. The port's display
+        // has no palette and the NT model sends the message only on palette displays, so the
+        // port runs nothing here and ignores the system's palette messages; the real machine
+        // keeps the status display across the wave start's reactivation (ADR 0007 decision 5,
+        // ADR 0013 decision 3) [ORACLE win98-0001] [REF ReactOS win32ss/user/ntuser/focus.c].
         DefWindowProcW(hwnd, msg, wparam, lparam);
-        if (LOWORD(wparam) != WA_INACTIVE) palette_message();
         return 0;
     case WM_SETFOCUS:  // seg2:0x7fa
         if (!IsIconic(hwnd) && !g.running) resume_game();
@@ -560,9 +532,7 @@ LRESULT handle(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
         // the repaint seg11:0xafe that 0x978 runs; in states 1 and 7 after it, as seg2:0x7ac runs
         // seg2:0x970 before DefWindowProc's BeginPaint [BYTES seg2:0x7c4 seg2:0x7c7 seg6:0x14a8]
         // (ADR 0013 decisions 1 and 3); the IS_INFO children paint again after it
-        // (children_invalidated). At the wave start the IS_ICON column's reactivation of main
-        // is followed by a second repaint, so the full status display stands from the first
-        // frame (src/hud/icon_column_win32.cpp) [ORACLE win98-0001] [DESIGN].
+        // (children_invalidated).
         // Other states black the play area in the paint routine until they draw.
         const int erase_state = g.game.state();
         const bool wave_states = erase_state == shell::kWave || erase_state == shell::kHelp;

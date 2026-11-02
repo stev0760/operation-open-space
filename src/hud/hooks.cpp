@@ -711,10 +711,21 @@ void install_hud_hooks(App& app) {
     };
     auto prev_over = h.enter[shell::kGameOver];
     h.enter[shell::kGameOver] = [prev_over](shell::GameState& s) {
+        // The column is not closed by the bytes read so far on this path (seg9:0xd6c; the state
+        // teardown seg10:0x1fe is unread, shell.md "Exit"); the port closes it with the wave
+        // [OPEN seg10:0x1fe] [DESIGN].
+        if (icon_column_exists()) icon_column_destroy();
         if (prev_over) prev_over(s);
         if (!g_canvas || !g.gfx || g.gfx->surface().empty()) return;
         game_over_entry(*g_canvas, g.area.w, g.area.h, s.change_pending(), game_over_lines_now());
         app::log("hud: seg9:0xd6c GAME OVER drawn");
+    };
+    // The abort (0x991, request 0) and the demo's end return to state 0 with the column still
+    // up; the same rule as above [OPEN seg10:0x1fe] [DESIGN].
+    auto prev_intro = h.enter[shell::kIntro];
+    h.enter[shell::kIntro] = [prev_intro](shell::GameState& s) {
+        if (icon_column_exists()) icon_column_destroy();
+        if (prev_intro) prev_intro(s);
     };
     auto prev_over_paint = h.repaint[shell::kGameOver];
     h.repaint[shell::kGameOver] = [prev_over_paint](shell::GameState& s) {
