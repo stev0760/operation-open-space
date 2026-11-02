@@ -54,6 +54,9 @@ struct WaveLinks {
     // seg7:0x119c(2, 0), the information display back to the target at the end of the speed or
     // message display [BYTES seg7:0xbe5].
     std::function<void()> info_target;
+    // seg13:0x675e's HUD part at the ship mover's head (hud/wave.h pictures_tick) [BYTES
+    // seg13:0x15] (M4 s2 fixer).
+    std::function<void()> pictures;
 };
 WaveLinks& wave_links();
 // DGROUP:0xa6c's owner (the radar, src/hud/radar.h): the key switch reads the zoom through it,
@@ -73,6 +76,11 @@ int frame_rate_actual();
 struct CollideLinks {
     std::function<void(int ship, int pool, int rec, int code)> message;  // seg3:0x6ec
     std::function<void(int pool, int rec)> in_use;                       // seg7:0x2080
+    // M4 s2 fixer: seg7:0x233c's crack and seg7:0x2768's fragment bitmaps and pictures on the
+    // strip DC DGROUP:0x3a02 (src/hud/wave_win32.cpp) (collide.h CrackPlan, FragmentPlan).
+    std::function<void(const CrackPlan&)> icon_crack;
+    std::function<void(int r, std::int16_t side)> fragment_bitmap;
+    std::function<void(const FragmentPlan&)> fragment_pictures;
 };
 CollideLinks& collide_links();
 // seg12:0x274a(pool, rec), the generic destroy handler (effects.h object_destroyed), on the

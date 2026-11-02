@@ -58,6 +58,15 @@ constexpr std::uint16_t kMaskDownOrPressed = 0x8001;
 // once at its one pass per frame [DESIGN ADR 0013 decision 6].
 constexpr std::uint16_t kFireMask = kMaskDownOrPressed;
 
+// --- The fire poll seg11:0x4db0 (M4 s2 GUN) -------------------------------------------------
+// seg11:0x4db0: true when the gun seg11:0x4e0a(player) is due: PlayMode DGROUP:0x9134 = 0, the
+// player's lock-out dword +0x84 before now (unsigned), then GetAsyncKeyState(VK_SHIFT) & 0x8000,
+// else VK_SPACE (read only when Shift is up), else the joystick word DGROUP:0x1042
+// [BYTES seg11:0x4dba-0x4e00]. The port reads kFireMask (0x8001) [DESIGN ADR 0013 decision 6].
+// The frame calls it at seg7:0x881 only while the player's object +0x18 = 0 [BYTES
+// seg7:0x871-0x881]; update.cpp's step 3 calls it.
+bool fire_poll(const WaveGlobals& g, KeyLatch& keys, std::uint32_t player_lockout);
+
 // --- The key remap seg11:0xb306 ---------------------------------------------------------------
 // DGROUP:0x94e4 holds ENG_LANG string 2900 and DGROUP:0x94fa string 2901, both loaded at start-up
 // (seg6:0x178d, seg6:0x179f). Unless DGROUP:0x94fa[0] is 'Y', a key code equal to byte

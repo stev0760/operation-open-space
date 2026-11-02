@@ -345,18 +345,28 @@ void Info::target_picture(int flag) {
     if (p.picture && p.slot == 0xd)
         c_.stretch_blt(Img::kScreen, p.dx, p.dy, p.dw, p.dh, Img::kIconStrip, p.sx, p.sy, p.sw, p.sh,
                        kSrcCopy);
+    // A shattered icon's four quarters [BYTES seg13:0x5f49-0x6057] (M4 s2 DISPLAY).
+    if (p.sub_cells) {
+        for (const CellPlan::SubCell& q : p.subs) {
+            if (q.draw && h_.fragment(q.frag))
+                c_.stretch_blt(Img::kScreen, q.x, q.y, q.side, q.side, Img::kFragment, p.frag_sx, p.frag_sx,
+                               p.frag_size, p.frag_size, kSrcCopy);
+            else if (!q.draw)
+                c_.pat_blt(Img::kScreen, q.x, q.y, q.side, q.side, kBlackness, Brush::none());
+        }
+    }
     // Pool 7's slot 5, the logo strip [BYTES seg13:0x5d3a seg13:0x60cd-0x60e1] (M4 s1 SCREENS).
     if (p.picture && p.slot == 5 && c_.has(Img::kLogoStrip))
         c_.stretch_blt(Img::kScreen, p.dx, p.dy, p.dw, p.dh, Img::kLogoStrip, p.sx, p.sy, p.sw, p.sh,
                        kSrcCopy);
 }
 
-void Info::target_picture_now() {
+void Info::target_picture_now(int flag) {
     // GetDC(DGROUP:0xa7c) when hdc = 0 [BYTES seg13:0x5967-0x597b].
     if (!exists_) return;
     const shell::Box& b = rect_[0];
     c_.set_view(b.x, b.y, b.cx, b.cy);
-    target_picture(1);
+    target_picture(flag);
     c_.clear_view();
 }
 

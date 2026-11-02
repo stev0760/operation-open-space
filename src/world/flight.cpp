@@ -671,7 +671,10 @@ void move_ships(FlightCtx& c) {
                 o.src_y = o.gap;
             c.host.draw_sprite(pool_rec(g.ship_pool, i), 1, slot, 0);
         }
-        if (o.on_screen != 0) c.host.ship_collide(i);  // seg13:0xb5a-0xcf9 [OPEN] M4
+        // seg13:0xb5a-0xcf9: the hit test, the touch branches and the weapon tail (update.cpp
+        // UpdateHost::ship_collide); the object word +0x1a = 0 skips all of it (verified claim 10)
+        // [BYTES seg13:0xb69 seg13:0xb6e].
+        if (o.on_screen != 0) c.host.ship_collide(i);
     }
 }
 

@@ -66,6 +66,27 @@ struct Links {
     // The zoom keys' tail for a zoom the key switch computed (Radar::zoom_changed): stores it,
     // SetScrollPos(600 - zoom) and the radar [BYTES seg11:0x7233-0x7247].
     std::function<void(std::int32_t)> zoom_changed;
+
+    // ---- M4 stage 2, track DISPLAY: what the other tracks of the stage own. An empty slot
+    // keeps the default named at each.
+    // seg11:0xac86, the weapon system, for WM_KEYUP VK_RETURN / 'Z' in Action mode and the
+    // WILDCARD's WM_KEYDOWN (MISSILE's fire_weapon_system) [BYTES seg11:0x6e11 seg11:0x6f6e];
+    // empty: logged once.
+    std::function<void()> weapon_system;
+    // W(w)-4, the image slot seg10:0x533a gave weapon w (MISSILE's mutable word); empty or -1:
+    // the HUD renders the sheet itself (hooks.cpp weapon_sheet) [DESIGN, duplicate].
+    std::function<int(int w)> weapon_sheet_slot;
+    // The capture's words for message 0x55 / 0x56: DGROUP:0x9604 (the value in hundredths) and
+    // DGROUP:0x9602 (the defenders), CAPTURE's; empty: 0.
+    std::function<int()> capture_value, capture_defenders;
+    // seg13:0x218a(design word DGROUP:0x970a of ship rec): the team name of message 0x6f (M5);
+    // empty: "" [OPEN].
+    std::function<std::string(int ship)> team_name;
+    // seg13:0x5f49's data of a shattered icon, written by the shatter seg7:0x2768: the fragment
+    // index byte DGROUP:0x57c3 + 0x23·rec + i and the fragment's icon word DGROUP:0x6038 + 2k;
+    // empty: -1 (the quarter is blacked) [OPEN].
+    std::function<int(int rec, int i)> fragment_index;
+    std::function<int(int k)> fragment_parent;
 };
 
 // The slots; fill them before the wave starts.

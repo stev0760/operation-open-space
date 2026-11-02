@@ -111,6 +111,9 @@ public:
     // and DGROUP:0x131c (Info::target_picture, M3 stage 4). Returns false when the record does
     // not exist; the picture is then not drawn.
     virtual bool cell(int /*pool*/, int /*rec*/, CellInputs& /*out*/) const { return false; }
+    // seg13:0x5f49: puts fragment bitmap DGROUP:0x4e94[k] in Img::kFragment; false when the port
+    // has none (the shatter's seg7:0x2768 makes them) [OPEN].
+    virtual bool fragment(int /*k*/) { return false; }
     // DGROUP:0x9320, the game mode: 6 suppresses the target display's picture [BYTES
     // seg13:0x5902].
     virtual int game_mode() const { return 0; }

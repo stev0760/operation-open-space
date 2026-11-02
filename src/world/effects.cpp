@@ -2,6 +2,8 @@
 // arithmetic is 16-bit where the original's is (ADR 0013 decision 7).
 #include "world/effects.h"
 
+#include "world/missile.h"
+
 #include "world/death.h"
 
 namespace is::world {
@@ -315,7 +317,7 @@ void object_destroyed(EffectCtx& c, int pool, int rec) {
     if (!pools.destroy_index_ok(pool, static_cast<std::int16_t>(rec), w.roles.ships, w.last_ship)) return;
     if (!record_ok(pools, pool, rec)) return;  // [DESIGN] storage bound
     const std::uint32_t now = c.in.now;
-    if (pool == 4) c.st.dg_698c = now + 10000u;  // [BYTES seg12:0x2787-0x279d]
+    if (pool == 4) w.w698c = now + 10000u;  // DGROUP:0x698c, World::w698c [BYTES seg12:0x2787-0x279d]
     // A pool-8 record of kind 1 (DGROUP:0x3d6c + 0x34·rec) keeps its square and its state
     // [BYTES seg12:0x27a1-0x27b0 seg12:0x2a78-0x2a87].
     const bool kind1 = pool == kPoolGatePosts && rec < kPool8Max && w.pool8[ix(rec)].at(0x1c) == 1;
@@ -375,7 +377,10 @@ void object_destroyed(EffectCtx& c, int pool, int rec) {
             }
         }
     }
-    if (pool == 6) c.host.pool6_destroyed(rec);  // [BYTES seg12:0x2ae6-0x2afd]
+    if (pool == 6) {  // [BYTES seg12:0x2ae6-0x2afd] (s2-missile.md claim 79)
+        missile_destroyed(w.pools, rec, c.weapons ? *c.weapons : missile_state().words);
+        c.host.pool6_destroyed(rec);
+    }
     c.host.sound(0x45, pool, rec, 1);            // [BYTES seg12:0x2b0d]
 }
 

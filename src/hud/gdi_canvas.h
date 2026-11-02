@@ -68,5 +68,15 @@ private:
     int view_saved_ = 0;
 };
 
+// The weapon sheet seg10:0x533a renders for weapon w into a slot 0x30 ... 0x38: seg10:0x6ee6(k,
+// W(w)-2 = graphic, "", 2, 0x63, W+0x1a, W+0x1c, 1, 0, 0xc, 0xc, 0, sel 0), the ship renderer
+// (gfx/ship_sheet.h) with gap 99, four headings filled to 16 by quarter turns, schemes 12 / 12,
+// mode 0 and the scale flag `scale` (Size >= 2) (s2-display-verify.md claims 14-16) [BYTES
+// seg10:0x53e3-0x5409 seg10:0x5426-0x5461]. The hPal indices become the image's index pixels
+// (ADR 0007 decision 2), the BLACKNESS-only pixels index 0. Null when the graphic is not a 4-bpp
+// sprite. [DESIGN: the HUD's copy of MISSILE's seg10:0x533a, for the weapon picture until the
+// fixer binds the world's slot (src/hud/program.h Links::weapon_sheet_slot).]
+gfx::ImagePtr render_weapon_sheet(gfx::Gfx& gfx, const fmt::Dib& sprite, int graphic, int scale);
+
 }  // namespace is::hud
 #endif

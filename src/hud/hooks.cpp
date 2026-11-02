@@ -34,6 +34,7 @@
 #include "world/flight.h"
 #include "world/flight_hooks.h"
 #include "world/hooks.h"
+#include "world/player_sheet.h"
 #include "world/world.h"
 
 namespace is::hud {
@@ -107,6 +108,31 @@ bool player_design_records(fmt::ShipRecord& shp, fmt::BodyRecord& body) {
 }
 
 namespace {
+std::function<gfx::ImagePtr(int)> g_fragment_images;
+}  // namespace
+
+void set_fragment_images(std::function<gfx::ImagePtr(int k)> f) { g_fragment_images = std::move(f); }
+gfx::ImagePtr fragment_image(int k) { return g_fragment_images ? g_fragment_images(k) : nullptr; }
+
+// seg13:0x5f49's inputs for icon rec (hud/target.h CellInputs): pool-1 record 0's size and gap
+// (far DGROUP:0x1dfc) [BYTES seg13:0x5f49-0x5f58], and per quarter the fragment index byte
+// DGROUP:0x57c3 + 0x23·rec + i (cbw), pool-1 record k's `state` and its icon word DGROUP:0x6038 +
+// 2k [BYTES seg13:0x5f94-0x5fb3]. The bytes and the icon words are the shatter's (links()).
+void fill_fragment_inputs(int rec, CellInputs& in) {
+    world::World& wd = world::current();
+    if (wd.pools.records(1) > 0) {
+        in.frag_size = wd.pools.rec(1, 0).size;
+        in.frag_gap = wd.pools.rec(1, 0).gap;
+    }
+    for (int i = 0; i < 4; ++i) {
+        CellInputs::Fragment& f = in.frags[i];
+        f.index = links().fragment_index ? static_cast<std::int8_t>(links().fragment_index(rec, i)) : -1;
+        f.state = f.index >= 0 && f.index < wd.pools.records(1) ? int{wd.pools.rec(1, f.index).state} : 1;
+        f.parent = links().fragment_parent && f.index >= 0 ? links().fragment_parent(f.index) : -1;
+    }
+}
+
+namespace {
 
 // The dispatcher's words (DGROUP:0x8740, 0x8768, 0x87b8, 0x8db0, 0x1cb0 ... 0x1cb6).
 MessageState g_msg;
@@ -177,6 +203,14 @@ public:
         const int r = audio::play(id);
         app::log("sound 0x" + hex(id) + " seg10:0x744c (seg3:0x6ec) -> " + std::to_string(r));
     }
+    // DGROUP:0x9604 / 0x9602 and seg13:0x218a, the capture's (links(), M4 s2 DISPLAY).
+    int capture_value() const override { return call(links().capture_value, 0); }
+    int capture_defenders() const override { return call(links().capture_defenders, 0); }
+    std::string team_name(int ship) override {
+        if (links().team_name) return links().team_name(ship);
+        app::log_todo("seg13:0x218a, the team name of message 0x6f", "seg13:0x218a");
+        return {};
+    }
     void todo(int code) override {
         if (logged_.insert(code).second)
             app::log_todo("message code " + std::to_string(code) + " of seg3:0x1351", "seg3:0x1351");
@@ -227,7 +261,10 @@ public:
     int view_mode() const override { return call(links().view_mode, int{w().w9e49}); }
     bool blink() const override { return call(links().blink, false); }
 
-    std::uint32_t score() const override { return call(links().score, std::uint32_t{0}); }
+    // dword DGROUP:0x1e58: the World's score, which the kill scorer and the captures add to
+    // (seg11:0x1bcc's DGROUP:0x5018 test, then seg11:0x4a0(0)) [BYTES seg11:0x1bda-0x1beb] (M4 s2
+    // DISPLAY).
+    std::uint32_t score() const override { return call(links().score, w().score); }
     bool score_alt() const override { return call(links().score_alt, false); }
     bool score_alt_hi() const override { return call(links().score_alt_hi, false); }
     std::uint32_t wave_ticks() const override { return call(links().wave_ticks, w().frames); }
@@ -287,11 +324,41 @@ public:
         return links().frame_rate_actual ? links().frame_rate_actual() : world::frame_rate_actual();
     }
 
-    // seg11:0x3f2e's attitude, seg3:0x0 and seg13:0x371c are not ported: unlinked, attitude 0,
-    // every target acceptable and kind 0 [OPEN target tests, a later stage].
+    // seg11:0x3f2e's attitude is not ported: attitude 0 [OPEN]. seg3:0x0 and seg13:0x371c run on
+    // the World (hud/target.h target_valid, target_kind_371c; core.md "Target validity") (M4 s2
+    // DISPLAY): a captured or destroyed icon (`state` 1) fails, and the 280 ms retarget moves on.
     int attitude(int a, int b) const override { return call(links().attitude, 0, a, b); }
-    bool target_ok(int p, int r) const override { return call(links().target_ok, true, p, r); }
-    int target_kind(int p, int r) const override { return call(links().target_kind, 0, p, r); }
+    bool target_ok(int p, int r) const override {
+        if (links().target_ok) return links().target_ok(p, r);
+        return target_valid(validity(), p, r);
+    }
+    int target_kind(int p, int r) const override {
+        return call(links().target_kind, target_kind_371c(p, r), p, r);
+    }
+    static TargetValidity validity() {
+        TargetValidity v;
+        v.ship_pool = w().roles.ships;
+        v.player = w().player;
+        v.allocated = [](int p) { return p >= 0 && p < world::kPoolCount ? int{w().pools.allocated(p)} : 0; };
+        // A record the port's pool does not hold reads `state` 1 [DESIGN].
+        v.state = [](int p, int r) {
+            return p >= 0 && p < world::kPoolCount && r >= 0 && r < w().pools.records(p)
+                       ? int{w().pools.rec(p, r).state}
+                       : 1;
+        };
+        v.ship_147 = [](int r) { return r >= 0 && r < world::kShipCount ? int{w().ship(r).radar_hide} : 0; };
+        // The defender table DGROUP:0x52fe (world/collide.h CollideGlobals::defenders); an entry
+        // past its end reads 0 / -1 / 0 [DESIGN].
+        const auto def = [](int r) -> const world::DefenderEntry* {
+            const auto& d = world::collide_globals().defenders;
+            return r >= 0 && r < static_cast<int>(d.size()) ? &d[static_cast<std::size_t>(r)] : nullptr;
+        };
+        v.def_00 = [def](int r) { return def(r) ? int{def(r)->w00} : 0; };
+        v.def_pool = [def](int r) { return def(r) ? int{def(r)->owner_pool} : -1; };
+        v.def_rec = [def](int r) { return def(r) ? int{def(r)->owner_rec} : 0; };
+        v.gate_post_live = [](int r) { return world::gate_post_live(w(), r); };
+        return v;
+    }
     void bump_bad_index() override {
         if (links().bump_bad_index) links().bump_bad_index();
     }
@@ -323,6 +390,7 @@ public:
             out.icon.w00 = ic.w00;
             out.icon.w02 = ic.w02;
             out.icon.w19 = ic.w19;
+            fill_fragment_inputs(r, out);
         }
         // Pool 7: record 0's word +0x10 (seg13:0x5d2f) and the logo strip DGROUP:0x39e8[5]
         // (M4 s1 SCREENS).
@@ -338,6 +406,12 @@ public:
             }
         }
         return true;
+    }
+    bool fragment(int k) override {
+        if (!g_canvas) return false;
+        gfx::ImagePtr im = fragment_image(k);
+        g_canvas->set_image(Img::kFragment, im);
+        return im != nullptr;
     }
     int game_mode() const override { return call(links().game_mode, int{w().kind}); }
     void draw_race(Canvas& c) override {
@@ -560,10 +634,52 @@ void ensure_loaded() {
 
 HBRUSH metal_brush() { return g_canvas ? g_canvas->metal_brush() : nullptr; }
 
+namespace {
+
+// The sheet DGROUP:0x39e8[W(w)-4] of seg11:0x2ff6. seg10:0x533a (MISSILE's, at the end of
+// seg14:0x11a8) renders it into a slot 0x30 ... 0x38; while links().weapon_sheet_slot is unset or
+// gives no image, the HUD renders the same call itself: seg10:0x6ee6(k, W(w)-2, "", 2, 0x63,
+// W+0x1a, W+0x1c, 1, 0, 0xc, 0xc, 0, sel) is the ship renderer (gfx/ship_sheet.h) with gap 99,
+// four headings (w5 = 1), schemes 12 / 12, mode 0 and the scale flag of Size >= 2
+// (s2-display-verify.md claims 14-16) [BYTES seg10:0x53e3-0x5409 seg10:0x5426-0x5461]
+// [OPEN: a stop-gap that duplicates seg10:0x533a; links().weapon_sheet_slot is bound to the
+// world's W(w)-4 (wave_win32.cpp), so it runs only for a weapon the sheet build skipped]. W(w)+0x06 = 4's
+// loader seg10:0x4412 and the quick renderer (sel = 1) are [OPEN]; so is seg10:0x6308's rescale
+// at Size 0.
+gfx::ImagePtr weapon_sheet(const WeaponTable& t, int wpn, const WeaponPicture& p, int size_level) {
+    if (wpn == 0x18) return world::slot_image(p.sheet_slot);  // the player's own sheet
+    if (links().weapon_sheet_slot) {
+        const int k = links().weapon_sheet_slot(wpn);
+        if (k >= 0)
+            if (gfx::ImagePtr im = world::slot_image(k)) return im;
+    }
+    if (!g.store || !g.gfx) return nullptr;
+    const int id = t.word(wpn, -2);
+    if (t.word(wpn, 0x06) == 4) {
+        app::log_todo("the weapon sheet loader of W+0x06 = 4", "seg10:0x4412");
+        return nullptr;
+    }
+    // Rendered at each seg11:0x2f8c on the palette in force, as seg10:0x533a renders at each
+    // sheet build [DESIGN].
+    const int scale = world::sheet_scale_flag(size_level, 0, 0);
+    gfx::ImagePtr im;
+    try {
+        im = render_weapon_sheet(*g.gfx, g.store->sprite(static_cast<std::uint16_t>(id)), id, scale);
+        app::log("hud: weapon " + std::to_string(wpn) + " sheet of graphic " + std::to_string(id) + ": " +
+                 (im ? std::to_string(im->width()) + " x " + std::to_string(im->height()) : std::string("none")) +
+                 " (the HUD's seg10:0x533a)");
+    } catch (const std::exception& x) {
+        app::log("hud: weapon sheet " + std::to_string(id) + ": " + x.what());
+    }
+    return im;
+}
+
+}  // namespace
+
 // seg11:0x2f8c: DeleteObject(DGROUP:0x5040); when the player's slot word +0x18 != 0,
 // DGROUP:0x5040 = seg11:0x2ff6(the slot's weapon byte); PostMessage(DGROUP:0xa7e, WM_PAINT)
-// [BYTES seg11:0x2f9a-0x2fe8]. The composed pictures are not made [OPEN], so a weapon on that
-// path shows none.
+// [BYTES seg11:0x2f9a-0x2fe8]. The composed picture is hud/weapons.h compose_weapon_picture on
+// the canvas (M4 s2 DISPLAY).
 void weapon_picture_refresh() {
     if (!g_canvas) return;
     g_canvas->set_image(Img::kWeapon, nullptr);  // seg11:0x2f9a-0x2faa
@@ -574,20 +690,57 @@ void weapon_picture_refresh() {
         // seg11:0x2fb6 tests slot != 0 only; the range test is the port's bound [DESIGN].
         if (slot > 0 && slot < static_cast<int>(r.weapon.size())) {
             const int wpn = static_cast<std::int8_t>(r.weapon[static_cast<std::size_t>(slot)]);
-            const WeaponPicture p = weapon_picture(WeaponTable(wd.w920c), wpn);
+            const WeaponTable table(wd.w920c);
+            WeaponPictureInputs in;
+            in.size_level = wd.size;  // DGROUP:0x9156
+            in.player = wd.player;
+            if (links().weapon_sheet_slot) in.sheet_slot = links().weapon_sheet_slot(wpn);
+            // w = 0x18's roster bytes +0x7a / +0x7b are not kept by the port [OPEN].
+            const WeaponPicture p = weapon_picture(table, wpn, in);
             if (p.kind == WeaponPicture::Kind::kGraphic && g.gfx) {
                 try {
                     g_canvas->set_image(Img::kWeapon, g.gfx->load_graphic(p.graphic, 0, -1));
                 } catch (const std::exception& x) {
                     app::log("hud: weapon picture " + std::to_string(p.graphic) + ": " + x.what());
                 }
-            } else if (p.kind == WeaponPicture::Kind::kComposed) {
-                app::log_todo("the composed weapon picture of weapon " + std::to_string(wpn),
-                              "seg11:0x30d0");
+            } else if (p.kind == WeaponPicture::Kind::kComposed && g.gfx) {
+                if (p.overlay != 0) {  // seg10:0x6c02(G, 0, -1); a failed load leaves G = 0
+                    try {
+                        g_canvas->set_image(Img::kWeaponOverlay, g.gfx->load_graphic(p.overlay, 0, -1));
+                    } catch (const std::exception& x) {
+                        app::log("hud: weapon overlay " + std::to_string(p.overlay) + ": " + x.what());
+                    }
+                }
+                g_canvas->set_image(Img::kWeaponSheet, weapon_sheet(table, wpn, p, wd.size));
+                compose_weapon_picture(*g_canvas, p);
+                g_canvas->set_image(Img::kWeaponOverlay, nullptr);  // DeleteObject(G) [BYTES seg11:0x3340]
+                g_canvas->set_image(Img::kWeaponSheet, nullptr);    // the slot's DC stays
+                app::log("hud: seg11:0x2ff6 weapon " + std::to_string(wpn) + ": " +
+                         std::to_string(g_canvas->width(Img::kWeapon)) + " x " +
+                         std::to_string(g_canvas->height(Img::kWeapon)) + " from (" + std::to_string(p.sx) +
+                         ", " + std::to_string(p.sy) + ") " + std::to_string(p.cell));
             }
         }
     }
     if (g_hud) g_hud->info().invalidate(kInfoWeapon);  // seg11:0x2fe8
+}
+
+void refresh_object(int pool, int rec) { g_host.refresh_object(pool, rec); }
+
+void weapon_panel_repaint() {
+    if (g_hud) g_hud->info().invalidate(kInfoWeapon);
+}
+
+void pictures_tick() {
+    world::World& wd = world::current();
+    if (g_hud) {
+        const int m = g_host.info_mode();
+        // DGROUP:0x6e18 + 0x1e·DGROUP:0xa76 is the pool word of mark (mode - 2) [BYTES
+        // seg13:0x6800-0x6805]; outside modes 2 and 3 seg13:0x58dc returns at its own mode test.
+        if ((m == kModeTarget || m == kModeMessage) && g_hud->info().mark(m - 2).pool != wd.roles.ships)
+            g_hud->info().target_picture_now(0);  // seg13:0x58dc(0, 0)
+    }
+    icon_column_rows_tick();  // seg7:0x64ac(0, 0, -1)
 }
 
 namespace {
@@ -614,6 +767,84 @@ std::vector<briefing::GameOverLine> game_over_lines_now() {
     }
     return briefing::game_over_lines(g.area.w, g.area.h, briefing::wave(), captured, destroyed, wd.score,
                                      true, [](int id) { return lang_text(id); });
+}
+
+// DGROUP:0x9524, the slot seg11:0xadf0 keeps (no other reader ported) [BYTES seg11:0xae08
+// seg11:0xae55].
+std::int16_t g_dg_9524 = 0;
+
+// seg11:0xadf0 then seg11:0x2f8c on the program's World [BYTES seg11:0x71e4 seg11:0x71e7].
+void tab_key() {
+    world::World& wd = world::current();
+    const int p = wd.player;
+    if (p < 0 || p >= world::kShipCount) return;
+    world::ShipRecord& r = wd.ship(p);
+    // The ship byte +0xb8 + j; the record ends at 0x15a, the port's bound [DESIGN].
+    const auto byte = [&r](int j) {
+        const int off = 0xb8 + j;
+        return off >= 0 && off < 0x15a ? int{world::sbyte_at(r, off)} : 0;
+    };
+    const TabSelection t = tab_select(r.weapon_slot, r.slots_cb(), byte, wd.play_mode);
+    r.weapon_slot = static_cast<std::int16_t>(t.slot);
+    g_dg_9524 = static_cast<std::int16_t>(t.dg_9524);
+    if (t.clear_b50 && wd.pools.records(wd.roles.ships) > p) wd.ship_object(p).b50 = 0;
+    app::log("hud: Tab seg11:0xadf0: slot " + std::to_string(t.slot));
+    weapon_picture_refresh();
+}
+
+// The weapon keys of the key switch seg11:0x6b64 (hud/weapons.h weapon_key) ahead of the flight
+// role's route_wave: WM_KEYUP VK_RETURN / 'Z' and WM_KEYDOWN VK_TAB, VK_RETURN, 'Z'. Returns
+// false for any other message, which goes on (ESC's WM_KEYUP to the briefing hook) [DESIGN: the
+// HUD's wrapper of route_input; the gate and the demo filter are seg11:0x6b64's].
+bool weapon_keys(const shell::GameState& s, const shell::Input& in) {
+    if (s.state() != shell::kWave) return false;
+    if (in.msg != shell::kWmKeyUp && in.msg != 0x100) return false;
+    world::World& wd = world::current();
+    if (world::flight_globals().dg_9130 != 0) return false;  // seg18:0xd4e, as route_wave [OPEN]
+    static bool remap_read = false;
+    static world::KeyRemap remap;
+    if (!remap_read) {  // seg11:0xb306's strings 2900 / 2901 [BYTES seg6:0x178d seg6:0x179f]
+        remap_read = true;
+        remap = world::KeyRemap::from_strings(lang_text(2900), lang_text(2901));
+    }
+    const std::uint16_t key = remap.map(static_cast<std::uint16_t>(in.wparam));  // seg11:0x6aa8
+    const int p = wd.player;
+    if (p < 0 || p >= world::kShipCount) return false;
+    WeaponKeyState ks;
+    const std::int16_t pstate = wd.pools.records(wd.roles.ships) > p ? wd.ship_object(p).state : std::int16_t{0};
+    ks.gated = wd.ships[static_cast<std::size_t>(p)].lockout.get() > s.now() || pstate != 0;
+    ks.demo = wd.player_game;  // DGROUP:0x95bc
+    ks.play_mode = wd.play_mode;
+    ks.weapon = world::selected_weapon(wd.ship(p));  // the signed byte +0xb8 + slot
+    switch (weapon_key(in.msg, key, ks)) {
+    case WeaponKey::kNone: return false;
+    case WeaponKey::kIgnored: return true;
+    case WeaponKey::kTab: tab_key(); return true;
+    case WeaponKey::kFire:
+        if (links().weapon_system)
+            links().weapon_system();  // seg11:0xac86
+        else
+            app::log_todo("the weapon system", "seg11:0xac86");
+        return true;
+    }
+    return false;
+}
+
+// The launcher's PostMessage(DGROUP:0xa7e, WM_PAINT) after the count or fuel change [BYTES
+// seg11:0x7e9a-0x7ea6] (s2-display-verify.md claims 19-21): the port repaints the weapon panel
+// after the frame in which the line's inputs changed [DESIGN: until MISSILE's launch calls the
+// panel; a launch that leaves the line as it was repaints nothing, which looks the same since
+// seg11:0x238e blacks and redraws the panel whole].
+void weapon_line_watch() {
+    static WeaponView last;
+    static bool have = false;
+    if (!g_hud) return;
+    const WeaponView v = g_host.weapon();
+    if (have && (v.name_id != last.name_id || v.count != last.count || v.counted != last.counted ||
+                 v.no_count != last.no_count))
+        g_hud->info().invalidate(kInfoWeapon);
+    last = v;
+    have = true;
 }
 
 void close_hud() {
@@ -675,7 +906,14 @@ void install_hud_hooks(App& app) {
     auto prev_frame = h.frame[shell::kWave];
     h.frame[shell::kWave] = [prev_frame](shell::GameState& s) {
         if (prev_frame) prev_frame(s);
+        if (s.state() == shell::kWave) weapon_line_watch();  // the launch's WM_PAINT (M4 s2 DISPLAY)
         if (s.state() == shell::kWave || s.state() == shell::kHelp) g_hud->info().flush();
+    };
+    // The weapon keys ahead of the flight role's router (M4 s2 DISPLAY).
+    auto prev_route = h.route_input;
+    h.route_input = [prev_route](shell::GameState& s, const shell::Input& in) {
+        if (weapon_keys(s, in)) return;
+        if (prev_route) prev_route(s, in);
     };
     // The play area changed (seg2:0x1ac8): the scrollbar follows the scale factor [DESIGN].
     auto prev_area = h.play_area;

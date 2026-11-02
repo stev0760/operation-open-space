@@ -152,6 +152,21 @@ struct SheetBuild {
 SheetBuild build_ship_sheet(Blitter& out, ImageSlotTable& images, ShipRecord& ship, int i,
                             const SheetRequest& req, const SheetRenderer& render);
 
+// seg14:0x11a8's tail, the launched weapons' images [BYTES seg14:0x13f3-0x1425] (M4 s2 MISSILE;
+// s2-missile.md 6.2, verified claims 74-75): after every build path, for each slot l <
+// (int8) byte +0xcb (slot 0 included) whose weapon w = (int8) byte +0xb8 + l has W(w)+0x0a !=
+// 0, seg10:0x533a(w) (rock_images.h weapon_image_slot); a new slot is filled by seg10:0x6ee6(k,
+// W(w)-2, far DGROUP:0x76d "", 2, 0x63, W(w)+0x1a, W(w)+0x1c, 1, 0, 12, 12, 0, sel) through
+// the same renderer as the ship sheets [BYTES seg10:0x53b3-0x540c] (weapon 8: IGRAPHIC 370,
+// 23 x 23, one frame). `sel` is 1 when INI `Quick` (DGROUP:0x931e) = 2, or when the screen
+// state DGROUP:0x90f4 = 1, the frame counter DGROUP:0x1e68 != 0 and `Quick` = 1 [BYTES
+// seg10:0x53b3-0x53de] (weapon_sheet_sel). W(w)+0x06 = 4 loads through seg10:0x4412 instead,
+// not ported [OPEN]. Returns the number of slots filled.
+std::int16_t weapon_sheet_sel(int quick, int state, std::uint32_t frames);
+int build_weapon_sheets(Blitter& out, ImageSlotTable& images, Pools& pools, WeaponWords& words,
+                        const ShipRecord& ship, int sel, int size_level,
+                        const SheetRenderer& render);
+
 // seg16:0x3468(i, 3)'s sheet part: byte +0xac = 0 so the build renders [BYTES seg16:0x3621], the
 // build [BYTES seg16:0x362b], then object word +0x3a = DGROUP:0x3a38[i] (the sheet DC that
 // seg12:0x2556 and seg7:0x158e read) [BYTES seg16:0x3636 seg16:0x3645]. Its other writes (ship word +0x20, +0x22, object

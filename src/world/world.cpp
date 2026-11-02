@@ -27,6 +27,10 @@ void set_word_at(ShipRecord& s, int off, int v) { set_word_of(s, off, v); }
 std::int8_t sbyte_at(const ShipRecord& s, int off) {
     return static_cast<std::int8_t>(reinterpret_cast<const std::uint8_t*>(&s)[off]);
 }
+std::int8_t selected_weapon(const ShipRecord& s) {
+    const int off = 0xb8 + s.weapon_slot;
+    return off >= 0xb8 && off < static_cast<int>(sizeof(ShipRecord)) ? sbyte_at(s, off) : std::int8_t{-1};
+}
 void set_byte_at(ShipRecord& s, int off, int v) {
     reinterpret_cast<std::uint8_t*>(&s)[off] = static_cast<std::uint8_t>(v);
 }

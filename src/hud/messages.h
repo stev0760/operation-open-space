@@ -4,7 +4,8 @@
 // its sender DGROUP:0x8740 and its two lines DGROUP:0x8768 / DGROUP:0x87b8. Portable.
 //
 // Ported from the bytes for M4 stage 1 (track SCREENS): the head seg3:0x6ec-0x83e, the switch
-// seg3:0x1346-0x1351, the cases of codes 10-13, 82-84, 91, 94 and 112, the tail seg3:0x14d6,
+// seg3:0x1346-0x1351, the cases of codes 10-13, 82-84, 91, 94 and 112 (and, M4 stage 2 track
+// DISPLAY, the capture's 0x48, 0x55, 0x56 and 0x6f), the tail seg3:0x14d6,
 // seg10:0xa332's %S %s %d %? %R %< %> and its mode-2 split, and seg3:0x3498. Every other case of
 // the 192 is [OPEN]: the dispatcher shows the sender and switches the display, as the original's
 // head does, and leaves the two lines as they were; MessageHost::todo names the code.
@@ -75,6 +76,12 @@ public:
     virtual void set_end(std::uint32_t /*t*/) {}
     // seg10:0x744c(id).
     virtual void sound(int /*id*/) {}
+    // The capture's words (M4 s2 DISPLAY): DGROUP:0x9604, the captured icon's value in
+    // hundredths, and DGROUP:0x9602, the defenders that passed over [BYTES seg3:0xe21-0xe35].
+    virtual int capture_value() const { return 0; }
+    virtual int capture_defenders() const { return 0; }
+    // seg13:0x218a(design word DGROUP:0x970a of ship rec): the team name (M5) [OPEN].
+    virtual std::string team_name(int /*ship*/) { return {}; }
     // A case of the switch the port does not carry yet [OPEN].
     virtual void todo(int /*code*/) {}
 };

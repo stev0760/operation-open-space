@@ -83,6 +83,16 @@ constexpr std::uint16_t kVkAdd = 0x6b, kVkSubtract = 0x6d, kVkOemPlus = 0xbb, kV
 
 }  // namespace
 
+// ---- seg11:0x4db0 (M4 s2 GUN)
+
+bool fire_poll(const WaveGlobals& g, KeyLatch& keys, std::uint32_t player_lockout) {
+    if (g.play_mode != 0) return false;            // [BYTES seg11:0x4dba-0x4dbf]
+    if (!(player_lockout < g.now)) return false;   // `ja` / `jae` on the dword [BYTES seg11:0x4dc1-0x4dda]
+    return keys.test(kVkShift, kFireMask) ||       // [BYTES seg11:0x4ddc-0x4de6]
+           keys.test(kVkSpace, kFireMask) ||       // [BYTES seg11:0x4de8-0x4df2]
+           g.joy_fire != 0;                        // DGROUP:0x1042 [BYTES seg11:0x4df4-0x4df9]
+}
+
 KeyResult key_message(std::uint32_t msg, std::uint16_t key, const WaveGlobals& g,
                       std::uint32_t player_lockout, std::int16_t player_state, bool ctrl_down,
                       bool alt_down, KeyState& ks, KeyActions& act) {

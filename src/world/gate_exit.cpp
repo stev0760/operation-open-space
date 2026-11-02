@@ -162,11 +162,9 @@ void vanish_end(GateExitCtx& c, int pool, int rec) {
     }
     if (pool == 6) {
         // The weapon-slot reset [BYTES seg7:0x1983 seg7:0x1988 seg7:0x198c seg7:0x1990 seg7:0x19ae].
-        if (rec >= 0 && rec < static_cast<int>(w.w66e4.size())) {
-            const auto r = static_cast<std::size_t>(rec);
-            w.w66ec[r] = c.host.weapon_word_1e(w.w66e4[r]);
-            w.w66e4[r] = -1;
-        }
+        MissileSlot& e = w.pools.missile(rec);  // DGROUP:0x66e0 + 0x1c·rec (records.h)
+        e.age = c.host.weapon_word_1e(e.weapon);
+        e.weapon = -1;
         o.b2e = 0;
     } else {
         o.b2e = 0xff;     // [BYTES seg7:0x19d1]

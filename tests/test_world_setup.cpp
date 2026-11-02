@@ -447,3 +447,44 @@ TEST_CASE("world setup: the stars at the wave start and the placement's words (M
     // Nothing else in this wave start draws rand() (no resident ship, no chance block).
     CHECK(r.rng.state() == ref.state());
 }
+
+TEST_CASE("world setup: pool 6 holds the missile template, pool-7 record 0 the ambulance (M4 s2 MISSILE)") {
+    // seg10:0x108a-0x11ac [BYTES seg10:0x108a-0x1101 seg10:0x1103-0x11ac] (s2-missile.md 6.1,
+    // verified claims 69, 70, 73), the placement's entry age 0x191 [BYTES seg9:0x66a0] (claim
+    // 72) and the ambulance's `state` writes [BYTES seg9:0x5d42 seg9:0x6876] (claim 71).
+    Rig r;
+    r.w.wave = 1;
+    state1_load(r.w, r.host);
+    new_game(r.w);
+    r.w.wave = 1;
+    enter_briefing(r.w, r.host);
+    const Pools& p = r.w.pools;
+    REQUIRE(p.allocated(6) >= 1);
+    for (int i = 0; i < p.allocated(6); ++i) {
+        const ObjectRecord& m = p.rec(6, i);
+        CHECK(m.mass == 20);
+        CHECK(m.hit_sound == 6);
+        CHECK(m.radar_color.get() == 0x00007f00u);
+        CHECK(m.max_damage == -1);
+        CHECK(m.blast_size == 5);
+        CHECK(m.radar_draw.get() == kRadarSmall);
+        CHECK(m.on_damage.get() == kDamageGeneric);
+        CHECK(m.state == 1);
+        CHECK(p.missile(i).age == 0x191);
+    }
+    const ObjectRecord& a = p.rec(7, 0);
+    CHECK(a.mass == 800);
+    CHECK(a.hit_sound == 8);
+    CHECK(a.state == 1);
+    CHECK(a.max_damage == 800);
+    CHECK(a.radar_brush == 1);
+    CHECK(a.blast_size == 7);
+    CHECK(a.extent == 320);
+    CHECK(a.size == 40);  // (40 << 1) >> 1 at Size 1
+    CHECK(a.on_destroy.get() == kDestroyGeneric);
+    CHECK(a.radar_draw.get() == kRadarShip);
+    CHECK(a.on_damage.get() == kDamagePool7);
+    // Pool 5's handler is seg7:0x570a [BYTES seg10:0x105a].
+    for (int i = 0; i < p.allocated(5) && i < p.records(5); ++i)
+        CHECK(p.rec(5, i).on_damage.get() == handler(7, 0x570a));
+}

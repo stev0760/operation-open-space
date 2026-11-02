@@ -21,6 +21,10 @@ bool icon_column_wave_start();
 void icon_column_create();
 // seg7:0x64ac(0, 1, rec): one row repainted on the column's own DC (seg7:0x65aa's pool-0 part).
 void icon_column_row(int rec);
+// seg7:0x64ac(0, 0, -1): every row unflagged on the column's own DC, from the ship mover's
+// seg13:0x675e [BYTES seg13:0x6816-0x681c] (M4 s2 DISPLAY): a dissolving icon's row (+0x51 != 0)
+// follows the dissolve; DGROUP:0x91fc = 0 destroys the column [BYTES seg7:0x659e].
+void icon_column_rows_tick();
 // seg7:0x63f2: DestroyWindow(DGROUP:0x9458), DGROUP:0x9458 = 0.
 void icon_column_destroy();
 // DGROUP:0x9458 != 0.

@@ -336,6 +336,59 @@ constexpr int ship_image_slot(int ship, const ShipRecord& s) {
 }
 using ImageSlotTable = std::array<std::uint16_t, kImageSlots>;
 
+// --- The missile entries DGROUP:0x66e0 + 0x1c·m (M4 s2 MISSILE) -------------------------------
+// One 0x1c-byte entry per pool-6 record m, 14 words (work/analysis/m4/s2-missile.md 0.1, claims
+// 19-22, 29, 40-43, 49-50, 56, 72 verified). The launcher seg11:0x7c12 grows pool 6 only while
+// DGROUP:0x9412 < 10, so m < 10 [BYTES seg11:0x7c2b seg11:0x7c3a seg11:0x7c45].
+struct MissileSlot {
+    std::int16_t target_pool = 0;   // +0x00 DGROUP:0x66e0, -1 = none [BYTES seg11:0x7f57 seg12:0x7aa]
+    std::int16_t target_rec = 0;    // +0x02 DGROUP:0x66e2 [BYTES seg11:0x7f47 seg12:0x7b1]
+    std::int16_t weapon = 0;        // +0x04 DGROUP:0x66e4, -1 = free [BYTES seg11:0x7ebc seg11:0x7d8b]
+    std::int16_t w06 = 0;           // +0x06 DGROUP:0x66e6 [OPEN] no writer in the launch or mover
+    std::int16_t launcher_pool = 0; // +0x08 DGROUP:0x66e8 [BYTES seg11:0x89cb]
+    std::int16_t launcher_rec = 0;  // +0x0a DGROUP:0x66ea [BYTES seg11:0x89d2]
+    std::int16_t age = 0;           // +0x0c DGROUP:0x66ec, mover passes [BYTES seg11:0x8981 seg12:0x445 seg9:0x66a0]
+    std::int16_t steer_delay = 0;   // +0x0e DGROUP:0x66ee, kind 1 steers once age > it [BYTES seg12:0x156]
+    std::int16_t alt_pool = 0;      // +0x10 DGROUP:0x66f0, the target of modes != 2 (seg4:0x5514, M4-later)
+    std::int16_t alt_rec = 0;       // +0x12 DGROUP:0x66f2
+    std::int16_t mode = 0;          // +0x14 DGROUP:0x66f4, the steering mode, 2 at launch [BYTES seg11:0x7ec4]
+    std::int16_t anim = 0;          // +0x16 DGROUP:0x66f6, the animation counter [BYTES seg11:0x7ec0 seg12:0x23]
+    std::int16_t w18 = 0;           // +0x18 DGROUP:0x66f8, 0 at launch [BYTES seg11:0x7eb5]
+    std::int16_t lock = 0;          // +0x1a DGROUP:0x66fa, homing on [BYTES seg12:0x5e9 seg12:0x7a1 seg12:0x8e9]
+};
+constexpr std::size_t kMissileSlotSize = 0x1c;
+constexpr int kMissileSlots = 10;
+constexpr std::uint16_t kDgMissileTable = 0x66e0;
+
+// --- The weapon table DGROUP:0x2f54 as the wave reads and writes it (M4 s2 MISSILE) -----------
+// 28 blocks of 0x50 bytes (src/hud/weapons.h holds the filler seg10:0x1fb2's values; isworld
+// does not link src/hud, so the program copies its blocks in, block(w) = hud::WeaponTable::
+// block(w)) [DESIGN]. Words -8 ... -2 of weapon w are words +0x48 ... +0x4e of block w - 1;
+// word -4 (the image slot) is written at run time by seg10:0x533a [BYTES seg10:0x5389
+// seg10:0x542d], so the wave holds a mutable copy (s2-missile.md 0.2 "Port note") [DESIGN].
+constexpr int kWeaponTableBlocks = 28;
+class WeaponWords {
+public:
+    using Block = std::array<std::int16_t, 0x50 / 2>;
+    // The signed word DGROUP:0x2f54 + 0x50·w + off. A word outside the table (w = -1 reads
+    // DGROUP:0x2f04 + off, the star colours, in the original) reads 0 [DESIGN].
+    std::int16_t word(int w, int off) const {
+        const int a = w * 0x50 + off;
+        if (a < 0 || a >= kWeaponTableBlocks * 0x50 || (a & 1) != 0) return 0;
+        return blocks_[static_cast<std::size_t>(a / 0x50)][static_cast<std::size_t>((a % 0x50) / 2)];
+    }
+    void set_word(int w, int off, std::int16_t v) {
+        const int a = w * 0x50 + off;
+        if (a < 0 || a >= kWeaponTableBlocks * 0x50 || (a & 1) != 0) return;
+        blocks_[static_cast<std::size_t>(a / 0x50)][static_cast<std::size_t>((a % 0x50) / 2)] = v;
+    }
+    Block& block(int w) { return blocks_[static_cast<std::size_t>(w)]; }
+    const Block& block(int w) const { return blocks_[static_cast<std::size_t>(w)]; }
+
+private:
+    std::array<Block, kWeaponTableBlocks> blocks_{};
+};
+
 // --- Pools (structs.md "Object pools") -------------------------------------------------------
 constexpr int kPoolCount = 21;               // DGROUP:0x1df8 holds 21 far pointers [BYTES seg6:0x1bab seg18:0x1e19]
 constexpr int kStartupPools = 15;            // pools 0..14 by seg6:0x1b62 [BYTES seg6:0x1bb1]
@@ -461,7 +514,24 @@ public:
 
     std::int16_t bad_index_count = 0;  // DGROUP:0x9498
 
+    // The missile entries DGROUP:0x66e0 (MissileSlot), pool 6's side table. They live beside
+    // the pool storage so that every routine holding the pools reaches the one copy (the
+    // launcher, the mover, the destroy seg12:0x274a, the collisions) [DESIGN]. BSS: zero at
+    // start-up, as DGROUP is. m outside 0 ... 9 reads and writes a scratch entry, where the
+    // original reads the next table [DESIGN].
+    std::array<MissileSlot, kMissileSlots> missiles{};
+    MissileSlot& missile(int m) {
+        if (m < 0 || m >= kMissileSlots) return scratch_missile_ = MissileSlot{};
+        return missiles[static_cast<std::size_t>(m)];
+    }
+    const MissileSlot& missile(int m) const {
+        static const MissileSlot none{};
+        if (m < 0 || m >= kMissileSlots) return none;
+        return missiles[static_cast<std::size_t>(m)];
+    }
+
 private:
+    MissileSlot scratch_missile_{};
     static std::size_t idx(int pool) { return static_cast<std::size_t>(pool); }
     std::array<std::vector<ObjectRecord>, kPoolCount> store_;
     std::array<std::int16_t, kPoolCount> allocated_{};  // DGROUP:0x92ec
@@ -480,6 +550,7 @@ constexpr int rec_of(std::int16_t pr) { return static_cast<std::uint16_t>(pr) & 
 static_assert(sizeof(Dword) == 4 && alignof(Dword) == 2, "Dword");
 static_assert(sizeof(ObjectRecord) == kObjectRecordSize, "object record 0x70");
 static_assert(sizeof(EffectEntry) == kEffectEntrySize, "effect entry 0x14");
+static_assert(sizeof(MissileSlot) == kMissileSlotSize, "missile entry 0x1c");
 static_assert(sizeof(ShipRecord) == kShipRecordSize, "ship record 0x15a");
 static_assert(sizeof(ShipTable) == kShipCount * kShipRecordSize, "ship table");
 static_assert(kDgShipRecords + kShipCount * kShipRecordSize == 0x7b60, "structs.md: next table at DGROUP:0x7b60");

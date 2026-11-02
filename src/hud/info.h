@@ -87,8 +87,9 @@ public:
     // (mark a76 - 2) through seg13:0x5a6a / seg13:0x5c22; in mode 3 an object that is gone
     // returns the display to mode 2 (M3 stage 4).
     void target_picture(int flag);
-    // seg13:0x58dc(0, 1) from seg7:0x65aa: on the left panel, without a repaint.
-    void target_picture_now();
+    // seg13:0x58dc(0, flag) on its own DC: flag 1 from seg7:0x65aa, flag 0 from the ship mover's
+    // seg13:0x675e (M4 s2 DISPLAY); on the left panel, without a repaint.
+    void target_picture_now(int flag = 1);
     // seg11:0x3f2e(r): the attitude text DGROUP:0x93e0.
     void attitude_text(int r);
     const std::string& text_93e0() const { return text_93e0_; }

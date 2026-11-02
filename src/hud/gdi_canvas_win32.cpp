@@ -6,6 +6,7 @@
 
 #include "formats/bytes.h"
 #include "gfx/font.h"
+#include "gfx/ship_sheet.h"
 
 namespace is::hud {
 
@@ -215,6 +216,27 @@ void GdiCanvas::clear_view() {
     if (!d || view_saved_ == 0) return;
     RestoreDC(d, view_saved_);
     view_saved_ = 0;
+}
+
+gfx::ImagePtr render_weapon_sheet(gfx::Gfx& gfx, const fmt::Dib& sprite, int graphic, int scale) {
+    gfx::SheetArgs a;
+    a.gap = 0x63;      // [BYTES seg10:0x53ee]
+    a.four = 1;
+    a.scale = scale;
+    a.scheme_a = 0xc;  // [BYTES seg10:0x53f9 seg10:0x53fe]
+    a.scheme_b = 0xc;
+    a.mode = 0;
+    const gfx::ShipSheet sh = gfx::ship_sheet_for(sprite, graphic, gfx.palettes(), gfx.palette(), a);
+    if (!sh.ok()) return nullptr;
+    gfx::ImagePtr im = gfx.create_image(sh.width, sh.height);
+    if (!im) return nullptr;
+    for (int y = 0; y < sh.height; ++y)
+        for (int x = 0; x < sh.width; ++x) {
+            const std::int16_t v = sh.at(x, y);
+            im->pixels()[static_cast<std::size_t>(y) * im->stride() + x] =
+                v < 0 ? std::uint8_t{0} : static_cast<std::uint8_t>(v & 0xff);
+        }
+    return im;
 }
 
 }  // namespace is::hud

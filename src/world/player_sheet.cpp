@@ -2,6 +2,8 @@
 // measures of ISPACE.DLL seg6:0x11c. 16-bit arithmetic as the original's (ADR 0013 decision 7).
 #include "world/player_sheet.h"
 
+#include "world/rock_images.h"
+
 #include <algorithm>
 
 #include "world/world.h"
@@ -148,6 +150,52 @@ SheetBuild build_ship_sheet(Blitter& out, ImageSlotTable& images, ShipRecord& sh
     set_byte_at(ship, 0xad, 1);
     set_byte_at(ship, 0xac, 1);
     return b;
+}
+
+std::int16_t weapon_sheet_sel(int quick, int state, std::uint32_t frames) {
+    if (state == 1 && frames != 0 && (quick == 1 || quick == 2)) return 1;  // [BYTES seg10:0x53b3-0x53d0]
+    return quick == 2 ? 1 : 0;                                              // [BYTES seg10:0x53d7-0x53de]
+}
+
+int build_weapon_sheets(Blitter& out, ImageSlotTable& images, Pools& pools, WeaponWords& words,
+                        const ShipRecord& ship, int sel, int size_level,
+                        const SheetRenderer& render) {
+    int filled = 0;
+    // l = 0 ... (int8) byte +0xcb - 1 [BYTES seg14:0x13f3-0x1425]
+    const int n = static_cast<std::int8_t>(sbyte_at(ship, 0xcb));
+    for (int l = 0; l < n; ++l) {
+        const int w = sbyte_at(ship, 0xb8 + l);
+        if (words.word(w, 0x0a) == 0) continue;  // [BYTES seg14:0x1407]
+        const WeaponSlotChoice ch = weapon_image_slot(words, images, pools, w);  // seg10:0x533a
+        if (!ch.load) continue;
+        if (words.word(w, 0x06) == 4) continue;  // seg10:0x4412(k, 6, W-2, W+0x26) [OPEN]
+        SheetRequest req;
+        req.slot = ch.slot;
+        req.graphic_id = words.word(w, -2);
+        req.file.clear();     // far DGROUP:0x76d, the empty string
+        req.w1 = 2;
+        req.gap_word = kSheetGapAuto;  // 0x63
+        req.recolour_a = words.word(w, 0x1a);
+        req.recolour_b = words.word(w, 0x1c);
+        req.w5 = 1;
+        req.scale = sheet_scale_flag(size_level, 0, sel);
+        req.colour_a = 12;
+        req.colour_b = 12;
+        req.mode = 0;
+        req.sel = sel;
+        req.size_level = size_level;
+        std::uint16_t& slot = images[static_cast<std::size_t>(ch.slot)];
+        if (slot != 0) {  // seg10:0x552(slot, 0) [BYTES seg10:0x6ee6]
+            out.delete_image(slot);
+            slot = 0;
+        }
+        SheetPixels px;
+        if (render && render(req, px) && px.w > 0 && px.h > 0) {
+            slot = out.create_image_from(px.w, px.h, px.index);  // [BYTES seg10:0x6f7f seg10:0x6f89]
+            if (slot != 0) ++filled;
+        }
+    }
+    return filled;
 }
 
 SheetBuild rebuild_ship_sheet(Blitter& out, ImageSlotTable& images, ShipRecord& ship,

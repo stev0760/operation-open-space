@@ -101,7 +101,18 @@ WeaponView weapon_view(const WeaponTable& t, int weapon, int count) {
     return v;
 }
 
-WeaponPicture weapon_picture(const WeaponTable& t, int weapon) {
+namespace {
+
+std::int16_t w16(int v) { return static_cast<std::int16_t>(v); }
+// cwd; sub ax, dx; sar ax, 1: a signed halving toward zero.
+std::int16_t half16(int v) {
+    const std::int16_t x = w16(v);
+    return w16((x - (x < 0 ? -1 : 0)) >> 1);
+}
+
+}  // namespace
+
+WeaponPicture weapon_picture(const WeaponTable& t, int weapon, const WeaponPictureInputs& in) {
     WeaponPicture p;
     if (weapon == 0) return p;  // seg11:0x3003-0x300b
     // seg11:0x300e-0x3024: +0x0a = 0, or word -2 = -1, and not weapon 0x18.
@@ -110,8 +121,138 @@ WeaponPicture weapon_picture(const WeaponTable& t, int weapon) {
         p.graphic = t.word(weapon, 0x02);  // seg11:0x302e: DGROUP:0x2f56 + 0x50·w
         return p;
     }
-    p.kind = WeaponPicture::Kind::kComposed;  // seg11:0x3040 onward [OPEN]
+    p.kind = WeaponPicture::Kind::kComposed;
+    p.weapon = weapon;
+    p.name = t.word(weapon, 0x00);  // [BYTES seg11:0x317d seg11:0x3222]
+    // seg11:0x3044-0x3078: A = W-8 (B = W-6 is overwritten before use, claim 7) when +0x0a != 0;
+    // only w = 0x18 reaches the roster bytes (cbw) (s2-display-verify.md claim 2).
+    int a = t.word(weapon, 0x0a) != 0 ? t.word(weapon, -8) : static_cast<std::int8_t>(in.roster_7a);
+    p.a_raw = w16(a);
+    // seg11:0x307b-0x30cb: the overlay graphic.
+    switch (t.word(weapon, 0x14)) {
+    case 1:
+    case 4: p.overlay = 0xbf; break;
+    case 2: p.overlay = 0xc4; break;
+    case 3: p.overlay = 0xc5; break;
+    case 0: p.overlay = weapon == 0x18 ? 0xbd : 0; break;
+    default: p.overlay_unset = true; break;  // [bp-0xe] unwritten [OPEN]
+    }
+    // seg11:0x30e2-0x30f3: S = A for w = 0x18, else 2·A (16-bit, the A before the odd rule).
+    p.side_overlay = weapon == 0x18 ? p.a_raw : w16(2 * p.a_raw);
+    // seg11:0x3179-0x31bc: names 0xc4, 0xc6, 0xc3 take (W-8 << 2) / 3 (signed idiv), the rest
+    // 2·(W-8): W-8 read again from the table, not A.
+    const std::int16_t w8 = t.word(weapon, -8);
+    if (p.name == 0xc4 || p.name == 0xc6 || p.name == 0xc3)
+        p.side_plain = w16(w16(w8 << 2) / 3);
+    else
+        p.side_plain = w16(2 * w8);
+    // seg11:0x3229-0x3253: an odd A grows by one with gap 4, an even one keeps gap 6; both
+    // scale by Size as (v << Size) sar 1.
+    int b;
+    if (a & 1) {
+        a = w16(a + 1);
+        b = 4;
+    } else {
+        b = 6;
+    }
+    const int sz = in.size_level & 0xff;  // mov cl, byte [0x9156]
+    p.gap = w16(w16(b << sz) >> 1);
+    p.cell = w16(w16(a << sz) >> 1);
+    // seg11:0x325a-0x32a6: the source cell; the test is W+0x06, not the kind +0x0a (claim 8).
+    const std::int16_t k06 = t.word(weapon, 0x06);
+    if (k06 == 5 || p.name == 0xc6 || p.name == 0xc3)
+        p.sx = p.gap;
+    else if (k06 == 4)
+        p.sx = w16(w16(w16(t.word(weapon, 0x26) - 1) * w16(p.cell + p.gap)) + p.gap);
+    else
+        p.sx = w16(w16(4 * p.cell) + w16(5 * p.gap));  // frame 4 of the sheet
+    p.sy = p.gap;
+    // seg11:0x32c7-0x32eb: the source DC.
+    if (weapon == 0x18)
+        p.sheet_slot = 0x28 + in.player;  // DGROUP:0x3a38[DGROUP:0x9646]
+    else
+        p.sheet_slot = in.sheet_slot >= 0 ? in.sheet_slot : t.word(weapon, -4);  // DGROUP:0x39e8[W-4]
     return p;
+}
+
+void compose_weapon_picture(Canvas& c, const WeaponPicture& p) {
+    if (p.kind != WeaponPicture::Kind::kComposed) return;
+    // G != 0 [BYTES seg11:0x30d0-0x30d4]: the overlay the caller loaded.
+    const bool g = p.overlay != 0 && !p.overlay_unset && c.has(Img::kWeaponOverlay);
+    int side, wd, ht, ys = 0, yg = 0, gw = 0, gh = 0;
+    if (g) {
+        // seg11:0x30d8-0x3177: GetObject's bmWidth / bmHeight [BYTES seg11:0x30e2-0x313f].
+        gw = c.width(Img::kWeaponOverlay);
+        gh = c.height(Img::kWeaponOverlay);
+        side = p.side_overlay;
+        ht = gh > side ? gh : side;  // H = max(gh, S) [BYTES seg11:0x3106]
+        wd = w16(gw + side);
+        if (ht > side)
+            ys = half16(ht - side);
+        else
+            yg = half16(side - gh);
+    } else {
+        side = p.side_plain;  // seg11:0x3179-0x31c7
+        wd = ht = side;
+    }
+    // CreateCompatibleBitmap(DGROUP:0x13dc, Wd, H) and PatBlt BLACKNESS over it [BYTES
+    // seg11:0x31d2 seg11:0x3219] (claim 6).
+    c.create(Img::kWeapon, wd, ht);
+    c.pat_blt(Img::kWeapon, 0, 0, wd, ht, kBlackness, Brush::none());
+    // SetStretchBltMode(3) and StretchBlt SRCCOPY from the sheet [BYTES seg11:0x32ae
+    // seg11:0x3300] (claim 9). The canvas's stretch_blt sets COLORONCOLOR itself.
+    if (c.has(Img::kWeaponSheet))
+        c.stretch_blt(Img::kWeapon, 0, ys, side, side, Img::kWeaponSheet, p.sx, p.sy, p.cell, p.cell,
+                      kSrcCopy);
+    // The overlay, BitBlt SRCCOPY at (S, yG) [BYTES seg11:0x3326] (claim 4).
+    if (g) c.bit_blt(Img::kWeapon, side, yg, gw, gh, Img::kWeaponOverlay, 0, 0, kSrcCopy);
+}
+
+TabSelection tab_select(int slot, int slots, const std::function<int(int)>& weapon_byte, int play_mode) {
+    TabSelection r;
+    const std::int16_t old = w16(slot);
+    r.dg_9524 = old;  // seg11:0xae04-0xae0b
+    r.slot = old;
+    const std::int8_t cb = static_cast<std::int8_t>(slots);
+    if (cb > 1) {  // cmp byte [+0xcb], 1; jle (signed) [BYTES seg11:0xae0e seg11:0xae13]
+        std::int16_t s = w16(old + 1);  // seg11:0xae15
+        // One weapon-0 slot is skipped, once [BYTES seg11:0xae1b-0xae23].
+        if ((weapon_byte(s) & 0xff) == 0) s = w16(s + 1);
+        // cbw of +0xcb against DGROUP:0x9524, jg (signed) [BYTES seg11:0xae2c-0xae35]; the wrap
+        // is 0 in Strategy mode and 1 in Action mode [BYTES seg11:0xae37-0xae46].
+        if (!(cb > s)) s = play_mode != 0 ? 0 : 1;
+        r.dg_9524 = s;
+        r.slot = s;  // [BYTES seg11:0xae55]
+    } else {
+        r.slot = 0;  // [BYTES seg11:0xae61]: DGROUP:0x9524 keeps the old slot
+    }
+    // The old slot's weapon 3 (LIGHTNING): object byte +0x50 = 0 [BYTES seg11:0xae70-0xae87].
+    r.clear_b50 = (weapon_byte(old) & 0xff) == 3;
+    return r;
+}
+
+int wave_start_slot(int slot, int slots, int restored) {
+    if (restored != 0) return slot;  // [BYTES seg11:0xae9e-0xaea3]
+    // cmp byte [+0xcb], 1; jle [BYTES seg11:0xaeab-0xaec0]
+    return static_cast<std::int8_t>(slots) > 1 ? 1 : 0;
+}
+
+WeaponKey weapon_key(std::uint32_t msg, std::uint16_t key, const WeaponKeyState& s) {
+    const bool fire_key = key == 0x0d || key == 'Z';
+    if (msg == 0x101) {
+        if (!fire_key) return WeaponKey::kNone;
+        if (s.gated || s.demo == 0) return WeaponKey::kIgnored;  // [BYTES seg11:0x6cd1 seg11:0x6d1e]
+        return s.play_mode == 0 ? WeaponKey::kFire : WeaponKey::kIgnored;  // [BYTES seg11:0x6e11-0x6e16]
+    }
+    if (msg != 0x100) return WeaponKey::kNone;
+    if (key == 0x09) {
+        if (s.gated || s.demo == 0) return WeaponKey::kIgnored;  // [BYTES seg11:0x6e19]
+        return WeaponKey::kTab;
+    }
+    if (!fire_key) return WeaponKey::kNone;
+    if (s.gated || s.demo == 0) return WeaponKey::kIgnored;
+    // [BYTES seg11:0x6f58-0x6f69]: PlayMode 0 and weapon 13
+    return s.play_mode == 0 && s.weapon == 13 ? WeaponKey::kFire : WeaponKey::kIgnored;
 }
 
 }  // namespace is::hud

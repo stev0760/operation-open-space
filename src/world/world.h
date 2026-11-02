@@ -42,7 +42,7 @@ constexpr std::uint32_t kDamageGeneric = handler(7, 0x2652);  // on_damage seg7:
 constexpr std::uint32_t kDamageRock = handler(7, 0x5090);     // on_damage seg7:0x5090
 constexpr std::uint32_t kDamagePool2 = handler(8, 0x95f2);    // on_damage seg8:0x95f2
 constexpr std::uint32_t kDamagePool4 = handler(12, 0xdc4);    // on_damage seg12:0xdc4
-constexpr std::uint32_t kDamagePool6 = handler(7, 0x570a);    // on_damage seg7:0x570a
+constexpr std::uint32_t kDamagePool5 = handler(7, 0x570a);    // on_damage seg7:0x570a, pool 5 [BYTES seg10:0x105a]
 constexpr std::uint32_t kDamagePool7 = handler(16, 0x85e);    // on_damage seg16:0x85e
 constexpr std::uint32_t kDestroyGeneric = handler(12, 0x274a);  // on_destroy seg12:0x274a
 constexpr std::uint32_t kDestroyPickup = handler(7, 0x2e02);    // on_destroy seg7:0x2e02
@@ -109,6 +109,9 @@ struct IconRecord {
     std::uint8_t b0b = 0;        // DGROUP:0x57b3, 0xff at activation
     std::string name;            // DGROUP:0x57b4: the found file name (8.3, at most 13 bytes)
     std::int16_t w19 = 0;        // DGROUP:0x57c1, cleared at activation
+    // DGROUP:0x57c3 + k, bytes +0x1b ... +0x1e: the pool-1 record of fragment k after the shatter
+    // seg7:0x2768 [BYTES seg7:0x2c84-0x2cb4] (M4 s2 GUN).
+    std::array<std::uint8_t, 4> fragment{};
 };
 constexpr int kIconRecords = 8;  // pool 0 holds 8 records [BYTES seg9:0x24b5]
 
@@ -170,12 +173,7 @@ struct SpecialPlace {
     std::int16_t we = 0;      // +0xe DGROUP:0x4f3a
 };
 
-// Beam slot j of the 0x94-byte table DGROUP:0x6098 (world.md "Update loop" step 4): the two
-// words the placement writes. Weapons are M4.
-struct BeamSlot {
-    std::int16_t limit = 0;  // +0x74 DGROUP:0x610c, 50 at the placement
-    std::int16_t index = 0;  // +0x76 DGROUP:0x610e, -1 at the placement
-};
+// The shot slots DGROUP:0x6098 (world.md "Update loop" step 4) are shots.h ShotState.
 
 // A star of seg8:0x190e (DGROUP:0x2398 + 4k, colours DGROUP:0x2f04 + 4k, bytes
 // DGROUP:0x91d4 + k, DGROUP:0x91e6 + k, DGROUP:0x91c2 + k) [BYTES seg8:0x190e].
@@ -209,6 +207,10 @@ struct HazardMark {
     std::int16_t x = 0, y = 0, w8 = 0, wa = 0;
 };
 
+// ---- M4 stage 2: the missile table DGROUP:0x66e0 is records.h MissileSlot (Pools::missiles); the
+// pod table DGROUP:0x8560 is EffectState::pods (effects.h).
+
+
 // The values Enter hands to the wave set-up (nav.md "Values handed to the wave set-up").
 struct WaveHandover {
     std::string directory;     // DGROUP:0x38c8 ("D:\GAMES\") or a built-in level's name
@@ -226,6 +228,10 @@ std::int16_t word_at(const ShipRecord& s, int off);
 void set_word_at(ShipRecord& s, int off, int v);
 std::int8_t sbyte_at(const ShipRecord& s, int off);
 void set_byte_at(ShipRecord& s, int off, int v);
+// The selected weapon: the signed byte +0xb8 + word +0x18 (cbw), as seg13:0xc12, seg13:0xc95,
+// seg11:0xacc5 and seg11:0x2a60 read it [BYTES seg13:0xc9e seg11:0xacc5]. A slot whose byte lies
+// outside the 0x15a-byte record reads -1 [DESIGN: the port's one bound].
+std::int8_t selected_weapon(const ShipRecord& s);
 std::int16_t word_at(const ObjectRecord& r, int off);
 void set_word_at(ObjectRecord& r, int off, int v);
 
@@ -393,9 +399,54 @@ public:
     std::uint32_t w05c0 = 0;
     std::int16_t w058c = 0;
     std::string w8630;
-    // The weapon-slot words of pool 6 that the vanish's end resets: DGROUP:0x66e4 + 0x1c·rec
-    // (the weapon, -1 = none) and DGROUP:0x66ec + 0x1c·rec [BYTES seg7:0x1983 seg7:0x1990].
-    std::array<std::int16_t, 16> w66e4{}, w66ec{};
+    // The words of pool 6 that the vanish's end resets, DGROUP:0x66e4 / 0x66ec + 0x1c·rec, are the
+    // missile entry's weapon and age (Pools::missile) [BYTES seg7:0x1983 seg7:0x1990].
+
+    // ---- M4 stage 2 (capture, scoring, weapons): the words the four tracks share
+    // The missile table DGROUP:0x66e0 is Pools::missiles (records.h).
+    // The pod table DGROUP:0x8560 is EffectState::pods (effects.h, death.h fill_pod);
+    // CollideGlobals::pool11_856a stands for its word +0x0a (`rec`) [OPEN M4 s2 fixer].
+    // DGROUP:0x6038 + 2r: the icon of pool-1 record r, written by the shatter seg7:0x2768 and read
+    // by seg13:0x5f49 [BYTES seg7:0x2c84-0x2cb4 seg13:0x5fb3]. The port keeps 64 [OPEN: the bound].
+    std::array<std::int16_t, 64> fragment_icon{};
+    // DGROUP:0x9604: the last capture's value (an icon's, or a pod's +0x02), in hundredths; the
+    // messages 0x55 and 0x56 format it (seg6:0x1010) [BYTES seg13:0x1af5 seg13:0x1dcd seg3:0xe44].
+    std::int16_t w9604 = 0;
+    // DGROUP:0x9602: the defenders the last icon capture took over [BYTES seg13:0x1b5e seg13:0x1b97].
+    std::int16_t w9602 = 0;
+    // DGROUP:0x945c / DGROUP:0x945e: icons captured / destroyed this wave (seg7:0x5ae8)
+    // [BYTES seg7:0x5b0c seg7:0x5b3d]. The live-icon count DGROUP:0x91fc is icons_b.
+    std::int16_t w945c = 0, w945e = 0;
+    // DGROUP:0x9498 is Pools::bad_index_count (records.h): the capture's "value < 0" also counts there.
+    // DGROUP:0x698c: the fuel tanks' respawn deadline (dword): now + 10000 at a tank touch
+    // (seg13:0x1ce8), at a pool-4 destroy (seg12:0x279a) and when the spawner seg12:0x4f4e finds
+    // no pending record (seg12:0x514e); the spawner respawns only once now > it, unsigned
+    // (s2-capture-verify.md claim 33, CORRECTED) [BYTES seg13:0x1ce8 seg12:0x279a seg12:0x514e
+    // seg12:0x5068-0x5074]. The spawner is M4 stage 3 [OPEN]; capture.cpp and effects.cpp's
+    // seg12:0x274a both write this word.
+    std::uint32_t w698c = 0;
+    // DGROUP:0x8ffe: the dissolve step, written as a word by seg6:0xdaa from `Detail` (3, 2, 1, 1),
+    // read as a byte by seg7:0x3a42 and seg12:0xe5c (capture.h dissolve_step_for) [BYTES seg6:0xe41
+    // seg6:0xe4f seg6:0xe5d seg7:0x3a63 seg12:0xe9f]. The star count DGROUP:0x9154 of the same
+    // routine is star_wanted.
+    std::int16_t w8ffe = 0;
+    // DGROUP:0x5018, the score the SCORE panel last drew, is src/hud/panels.h
+    // Panels::State::score_shown [BYTES seg11:0x1bda seg11:0x4ff-0x50b].
+    // DGROUP:0x8e28 (dword) = now at every weapon-system use (seg11:0xac86) and at the player's gun
+    // (seg11:0x4ff1); DGROUP:0x9432 decays
+    // faster 15 s after it (s2-missile.md 0, verified claim 7) [BYTES seg7:0x2190 seg7:0x21d1].
+    std::uint32_t w8e28 = 0;
+    // DGROUP:0x9412: the pool-6 in-use count the launcher caps at 10 [BYTES seg11:0x7c2b]; the
+    // pool's count lives in Pools (in_use(6)), this is the port's name for the same word when a
+    // routine reads it as a global [DESIGN]: readers use pools.in_use(6).
+    // The shot loop's words of the pass (DGROUP:0x594, 0x598, 0x5cc, 0x9136) are shots.h
+    // ShotState's.
+    // DGROUP:0x8690 (dword): now + 7500 at a virused capture, for any ship (M5's reader) [BYTES
+    // seg13:0x19e4].
+    std::uint32_t w8690 = 0;
+    // DGROUP:0x1318: 1 after a pod of kind 2 (seg13:0x1d81); the effects read it (EffectWords).
+    // DGROUP:0x94b2: the pod-2 touch sets DGROUP:0x913e = 1 while it is not 0 [BYTES seg13:0x1d95].
+    std::int16_t w1318 = 0, w94b2 = 0;
     // The other words of the tick's deadline block seg7:0x5ce-0x6ac (wave_end.h): the ambulance
     // deadline DGROUP:0x1e88 (set by seg16:0x568, M6), DGROUP:0x951a, DGROUP:0x9516 (the demo's
     // save test) and DGROUP:0xd26 (the demo's seg6:0x92b8 test) [BYTES seg7:0x5ce seg7:0x5f3
@@ -409,7 +460,6 @@ public:
 
     // ---- placement (world.md "Placement")
     std::int16_t placed = 0;      // DGROUP:0x93b0 latch
-    std::array<BeamSlot, 9> beams{};
     std::uint32_t clock = 0;      // DGROUP:0x1e50 at the placement
     std::uint32_t frames = 0;     // DGROUP:0x1e68
     std::uint32_t w1e6c = 0;      // DGROUP:0x1e6c = clock + 10000

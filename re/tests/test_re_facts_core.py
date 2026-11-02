@@ -1207,3 +1207,167 @@ def test_debriefing_strings():
             continue
         raise AssertionError(missing)
     assert _eng(2310) and _eng(2314)
+
+
+# ------------------------------------------------------------------ M4 stage 2: capture, scoring, weapons
+
+
+BRUSH_CALLS_DIM = ["seg10:0x4f57", "seg10:0x4f65", "seg10:0x4f73", "seg10:0x4f81", "seg10:0x4f8f",
+                   "seg10:0x4f9d", "seg10:0x4fab", "seg10:0x4fb8", "seg10:0x4fc5", "seg10:0x4fd2",
+                   "seg10:0x4fe0", "seg10:0x4fee", "seg10:0x4ffc", "seg10:0x500a", "seg10:0x5018",
+                   "seg10:0x5026", "seg10:0x5034", "seg10:0x5041", "seg10:0x504e", "seg10:0x505b"]
+BRUSH_CALLS_BRIGHT = ["seg10:0x4e45", "seg10:0x4e53", "seg10:0x4e61", "seg10:0x4e6f", "seg10:0x4e7d",
+                      "seg10:0x4e8b", "seg10:0x4e99", "seg10:0x4ea7", "seg10:0x4eb5", "seg10:0x4ec3",
+                      "seg10:0x4ed1", "seg10:0x4edf", "seg10:0x4eed", "seg10:0x4efb", "seg10:0x4f09",
+                      "seg10:0x4f17", "seg10:0x4f25", "seg10:0x4f33", "seg10:0x4f41"]
+
+
+def test_shot_brushes(ins):
+    """core.md The brushes (seg10:0x4dfe): the 20 brushes DGROUP:0x3b4c + 2n for Bright = 0
+    and Bright != 0; brush 19 is stored by the call both paths share."""
+    dim = _brushes(ins, {c: 0x3B4C + 2 * n for n, c in enumerate(BRUSH_CALLS_DIM)})
+    assert list(dim.values()) == [
+        0x0200FFFF, 0x0200D7DC, 0x02008CC8, 0x020064AF, 0x02004187, 0x02001969, 0x02000550,
+        0x02000032, 0x02000019, 0x0200000A, 0x02FFFF00, 0x02E6D700, 0x02CDAF00, 0x02A08200,
+        0x02826400, 0x026E3C00, 0x025A1E00, 0x023C0000, 0x021A0000, 0x020A0000]
+    bright = _brushes(ins, {c: 0x3B4C + 2 * n for n, c in enumerate(BRUSH_CALLS_BRIGHT)})
+    assert list(bright.values()) == [
+        0x0200FFFF, 0x0200EBEB, 0x0200D7DC, 0x0200B4D2, 0x02008CC8, 0x020078B9, 0x020064AF,
+        0x02004187, 0x02004187, 0x02001969, 0x02FFFF00, 0x02F0EB00, 0x02E6D700, 0x02D7CD00,
+        0x02CDAF00, 0x02C6A500, 0x02BE9B00, 0x02A08200, 0x02826400]
+    expect = {"seg10:0x4e3c": "je seg10:0x4f52", "seg10:0x4f49": "push 0x2826400",
+              "seg10:0x4f4f": "jmp seg10:0x505b"}
+    assert _texts(ins, expect) == expect
+    rgb = lambda c: "%02x%02x%02x" % (c & 0xFF, (c >> 8) & 0xFF, (c >> 16) & 0xFF)
+    assert (rgb(dim[0x3B4C]), rgb(dim[0x3B56])) == ("ffff00", "691900")   # core-0002's trail ends
+
+
+def test_shot_brush_index_and_row(ins):
+    """core.md Shot update, Draw, and The brushes, Which row: b + 10·(signed byte +0xe3) from
+    DGROUP:0x3b4c, else DGROUP:0x3b60 + 2b; +0xe3 = design byte DGROUP:0x9716 AND 1."""
+    expect = {"seg14:0x21d0": "mov al, byte ptr [si - 0x68ea]", "seg14:0x21d4": "and al, 1",
+              "seg14:0x21d6": "mov byte ptr [di + 0x7173], al"}
+    got = _texts(ins, expect)
+    assert got == expect
+    assert (0x10000 - 0x68EA) == 0x9716
+    assert 0x3B60 - 0x3B4C == 2 * 10 and 0x7173 - 0x7090 == 0xE3
+
+
+def test_gun_velocity_uses_the_heading_table(ins, dgroup):
+    """core.md The gun, Fill: +0x70 = lo16(3·DGROUP:0x1050[4·frame]) + ((vx/10)·10)/DGROUP:0x9006,
+    all 16-bit (the listing's cdq is cwd); lifetime W/10 with CX still 10."""
+    expect = {"seg11:0x51a8": "mov di, word ptr es:[bx + 0x28]", "seg11:0x51ac": "shl di, 2",
+              "seg11:0x51af": "imul ax, word ptr [di + 0x1050], 3", "seg11:0x51cc": "mov cx, 0xa",
+              "seg11:0x51cf": "cdq", "seg11:0x51d0": "idiv cx", "seg11:0x51d2": "imul ax, ax, 0xa",
+              "seg11:0x51d6": "idiv word ptr [0x9006]", "seg11:0x51bf": "imul ax, word ptr [di + 0x1052], 3"}
+    assert _texts(ins, expect) == expect
+    assert ins.at("seg11:0x51cf").raw == b"\x99"
+    heads = [struct.unpack_from("<hh", dgroup, 0x1050 + 4 * i) for i in range(16)]
+    assert heads[0] == (0, -16) and heads[9] == (-6, 16) and heads[4] == (16, 0)
+    assert (3 * heads[0][1], 1024 // 10) == (-48, 102)       # core-0002: vy −45 with the ship term
+
+
+def test_weapon_8_full_record(ins):
+    """structs.md Weapon records, Weapon 8: every word seg10:0x1fb2 stores for weapon 8."""
+    vals = _weapon_stores(ins)
+    expect = {-8: 23, -6: 1, -4: 0xFFFF, -2: 0x172, 0x00: 194, 0x02: 0xFFFF, 0x04: 1, 0x06: 2,
+              0x08: 1, 0x0A: 3, 0x0C: 10, 0x0E: 120, 0x10: 20, 0x12: 0, 0x14: 0, 0x18: 0x1C,
+              0x1A: 3, 0x1C: 2, 0x1E: 200, 0x20: 40, 0x22: 9, 0x24: 1, 0x26: 0, 0x2E: 0,
+              0x38: 0, 0x3A: 1, 0x3C: 1, 0x3E: 0, 0x40: 0, 0x46: 0}
+    assert {o: vals[W(8, o)] for o in expect} == {o: [v] for o, v in expect.items()}
+    assert W(8, 0) == 0x31D4 and W(8, -2) == 0x31D2
+
+
+def test_m4s2_strings():
+    """core.md Capturing an icon, The rivals, Messages, Shot hit test; world.md Key messages:
+    the ids and texts of the capture, gun-kill and command-line strings."""
+    expect = {478: "Capturing %s", 574: "Good Icon Capture! %s Resource Gained.",
+              575: "Good Icon Capture! %# Acquired.", 652: "You're In Trouble! You Captured A Virused Icon!",
+              654: "Hey, I Wanted That %D! ", 680: "Resource Pack Captured! %s Resource Gained.",
+              687: "You Destroyed A Virus! %R %s!!", 688: "Well Done, ", 689: "Way To Go, ",
+              690: "That's The Ticket, ", 691: "Right On, ", 692: "That Was A Nasty Icon. %R %s!!",
+              1062: "I've Captured An Icon. Score 1 For The %s.", 2345: "Cmd Mode: ", 2530: "Defender",
+              2901: "NQADTGSCDVPBWGXSIEFSCM"}
+    assert {k: _eng(k) for k in expect} == expect
+    assert [(k >> 4) + 1 for k in (478, 574, 654, 680, 687, 688, 692, 1062, 2345, 2530, 2901)] == [
+        30, 36, 41, 43, 43, 44, 44, 67, 147, 159, 182]
+    assert "Z" not in _eng(2901) and "\r" not in _eng(2901)
+
+
+def test_m4s2_routine_frames(ins):
+    """pitfalls.md Calls are written in declaration order; core.md Weapons and Capture: the
+    return sizes that make each routine Pascal (retf n) or cdecl (retf)."""
+    expect = {"seg8:0xb76": {"retf 8"}, "seg13:0x16ac": {"retf"}, "seg11:0x7c12": {"retf 6"},
+              "seg8:0x7d70": {"retf 0x24"}, "seg13:0xd6c": {"retf 0x14"}, "seg8:0x1cbe": {"retf 4"},
+              "seg12:0x586": {"retf 4"}, "seg12:0x7c0": {"retf 2"}, "seg8:0x3aec": {"retf 4"},
+              "seg8:0x764": {"retf 4"}, "seg8:0x3688": {"retf 2"}, "seg8:0x6f3c": {"retf 8"},
+              "seg8:0x19b0": {"retf 4"}, "seg8:0x1b54": {"retf 4"}, "seg8:0x1d54": {"retf 4"},
+              "seg11:0x5ab6": {"retf 4"}, "seg8:0x1290": {"retf 8"}, "seg11:0x4e0a": {"retf 2"},
+              "seg10:0x7944": {"retf"}, "seg7:0x4a38": {"retf"}, "seg7:0x2080": {"retf"},
+              "seg13:0x3008": {"retf"}, "seg8:0x804a": {"retf"}, "seg7:0x2768": {"retf"}}
+    assert {f: _rets(ins, f) for f in expect} == expect
+    assert 0x24 == 2 * 2 + 8 * 4 and 0x14 == 10 * 2       # seg8:0x7d70: 2 words, 8 far pointers
+
+
+def test_touch_routine_callers(ins):
+    """core.md Who calls the touch routine: the eight call sites of seg13:0x16ac."""
+    assert sorted(ins.call_sites("seg13:0x16ac"), key=A) == sorted(
+        ["seg7:0x4a7f", "seg12:0x3a3", "seg12:0x3fb", "seg12:0xbba", "seg12:0x6ce0", "seg4:0x1439",
+         "seg13:0xc08", "seg13:0xc69"], key=A)
+
+
+def test_capture_award_widths(ins):
+    """core.md Capturing an icon, Score and Teammate: (DGROUP:0x9602 + 4)·1000 is a 16-bit imul
+    sign-extended by cwd (printed cdq) into add/adc on the score and the rating; the teammate's
+    1000 is an add dword."""
+    expect = {"seg13:0x1c27": "mov ax, word ptr [0x9602]", "seg13:0x1c2a": "add ax, 4",
+              "seg13:0x1c2d": "imul ax, ax, 0x3e8", "seg13:0x1c31": "cdq",
+              "seg13:0x1c32": "add word ptr [0x1e58], ax", "seg13:0x1c36": "adc word ptr [0x1e5a], dx",
+              "seg13:0x1c3a": "add word ptr [0x5078], ax", "seg13:0x1c3e": "adc word ptr [0x507a], dx",
+              "seg13:0x1b4a": "add dword ptr [0x1e58], 0x3e8",
+              "seg13:0x1b53": "add dword ptr [0x5078], 0x3e8"}
+    assert _texts(ins, expect) == expect
+    assert ins.at("seg13:0x1c31").raw == b"\x99"
+    assert s16((29 + 4) * 1000 & 0xFFFF) < 0 and s16((28 + 4) * 1000) > 0     # wraps from 29
+
+
+def test_level_runs_once_per_wave(ins):
+    """core.md Scoring, The level; globals.md Scoring: seg9:0x484c has the one caller seg9:0x3229
+    in seg9:0x3202 and compares the table with the rating as signed 32-bit values."""
+    expect = {"seg9:0x4870": "cmp word ptr [bx + 0x9be], dx", "seg9:0x4874": "jg seg9:0x4885",
+              "seg9:0x4876": "jl seg9:0x487e", "seg9:0x4878": "cmp word ptr [bx + 0x9bc], ax",
+              "seg9:0x487c": "jae seg9:0x4885", "seg9:0x4882": "mov word ptr [0x9334], ax",
+              "seg9:0x4888": "cmp word ptr [bp - 4], 0xc"}
+    assert _texts(ins, expect) == expect
+    assert ins.call_sites("seg9:0x484c") == ["seg9:0x3229"]
+    assert ins.owners(*A("seg9:0x3229")) == {"seg9:0x3202"}
+
+
+def test_retarget_widths(ins):
+    """core.md The retarget, Distance: the launcher's ×4 (shl), the team ×7 (imul word, low
+    word kept) and the ship 2/3 (add ax, ax; cwd; idiv) are all 16-bit, so 56·d wraps from 586."""
+    expect = {"seg12:0x6ce": "shl word ptr [bp - 0xa], 2", "seg12:0x70c": "mov ax, 7",
+              "seg12:0x70f": "imul word ptr [bp - 0xa]", "seg12:0x712": "mov word ptr [bp - 0xa], ax",
+              "seg12:0x602": "mov ax, word ptr [bp - 0xa]", "seg12:0x605": "add ax, ax",
+              "seg12:0x607": "mov cx, 3", "seg12:0x60a": "cdq", "seg12:0x60b": "idiv cx"}
+    assert _texts(ins, expect) == expect
+    assert s16(56 * 585) > 0 and s16(56 * 586 & 0xFFFF) < 0
+
+
+def test_weapon_sound_constant_sites(ins):
+    """re/artifacts/sounds.tsv rows 0x04 and 0x1e; core.md The gun, Sound, and Shot hit test,
+    Sound: the pushes of 4 and 0x1e jump to the shared seg10:0x754a calls."""
+    expect = {"seg11:0x55a5": "push 4", "seg11:0x55a7": "jmp seg11:0x55b2", "seg11:0x55b0": "push 3",
+              "seg11:0x55b2": "call far seg10:0x754a", "seg8:0x7539": "push 0x1e",
+              "seg8:0x753b": "jmp seg8:0x7546", "seg8:0x7544": "push 0x11",
+              "seg8:0x7546": "call far seg10:0x754a", "seg8:0x74ef": "mov cx, 5"}
+    assert _texts(ins, expect) == expect
+
+
+def test_launch_constants(ins, dgroup):
+    """core.md Launch: the cap of 10, the front launch's +0xa0 = frame# + 36 and the empty
+    names DGROUP:0x1118 (seg10:0x7944) and DGROUP:0x76d (seg10:0x6ee6)."""
+    expect = {"seg11:0x7c2b": "cmp word ptr [0x9412], 0xa", "seg11:0x7c30": "jge seg11:0x8a35"}
+    assert _texts(ins, expect) == expect
+    assert (dgroup[0x1118], dgroup[0x76D]) == (0, 0)
+    assert 36 + 5 == 41

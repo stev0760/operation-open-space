@@ -39,6 +39,26 @@ void build_rock_images(Blitter& out, ImageSlotTable& images, std::int16_t& dg_74
 void build_wave_images(Blitter& out, ImageSlotTable& images, std::int16_t& dg_740,
                        std::int16_t enhance = 1);
 
+// ---- the launched weapons' image slots seg10:0x533a (M4 s2 MISSILE; s2-missile.md 6.2, verified
+// claim 74 with its precision note)
+
+constexpr int kSlotWeaponFirst = 0x30;  // DGROUP:0x3a48 ... DGROUP:0x3a58: slots 0x30 ... 0x38
+constexpr int kSlotWeaponEnd = 0x39;    // [BYTES seg10:0x5393 seg10:0x5414]
+// What seg10:0x533a(w) chose: slot k, -1 for none; `load` when it took an empty slot, which
+// the caller then fills (seg10:0x6ee6, or seg10:0x4412 when W(w)+0x06 = 4) [BYTES
+// seg10:0x5449-0x5461 seg10:0x53b3-0x540c].
+struct WeaponSlotChoice {
+    int slot = -1;
+    bool load = false;
+};
+// seg10:0x533a(w)'s choice [BYTES seg10:0x533a-0x5464]: nothing for w = 0x1b or 0x16; else the
+// first occupied slot k in 0x30 ... 0x38 that a weapon j = 0 ... 0x1b with W(j)+0x0a != 0 holds
+// (W(j)-4 = k) with the same graphic W(j)-2 as w: W(w)-4 = k, nothing else written; else the
+// first empty slot k: W(w)-4 = k and pool-6 record 0's `size` = W(w)-8, `gap` = W(w)-6, raw
+// (the launcher's scaled values replace them at every launch); with no empty slot nothing.
+WeaponSlotChoice weapon_image_slot(WeaponWords& words, const ImageSlotTable& images, Pools& pools,
+                                   int w);
+
 // ---- the gate images seg10:0x3ea2 (work/analysis/m3/s4-draw.md 1.3)
 
 constexpr int kSlotGate = 1;      // DGROUP:0x39ea, the colour posts (CreateCompatibleBitmap)
@@ -56,7 +76,10 @@ constexpr int kOutSignW = 26, kOutSignH = 13;
 struct WaveGraphics {
     std::array<BrushId, 10> heat{};   // DGROUP:0x3b74 + 2n, n = 1 ... 9 (seg10:0x4b2e)
     std::array<BrushId, 6> beam{};    // DGROUP:0x3b88 + 2n, n = 1 ... 5 (seg10:0x4b2e)
-    std::array<BrushId, 15> star{};   // DGROUP:0x3b4c + 2n, n = 10 ... 14 (seg10:0x4dfe, Bright 0)
+    // DGROUP:0x3b4c + 2n, n = 0 ... 19 (seg10:0x4dfe, Bright 0): the shot brushes (shots.h
+    // kShotBrushes), of which the stars use 10 ... 14 (M4 s2 fixer). The Bright != 0 table
+    // (kShotBrushesBright) is not selected here [OPEN: seg10:0x4dfe's Bright test at the load].
+    std::array<BrushId, 20> star{};
     BrushId mask = kBrushNone;        // DGROUP:0x5ea8, the sparse-dot pattern brush (seg10:0xd8)
     BrushId checker = kBrushNone;     // DGROUP:0x5eaa, the checkerboard pattern brush (seg10:0xd8)
     // OUT_SIGN as seg10:0x3ea2 loaded it. seg12:0x1776 loads and frees it on every flash; the
@@ -67,6 +90,11 @@ struct WaveGraphics {
 };
 // The program's tables (the window Blitter's objects).
 WaveGraphics& wave_graphics();
+// The 20 brushes DGROUP:0x3b4c made again on the palette in force: a PALETTERGB brush resolves
+// against the palette when it is used in the original, while the port's brush keeps the index
+// it was made with (ADR 0007), so the wave start makes them again on the wave's palette
+// [DESIGN ADR 0007] (M4 s2 fixer).
+void refresh_shot_brushes(Blitter& out);
 
 // The brush colours as the original passes them to CreateSolidBrush (COLORREF 0x00bbggrr; the
 // stars' 0x02 is PALETTERGB) [BYTES seg10:0x4b67-0x4bd9 seg10:0x4d44-0x4d84 seg10:0x4fda-0x501d].

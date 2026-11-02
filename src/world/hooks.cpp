@@ -3,6 +3,7 @@
 // world part and the wave start, wired around the briefing's own state-1 and state-3 hooks
 // (src/briefing/hooks.cpp). Win32 only: the host build compiles this file without its hooks.
 #include "world/hooks.h"
+#include "world/shots.h"
 
 #include <array>
 
@@ -224,6 +225,10 @@ void ship_setup_player(World& w) {
         set_byte_at(s, 0x5d, shp->to_friends);
         set_byte_at(s, 0x5e, shp->to_enemies);
         w.design_ratings[0] = design_rating(*shp, *body);
+        // seg14:0x0's three muzzle-table calls for design 0 (shots.h fill_muzzles), from the
+        // design words the World holds (design_words_from_world: +0x2a only) [BYTES seg14:0xcdc
+        // seg14:0xce6 seg14:0xcf0] (M4 s2 fixer).
+        fill_muzzles(shot_state(), 0, design_words_from_world(w, 0));
         w.roster[0].shp = static_cast<std::int16_t>(shp - ships.ships.records.data());
         // The cell sizes +0x20, +0x22, +0x24 (seg14:0x11a8's raw side and gap, seg14:0x0's
         // scaling; setup.h ship_cell_raw, ship_cell_sizes). The raw side is the body DIB's
@@ -255,6 +260,13 @@ void ship_setup_player(World& w) {
         set_byte_at(s, 0xaf, 20);
         set_byte_at(s, 0xb9, shp->weapon);
         set_byte_at(s, 0xcb, 2);
+        // The gun's barrel count +0x24 = 1 and the barrel flags +0xe0 = +0xe1 = 1, which the gun
+        // copies into each shot slot (+0x78, +0x84, +0x86) [ORACLE probe-0001
+        // work/probe/dumps/wave-inspace.bin DGROUP:0x70b4 DGROUP:0x7170 DGROUP:0x7171]
+        // [BYTES seg11:0x518e seg11:0x519b] (M4 s2 fixer); their writer in seg14 is [OPEN].
+        s.w24 = 1;
+        set_byte_at(s, 0xe0, 1);
+        set_byte_at(s, 0xe1, 1);
         log("world: ship set-up: the player flies " + shp->name + " (thrust " + std::to_string(s.thrust) +
             ", drag " + std::to_string(s.drag) + ", turn " + std::to_string(s.turn) + ", mass " +
             std::to_string(o.mass) + ", fuel " + std::to_string(s.fuel) + ")");
@@ -305,6 +317,9 @@ void read_inputs(World& w, bool new_entry) {
     }
     w.star_wanted = star_count_for(w.detail, g.ini ? w.bright : std::int16_t{0}, w.star_base);
     if (new_entry) w.star_count = w.star_wanted;
+    // DGROUP:0x8ffe, the dissolve step of the same routine seg6:0xdaa (capture.h dissolve_step_for)
+    // (M4 s2 CAPTURE) [BYTES seg6:0xe41 seg6:0xe4f seg6:0xe5d seg6:0xe6b-0xe78].
+    w.w8ffe = dissolve_step_for(w.detail, w.w8ffe);
     if (w.size < 0 || w.size > 2) w.size = 1;
     w.shift = static_cast<std::int16_t>(4 - w.size);  // DGROUP:0x9150
     w.play_mode = static_cast<std::int16_t>(g.play_mode);
@@ -521,9 +536,12 @@ public:
         if (pool == 0 || pool == 14) return;  // a no-op for pools 0 and 14 (s1-end.md 1c.6)
         todo_once("seg7:0x2080 for pool " + std::to_string(pool) + " record " + std::to_string(rec), "seg7:0x2080");
     }
+    // seg7:0x5ae8 on the program's World (capture.h icon_counted) unless a link replaces it
+    // (M4 s2 CAPTURE).
     void icon_counted(int rec, int arg) override {
         if (wave_end_links().icon_counted) return wave_end_links().icon_counted(rec, arg);
-        todo_once("icon counters", "seg7:0x5ae8");
+        World& w = current();
+        ::is::world::icon_counted(w, rec, arg, w.roles.ships);
     }
     std::int16_t design_type(int design) override {
         return wave_end_links().design_type ? wave_end_links().design_type(design) : std::int16_t{0};
@@ -538,10 +556,8 @@ public:
     }
     void lines() override { todo_once("the link lines after a vanish", "seg12:0x3778"); }
     void menu_refresh() override { todo_once("menu state after the vanish", "seg2:0x170e"); }
-    std::int16_t weapon_word_1e(int weapon) override {
-        todo_once("weapon table word +0x1e of " + std::to_string(weapon), "seg7:0x1988");
-        return 0;
-    }
+    // W(weapon)+0x1e from the program's weapon words (collide.h weapon_word) [BYTES seg7:0x1988].
+    std::int16_t weapon_word_1e(int weapon) override { return weapon_word(weapon, 0x1e); }
     std::string lang(int id) override {
         try {
             if (g.store) return g.store->find_string(static_cast<std::uint16_t>(id)).value_or("");

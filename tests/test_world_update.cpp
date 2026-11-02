@@ -86,6 +86,7 @@ std::size_t index_of(const std::vector<std::string>& v, const std::string& s) {
 
 TEST_CASE("update: the pass and the frame in address order") {
     Rig r;
+    const std::uint32_t passes = r.host.shots().dg_5cc;
     wave_pass(r.c, false);
     wave_frame(r.c);
     const auto& c = r.host.calls;
@@ -95,7 +96,7 @@ TEST_CASE("update: the pass and the frame in address order") {
     CHECK(index_of(c, "3396") < index_of(c, "375a"));
     // 5 x (3 + 2) beam calls (world.md step 4)
     CHECK(r.host.beams == 25);
-    CHECK(r.f.beam_passes == 5);
+    CHECK(r.host.shots().dg_5cc - passes == 5);  // DGROUP:0x5cc, shots.h ShotState
     // The frame: stars, (view), visibility, lines, sound, the movers in their order, seg13:0x447a.
     const std::vector<std::string> order = {"158a", "4e14", "3778", "7b48", "seg12:0x532c",
                                             "seg12:0x633e", "seg8:0x8256", "seg7:0x309c",

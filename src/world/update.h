@@ -12,11 +12,14 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
+#include "world/capture.h"
 #include "world/collide.h"
 #include "world/draw.h"
 #include "world/flight.h"
 #include "world/input.h"
+#include "world/shots.h"
 #include "world/sprite.h"
 #include "world/view.h"
 #include "world/visibility.h"
@@ -51,10 +54,8 @@ struct FrameGlobals {
     std::int16_t dg_9142 = 0;           // DGROUP:0x9142, the 0 ... 54 frame counter
     // DGROUP:0x9430, 0x9434 and 0x9456 are the World's (World::w9430, w9434, w9456): the pass
     // reads them through UpdateHost::frame_world.
-    std::int16_t beam_a = 3;            // DGROUP:0x594 (seg11:0x4e19 sets 7)
-    std::int16_t beam_b = 2;            // DGROUP:0x598, no writer
-    std::uint32_t beam_passes = 0;      // DGROUP:0x5cc
-    std::int16_t beam_result = 0;       // DGROUP:0x9136
+    // DGROUP:0x594, 0x598, 0x5cc and 0x9136, the shot loop's words, are shots.h ShotState's
+    // (UpdateHost::shots()).
     std::int16_t entry_pending = 0;     // DGROUP:0x9140: a ship waits off-world (state 100)
     std::int16_t dg_9146 = 0;           // DGROUP:0x9146
     std::int16_t size_reread = 0;       // DGROUP:0x103c
@@ -91,11 +92,25 @@ public:
     virtual void turn_followup() {}                    // seg11:0x894 [OPEN]
     virtual void radar_refresh() {}                    // seg11:0x3396
     virtual void select_clip() {}                      // SelectClipRgn(DGROUP:0x13dc, DGROUP:0x12)
-    virtual void fire(int ship) { (void)ship; }        // seg11:0x4e0a (weapons, M4)
+    // seg11:0x4e0a(ship), the gun: the default runs shots.h fire on the frame World with
+    // shots() and shot_host(); nothing without a World (M4 s2 fixer).
+    virtual void fire(int ship);
     virtual void seg8_9464() {}                        // [OPEN]
     virtual void seg8_9564() {}                        // [OPEN]
     virtual void seg7_2128() {}                        // [OPEN]
-    virtual std::int16_t beam(int i, int j) { return (void)i, (void)j, 0; }  // seg8:0x3aec (M4)
+    // seg8:0x3aec(j, i), slot j's sub-step i: the default runs shots.h shot_update on the frame
+    // World, 0 without one (M4 s2 fixer).
+    virtual std::int16_t beam(int i, int j);
+    // The shot slots DGROUP:0x6098 and their words (shots.h); the default is shot_state().
+    virtual ShotState& shots() { return shot_state(); }
+    // The gun's and the shot update's calls out; the default forwards the reset sound (play),
+    // seg13:0x4eec, the player's sprite, the thrust step and the brushes and PatBlts on the
+    // window DC (blitter(), WaveGraphics::star = DGROUP:0x3b4c).
+    virtual ShotHost& shot_host() { return shot_forward_; }
+    // The shot context of the frame (the collisions' context, shots(), shot_host(),
+    // effects.h effect_state()) runs f; false without a frame World.
+    template <typename F>
+    bool with_shots(F f);
     virtual void effect(int k) { (void)k; }            // seg8:0x3fbe
     virtual void burst() {}                            // seg7:0x375a, the particle burst
     // ---- the frame
@@ -129,7 +144,10 @@ public:
     // ---- the ship entry seg7:0x1d0c
     virtual void ship_entered(int ship) { (void)ship; }  // seg12:0x2556 and seg7:0x13b2(2, 14, i)
     virtual void seg13_563c() {}
-    virtual void set_design_word_22(int design, std::int16_t v) { (void)design, (void)v; }
+    // seg7:0x1e4e: the player's design word DGROUP:0x9714 + 0xad·n (`captures`) = 1, so the player
+    // always captures (core.md "Who captures"); the default writes the frame World's
+    // design_ratings[n].captures (M4 s2 CAPTURE) [BYTES seg7:0x1e4e].
+    virtual void set_design_word_22(int design, std::int16_t v);
     // ---- the rock mover seg7:0x3bae and the gate posts seg12:0x1776
     // SelectObject(DGROUP:0x13dc, DGROUP:0x3b74[b]) and back: the heated rock's or post's brush.
     // The defaults select wave_graphics().heat[b] on blitter()'s window DC (M3 s4 DRAW).
@@ -175,13 +193,41 @@ public:
     // seg8:0x1320, the Bright starfield [OPEN].
     virtual void bright_stars(int arg) { (void)arg; }
 
-    // ---- the collisions (collide.h, damage.h) (M4 s1 COLLIDE)
-    // seg13:0xb5a-0xc92 for an on-screen ship i: DGROUP:0x943c = i, DGROUP:0x943a = 14, the
-    // pair finder, the response and the dispatch (s1-hit.md 4; claim 37 unchecked [OPEN]).
-    // The touch branches seg13:0xbee-0xc77 (a capturable hit object, a kind-6 missile) are M4
-    // stage 2: the port goes on to the dispatcher [OPEN]. The weapon tail seg13:0xc95-0xcf6
-    // (seg18:0x551a, seg18:0x59ec) is [OPEN].
+    // ---- the collisions (collide.h, damage.h) (M4 s1 COLLIDE, M4 s2 CAPTURE)
+    // seg13:0xb5a-0xcf9 for an on-screen ship i (work/analysis/m4/s2-capture.md 1a, verified
+    // claims 5-10): DGROUP:0x943c = i, DGROUP:0x943a = DGROUP:0x9324, the pair finder; on a hit
+    // the response always, then the touch seg13:0x16ac for a hit object with `capturable` (+0x53)
+    // != 0 and ship byte +0xea = 0, or for a kind-6 missile (dead code in a normal wave), else the
+    // dispatcher; then, hit or not, the weapon tail seg13:0xc95-0xcf6 (weapons 24 ... 26).
     void ship_collide(int ship) override;
+    // seg18:0x551a(DGROUP:0x9324, i) (weapons 0x18 and 0x1a, every frame) and seg18:0x59ec
+    // (weapons 0x19 and 0x1a, frame# & 7 = 0 with Enter or Z down, any ship i) [BYTES seg13:0xca6
+    // seg13:0xcb7 seg13:0xcbf-0xcf1]: the "noble forces" bodies are [OPEN].
+    virtual void seg18_551a(int pool, int ship) { (void)pool, (void)ship; }
+    virtual void seg18_59ec(int pool, int ship) { (void)pool, (void)ship; }
+
+    // ---- the touch routine's calls out (capture.h CaptureHost) (M4 s2 CAPTURE)
+    // The default forwards erase (blitter()), the first dissolve step (dissolve()), the sounds
+    // (sound(), play()), the messages (collide_host().message), lang(), weapon_word() and the
+    // team (design_kind); the M5/M6 routines stay CaptureHost's stubs.
+    virtual CaptureHost& capture_host() { return capture_forward_; }
+    // seg10:0x744c(id) (src/audio play) [DESIGN: the Win32 host plays it].
+    virtual void play(int id) { (void)id; }
+    // An ENG_LANG string (LoadString), "" by default.
+    virtual std::string lang(int id) { return (void)id, std::string{}; }
+    // W(w)+off of the weapon table DGROUP:0x2f54: +0x24 through collide_host().weapon_kind(w),
+    // any other word from collide.h weapon_word (the program's mutable copy, M4 s2 fixer).
+    virtual std::int16_t weapon_word(int w, int off) {
+        return off == 0x24 ? collide_host().weapon_kind(w) : ::is::world::weapon_word(w, off);
+    }
+
+    // ---- the icon mover seg7:0x309c's helpers that are not read (s2-capture.md 1b) [OPEN]
+    virtual void seg7_4d86(int icon) { (void)icon; }   // DGROUP:0x57a8 != 0 [BYTES seg7:0x323a]
+    virtual void seg7_4ffe(int icon) { (void)icon; }   // after the 0x57a8 reset [BYTES seg7:0x3206]
+    virtual void seg7_5660(int icon) { (void)icon; }   // heat -2 [BYTES seg7:0x31d8]
+    virtual void seg7_477e(int icon) { (void)icon; }   // an icon met by an icon [BYTES seg7:0x4d4f]
+    // seg7:0x4a8a-0x4c4f: an icon met by a pool-5 FIREBALL (mass 120) or SNOWBALL (mass 200).
+    virtual void icon_pool5_hit(int rec, int icon) { (void)rec, (void)icon; }
     // The collision routines' calls out; the default forwards sound(), seg12_274a() (the
     // destroy), the flame-off (flight.h ship_touched) and the erase (blitter()) and leaves the
     // rest to CollideHost's defaults.
@@ -191,7 +237,7 @@ public:
     // The frame's context while the movers run (set by wave_frame, move_rocks, move_gate).
     UpdateCtx* frame_ctx = nullptr;
 
-    UpdateHost() { forward_.u = this; }
+    UpdateHost() { forward_.u = this; capture_forward_.u = this; shot_forward_.u = this; }
     UpdateHost(const UpdateHost&) = delete;
     UpdateHost& operator=(const UpdateHost&) = delete;
 
@@ -204,7 +250,38 @@ private:
         void flame_off(int ship) override;
         void erase(int x, int y, int w, int h) override;
     };
+    class CaptureForward final : public CaptureHost {
+    public:
+        UpdateHost* u = nullptr;
+        void erase(int x, int y, int w, int h) override;
+        void dissolve(int rec) override { u->dissolve(rec); }
+        void sound(int id, int pool, int rec, int mode) override { u->sound(id, pool, rec, mode); }
+        void play(int id) override { u->play(id); }
+        void message(int ship, int pool, int rec, int code) override {
+            u->collide_host().message(ship, pool, rec, code);
+        }
+        std::string lang(int id) override { return u->lang(id); }
+        std::int16_t weapon_word(int w, int off) override { return u->weapon_word(w, off); }
+        std::int16_t team(int design) override { return u->design_kind(design); }
+        void seg13_b6f2(int ship, int code) override { u->collide_host().seg13_b6f2(ship, code); }
+        void seg13_2714(int a, int b, int c, int d, int e, int f) override {
+            u->collide_host().seg13_2714(a, b, c, d, e, f);
+        }
+        void seg4_5e8e(int a, int b, int c, int d) override { u->collide_host().seg4_5e8e(a, b, c, d); }
+    };
+    class ShotForward final : public ShotHost {
+    public:
+        UpdateHost* u = nullptr;
+        void sound_744c(int id) override { u->play(id); }
+        void seg13_4eec(int ship, int arg) override;
+        void player_sprite() override { u->player_sprite(); }
+        void thrust_step(int mode, int ship) override;
+        void select_brush(int n) override;
+        void patblt(std::int16_t x, std::int16_t y, std::int16_t w, std::int16_t h, std::uint32_t rop) override;
+    };
     Forward forward_;
+    CaptureForward capture_forward_;
+    ShotForward shot_forward_;
     CollideGlobals collide_globals_;
 };
 
@@ -221,6 +298,20 @@ struct UpdateCtx {
     JoyButtons& joy_buttons;
 };
 
+// The collision context of the frame on World w (below).
+CollideCtx frame_collide_ctx(UpdateCtx& c, World& w);
+
+template <typename F>
+bool UpdateHost::with_shots(F f) {
+    if (!frame_ctx) return false;
+    World* w = frame_world(frame_ctx->flight.pools);
+    if (!w) return false;
+    CollideCtx x = frame_collide_ctx(*frame_ctx, *w);
+    ShotCtx sc{x, shots(), shot_host(), effect_state()};
+    f(sc);
+    return true;
+}
+
 // The wave pass (seg7:0x7fe-0x993) before a due frame. `max_rate` is FrameRateSet above 1000,
 // where the original's threshold is 0 and the turn follow-up waits for frames % 3 = 0.
 void wave_pass(UpdateCtx& c, bool max_rate);
@@ -230,6 +321,9 @@ void wave_frame(UpdateCtx& c);
 void ship_entry(UpdateCtx& c);
 // seg7:0x3bae: the rock mover.
 void move_rocks(UpdateCtx& c);
+// The collision context of the frame on World w: the host's collision words and calls, the
+// frame's view, visibility list, rand() and DGROUP:0x943a / 0x943c / 0x9454 (M4 s2 CAPTURE).
+CollideCtx frame_collide_ctx(UpdateCtx& c, World& w);
 
 // ---- the pool-8 mover seg12:0x633e (work/analysis/m3/s4-draw.md 1) (M3 s4 DRAW)
 

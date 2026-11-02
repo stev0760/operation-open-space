@@ -1,8 +1,11 @@
 // Collisions (collide.h). Every site cites the listing it ports.
 #include "world/collide.h"
 
+#include <utility>
+
 #include "world/bounce.h"
 #include "world/damage.h"
+#include "world/missile.h"
 
 namespace is::world {
 
@@ -32,7 +35,6 @@ T& entry(std::array<T, N>& a, int k, T& scratch) {
     return a[static_cast<std::size_t>(k)];
 }
 Pool5Entry g_scratch_p5{};
-MissileEntry g_scratch_missile{};
 std::int16_t g_scratch_word = 0;
 
 Pool8Entry& pool8_at(World& w, int rec) {
@@ -90,6 +92,43 @@ DamageDesign design_from_world(const World& w, int n) {
     // writer of +0x2a is [OPEN].
     d.w2a = idiv16(r.tank, 40);
     return d;
+}
+
+// ---- the words past the in-use counts, the weapon words (M4 s2 GUN)
+
+std::int16_t in_use_word(const CollideCtx& x, int pool) {
+    if (pool >= 0 && pool < kPoolCount) return x.w.pools.in_use(pool);
+    // DGROUP:0x9406 + 2·pool for pool 21 ... 31 [BYTES DGROUP:0x9430-0x9444 seg7:0x509f-0x50ac]
+    switch (pool) {
+    case 21: return x.w.w9430;     // DGROUP:0x9430
+    case 22: return x.w.w9432;     // DGROUP:0x9432
+    case 23: return x.w.w9434;     // DGROUP:0x9434
+    case 24: return x.c.dB;        // DGROUP:0x9436
+    case 25: return x.c.dA;        // DGROUP:0x9438
+    case 26: return x.dg_943a;     // DGROUP:0x943a
+    case 27: return x.dg_943c;     // DGROUP:0x943c
+    case 28: return x.c.hit_pool;  // DGROUP:0x943e
+    case 29: return x.c.hit_rec;   // DGROUP:0x9440
+    case 30: return x.c.eA;        // DGROUP:0x9442 (a gun hit's B pool)
+    case 31: return x.c.eB;        // DGROUP:0x9444
+    default: return 0;             // [OPEN]
+    }
+}
+
+namespace {
+std::function<std::int16_t(int, int)>& weapon_words_fn() {
+    static std::function<std::int16_t(int, int)> f;
+    return f;
+}
+}  // namespace
+
+void set_weapon_words(std::function<std::int16_t(int w, int off)> f) { weapon_words_fn() = std::move(f); }
+// Without a registered source the words are the program's one mutable copy DGROUP:0x2f54,
+// missile.h MissileState::words, which the program fills from hud::WeaponTable at the load and
+// seg10:0x533a writes W(w)-4 into (M4 s2 fixer).
+std::int16_t weapon_word(int w, int off) {
+    const auto& f = weapon_words_fn();
+    return f ? f(w, off) : missile_state().words.word(w, off);
 }
 
 // ---- tables
@@ -180,11 +219,11 @@ int pair_test(CollideCtx& x, std::int16_t cw, std::int16_t kw) {
     if (C.b2e != 0 && (cp != x.g.ship_pool || word_at(ship_at(w, cr), 0x2e) != 2)) return 0;
     // A young missile and its launcher [BYTES seg8:0x6c67-0x6cb0]
     if (kp == 6) {
-        const MissileEntry& m = entry(c.missiles, kr, g_scratch_missile);
+        const MissileSlot& m = w.pools.missile(kr);  // DGROUP:0x66e0 (records.h)
         if (m.age < 10 && m.launcher_pool == cp && m.launcher_rec == cr) return 0;
     }
     if (cp == 6) {
-        const MissileEntry& m = entry(c.missiles, cr, g_scratch_missile);
+        const MissileSlot& m = w.pools.missile(cr);
         if (m.age < 10 && m.launcher_pool == kp && m.launcher_rec == kr) return 0;
     }
     // The ambulance [BYTES seg8:0x6cb3-0x6cc6]
@@ -405,6 +444,17 @@ std::int16_t call_on_damage(CollideCtx& x, int pool, int rec, std::int16_t a) {
     const std::uint32_t id = obj(x.w, pool, rec).on_damage.get();
     if (id == kDamageShip) return ship_damage(x, pool, rec, a);
     if (id == kDamageRock) return rock_damage(x, pool, rec, a);
+    if (id == kDamageIcon) return icon_damage(x, pool, rec, a);  // seg7:0x233c (M4 s2 GUN)
+    // seg7:0x2652, the generic handler of the missiles and the other generic records (missile.h
+    // generic_on_damage); its far call through +0x66 is CollideHost::on_destroy (M4 s2 fixer).
+    if (id == kDamageGeneric) {
+        struct Forward final : MissileHost {
+            CollideHost& h;
+            explicit Forward(CollideHost& c) : h(c) {}
+            void on_destroy(int p, int r) override { h.on_destroy(p, r); }
+        } f{x.h};
+        return generic_on_damage(x.w.pools, pool, rec, a, f);
+    }
     // The ship set-up does not write the ship pool's slot yet (seg14:0x2158, the set-up's
     // owner): a ship record without one takes seg8:0x45e0 [DESIGN].
     if (id == 0 && pool == x.g.ship_pool) return ship_damage(x, pool, rec, a);
@@ -484,7 +534,7 @@ std::int16_t dispatch(CollideCtx& x, int tp, int tr, int xp, int xr, std::int16_
         }
         // Pool 6, the launcher [BYTES seg8:0x6023-0x6067]
         if (xp == 6) {
-            const MissileEntry& m = entry(c.missiles, xr, g_scratch_missile);
+            const MissileSlot& m = w.pools.missile(xr);  // DGROUP:0x66e0 (records.h)
             cp = m.launcher_pool;
             cr = m.launcher_rec;
             if (x.h.weapon_kind(m.weapon) == 6 && tp == ships) {

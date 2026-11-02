@@ -75,7 +75,7 @@ struct EffectState {
     std::int16_t dg_5146 = 0;
     std::int16_t dg_b0c = 1;        // DGROUP:0xb0c, 1 in the image, 0 while the blast's dispatcher call runs [BYTES DGROUP:0xb0c]
     std::int16_t dg_95a8 = 0;       // DGROUP:0x95a8 = 1 at the demo player's death [BYTES seg16:0xaea]
-    std::uint32_t dg_698c = 0;      // DGROUP:0x698c = now + 10000 when a pool-4 record is destroyed [BYTES seg12:0x279a] [OPEN its reader]
+    // DGROUP:0x698c (now + 10000 when a pool-4 record is destroyed) is World::w698c [BYTES seg12:0x279a].
     std::array<PodRecord, kPodRecords> pods{};  // DGROUP:0x8560
 };
 // The program's one EffectState (DGROUP lives once).
@@ -118,6 +118,8 @@ public:
     virtual void seg7_2080(int pool, int arg) { (void)pool, (void)arg; }
     // seg12:0x2aec-0x2afd: a destroyed pool-6 record's weapon slot DGROUP:0x66e4 + 0x1c·rec
     // (DGROUP:0x66ec = W(w)+0x1e, DGROUP:0x66e4 = -1) [BYTES seg12:0x2aec-0x2afd] (weapons, M4).
+    // object_destroyed writes the two words in Pools::missiles itself (missile.h
+    // missile_destroyed) and then calls this, for a copy the program keeps (M4 s2 MISSILE).
     virtual void pool6_destroyed(int rec) { (void)rec; }
 };
 
@@ -133,6 +135,9 @@ struct EffectCtx {
     ToScreen to_screen;                      // seg8:0x29ea; empty gives (0, 0)
     std::int16_t* dg_943a = nullptr;         // DGROUP:0x943a/0x943c: the colliding party the
     std::int16_t* dg_943c = nullptr;         //   blast sets before its dispatcher call
+    // The weapon words DGROUP:0x2f54 seg12:0x274a reads for a pool-6 record; null reads the
+    // program's (missile.h missile_state) (M4 s2 MISSILE).
+    const WeaponWords* weapons = nullptr;
 };
 
 // seg8:0x3fbe(k) [BYTES seg8:0x3fbe-0x45db] (verified claims 1, 4-13):

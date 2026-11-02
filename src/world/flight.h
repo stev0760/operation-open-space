@@ -158,7 +158,7 @@ public:
     }
     // seg13:0x6e5-0xa57 (Detail > 1: the ships' distance work, seg11:0x947a) [OPEN] M5.
     virtual void seg13_6e5(int ship) { (void)ship; }
-    // seg13:0xb5a-0xcf9: an on-screen ship's collisions (seg8:0x50aa and the responses) [OPEN] M4.
+    // seg13:0xb5a-0xcf9: an on-screen ship's collisions, touches and weapon tail (update.h).
     virtual void ship_collide(int ship) { (void)ship; }
     // seg7:0x5b68(pool, rec, arg): a smoke or fragment puff [OPEN] M4.
     virtual void puff(int pool, int rec, int arg) { (void)pool, (void)rec, (void)arg; }

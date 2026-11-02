@@ -16,6 +16,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 #include "shell/rng.h"
@@ -54,12 +55,8 @@ struct Pool5Entry {
     std::int16_t shooter_pool = 0, shooter_rec = 0;  // DGROUP:0x5a50, 0x5a52
     std::int16_t hit_pool = 0, hit_rec = 0;          // DGROUP:0x5a54, 0x5a56
 };
-// A missile's entry DGROUP:0x66e4 + 0x1c·rec (pool 6) [BYTES seg8:0x602d seg8:0x6c71].
-struct MissileEntry {
-    std::int16_t weapon = 0;                          // DGROUP:0x66e4
-    std::int16_t launcher_pool = -1, launcher_rec = 0;  // DGROUP:0x66e8, 0x66ea
-    std::int16_t age = 0;                             // DGROUP:0x66ec
-};
+// A missile's entry DGROUP:0x66e0 + 0x1c·rec (pool 6) is records.h MissileSlot, Pools::missile(rec)
+// [BYTES seg8:0x602d seg8:0x6c71].
 // A defender entry DGROUP:0x52fe + 0x24·k, k < DGROUP:0x940a (structs.md "Other wave tables").
 struct DefenderEntry {
     std::int16_t w00 = 0;                       // +0x00 DGROUP:0x52fe
@@ -114,13 +111,62 @@ struct CollideGlobals {
     Rect16 other;   // DGROUP:0x5150, the candidate's square
     Rect16 meet;    // DGROUP:0x5158, IntersectRect's output
     std::array<Pool5Entry, 32> pool5{};
-    std::array<MissileEntry, 32> missiles{};
     std::vector<DefenderEntry> defenders;  // DGROUP:0x940a of them
     std::array<std::int16_t, kLinkSlots> link_65da{};  // DGROUP:0x65da + 0x20·s [OPEN: LinkSlot's word +0x0e]
     std::array<std::int16_t, 32> pool11_856a{};        // DGROUP:0x856a + 0x34·rec [OPEN]
+    // The icon fragments of seg7:0x2768 (DGROUP:0x57c3, DGROUP:0x6038) are World's (IconRecord::
+    // fragment, World::fragment_icon).
 };
+// The DGROUP word DGROUP:0x9406 + 2·pool for a pool index past the 21 in-use counts: the words
+// that follow DGROUP:0x9430 (pool 21) ... DGROUP:0x9444 (pool 31). seg7:0x5090's guard reads it
+// for the B party of the last hit; a gun hit's B pool is 30, so the guard reads DGROUP:0x9442,
+// the collision word eA (s2-gun.md 6.1, claim 58) [BYTES seg7:0x509f-0x50ac]. Other pools read 0
+// [OPEN].
+struct CollideCtx;
+std::int16_t in_use_word(const CollideCtx& x, int pool);
 // ADR 0015 decision 1: the wave start's reset of the pair orientation [DESIGN ADR 0015].
 inline void reset_collide_wave(CollideGlobals& c) { c.orientation = 0; }
+
+// Shot slot k as seg8:0x45e0 reads it, from the table shots.h set_shot_source registered (the
+// program's shot_state() by default); a k outside the nine slots reads zeros [DESIGN].
+ShotSlotView shot_view(int k);
+// The weapon table's word DGROUP:0x2f54 + 0x50·w + off: a registered source (tests), else the
+// program's mutable copy missile.h missile_state().words, filled from hud::WeaponTable at the
+// load (src/hud/wave_win32.cpp).
+void set_weapon_words(std::function<std::int16_t(int w, int off)> f);
+std::int16_t weapon_word(int w, int off);
+
+// seg7:0x233c's crack overlay (M4 s2 GUN) [BYTES seg7:0x23cf-0x24a1]: two BitBlts onto the
+// strip DC DGROUP:0x3a02 at (dest_x, dest_y), side x side, from a compatible DC holding graphic
+// "CRACKS" (DGROUP:0xb8b, seg10:0x6d38), MERGEPAINT 0xbb0226 from x = (frame + 3)·side, then
+// SRCAND 0x8800c6 from x = frame·side, y 0, frame = damage / 70. With amount != 0 the graphic
+// first goes through seg10:0x6308(-1, -1, bitmap) [OPEN: that routine; the gap and side are the
+// record's +0x24 and +0x22]; with amount 0 the gap is 6 and the side 32, unscaled.
+struct CrackPlan {
+    int rec = 0;
+    bool scaled = false;            // amount != 0: the seg10:0x6308 pass
+    std::int16_t gap = 0, side = 0;
+    std::int16_t frame = 0;
+    std::int16_t dest_x = 0, dest_y = 0;  // ((gap + side)·rec + gap, gap)
+    std::int16_t src_merge_x = 0;   // (frame + 3)·side, MERGEPAINT
+    std::int16_t src_and_x = 0;     // frame·side, SRCAND
+};
+constexpr std::uint32_t kRopMergePaint = 0x00bb0226;
+constexpr std::uint32_t kRopSrcAnd = 0x008800c6;
+constexpr std::uint32_t kRopSrcCopy = 0x00cc0020;
+// seg7:0x2768's pictures (M4 s2 GUN) [BYTES seg7:0x2a20-0x2c82]: for each fragment q (pool-1
+// record rec[q]): PatBlt(bitmap, 0, 0, side, side, BLACKNESS); BitBlt(bitmap, piece_at,
+// piece_at, piece, piece, the "piece" graphic DGROUP:0xb92 through seg10:0x6d38 and
+// seg10:0x6308(-1, -1), 0, 0, SRCCOPY); BitBlt(bitmap, quad_at, quad_at, quad, quad, strip DC
+// DGROUP:0x3a02, src_x[q], src_y[q], SRCCOPY).
+struct FragmentPlan {
+    int icon = 0;
+    std::array<int, 4> rec{};
+    std::int16_t side = 0;          // 2·gap + piece, gap = (6 << Size) >> 1
+    std::int16_t piece_at = 0, piece = 0;  // gap, (20 << Size) >> 1
+    std::int16_t quad_at = 0, quad = 0;    // gap + ((2 << Size) >> 1), piece - ((4 << Size) >> 1)
+    std::array<std::int16_t, 4> src_x{}, src_y{};
+};
 
 // The calls out of the collision and damage routines.
 class CollideHost {
@@ -155,6 +201,9 @@ public:
     virtual void race_marker(int rec) { (void)rec; }
     // seg12:0x274a(pool, rec), the generic destroy (the effects' owner).
     virtual void destroy(int pool, int rec) { (void)pool, (void)rec; }
+    // The far call through a record's `on_destroy` (+0x66) from seg7:0x2652 [BYTES seg7:0x26b1]
+    // (the program's: flight_hooks.cpp call_on_destroy).
+    virtual void on_destroy(int pool, int rec) { (void)pool, (void)rec; }
     // seg16:0x8e4(pool, ship), the ship's on_destroy (the death's owner).
     virtual void ship_destroyed(int pool, int ship) { (void)pool, (void)ship; }
     // PatBlt(DGROUP:0x13dc, x, y, w, h, BLACKNESS) of seg7:0x51f9.
@@ -174,10 +223,25 @@ public:
     virtual std::int16_t other_damage(std::uint32_t handler_id, int pool, int rec, std::int16_t a) {
         return (void)handler_id, (void)pool, (void)rec, (void)a, 0;
     }
-    // Shot slot k of DGROUP:0x6098 (the weapons' owner, M4 stage 2).
-    virtual ShotSlotView shot(int k) { return (void)k, ShotSlotView{}; }
-    // W(w)+0x24, the weapon kind DGROUP:0x2f78 + 0x50·w.
-    virtual std::int16_t weapon_kind(int w) { return (void)w, 0; }
+    // Shot slot k of DGROUP:0x6098: the default reads the registered table (shots.h
+    // set_shot_source, the program's shot_state()) (M4 s2 GUN).
+    virtual ShotSlotView shot(int k) { return shot_view(k); }
+    // W(w)+0x24, the weapon kind DGROUP:0x2f78 + 0x50·w: the default reads weapon_word(w, 0x24),
+    // the program's weapon words.
+    virtual std::int16_t weapon_kind(int w) { return weapon_word(w, 0x24); }
+    // ---- the icon's on_damage seg7:0x233c and its shatter (damage.h) (M4 s2 GUN)
+    // seg7:0x233c's crack overlay on the icon strip DC DGROUP:0x3a02 (the picture both the
+    // icon's sprite and its column row are cut from) [BYTES seg7:0x23cf-0x24a1].
+    virtual void icon_crack(const CrackPlan& p) { (void)p; }
+    // seg7:0x65aa(0, rec): the icon column's row of icon rec (the column's owner).
+    virtual void column_row(int pool, int rec) { (void)pool, (void)rec; }
+    // seg7:0x5ae8(rec, 0): an icon gone, the capture counters' routine (CAPTURE's) [OPEN].
+    virtual void icon_gone(int rec, int arg) { (void)rec, (void)arg; }
+    // seg7:0x2768's bitmaps: fragment k of icon rec in pool-1 record r gets a fresh
+    // CreateCompatibleBitmap(DGROUP:0x13dc, side, side) at DGROUP:0x4e94 + 2r [BYTES
+    // seg7:0x29ce-0x2a20], then the quadrant pictures of the plan [BYTES seg7:0x2a47-0x2c82].
+    virtual void fragment_bitmap(int r, std::int16_t side) { (void)r, (void)side; }
+    virtual void fragment_pictures(const FragmentPlan& p) { (void)p; }
     // The design words of design n; the default reads the World's.
     virtual DamageDesign design(const World& w, int n) { return design_from_world(w, n); }
 };

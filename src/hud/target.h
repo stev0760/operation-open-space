@@ -59,6 +59,25 @@ struct NextTargetInputs {
 // ([bp-0xc], seg13:0x23f9); the port returns -1 (0xffff) [DESIGN].
 std::int16_t next_target(const NextTargetInputs& in, const NextTargetHost& h);
 
+// ---- seg3:0x0 and seg13:0x371c (core.md "Target validity")
+// seg13:0x371c(pool, rec): 0 outside pool 12, 1 for an even pool-12 record, 2 for an odd one
+// [BYTES seg13:0x3729-0x373e].
+int target_kind_371c(int pool, int rec);
+// What seg3:0x0 reads.
+struct TargetValidity {
+    int ship_pool = 14;  // DGROUP:0x9324
+    int player = 0;      // DGROUP:0x9646
+    std::function<int(int pool)> allocated;           // DGROUP:0x92ec + 2·pool
+    std::function<int(int pool, int rec)> state;      // object word +0x18
+    std::function<int(int rec)> ship_147;             // ship byte +0x147 (DGROUP:0x71d7)
+    // The defender entry DGROUP:0x52fe + 0x24·rec: words +0x00, +0x06, +0x08.
+    std::function<int(int rec)> def_00, def_pool, def_rec;
+    // DGROUP:0x3d6c + 0x34·rec = 2 and DGROUP:0x3d5a + 0x34·rec > 0 (the gate post).
+    std::function<bool(int rec)> gate_post_live;
+};
+// seg3:0x0(pool, rec) [BYTES seg3:0xe-0xe9].
+bool target_valid(const TargetValidity& v, int pool, int rec);
+
 // ---- seg13:0x5a6a / seg13:0x5c22 for pool 0
 
 // The object record fields the cell reads.
@@ -93,9 +112,20 @@ struct CellPlan {
     int sx = 0, sy = 0, sw = 0, sh = 0;
     // seg13:0x371c != 0: graphic 500 instead (seg13:0x5de0-0x5e8f) [OPEN: not drawn by the port].
     bool special = false;
-    // Pool 0 with +0x18 != 0 and DGROUP:0x57c1 != 0: the four 20 x 20 sub-cells of
-    // seg13:0x5f49-0x606d [OPEN: not drawn by the port].
+    // Pool 0 with +0x18 != 0 and DGROUP:0x57c1 != 0: the four sub-cells of seg13:0x5f49-0x6057
+    // (a shattered icon's quarters) [BYTES seg13:0x5f2c-0x5f46] (s2-display-verify.md claim 33).
+    // Sub-cell i sits at ((dx_i + X) >> s, (dy_i + Y) >> s), (dx, dy) = (0, 0), (22, 0), (0, 22),
+    // (22, 22), side 20 >> s. `draw`: StretchBlt SRCCOPY from fragment bitmap DGROUP:0x4e94[frag]
+    // at (gap, gap) size x size of pool-1 record 0 [BYTES seg13:0x5fb9-0x6011]; else PatBlt
+    // BLACKNESS [BYTES seg13:0x6034-0x604b].
     bool sub_cells = false;
+    struct SubCell {
+        int x = 0, y = 0, side = 0;
+        bool draw = false;
+        int frag = 0;
+    };
+    SubCell subs[4];
+    int frag_sx = 0, frag_size = 0;
     // A pool other than 0 and 7 [OPEN: M4/M5].
     bool other_pool = false;
 };
@@ -114,6 +144,14 @@ struct CellInputs {
     int pool7_w10 = 0;
     CellObject obj;
     CellIcon icon;
+    // seg13:0x5f49's inputs: pool-1 record 0's +0x22 (size) and +0x24 (gap) (far DGROUP:0x1dfc),
+    // and for i = 0 ... 3 the signed byte k = DGROUP:0x57c3 + 0x23·rec + i, pool-1 record k's
+    // `state` and its icon word DGROUP:0x6038 + 2k. A k outside pool 1 reads `state` 1 [DESIGN].
+    int frag_size = 0, frag_gap = 0;
+    struct Fragment {
+        int index = -1, state = 1, parent = -1;
+    };
+    Fragment frags[4];
 };
 
 // seg13:0x5a6a(hdc, x, y, pool, rec, mark, flag, scale): `glint_counter` is the mark's +0x14

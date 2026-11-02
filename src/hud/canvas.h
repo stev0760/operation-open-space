@@ -33,6 +33,13 @@ enum class Img : int {
     // DGROUP:0x39e8[5]: the logo strip of seg10:0x39a8, the source of seg13:0x5c22's pool-7
     // pictures (the SD logo of "MESSAGE from / Ambulance") (M4 s1 SCREENS).
     kLogoStrip,
+    // M4 stage 2 (DISPLAY): seg11:0x2ff6's sources, the weapon's sheet DGROUP:0x39e8[W(w)-4]
+    // and the overlay graphic G (seg10:0x6c02(0xbf/0xc4/0xc5/0xbd, 0, -1)).
+    kWeaponSheet,
+    kWeaponOverlay,
+    // seg13:0x5f49's source: the icon fragment's bitmap DGROUP:0x4e94[k] of the sub-cell being
+    // drawn (Host::fragment loads it).
+    kFragment,
     kCount
 };
 

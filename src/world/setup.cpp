@@ -3,6 +3,8 @@
 // the readings that go beyond world.md are listed in the stage report for a verifier. Portable.
 #include "world/setup.h"
 
+#include "world/shots.h"
+
 #include "world/draw.h"
 
 #include <cstdio>
@@ -925,12 +927,15 @@ void apply_templates(World& w) {
         r.hit_sound = 100;
         r.radar_color.set(0x000000ff);
         r.radar_draw.set(kRadarSmall);
-        r.on_damage.set(kDamagePool6);
+        // seg7:0x570a, pool 5's handler [BYTES seg10:0x1056 seg10:0x105a] (M4 s2 MISSILE).
+        r.on_damage.set(kDamagePool5);
         r.b53 = 0;
         r.b54 = 0;
     }
-    for (int i = 0; i < p.allocated(7); ++i) {
-        ObjectRecord& r = p.rec(7, i);
+    // Pool 6, every allocated record (DGROUP:0x1e10, bound DGROUP:0x92f8): the missile template
+    // [BYTES seg10:0x108a-0x1101] (s2-missile.md 6.1, verified claim 69; M4 s2 MISSILE).
+    for (int i = 0; i < p.allocated(6); ++i) {
+        ObjectRecord& r = p.rec(6, i);
         r.mass = 20;
         r.hit_sound = 6;
         r.radar_color.set(0x00007f00);
@@ -941,8 +946,9 @@ void apply_templates(World& w) {
         r.b53 = 0;
         r.b54 = 0;
     }
-    {  // pool 6, record 0
-        ObjectRecord& r = p.rec(6, 0);
+    {  // pool 7, record 0 (DGROUP:0x1e14), the ambulance [BYTES seg10:0x1103-0x11ac] (verified
+       // claim 70; M4 s2 MISSILE)
+        ObjectRecord& r = p.rec(7, 0);
         r.size = side(w, 40);
         r.extent = 320;
         r.gap = side(w, 6);
@@ -1644,7 +1650,12 @@ void place(World& w, SetupHost& h) {
     Pools& p = w.pools;
     w.frames = 0;
     w.w9510 = 0x65;
-    for (int i = 0; i < p.allocated(6); ++i) p.rec(6, i).state = 1;  // DGROUP:0x66ec + 0x1c i = 0x191
+    // Every allocated pool-6 record: entry age DGROUP:0x66ec + 0x1c·i = 0x191 and `state` 1
+    // [BYTES seg9:0x669c seg9:0x66a0 seg9:0x66ae seg9:0x66b7] (verified claim 72; M4 s2 MISSILE).
+    for (int i = 0; i < p.allocated(6); ++i) {
+        p.missile(i).age = 0x191;
+        p.rec(6, i).state = 1;
+    }
     for (int i = 0; i < p.allocated(10); ++i) p.rec(10, i).state = 1;
     // The link slots DGROUP:0x65cc + 0x20 k, k < DGROUP:0x9300: both ends' pools -1 (M3 s4 DRAW)
     // [BYTES seg9:0x66ce seg9:0x66dd seg9:0x66e1].
@@ -1655,10 +1666,8 @@ void place(World& w, SetupHost& h) {
     w.w226c.fill(-1);
     w.w9456 = 0;
     w.w9430 = 0;
-    for (BeamSlot& b : w.beams) {
-        b.index = -1;
-        b.limit = 50;
-    }
+    // The nine shot slots DGROUP:0x6098: +0x74 = 50, +0x76 = -1 (shots.h) [BYTES seg9:0x6624].
+    place_shot_slots(shot_state());
     clear_effects(w.effects);
     w.w58cc.fill(-1);
     for (int i = 0; i < p.allocated(w.roles.pool5); ++i) p.rec(w.roles.pool5, i).state = 1;
@@ -1680,7 +1689,7 @@ void place(World& w, SetupHost& h) {
     w.clock = now_of(h);                                                  // [BYTES seg9:0x6859]
     p.set_in_use(7, 0);
     w.w9e49 = 10;
-    p.rec(6, 0).state = 1;
+    p.rec(7, 0).state = 1;  // the ambulance, DGROUP:0x1e14 [BYTES seg9:0x6876 seg9:0x687a] (claim 71)
     // seg14:0x3eda, seg14:0x0(-1), seg14:0x4074 [BYTES seg9:0x685e seg9:0x6883 seg9:0x688a seg9:0x6890]
     if (h.ship_setup)
         h.ship_setup(w);
@@ -1719,7 +1728,7 @@ void enter_briefing(World& w, SetupHost& h) {
     // seg9:0x5cca [BYTES seg9:0x5cca]
     w.placed = 0;  // DGROUP:0x93b0 = 0 [BYTES seg9:0x5d24]
     load(w, h);        // seg9:0x22b4(1) [BYTES seg9:0x5d3c]
-    w.pools.rec(6, 0).state = 1;
+    w.pools.rec(7, 0).state = 1;  // the ambulance, DGROUP:0x1e14 [BYTES seg9:0x5d42 seg9:0x5d46] (claim 71)
     w.w9e49 = 10;
     w.w952e = -1;
     // seg10:0x5b30: the strip for N = the pool-0 in-use count, blacked [BYTES seg10:0x5b3d].

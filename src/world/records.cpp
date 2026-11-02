@@ -12,6 +12,7 @@ namespace {
 static_assert(std::is_standard_layout<ObjectRecord>::value, "offsetof needs standard layout");
 static_assert(std::is_standard_layout<EffectEntry>::value, "offsetof needs standard layout");
 static_assert(std::is_standard_layout<ShipRecord>::value, "offsetof needs standard layout");
+static_assert(std::is_standard_layout<MissileSlot>::value, "offsetof needs standard layout");
 
 #define IS_AT(T, f, off) static_assert(offsetof(T, f) == (off), #T "::" #f " at " #off)
 
@@ -169,6 +170,21 @@ IS_AT(ShipRecord, radar_hide, 0x147);
 IS_AT(ShipRecord, checkpoint, 0x148);
 IS_AT(ShipRecord, r149, 0x149);
 IS_AT(ShipRecord, due156, 0x156);
+
+IS_AT(MissileSlot, target_pool, 0x00);
+IS_AT(MissileSlot, target_rec, 0x02);
+IS_AT(MissileSlot, weapon, 0x04);
+IS_AT(MissileSlot, w06, 0x06);
+IS_AT(MissileSlot, launcher_pool, 0x08);
+IS_AT(MissileSlot, launcher_rec, 0x0a);
+IS_AT(MissileSlot, age, 0x0c);
+IS_AT(MissileSlot, steer_delay, 0x0e);
+IS_AT(MissileSlot, alt_pool, 0x10);
+IS_AT(MissileSlot, alt_rec, 0x12);
+IS_AT(MissileSlot, mode, 0x14);
+IS_AT(MissileSlot, anim, 0x16);
+IS_AT(MissileSlot, w18, 0x18);
+IS_AT(MissileSlot, lock, 0x1a);
 
 #undef IS_AT
 

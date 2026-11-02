@@ -8,6 +8,7 @@
 // ADR 0006 factor is not applied to it [DESIGN].
 #ifdef _WIN32
 #include "hud/icon_column.h"
+#include "hud/wave.h"
 
 #include <array>
 #include <string>
@@ -106,7 +107,8 @@ void draw_row(HDC dc, int i, int flag) {
     in.icon.w00 = ic.w00;
     in.icon.w02 = ic.w02;
     in.icon.w19 = ic.w19;
-    // seg13:0x371c(pool, rec) is not ported: 0 [OPEN] (hud/hooks.cpp target_kind).
+    in.kind = target_kind_371c(0, i);  // seg13:0x371c: 0 for pool 0 (M4 s2 DISPLAY)
+    fill_fragment_inputs(i, in);       // seg13:0x5f49's inputs (hud/wave.h)
     const CellPlan p = plan_cell(in, g_glint[static_cast<std::size_t>(i)]);
     if (p.clear) PatBlt(dc, p.clear_x, p.clear_y, p.clear_size, p.clear_size, BLACKNESS);
     // The glint (seg13:0x5460, seg13:0x54da) is not drawn [OPEN]; with flag 1 it never runs.
@@ -114,6 +116,18 @@ void draw_row(HDC dc, int i, int flag) {
     if (p.picture && p.slot == 0xd && strip) {
         SetStretchBltMode(dc, COLORONCOLOR);  // seg13:0x5c98
         StretchBlt(dc, p.dx, p.dy, p.dw, p.dh, strip->hdc(), p.sx, p.sy, p.sw, p.sh, SRCCOPY);
+    }
+    // A shattered icon's four quarters [BYTES seg13:0x5f49-0x6057] (M4 s2 DISPLAY).
+    if (p.sub_cells) {
+        for (const CellPlan::SubCell& q : p.subs) {
+            if (!q.draw) {
+                PatBlt(dc, q.x, q.y, q.side, q.side, BLACKNESS);  // seg13:0x604b
+            } else if (gfx::ImagePtr f = fragment_image(q.frag)) {
+                SetStretchBltMode(dc, COLORONCOLOR);
+                StretchBlt(dc, q.x, q.y, q.side, q.side, f->hdc(), p.frag_sx, p.frag_sx, p.frag_size, p.frag_size,
+                           SRCCOPY);  // seg13:0x5ffe
+            }
+        }
     }
 }
 
@@ -298,6 +312,16 @@ void icon_column_row(int rec) {
     // seg7:0x64ac(0, 1, rec): GetDC(DGROUP:0x9458), the row, ReleaseDC; DGROUP:0x91fc = 0 then
     // destroys the window (seg7:0x659e).
     const int more = paint_rows(1, rec);
+    if (HDC dc = GetDC(g_wnd)) {
+        present(dc);
+        ReleaseDC(g_wnd, dc);
+    }
+    if (more == 0) icon_column_destroy();
+}
+
+void icon_column_rows_tick() {
+    if (!g_wnd) return;
+    const int more = paint_rows(0, -1);
     if (HDC dc = GetDC(g_wnd)) {
         present(dc);
         ReleaseDC(g_wnd, dc);

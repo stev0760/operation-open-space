@@ -3,7 +3,7 @@ id	module	resource	flag	same_as	ms	transcript	hold	meaning	call_sites
 0x01	SND_FX.DLL	101	2	PUFF.WAV	264			PUFF; seg7:0x5b68 (mode 1)	P:seg7:0x5c6e in seg7:0x5b68(lo([bp + 6]),hi([bp + 6]),1)
 0x02	SND_FX.DLL	102	2	ZOOM.WAV	359			ZOOM; race routines seg4:0x144c and seg4:0x277a; seg12:0x0	P:seg4:0x1f40 in seg4:0x144c(8,ax,1) C:seg4:0x2ad5 in seg4:0x277a P:seg12:0x73 in seg12:0x0(6,[bp - 4],1)
 0x03	SND_FX.DLL	103	0	ONE_SHOT.WAV	219			ONE_SHOT; mode 2 with a = 0x1e in seg11:0x4e0a and seg13:0x1fc2; seg8:0x90fa passes a = 2, b = DX, mode = AX	P:seg8:0x9220 in seg8:0x90fa(2,dx,ax) P:seg11:0x53a9 in seg11:0x4e0a(0x1e,[bp - 4],2) P:seg11:0x55b2 in seg11:0x4e0a(0x1e,[bp - 4],2) P:seg13:0x214a in seg13:0x1fc2(0x1e,[bp - 4],2)
-0x04	SND_FX.DLL	104	2	LASER.WAV	448			LASER; no constant call site; reachable only through the data-driven hit-sound ids	
+0x04	SND_FX.DLL	104	2	LASER.WAV	448			LASER; mode 2 with a = 0x1e in seg11:0x4e0a, the two-barrel shot with both barrels alive (push at seg11:0x55a5); also reachable through the data-driven hit-sound ids	P:seg11:0x55b2 in seg11:0x4e0a(0x1e,[bp - 4],2)
 0x05	SND_FX.DLL	105	6	SHIELD.WAV	410			SHIELD; desk scene seg15:0x4c76; seg11:0x4b00; preloaded by seg14:0x1b84 (mode 5)	P:seg11:0x4c5e in seg11:0x4b00([0x9324],[bp + 6],1) P:seg14:0x1fb9 in seg14:0x1b84(0,0,5) C:seg15:0x4dbf in seg15:0x4c76
 0x06	SND_FX.DLL	106	0	CLUNK.WAV	294			CLUNK; seg12:0x3498	P:seg12:0x35cd in seg12:0x3498(0xa,[bp + 0xa],1)
 0x07	SND_FX.DLL	107	2	BOUNCE.WAV	413			BOUNCE; player-damage handler seg8:0x45e0; seg12:0x3e98	P:seg8:0x4960 in seg8:0x45e0([0x9324],[bp + 8],1) P:seg12:0x46a1 in seg12:0x3e98([bp - 0xa],[bp - 6],1)
@@ -29,7 +29,7 @@ id	module	resource	flag	same_as	ms	transcript	hold	meaning	call_sites
 0x1b	SND_FX.DLL	127	2	FIREBALL.WAV	1223			FIREBALL; seg6:0x84fc when rand()%3 = 0 (else 0x4e); seg13:0x1318	P:seg13:0x1676 in seg13:0x1318(5,[bp - 4],1)
 0x1c	SND_FX.DLL	128	2	MISSILE.WAV	1305			MISSILE; desk scene seg15:0x0, seg15:0x3caa, seg13:0x3748, seg18:0x66e0; with one channel ordinal 9 then sets ISPACE.DLL DGROUP:0xcf6 = now + 1200	P:seg13:0x3b77 in seg13:0x3748(7,0,1) C:seg15:0x185 in seg15:0x0 C:seg15:0x3cf9 in seg15:0x3caa P:seg18:0x6c56 in seg18:0x66e0([0x934a],[bp - 0xc],ax)
 0x1d	SND_FX.DLL	129	2	SLING.WAV	304			SLING; seg11:0x947a	P:seg11:0x95a3 in seg11:0x947a(lo([bp + 6]),hi([bp + 6]),1)
-0x1e	SND_FX.DLL	130	2	FUEL.WAV	581			FUEL; no constant call site	
+0x1e	SND_FX.DLL	130	2	FUEL.WAV	581			FUEL; mode 1 in seg8:0x6f3c, a gun hit on a pool-4 record or a pool-8 record of kind 2 with type 4 or 5 (push at seg8:0x7539)	P:seg8:0x7546 in seg8:0x6f3c([bp + 0xc],[bp + 0xa],1)
 0x1f	SND_FX.DLL	131	2	SHATTER.WAV	722			SHATTER; seg7:0x26c4, seg7:0x2e02, race place routine seg11:0x41bc	P:seg7:0x2705 in seg7:0x26c4(0,[bp + 8],1) P:seg7:0x2ec2 in seg7:0x2e02(lo([bp + 6]),hi([bp + 6]),1) C:seg11:0x4778 in seg11:0x41bc
 0x20	SND_FX.DLL	132	2	IGNITE.WAV	901			IGNITE; desk scene seg15:0x0 and seg15:0x374c; seg11:0x72e0; first of sequence 0x6a	P:seg11:0x730b in seg11:0x72e0([0x9324],[0x9646],1) C:seg15:0x58 in seg15:0x0 C:seg15:0x399a in seg15:0x374c
 0x21	SND_FX.DLL	133	2	SIZZLE.WAV	2137			SIZZLE; second of sequence 0x6a (1000 ms after 0x20)	

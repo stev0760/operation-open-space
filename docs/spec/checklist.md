@@ -47,9 +47,9 @@ One row per binding. MAINACCEL and FACTACCEL are the accelerator tables in ENG_L
 | KEY-01 | Up Arrow: thrust | [MANUAL QuickStart] [BYTES ENG_LANG.DLL STRING 77] id 1223 [ORACLE runtime-0001] | oracle | none | done | demo |
 | KEY-02 | Ctrl+Up Arrow: OverThruster (turbo thrust) | [MANUAL QuickStart] [BYTES ENG_LANG.DLL STRING 77] id 1224 | manual | none | wip | unknown |
 | KEY-03 | Left/Right Arrow: turn | [MANUAL QuickStart] [BYTES ENG_LANG.DLL STRING 77] id 1226 | manual | none | done | unknown |
-| KEY-04 | Shift or Space: fire gun | [MANUAL QuickStart] [BYTES ENG_LANG.DLL STRING 77] id 1227 [BYTES seg11:0x4db0 seg11:0x4ddc seg11:0x4de8 seg7:0x87a] | manual | verified | wip | unknown |
+| KEY-04 | Shift or Space: fire gun | [MANUAL QuickStart] [BYTES ENG_LANG.DLL STRING 77] id 1227 [BYTES seg11:0x4db0 seg11:0x4ddc seg11:0x4de8 seg7:0x87a] [ORACLE core-0002] | oracle | verified | done | unknown |
 | KEY-05 | Down Arrow: brake | [MANUAL QuickStart] [BYTES ENG_LANG.DLL STRING 77] id 1225 | manual | none | done | unknown |
-| KEY-06 | Z/Return: fire the weapon system on key release (WILDCARD DEFENSE fires on key press); Action mode only | [MANUAL QuickStart] [BYTES ENG_LANG.DLL STRING 77] id 1228 [BYTES seg11:0x6e11 seg11:0x6f74 seg11:0x6f58 seg11:0xac86] [ORACLE wave-0001] | oracle | verified | todo | unknown |
+| KEY-06 | Z/Return: fire the weapon system on key release (WILDCARD DEFENSE fires on key press); Action mode only | [MANUAL QuickStart] [BYTES ENG_LANG.DLL STRING 77] id 1228 [BYTES seg11:0x6e11 seg11:0x6f74 seg11:0x6f58 seg11:0xac86] [ORACLE wave-0001] [ORACLE core-0002] | oracle | verified | done | unknown |
 | KEY-07 | H: call the ambulance | [MANUAL QuickStart] [MANUAL Resource Management] [BYTES ENG_LANG.DLL STRING 77] id 1229 [BYTES seg11:0x6e8e seg11:0x6fb0 seg11:0x6fcc seg16:0xb4e] [ORACLE wave-0001] | oracle | verified | todo | unknown |
 | KEY-08 | F1: online help (MAINACCEL command 240) | [MANUAL QuickStart] [BYTES ENG_LANG.DLL STRING 76] id 1207 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES seg2:0x164b] | manual | located | wip | unknown |
 | KEY-09 | F2: online help (MAINACCEL command 256) | [BYTES ENG_LANG.DLL STRING 76] id 1207 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES seg2:0x1652] | strings | located | done | unknown |
@@ -61,7 +61,7 @@ One row per binding. MAINACCEL and FACTACCEL are the accelerator tables in ENG_L
 | KEY-15 | U: defender target | [MANUAL General] [BYTES ENG_LANG.DLL STRING 76] id 1205 | manual | none | done | unknown |
 | KEY-16 | Ctrl + a targeting key: target the closest object of that type | [MANUAL General] | manual | none | done | unknown |
 | KEY-17 | M: show the most recent message | [MANUAL General] [BYTES ENG_LANG.DLL STRING 76] id 1206 | manual | none | wip | unknown |
-| KEY-18 | Tab: change the current weapon | [MANUAL General] [BYTES ENG_LANG.DLL STRING 77] id 1230 [BYTES seg11:0xadf0 seg11:0xae94] [ORACLE wave-0001] | oracle | verified | todo | unknown |
+| KEY-18 | Tab: change the current weapon | [MANUAL General] [BYTES ENG_LANG.DLL STRING 77] id 1230 [BYTES seg11:0xadf0 seg11:0xae94] [ORACLE wave-0001] [ORACLE core-0002] | oracle | verified | done | unknown |
 | KEY-19 | CapsLock: cloak or shield on/off | [MANUAL Special Ship Systems] [BYTES ENG_LANG.DLL STRING 77] id 1231 [BYTES seg11:0x4c72] | manual | located | todo | unknown |
 | KEY-20 | P: perspective shift to a teammate and back | [MANUAL Special Ship Systems] [BYTES ENG_LANG.DLL STRING 76] id 1215 | manual | none | todo | unknown |
 | KEY-21 | B: show the game speed on the target display | [MANUAL Game Settings] [BYTES ENG_LANG.DLL STRING 76] id 1208 [BYTES seg11:0x71d4] | manual | located | done | unknown |
@@ -145,7 +145,7 @@ One row per binding. MAINACCEL and FACTACCEL are the accelerator tables in ENG_L
 | WIN-09 | Messages in the target display, shown for a few seconds | [MANUAL General] [BYTES seg3:0x6ec seg3:0x6fa seg3:0x7c6 seg3:0x813 seg10:0xa332 seg3:0x14d6] [ORACLE wave-0001] | oracle | verified | wip | unknown |
 | WIN-10 | Radar screen: colour coding, cloaked ships shown, zoom | [MANUAL General] [BYTES seg11:0x375f] [BYTES seg11:0x37 seg11:0x43 seg11:0xb0c seg11:0xb14 seg11:0x1b seg11:0x22] | manual | verified | done | unknown |
 | WIN-11 | Damage display: Engine, Guns, Thruster, plus Wings or Cloak; green/amber/red/blinking red/grey | [MANUAL General] [BYTES ENG_LANG.DLL STRING 53] ids 840–844 [ORACLE wave-0001] [BYTES seg11:0x5fe] | oracle | verified | wip | unknown |
-| WIN-12 | Weapon display: WEAPON SYSTEM, missiles left | [MANUAL General] [ORACLE runtime-0001] [BYTES ENG_LANG.DLL STRING 59] id 934 [BYTES seg10:0x1fb2 seg11:0x2f8c seg11:0x2ff6 seg10:0x533a seg11:0x7c12 seg9:0x6963] [ORACLE probe-0001] | oracle | verified | wip | demo |
+| WIN-12 | Weapon display: WEAPON SYSTEM, missiles left | [MANUAL General] [ORACLE runtime-0001] [BYTES ENG_LANG.DLL STRING 59] id 934 [BYTES seg10:0x1fb2 seg11:0x2f8c seg11:0x2ff6 seg10:0x533a seg11:0x7c12 seg9:0x6963] [ORACLE probe-0001] [ORACLE core-0002] | oracle | verified | done | demo |
 | WIN-13 | Play-time clock (wave clock) in the status display | [MANUAL General] [ORACLE runtime-0001] [BYTES seg11:0x1f0e] [BYTES seg11:0x1407 seg11:0x147d] [BYTES seg9:0x6689] [BYTES seg16:0x1f11] | oracle | verified | done | demo |
 | WIN-14 | Game menu bar: menu 101 (Game, Ship Cmds, Defenders, Watch, Help) and menu 102 (adds Strategy) | [MANUAL QuickStart] [MANUAL Display Options] [BYTES ENG_LANG.DLL MENU 101] [BYTES ENG_LANG.DLL MENU 102] [BYTES seg2:0x13b2] [BYTES seg11:0x6d19] | manual | understood | todo | unknown |
 | WIN-15 | Popup menu: Options Menu, Game Options.., Exit Game | [BYTES ENG_LANG.DLL MENU POPUPMENU] [BYTES seg2:0x13b2] | strings | located | todo | unknown |
@@ -247,7 +247,7 @@ Every weapon ENG_LANG names (strings 186–207 and the descriptions in #5000 110
 
 | ID | Feature | Evidence | Spec | RE | Port | Edition |
 |---|---|---|---|---|---|---|
-| WPN-01 | Gun: shots in the thrust colour; DOUBLE GUNS upgrade | [MANUAL QuickStart] [MANUAL Customizing Ships] [BYTES ENG_LANG.DLL STRING 75] id 1185 [BYTES ENG_LANG.DLL STRING 143] id 2285 [BYTES seg11:0x4e0a seg11:0x5011 seg11:0x51a8 seg8:0x3aec seg8:0x3688 seg8:0x6f3c] [ORACLE wave-0001] | oracle | verified | todo | unknown |
+| WPN-01 | Gun: shots in the thrust colour; DOUBLE GUNS upgrade | [MANUAL QuickStart] [MANUAL Customizing Ships] [BYTES ENG_LANG.DLL STRING 75] id 1185 [BYTES ENG_LANG.DLL STRING 143] id 2285 [BYTES seg11:0x4e0a seg11:0x5011 seg11:0x51a8 seg8:0x3aec seg8:0x3688 seg8:0x6f3c] [ORACLE wave-0001] [ORACLE core-0002] | oracle | verified | wip | unknown |
 | WPN-02 | NO WEAPON (empty weapon system) | [BYTES ENG_LANG.DLL STRING 12] id 186 | strings | none | todo | unknown |
 | WPN-03 | RING OF DEATH: ring of fiery explosions around the ship; heavy fuel use | [BYTES ENG_LANG.DLL STRING 12] id 187 [BYTES ENG_LANG.DLL 5000 110] [BYTES ENG_LANG.DLL 5000 138] [BYTES seg11:0x8a42] | strings | located | todo | registered |
 | WPN-04 | GRAPPLING HOOK: pulls objects in, swings them as a shield, releases as a slingshot | [BYTES ENG_LANG.DLL STRING 12] id 188 [BYTES ENG_LANG.DLL 5000 111] [BYTES ENG_LANG.DLL 5000 138] [BYTES seg11:0x947a] | strings | located | todo | registered |
@@ -256,7 +256,7 @@ Every weapon ENG_LANG names (strings 186–207 and the descriptions in #5000 110
 | WPN-07 | FIREBALLS: fuel-made, damage, heats objects | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 12] id 191 [BYTES ENG_LANG.DLL 5000 114] | manual | none | todo | unknown |
 | WPN-08 | TARGETTING MISSILES: pursue the selected target, dodge obstacles | [BYTES ENG_LANG.DLL STRING 13] id 192 [BYTES ENG_LANG.DLL 5000 115] [BYTES ENG_LANG.DLL 5000 138] | strings | none | todo | registered |
 | WPN-09 | HEATSEEKER MISSILES: seek hot objects, may return to the launcher | [MANUAL Special Ship Systems] [BYTES ENG_LANG.DLL STRING 13] id 193 [BYTES ENG_LANG.DLL 5000 116] | manual | none | todo | unknown |
-| WPN-10 | RADAR-GUIDED MISSILES: seek the closest object in range | [BYTES ENG_LANG.DLL STRING 13] id 194 [BYTES ENG_LANG.DLL 5000 117] [BYTES seg11:0x7c12 seg12:0x0 seg12:0x586 seg12:0x7c0 seg10:0x22cc] [ORACLE wave-0001] | oracle | verified | todo | unknown |
+| WPN-10 | RADAR-GUIDED MISSILES: seek the closest object in range | [BYTES ENG_LANG.DLL STRING 13] id 194 [BYTES ENG_LANG.DLL 5000 117] [BYTES seg11:0x7c12 seg12:0x0 seg12:0x586 seg12:0x7c0 seg10:0x22cc] [ORACLE wave-0001] [BYTES seg11:0xac86 seg8:0x1cbe seg13:0xd6c] [ORACLE core-0002] | oracle | verified | wip | unknown |
 | WPN-11 | DEATH HEADS: rear mines that seek heat, shoot, then explode with a shock blast | [BYTES ENG_LANG.DLL STRING 13] id 195 [BYTES ENG_LANG.DLL 5000 118] [BYTES ENG_LANG.DLL 5000 138] | strings | none | todo | registered |
 | WPN-12 | REAR-DEPLOYED MINES: damage and a stunning shock blast | [BYTES ENG_LANG.DLL STRING 13] id 196 [BYTES ENG_LANG.DLL 5000 119] | strings | none | todo | unknown |
 | WPN-13 | DUMB MISSILES: straight line; shock blast on a near miss | [BYTES ENG_LANG.DLL STRING 13] id 197 [BYTES ENG_LANG.DLL 5000 120] | strings | none | todo | unknown |
@@ -270,10 +270,10 @@ Every weapon ENG_LANG names (strings 186–207 and the descriptions in #5000 110
 | WPN-21 | BOOMERANGS: return to the sender if they miss; reusable when caught | [BYTES ENG_LANG.DLL STRING 13] id 205 [BYTES ENG_LANG.DLL 5000 128] [BYTES ENG_LANG.DLL 5000 138] | strings | none | todo | registered |
 | WPN-22 | SPUD MISSILES: heavy flying potatoes | [BYTES ENG_LANG.DLL STRING 13] id 206 [BYTES ENG_LANG.DLL 5000 129] [BYTES ENG_LANG.DLL 5000 138] | strings | none | todo | registered |
 | WPN-23 | THROWING STARS: light, fast, high damage | [BYTES ENG_LANG.DLL STRING 13] id 207 [BYTES ENG_LANG.DLL 5000 130] | strings | none | todo | unknown |
-| WPN-24 | Weapon effects on icons: burn, crack, smash, freeze, melt; frozen icons need thawing before capture | [MANUAL Icons] [MANUAL Dealing With Other Ships] [BYTES seg13:0x174d] [BYTES seg7:0x233c seg7:0x26c4] | manual | located | todo | unknown |
+| WPN-24 | Weapon effects on icons: burn, crack, smash, freeze, melt; frozen icons need thawing before capture | [MANUAL Icons] [MANUAL Dealing With Other Ships] [BYTES seg13:0x174d] [BYTES seg7:0x233c seg7:0x26c4] [ORACLE core-0002] | oracle | located | wip | unknown |
 | WPN-25 | Each ship starts with an initial weapon | [MANUAL General] [MANUAL Customizing Ships] [ORACLE probe-0001] | oracle | none | todo | unknown |
 | WPN-26 | Full version: more than 20 weapons | [MANUAL Why Register Inner Space?] [BYTES ENG_LANG.DLL 5000 330] | manual | none | todo | registered |
-| WPN-27 | Generic damage and destruction: a hit adds its amount to damage (pool 15 ignored; an object already past max_damage takes no more, except in pool 9); once damage > max_damage, on_destroy runs. The generic destroy handler blanks the object's screen square when seg8:0x7ba8 allows, fills effect-table fragment entries (count from blast_size, other values scaled by Detail), sets state 1 and calls the sound wrapper with sound 0x45 | [BYTES seg7:0x2652] [BYTES seg12:0x274a] [BYTES seg12:0x2816 seg12:0x28ec] | code | understood | todo | unknown |
+| WPN-27 | Generic damage and destruction: a hit adds its amount to damage (pool 15 ignored; an object already past max_damage takes no more, except in pool 9); once damage > max_damage, on_destroy runs. The generic destroy handler blanks the object's screen square when seg8:0x7ba8 allows, fills effect-table fragment entries (count from blast_size, other values scaled by Detail), sets state 1 and calls the sound wrapper with sound 0x45 | [BYTES seg7:0x2652] [BYTES seg12:0x274a] [BYTES seg12:0x2816 seg12:0x28ec] [] | code | understood | done | unknown |
 
 ## HAZ: Hazards
 
@@ -398,9 +398,9 @@ The nine crimes of the Laws of Inner Space topic, with the charge text the Hall 
 | ECO-10 | Demo refuses to sell powerful items | [BYTES ENG_LANG.DLL STRING 146] id 2320 [BYTES ENG_LANG.DLL STRING 146] id 2321 [BYTES seg16:0x44fa] | code | verified | todo | demo |
 | ECO-11 | Cost and credit readouts (TOTAL COST OF WORK, YOUR CREDIT IS NOW) | [BYTES ENG_LANG.DLL STRING 74] id 1179 [BYTES ENG_LANG.DLL STRING 73] id 1158 [BYTES seg16:0x5762 seg16:0x0 seg6:0x1010] | strings | located | todo | unknown |
 | ECO-12 | Other ships use the ambulance ("%D HAS LANDED..", "REFUELING %D...") | [MANUAL Resource Management] [BYTES ENG_LANG.DLL STRING 75] id 1184 [BYTES ENG_LANG.DLL STRING 159] id 2540 | manual | none | todo | unknown |
-| ECO-13 | Icon capture by flying into the icon; resources gained | [MANUAL Icons] [MANUAL QuickStart] [BYTES ENG_LANG.DLL STRING 36] id 574 [BYTES ENG_LANG.DLL STRING 36] id 575 [BYTES seg13:0x16ac seg13:0x1836 seg13:0x1842 seg13:0x1ae7 seg3:0xe21] [ORACLE wave-0001] | oracle | verified | todo | unknown |
+| ECO-13 | Icon capture by flying into the icon; resources gained | [MANUAL Icons] [MANUAL QuickStart] [BYTES ENG_LANG.DLL STRING 36] id 574 [BYTES ENG_LANG.DLL STRING 36] id 575 [BYTES seg13:0x16ac seg13:0x1836 seg13:0x1842 seg13:0x1ae7 seg3:0xe21] [ORACLE wave-0001] [ORACLE core-0002] | oracle | verified | done | unknown |
 | ECO-14 | Resource packs left by dead ships | [BYTES ENG_LANG.DLL STRING 58] id 926 [BYTES ENG_LANG.DLL STRING 43] id 680 | strings | none | todo | unknown |
-| ECO-15 | Icon fragments | [BYTES ENG_LANG.DLL STRING 56] id 892 | strings | none | todo | unknown |
+| ECO-15 | Icon fragments | [BYTES ENG_LANG.DLL STRING 56] id 892 [BYTES seg7:0x2768 seg7:0x32d0] | strings | none | wip | unknown |
 | ECO-16 | Fuel tanks: captured by flying over; volatile, may explode | [MANUAL QuickStart] [BYTES ENG_LANG.DLL 5000 301] [BYTES ENG_LANG.DLL STRING 10] id 155 [BYTES seg13:0x1c42 seg13:0x1c90 seg13:0x1cb5] | manual | verified | todo | unknown |
 | ECO-17 | Fuel use by thrust, weapons, repair, cloak and turbo | [MANUAL Special Ship Systems] [BYTES ENG_LANG.DLL 5000 301] [BYTES seg11:0x1d55 seg11:0x1c83 seg13:0x135e seg11:0x1dd9] | manual | verified | wip | unknown |
 | ECO-18 | Low fuel warning "FUEL LEVEL LOW. SEEK FUEL ASAP" and fuel readout | [BYTES ENG_LANG.DLL STRING 8] id 121 [BYTES ENG_LANG.DLL STRING 59] id 935 [BYTES seg3:0xcee] | strings | located | todo | unknown |

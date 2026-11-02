@@ -94,6 +94,32 @@ std::int16_t next_target(const NextTargetInputs& in, const NextTargetHost& h) {
     return pack(bp, br);
 }
 
+int target_kind_371c(int pool, int rec) {
+    if (pool != 0xc) return 0;      // [BYTES seg13:0x3729-0x3731]
+    return (rec & 1) != 0 ? 2 : 1;  // test byte [bp+8], 1 [BYTES seg13:0x3733-0x373e]
+}
+
+bool target_valid(const TargetValidity& v, int pool, int rec) {
+    const std::int16_t p = w16(pool), r = w16(rec);
+    if (p < 0 || r < 0 || p > w16(v.ship_pool)) return false;  // [BYTES seg3:0xe-0x20]
+    if (!(w16(v.allocated(p)) > r)) return false;              // jle [BYTES seg3:0x2f-0x33]
+    // Pool 14 (the constant) and not the player: 1 for `state` 0, and for another state when
+    // ship byte +0x147 != 0; else on to the general tests [BYTES seg3:0x35-0x67].
+    if (p == 0xe && r != w16(v.player)) {
+        if (v.state(p, r) == 0) return true;
+        if ((v.ship_147(r) & 0xff) != 0) return true;
+    }
+    if (v.state(p, r) != 0) return false;                       // [BYTES seg3:0x78-0x7d]
+    if (p == 0 || p == 7 || p == 1) return true;                // [BYTES seg3:0x7f-0x8f]
+    if (p == 2) {                                               // [BYTES seg3:0x91-0xb0]
+        if (w16(v.def_00(r)) == 0xf) return true;
+        if (w16(v.def_pool(r)) == 0xe && w16(v.def_rec(r)) == w16(v.player)) return true;
+    }
+    if (p == 9 || p == 0xb) return true;                        // [BYTES seg3:0xb2-0xbc]
+    if (p == 8 && v.gate_post_live(r)) return true;             // [BYTES seg3:0xbe-0xd4]
+    return target_kind_371c(p, r) == 2;                         // [BYTES seg3:0xd6-0xe9]
+}
+
 CellPlan plan_cell(const CellInputs& in, int& glint_counter) {
     CellPlan c;
     const int s = in.scale;
@@ -163,7 +189,21 @@ CellPlan plan_cell(const CellInputs& in, int& glint_counter) {
     }
     if (in.obj.state != 0) {                      // seg13:0x5f1e-0x5f46
         if (in.icon.w19 != 0) {
+            // seg13:0x5f49-0x6057: [bp-0xa] = 0, the four quarters 22 apart.
             c.sub_cells = true;
+            c.frag_sx = in.frag_gap;
+            c.frag_size = in.frag_size;
+            static const int kDx[4] = {0, 0x16, 0, 0x16}, kDy[4] = {0, 0, 0x16, 0x16};
+            for (int i = 0; i < 4; ++i) {
+                CellPlan::SubCell& q = c.subs[i];
+                q.x = w16(w16(kDx[i] + in.x)) >> s;  // sar ax, cl [BYTES seg13:0x5f71-0x5f8a]
+                q.y = w16(w16(kDy[i] + in.y)) >> s;
+                q.side = 0x14 >> s;
+                const CellInputs::Fragment& f = in.frags[i];
+                q.frag = f.index;
+                // pool-1 record k's +0x18 = 0 and DGROUP:0x6038 + 2k = rec [BYTES seg13:0x5fa3-0x5fb7]
+                q.draw = f.state == 0 && w16(f.parent) == w16(in.rec);
+            }
             return c;
         }
         if (in.obj.b51 == 0) return c;            // seg13:0x6070-0x6092

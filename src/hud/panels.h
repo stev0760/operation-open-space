@@ -32,6 +32,10 @@ struct PanelState {
     int last_second = 0;                  // DGROUP:0x1868
 };
 
+// The score panel's text of seg11:0x4ea: "000" for 0, else seg6:0xeb8's signed decimal of the
+// dword [BYTES seg11:0x519 seg6:0xeb8-0xeed].
+std::string score_text(std::uint32_t score);
+
 class Panels {
 public:
     Panels(Canvas& canvas, Host& host) : c_(canvas), h_(host) {}

@@ -187,9 +187,7 @@ std::int16_t ship_damage(CollideCtx& x, int pool, int ship, std::int16_t d) {
                 e.killer_pool = sh.owner_pool;
                 e.killer_rec = sh.owner_rec;
             } else if (x.dg_943a == 6) {
-                const MissileEntry m = x.dg_943c >= 0 && x.dg_943c < static_cast<int>(c.missiles.size())
-                                           ? c.missiles[static_cast<std::size_t>(x.dg_943c)]
-                                           : MissileEntry{};
+                const MissileSlot& m = x.w.pools.missile(x.dg_943c);  // DGROUP:0x66e0 (records.h)
                 e.killer_pool = m.launcher_pool;
                 e.killer_rec = m.launcher_rec;
             }
@@ -226,9 +224,10 @@ std::int16_t rock_damage(CollideCtx& x, int pool, int rec, std::int16_t d) {
     World& w = x.w;
     WaveGlobals& g = x.g;
     const CollideGlobals& c = x.c;
-    // The guard on the last collision's B party (s1-hit-verify.md 25, CORRECTED) [BYTES
-    // seg7:0x509f-0x50b0]
-    const std::int16_t in_use = c.b_pool >= 0 && c.b_pool < kPoolCount ? w.pools.in_use(c.b_pool) : 0;
+    // The guard on the last collision's B party (s1-hit-verify.md 25, CORRECTED): the word
+    // DGROUP:0x9406 + 2·B pool, for a gun hit (B = (30, j)) the collision word eA DGROUP:0x9442
+    // (s2-gun.md 6.1, claim 58) [BYTES seg7:0x509f-0x50b0]
+    const std::int16_t in_use = in_use_word(x, c.b_pool);
     if (in_use < c.b_rec) return 0;
     const int rocks = g.rock_pool;
     if (pool != rocks || d <= 1) {  // [BYTES seg7:0x50b3-0x50c1 seg7:0x563d-0x5652]
@@ -317,6 +316,152 @@ std::int16_t rock_damage(CollideCtx& x, int pool, int rec, std::int16_t d) {
         }
     }
     return 1;  // [BYTES seg7:0x51b7]
+}
+
+// ---- seg7:0x233c, seg7:0x26c4, seg7:0x2768 (M4 s2 GUN)
+
+namespace {
+IconRecord g_scratch_icon{};
+IconRecord& icon_at(World& w, int rec) {
+    if (rec < 0 || rec >= kIconRecords) return g_scratch_icon = IconRecord{};
+    return w.icons[static_cast<std::size_t>(rec)];
+}
+}  // namespace
+
+std::int16_t icon_damage(CollideCtx& x, int pool, int rec, std::int16_t d) {
+    (void)pool;  // the routine reads pool 0 (DGROUP:0x1df8) [BYTES seg7:0x2360]
+    World& w = x.w;
+    const IconRecord& ic = icon_at(w, rec);
+    ObjectRecord& O = obj(w, 0, rec);
+    const auto heat = [&]() { return static_cast<std::int8_t>(O.flame); };
+    // [BYTES seg7:0x234b-0x2372]
+    if (ic.w00 == 0 && heat() != -100 && heat() != -2) {
+        std::int16_t v = add16(mul16(d, 3), O.damage);  // [BYTES seg7:0x2375-0x2386]
+        if (v > 0xd3) v = 0xd3;
+        O.damage = v;
+        w.dir().set_word(0x1d2 + 2 * static_cast<std::size_t>(rec), O.damage);  // [BYTES seg7:0x2390-0x23a5]
+        std::int16_t gap = O.gap, side = O.size;  // [bp-6], [bp-4] [BYTES seg7:0x23b0-0x23bb]
+        if (O.damage > 0 && heat() >= 0) {        // [BYTES seg7:0x23be-0x23ca]
+            CrackPlan p;
+            p.rec = rec;
+            p.scaled = d != 0;  // seg10:0x6308(-1, -1, bitmap) [BYTES seg7:0x23f7]
+            if (d == 0) gap = 6, side = 0x20;  // [BYTES seg7:0x2404]
+            p.gap = gap;
+            p.side = side;
+            p.frame = idiv16(O.damage, 0x46);  // [BYTES seg7:0x2420-0x242a]
+            p.dest_x = add16(mul16(add16(gap, side), static_cast<std::int16_t>(rec)), gap);  // [BYTES seg7:0x2433-0x243c]
+            p.dest_y = gap;
+            p.src_merge_x = mul16(add16(p.frame, 3), side);  // [BYTES seg7:0x244e-0x2455]
+            p.src_and_x = mul16(p.frame, side);              // [BYTES seg7:0x2479-0x247c]
+            x.h.icon_crack(p);
+            if (d != 0 && ic.w02 == 0) x.h.sound(0x12, 0, rec, 1);  // [BYTES seg7:0x24a6-0x24c0]
+        }
+        // [BYTES seg7:0x24c8-0x24f8]
+        if (d != 0 && (O.damage > 0xd0 || heat() < 0)) {
+            icon_shatter(x, rec);
+            return 1;
+        }
+    }
+    x.h.column_row(0, rec);  // seg7:0x65aa(0, rec) [BYTES seg7:0x24fa-0x2506]
+    return 0;
+}
+
+void icon_shatter(CollideCtx& x, int rec) {
+    World& w = x.w;
+    {
+        ObjectRecord& O = obj(w, 0, rec);
+        O.damage = -1;  // [BYTES seg7:0x26d8]
+        w.dir().set_word(0x1d2 + 2 * static_cast<std::size_t>(rec), O.damage);  // [BYTES seg7:0x26e5-0x26f7]
+    }
+    x.h.sound(0x1f, 0, rec, 1);  // [BYTES seg7:0x26fc-0x2705]
+    icon_fragments(x, rec);      // [BYTES seg7:0x2711]
+    obj(w, 0, rec).state = 1;    // [BYTES seg7:0x2719]
+    x.h.column_row(0, rec);      // seg7:0x65aa(0, rec) [BYTES seg7:0x2725]
+    const ObjectRecord& O = obj(w, 0, rec);
+    const std::int16_t side = sprite_side(0x20, x.g.size & 0x1f);  // [BYTES seg7:0x273c-0x2745]
+    x.h.erase(O.scr_x, O.scr_y, side, side);  // PatBlt BLACKNESS [BYTES seg7:0x274d]
+    x.h.icon_gone(rec, 0);                    // seg7:0x5ae8(rec, 0) [BYTES seg7:0x2758]
+}
+
+void icon_fragments(CollideCtx& x, int rec) {
+    World& w = x.w;
+    const int sz = x.g.size & 0x1f;
+    const std::int16_t piece = sprite_side(0x14, sz);  // [bp-0xa] local_c
+    const std::int16_t gap = sprite_side(6, sz);       // local_12 = local_e
+    const std::int16_t cell = sprite_side(0x20, sz);   // local_10
+    icon_at(w, rec).w19 = 1;  // DGROUP:0x57c1 + 0x23·rec [BYTES seg7:0x2799]
+    std::array<int, 4> r4{};
+    for (int k = 0; k < 4; ++k) {
+        int r = 0;
+        bool found = false;
+        // The first pool-1 record of `state` != 0 is reused [BYTES seg7:0x27b1-0x2840]
+        for (; r < w.pools.allocated(1); ++r) {
+            ObjectRecord& f = obj(w, 1, r);
+            if (f.state != 0) {
+                f.state = 0;
+                f.damage = 0;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            // Appended: the allocated count r + 1, GlobalReAlloc(GMEM 0x42), the fields of
+            // s2-gun-verify.md 60 [BYTES seg7:0x2842-0x2938]
+            w.pools.grow_to(1, static_cast<std::int16_t>(r));
+            ObjectRecord& f = obj(w, 1, r);
+            f.size = piece;
+            f.extent = 0xa0;
+            f.gap = gap;
+            f.mass = 0x3c;
+            f.hit_sound = 0x12;
+            f.radar_color.set(0x00808000);
+            f.max_damage = 0xe;
+            f.state = 1;
+            f.on_destroy.set(kDestroyPickup);   // seg7:0x2e02
+            f.radar_draw.set(kRadarSmall);      // seg11:0x3914
+            f.on_damage.set(kDamageGeneric);    // seg7:0x2652
+            f.b53 = 0;
+            f.damage = 0;
+            f.state = 0;
+            f.owner_pool = -1;
+            f.src_y = f.gap;
+            f.b2e = 0;
+        }
+        // The bitmap DGROUP:0x4e94 + 2r and the maps [BYTES seg7:0x29ce-0x2a20 seg7:0x2c84-0x2cb4]
+        x.h.fragment_bitmap(r, add16(add16(gap, gap), piece));
+        if (r >= 0 && r < static_cast<int>(w.fragment_icon.size()))
+            w.fragment_icon[static_cast<std::size_t>(r)] = static_cast<std::int16_t>(rec);  // DGROUP:0x6038
+        if (rec >= 0 && rec < kIconRecords)  // DGROUP:0x57c3 + 0x23·rec + k
+            w.icons[static_cast<std::size_t>(rec)].fragment[static_cast<std::size_t>(k)] = static_cast<std::uint8_t>(r);
+        r4[static_cast<std::size_t>(k)] = r;
+        if (w.pools.in_use(1) <= r) w.pools.set_in_use(1, static_cast<std::int16_t>(r + 1));  // [BYTES seg7:0x2cb6]
+    }
+    // The pictures [BYTES seg7:0x2a20-0x2c82]
+    FragmentPlan p;
+    p.icon = rec;
+    p.rec = r4;
+    p.side = add16(add16(gap, gap), piece);
+    p.piece_at = gap;
+    p.piece = piece;
+    p.quad_at = add16(sprite_side(2, sz), gap);
+    p.quad = sub16(piece, sprite_side(4, sz));
+    const std::int16_t base = mul16(add16(gap, cell), static_cast<std::int16_t>(rec));
+    const std::int16_t three = sprite_side(3, sz);
+    p.src_x = {add16(add16(base, three), gap), add16(add16(base, idiv16(cell, 2)), gap),
+               add16(add16(base, three), gap), add16(add16(base, gap), piece)};
+    p.src_y = {add16(three, gap), add16(three, gap), add16(gap, piece), add16(gap, piece)};
+    x.h.fragment_pictures(p);
+    // Positions and velocities [BYTES seg7:0x2cc0-0x2df4]
+    static constexpr std::int16_t kDx[4] = {0, 176, 0, 176}, kDy[4] = {0, 0, 176, 176};
+    static constexpr std::int16_t kVx[4] = {-10, 20, -10, 10}, kVy[4] = {-10, -10, 20, 10};
+    for (int k = 0; k < 4; ++k) {
+        const ObjectRecord I = obj(w, 0, rec);
+        ObjectRecord& f = obj(w, 1, r4[static_cast<std::size_t>(k)]);
+        f.x = add16(I.x, kDx[k]);
+        f.y = add16(I.y, kDy[k]);
+        f.vx = add16(I.vx, kVx[k]);
+        f.vy = add16(I.vy, kVy[k]);
+    }
 }
 
 // ---- seg11:0x1d7c

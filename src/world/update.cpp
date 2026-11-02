@@ -4,6 +4,8 @@
 #include "world/rock_images.h"
 
 #include "world/damage.h"
+#include "world/icon_mover.h"
+#include "world/missile.h"
 
 namespace is::world {
 
@@ -86,6 +88,57 @@ void UpdateHost::Forward::erase(int x, int y, int w, int h) {
     if (Blitter* out = u->blitter()) out->pat_blt(kDcWindow, x, y, w, h, kBlackness);
 }
 
+void UpdateHost::CaptureForward::erase(int x, int y, int w, int h) {
+    if (Blitter* out = u->blitter()) out->pat_blt(kDcWindow, x, y, w, h, kBlackness);
+}
+
+void UpdateHost::set_design_word_22(int design, std::int16_t v) {
+    if (!frame_ctx) return;
+    World* w = frame_world(frame_ctx->flight.pools);
+    if (!w || design < 0 || design >= kShipCount) return;
+    w->design_ratings[static_cast<std::size_t>(design)].captures = v;
+}
+
+CollideCtx frame_collide_ctx(UpdateCtx& c, World& w) { return collide_ctx(c.host, c, w); }
+
+// ---- the gun and the shots (shots.h) (M4 s2 fixer)
+
+void UpdateHost::fire(int ship) {
+    with_shots([ship](ShotCtx& sc) { ::is::world::fire(sc, ship); });  // seg11:0x4e0a(ship)
+}
+
+std::int16_t UpdateHost::beam(int i, int j) {
+    std::int16_t r = 0;
+    with_shots([&](ShotCtx& sc) { r = shot_update(sc, i, j); });  // seg8:0x3aec(j, i)
+    return r;
+}
+
+void UpdateHost::ShotForward::seg13_4eec(int ship, int arg) {
+    if (!u->frame_ctx) return;
+    if (World* w = u->frame_world(u->frame_ctx->flight.pools))
+        bump_w82(ship_at(*w, ship), static_cast<std::int16_t>(arg));  // capture.h seg13:0x4eec
+}
+
+void UpdateHost::ShotForward::thrust_step(int mode, int ship) {
+    if (u->frame_ctx) ::is::world::thrust_step(u->frame_ctx->flight, static_cast<std::int16_t>(mode), ship);
+}
+
+// SelectObject(DGROUP:0x13dc, DGROUP:0x3b4c[n]): WaveGraphics::star holds the 20 brushes of
+// seg10:0x4dfe; an index past them (ship byte +0xe3 >= 2) reaches DGROUP:0x3b74, the heat
+// brushes, in the original [OPEN] and selects nothing here [DESIGN].
+void UpdateHost::ShotForward::select_brush(int n) {
+    Blitter* out = u->blitter();
+    if (!out) return;
+    WaveGraphics& wg = wave_graphics();
+    create_wave_brushes(*out, wg);
+    if (n >= 0 && n < static_cast<int>(wg.star.size())) out->select_brush(kDcWindow, wg.star[static_cast<std::size_t>(n)]);
+}
+
+void UpdateHost::ShotForward::patblt(std::int16_t x, std::int16_t y, std::int16_t w, std::int16_t h,
+                                     std::uint32_t rop) {
+    if (Blitter* out = u->blitter()) out->pat_blt(kDcWindow, x, y, w, h, rop);
+}
+
 std::uint16_t UpdateHost::collide(std::int16_t pool_rec) {
     if (!frame_ctx) return 0xffffu;
     World* w = frame_world(frame_ctx->flight.pools);
@@ -127,18 +180,50 @@ void UpdateHost::ship_collide(int i) {
     UpdateCtx& c = *frame_ctx;
     const int ships = c.flight.g.ship_pool;
     ObjectRecord& o = obj(*w, ships, i);
-    if (o.on_screen == 0) return;  // [BYTES seg13:0xb69]
+    // The object's word +0x1a = 0 jumps to seg13:0xcf9 past the hit test and the weapon tail
+    // alike (verified claim 10: the ship's object in pool DGROUP:0x9324, not the ship record)
+    // [BYTES seg13:0xb69 seg13:0xb6e].
+    if (o.on_screen == 0) return;
     c.f.dg_943c = static_cast<std::int16_t>(i);  // [BYTES seg13:0xb75 seg13:0xb7d]
     c.f.dg_943a = static_cast<std::int16_t>(ships);
     const std::uint16_t hit = collide(pool_rec(ships, i));  // [BYTES seg13:0xb8a]
-    if (hit == 0xffffu) return;                              // to seg13:0xc95 [OPEN]
-    CollideCtx x = collide_ctx(*this, c, *w);
-    ObjectRecord& s = obj(*w, ships, i);
-    // [BYTES seg13:0xb97-0xbd1] (s1-hit.md claim 37, unchecked) [OPEN]
-    const std::int16_t amount = respond(x, s.mass, add16(s.extent, 2), &s.vy, &s.vx, hit);
-    // The touch branches seg13:0xbee-0xc77 are M4 stage 2 [OPEN]; the dispatch
-    // [BYTES seg13:0xc79-0xc92]
-    dispatch(x, ships, i, hit >> 8, hit & 0xff, amount);
+    if (hit != 0xffffu) {                                    // else to seg13:0xc95 [BYTES seg13:0xb93]
+        CollideCtx x = collide_ctx(*this, c, *w);
+        ObjectRecord& s = obj(*w, ships, i);
+        // The response on every hit, before the touch branches (verified claim 5): a touch still
+        // bounces [BYTES seg13:0xb97-0xbd1] (s1-hit.md claim 37, unchecked) [OPEN].
+        const std::int16_t amount = respond(x, s.mass, add16(s.extent, 2), &s.vy, &s.vx, hit);
+        const int hp = hit >> 8, hr = hit & 0xff;
+        ObjectRecord& H = obj(*w, hp, hr);
+        ShipRecord& S = ship_at(*w, i);
+        CaptureCtx cc{x, c.flight, capture_host()};
+        // The missile entry's weapon DGROUP:0x66e4 + 0x1c·rec (records.h Pools::missile) and the
+        // ship's selected weapon byte +0xb8 + slot [BYTES seg13:0xc12-0xc5b].
+        auto weapon_of = [](const World& wr, int rec) -> int { return wr.pools.missile(rec).weapon; };
+        const int sel = selected_weapon(S);
+        if (H.b53 != 0 && S.bea == 0) {
+            // [BYTES seg13:0xbee-0xc0e]. In a normal wave this site meets only ships (pool >= 14);
+            // whether a ship's object byte +0x53 is ever not 0 is [OPEN] (s2-capture.md 1a).
+            touch(cc, i, static_cast<std::int16_t>(hit));
+        } else if (hp == 6 && x.h.weapon_kind(weapon_of(*w, hr)) == 6 && x.h.weapon_kind(sel) == 6) {
+            // [BYTES seg13:0xc12-0xc77]: dead code in a normal wave (the pair finder hands a
+            // pool-6 pair to the pool-6 mover, seg12:0x3ad-0x40b, its live copy). +0x53 = 1 before
+            // the call (verified claim 6), and the count byte +0xae + slot (the slot re-read)
+            // rises whatever the touch did, an early exit included.
+            H.b53 = 1;
+            touch(cc, i, static_cast<std::int16_t>(hit));
+            const int s2 = ship_at(*w, i).weapon_slot;
+            if (s2 >= 0 && s2 < 10) ++ship_at(*w, i).weapon_count[static_cast<std::size_t>(s2)];
+        } else {
+            dispatch(x, ships, i, hp, hr, amount);  // [BYTES seg13:0xc79-0xc92]
+        }
+    }
+    // The weapon tail seg13:0xc95-0xcf6, hit or not (verified claims 7-9) [BYTES seg13:0xc9e].
+    const int wsel = selected_weapon(ship_at(*w, i));
+    if (wsel == 0x18 || wsel == 0x1a) seg18_551a(ships, i);  // [BYTES seg13:0xca6-0xcb7]
+    if ((wsel == 0x1a || wsel == 0x19) && (c.flight.g.game_frames & 7u) == 0 &&
+        (c.flight.keys.test(0x0d, kMaskDown) || c.flight.keys.test(0x5a, kMaskDown)))
+        seg18_59ec(ships, i);  // no test that i is the player [BYTES seg13:0xcbf-0xcf1]
 }
 
 namespace {
@@ -184,6 +269,7 @@ void frame_lines(UpdateCtx& c) {
 
 // seg7:0x7fe-0x993 [BYTES seg7:0x7fe-0x998]
 void wave_pass(UpdateCtx& c, bool max_rate) {
+    FrameScope scope(c.host, c);
     WaveGlobals& g = c.flight.g;
     FrameGlobals& f = c.f;
     UpdateHost& h = c.host;
@@ -199,17 +285,12 @@ void wave_pass(UpdateCtx& c, bool max_rate) {
     h.select_clip();  // seg7:0x84a
     // 2. Pending input (seg7:0x863): the port's GameState::pass routes it before this pass and
     // ends the pass when it does (shell/game_state.cpp) [DESIGN ADR 0001].
-    // 3. Fire poll on the player in play [BYTES seg7:0x871-0x881 seg11:0x4dba-0x4e00].
+    // 3. The fire poll seg11:0x4db0 on the player in play (input.h fire_poll), then the gun
+    // seg11:0x4e0a(player) [BYTES seg7:0x871-0x881 seg11:0x4dba-0x4e00].
     ObjectRecord& player = c.flight.ship_obj(g.player);
-    if (player.state == 0 && g.play_mode == 0) {
-        const ShipRecord& s = c.flight.ships[static_cast<std::size_t>(g.player)];
-        if (s.lockout.get() < g.now) {
-            // Shift, then Space only when Shift is up; 0x8001 for 0x8000 [DESIGN ADR 0013 decision 6].
-            if (c.flight.keys.test(kVkShift, kFireMask) || c.flight.keys.test(kVkSpace, kFireMask) ||
-                g.joy_fire != 0)
-                h.fire(g.player);
-        }
-    }
+    if (player.state == 0 &&
+        fire_poll(g, c.flight.keys, c.flight.ships[static_cast<std::size_t>(g.player)].lockout.get()))
+        h.fire(g.player);
     // [BYTES seg7:0x886-0x8d0] [OPEN]
     if (f.dg_1048 != 0) {
         if (!(g.now < f.dg_1e6c) && f.dg_92f0 != 0) {
@@ -227,11 +308,17 @@ void wave_pass(UpdateCtx& c, bool max_rate) {
             h.seg7_2128();
         }
     }
-    // 4. Beam slots: 5 x (DGROUP:0x594 + DGROUP:0x598) calls [BYTES seg7:0x938-0x970].
-    f.beam_result = 0;
-    for (int i = 0; i < 5; ++i) {
-        for (int j = 0; add16(f.beam_b, f.beam_a) > j; ++j) f.beam_result = h.beam(i, j);
-        ++f.beam_passes;
+    // 4. The shot slots: five sub-steps of every slot j < DGROUP:0x598 + DGROUP:0x594, the
+    // bound re-read each time (shots.h run_shots, here through the host's seg8:0x3aec) [BYTES
+    // seg7:0x938-0x970]; the original's DGROUP:0x9144 / frame-skip gate is the one pass per frame
+    // [DESIGN ADR 0001].
+    {
+        ShotState& ss = h.shots();
+        ss.dg_9136 = 0;
+        for (int i = 0; i < 5; ++i) {
+            for (int j = 0; add16(ss.dg_598, ss.dg_594) > j; ++j) ss.dg_9136 = h.beam(i, j);
+            ++ss.dg_5cc;
+        }
     }
     // 5. Effects and the particle burst [BYTES seg7:0x972-0x993]. DGROUP:0x9430 is tested once;
     // the loop bound DGROUP:0x9434 is read again on every iteration (`mov ax,[0x9434]` inside the
@@ -341,10 +428,16 @@ void wave_frame(UpdateCtx& c) {
     else
         h.mover(Mover::k12_633e);
     h.mover(Mover::k8_8256);
-    h.mover(Mover::k7_309c);
+    if (World* w = h.frame_world(c.flight.pools))  // seg7:0x309c (M4 s2 CAPTURE)
+        move_icons(c, *w);
+    else
+        h.mover(Mover::k7_309c);
     h.mover(Mover::k7_32d0);
     h.mover(Mover::k7_40c4);
-    h.mover(Mover::k12_0);
+    if (World* w = h.frame_world(c.flight.pools))  // seg12:0x0, the pool-6 mover (missile.h) (M4 s2 fixer)
+        move_missiles(*w, c);
+    else
+        h.mover(Mover::k12_0);
     h.mover(Mover::k6_73f6);
     h.mover(Mover::k6_7c14);
     if (World* w = h.frame_world(c.flight.pools); w && w->w9456 > 0) h.mover(Mover::k7_5e04);

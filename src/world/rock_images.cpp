@@ -1,6 +1,8 @@
 // seg10:0x3a2e, the rock images (rock_images.h). (M3 s2 fixer)
 #include "world/rock_images.h"
 
+#include "world/shots.h"
+
 #include "world/effects.h"
 
 namespace is::world {
@@ -156,9 +158,51 @@ void create_wave_brushes(Blitter& out, WaveGraphics& wg) {
     wg.brushes = true;
     for (std::size_t n = 1; n < kHeatColours.size(); ++n) wg.heat[n] = out.create_solid_brush(kHeatColours[n]);
     for (std::size_t n = 1; n < kBeamColours.size(); ++n) wg.beam[n] = out.create_solid_brush(kBeamColours[n]);
-    for (std::size_t n = 10; n < kStarColours.size(); ++n) wg.star[n] = out.create_solid_brush(kStarColours[n]);
+    // seg10:0x4dfe's 20 brushes DGROUP:0x3b4c [BYTES seg10:0x4f52-0x5060]; 10 ... 14 are the
+    // stars' kStarColours.
+    for (std::size_t n = 0; n < kShotBrushes.size(); ++n) wg.star[n] = out.create_solid_brush(kShotBrushes[n]);
     wg.mask = out.create_pattern_brush(kMaskRows);        // [BYTES seg10:0xe4 seg10:0xf2]
     wg.checker = out.create_pattern_brush(kCheckerRows);  // [BYTES seg10:0x10a]
+}
+
+void refresh_shot_brushes(Blitter& out) {
+    WaveGraphics& wg = wave_graphics();
+    create_wave_brushes(out, wg);
+    for (std::size_t n = 0; n < kShotBrushes.size(); ++n) wg.star[n] = out.create_solid_brush(kShotBrushes[n]);
+}
+
+// ---- seg10:0x533a (M4 s2 MISSILE)
+
+WeaponSlotChoice weapon_image_slot(WeaponWords& words, const ImageSlotTable& images, Pools& pools,
+                                   int w) {
+    WeaponSlotChoice r;
+    if (w == 0x1b || w == 0x16) return r;  // [BYTES seg10:0x5348-0x5354]
+    const std::int16_t graphic = words.word(w, -2);
+    // The reuse scan over the occupied slots [BYTES seg10:0x5357-0x538d seg10:0x5390-0x53aa]
+    for (int k = kSlotWeaponFirst; k < kSlotWeaponEnd; ++k) {
+        if (images[static_cast<std::size_t>(k)] == 0) continue;
+        for (int j = 0; j <= 0x1b; ++j) {
+            if (words.word(j, 0x0a) == 0) continue;     // DGROUP:0x2f5e + 0x50 j
+            if (words.word(j, -4) != k) continue;       // DGROUP:0x2f50 + 0x50 j
+            if (words.word(j, -2) != graphic) continue; // DGROUP:0x2f52 + 0x50 j
+            words.set_word(w, -4, static_cast<std::int16_t>(k));  // [BYTES seg10:0x5389]
+            r.slot = k;
+            return r;
+        }
+    }
+    // The first empty slot [BYTES seg10:0x53ac seg10:0x5411-0x5445]
+    for (int k = kSlotWeaponFirst; k < kSlotWeaponEnd; ++k) {
+        if (images[static_cast<std::size_t>(k)] != 0) continue;
+        words.set_word(w, -4, static_cast<std::int16_t>(k));  // [BYTES seg10:0x542d]
+        if (pools.records(6) > 0) {
+            pools.rec(6, 0).size = words.word(w, -8);  // [BYTES seg10:0x5431-0x5439]
+            pools.rec(6, 0).gap = words.word(w, -6);   // [BYTES seg10:0x543d-0x5445]
+        }
+        r.slot = k;
+        r.load = true;
+        return r;
+    }
+    return r;  // no free slot [BYTES seg10:0x5418]
 }
 
 }  // namespace is::world

@@ -45,7 +45,7 @@ public:
     // seg2:0x170e, the menu items' state [BYTES seg7:0x19fa].
     virtual void menu_refresh() {}
     // Word +0x1e of the weapon table DGROUP:0x2f54 + 0x50·weapon (DGROUP:0x2f72) [BYTES
-    // seg7:0x1988] [OPEN: the weapon table is structs.md's, not in the port].
+    // seg7:0x1988]; the program reads collide.h weapon_word.
     virtual std::int16_t weapon_word_1e(int weapon) { return (void)weapon, 0; }
     // LoadString for seg10:0xa332(DGROUP:0x8630, 1422, 1) (no directive in 1422).
     virtual std::string lang(int id) { return (void)id, std::string(); }

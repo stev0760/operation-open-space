@@ -107,7 +107,7 @@ Field names come from behaviour. A field whose meaning is unknown is marked [OPE
 | +0x51 | byte | `race_status` | in pool 14, race code writes 2 to a ship's byte and sets every 0 byte to 1, and the race placing routine runs only while the player's byte is 0 [BYTES seg4:0x26b7 seg4:0x273e seg4:0x2744 seg4:0x8b99]. In pool 0 a capture needs the byte to be 0 and sets 11, and the icon dissolve seg7:0x3a42 counts it down to 0 [BYTES seg13:0x1822 seg13:0x184a seg7:0x3a42]. A pool-4 pickup sets 10 [BYTES seg13:0x1cc3 seg13:0x1ce8]. The icon count seg7:0x5a46 counts only icons whose byte is 0 [BYTES seg7:0x5a46]. The values' meanings in pool 14 are [OPEN] | seg4:0x26b7, seg4:0x2744, seg13:0x184a, seg13:0x1ce8 | seg4:0x8b99, seg7:0x3a42, seg13:0x1822 |
 | +0x53 | byte | `capturable` | not 0 for an object a ship can touch: seg10:0xb94 sets 1 for icons and 0 for rocks [BYTES seg10:0xc2b seg10:0xec2]. 2 marks a virused icon [BYTES seg13:0x18d7]. The ship mover hands a hit object whose byte is not 0 to the touch routine seg13:0x16ac instead of the hit dispatcher while ship byte +0xea is 0, and seg13:0x16ac returns at once when the byte is 0 [BYTES seg13:0xbee seg13:0xbfa seg13:0xc08 seg13:0x16d7]. In the collision response a capturing ship passes through an object whose byte is not 0 and whose heat +0x2f is not negative [BYTES seg8:0x56dd seg8:0x5727]. A pool-6 missile of kind 6 gets 1 when a ship of that weapon kind touches it, and a launch of weapon 16 sets 1 [BYTES seg13:0xc11 seg13:0xc77 seg11:0x7c12] | seg10:0xc2b, seg10:0xec2, seg13:0xc11 | seg13:0xbee, seg13:0x16d7, seg8:0x56dd |
 | +0x54 | byte | `fixed` | not 0 for an object that collisions do not move. Two such objects never collide, one of them is party A of a collision, it counts as mass 20000 in the response, its velocity is set to 0 and its position is not moved ([core.md](core.md#response-seg80x546c)) [BYTES seg8:0x6b3b seg8:0x6b4d seg8:0x6d3d seg8:0x6d57 seg8:0x56d0 seg8:0x56d7 seg8:0x69dc seg8:0x5853]. Gate posts hold 1 [BYTES seg9:0x10d4]. Kill scoring adds a second bonus for a pool-8 record whose byte is not 0 [BYTES seg8:0x7c6d]. The integrator leaves a pool-14 record whose byte is not 0 in place while DGROUP:0x92e8 ≠ 0 and DGROUP:0x9e49 = 10 [BYTES seg8:0x1b72 seg8:0x1b7e seg8:0x1b84 seg8:0x1b8b]. seg11:0x9daa sets the player's to 1 in a DGROUP:0x92e8 wave with one ship, and seg12:0x2288 clears it there when ship 1 leaves [BYTES seg11:0x9ed4 seg11:0x9ef5 seg12:0x2288] | seg10:0x10f3, seg11:0x9ef5 | seg8:0x6b3b, seg8:0x56d0, seg8:0x7c6d, seg8:0x1b7e |
-| +0x55 | 9 bytes | — | one byte per shot slot j ([Shot slots](#shot-slots-9--0x94-bytes-at-dgroup0x6098)). A gun shot from slot j clears byte +0x55 + j of every in-use record of pools DGROUP:0x9326 … DGROUP:0x9324, and the slot's hit test seg8:0x6f3c skips a record whose byte is 2 or more unless slot word +0x82 ≠ 0 or DGROUP:0x9130 ≠ 0 [BYTES seg11:0x52a5 seg11:0x52b0 seg11:0x52c8 seg8:0x6f3c] | seg11:0x52c8 | seg8:0x6f3c |
+| +0x55 | 9 bytes | — | one near-miss byte per shot slot j ([Shot slots](#shot-slots-9--0x94-bytes-at-dgroup0x6098)). A gun shot from slot j clears byte +0x55 + j of every in-use record of pools DGROUP:0x9326 … DGROUP:0x9324. The slot's hit test seg8:0x6f3c skips a record whose signed byte is above 1, lowering it by 1, unless slot word +0x82 ≠ 0 or DGROUP:0x9130 ≠ 0, and a miss sets it to 0 near the shot or to an estimate of the passes until the shot can come close ([core.md](core.md#shot-hit-test-seg80x3688-and-seg80x6f3c), Near miss) [BYTES seg11:0x52a5 seg11:0x52b0 seg11:0x52c8 seg8:0x6f7d seg8:0x6f9c seg8:0x7131 seg8:0x714a] | seg11:0x52c8, seg8:0x6f9c, seg8:0x7131, seg8:0x714a | seg8:0x6f7d |
 | +0x5e | far ptr | `on_damage` | damage handler, called cdecl as (pool, record, amount). It returns non-zero when the object is destroyed [BYTES seg8:0x6465 seg8:0x647c seg8:0x6480 seg8:0x6483] | seg10:0x10da, seg14:0x2158 | seg8:0x647c |
 | +0x62 | far ptr | `radar_draw` | radar callback, Pascal (pool, record, hDC); it pops its arguments with `retf 6`. seg11:0x375f calls it with the hDC in DGROUP:0x93ce [BYTES seg11:0x374a seg11:0x374e seg11:0x375f seg11:0x39d5 seg11:0x3911] | seg10:0x10ca, seg10:0x1183, seg14:0x2141 | seg11:0x375f |
 | +0x66 | far ptr | `on_destroy` | destroy handler, called cdecl as (pool, record) [BYTES seg7:0x26ad seg7:0x26b1 seg7:0x26b5] | seg10:0x1173, seg14:0x212a | seg7:0x26b1 |
@@ -249,60 +249,68 @@ Entry e lies at DGROUP:0x1e90 + 0x14e; the [effect frame](world.md#effect-frame-
   | Offset | Address for w = 0 | Meaning | Evidence |
   |---|---|---|---|
   | −8 | DGROUP:0x2f4c | cell side: a launched record's `extent` is word << 3; the weapon picture is 2 × word square, or 4/3 × word for name ids 0xc3, 0xc4 and 0xc6 | [BYTES seg11:0x7c12 seg11:0x2ff6 seg11:0x30d0] |
-  | −4 | DGROUP:0x2f50 | image slot 0x30 … 0x38, assigned by seg10:0x533a; the missile and the picture draw from DC DGROUP:0x39e8 + 2·slot | [BYTES seg10:0x5375 seg10:0x5389 seg10:0x542d seg12:0x307] |
-  | −2 | DGROUP:0x2f52 | graphic id, −1 for none: seg12:0x0 then draws no missile, and seg11:0x7c12 draws one rand() | [BYTES seg12:0x2f9 seg11:0x8087 seg11:0x80c5] |
+  | −6 | DGROUP:0x2f4e | raw gap: seg10:0x533a copies it into pool-6 record 0's `gap` for the sheet render; the launch and the picture use their own gap rule | [BYTES seg10:0x5439 seg10:0x5445 seg11:0x3232 seg11:0x3239] |
+  | −4 | DGROUP:0x2f50 | image slot 0x30 … 0x38, assigned by seg10:0x533a, the only run-time write into the table; −1 until then. The missile and the picture draw from DC DGROUP:0x39e8 + 2·slot | [BYTES seg10:0x5375 seg10:0x5389 seg10:0x542d seg10:0x5560 seg12:0x307] |
+  | −2 | DGROUP:0x2f52 | graphic id of the sheet, −1 for none: seg12:0x0 then draws no missile and only sets its screen position, seg11:0x7c12 draws one rand(), and seg11:0x2ff6 shows the plain graphic | [BYTES seg12:0x27d seg12:0x284-0x2ab seg11:0x8087 seg11:0x80c5 seg11:0x3019] |
   | +0x00 | DGROUP:0x2f54 | name id 186 + w | [BYTES seg10:0x1fb2 seg11:0x238e] |
-  | +0x04 | DGROUP:0x2f58 | launch direction: 1 front, 2 rear | [BYTES seg11:0x7c12] |
-  | +0x06 | DGROUP:0x2f5a | animation; 4 and 5 change the picture's source cell | [BYTES seg11:0x2ff6 seg11:0x32e5 seg12:0x0] |
+  | +0x02 | DGROUP:0x2f56 | the plain picture's graphic id, loaded by seg11:0x2ff6 for a weapon with kind 0 or no sheet | [BYTES seg11:0x302e seg11:0x3032] |
+  | +0x04 | DGROUP:0x2f58 | launch direction: 1 front, 2 rear | [BYTES seg11:0x86c3 seg11:0x880e] |
+  | +0x06 | DGROUP:0x2f5a | animation: the pool-6 mover runs seg12:0x17 for 1, seg12:0x2b1 for 4 and seg12:0x2e8 for 5, and the steer turns `frame` for 2; 4 and 5 change the picture's source cell, and 4 picks seg10:0x4412 for the sheet | [BYTES seg12:0x55c seg12:0x567 seg12:0x574 seg12:0x579 seg12:0x8f3 seg11:0x325a seg11:0x327e seg10:0x5449] |
   | +0x08 | DGROUP:0x2f5c | `max_damage` of a launched record | [BYTES seg11:0x7c12] |
   | +0x0a | DGROUP:0x2f5e | launch kind: not 0 makes seg11:0xac86 launch through seg11:0x7c12. Kinds 1 and 5 never retarget, kind 2 targets through seg3:0xf4, kind 5 picks its own target and kind 4 weights ships differently in the target search | [BYTES seg11:0xad10 seg11:0xad21 seg12:0xe5 seg12:0x586 seg11:0x7c12] |
   | +0x0c | DGROUP:0x2f60 | steering thrust per step | [BYTES seg12:0x7c0] |
   | +0x0e | DGROUP:0x2f62 | speed limit passed to seg8:0x1cbe | [BYTES seg12:0x7c0] |
-  | +0x10 | DGROUP:0x2f64 | `mass` of a launched record | [BYTES seg11:0x7c12] |
+  | +0x10 | DGROUP:0x2f64 | `mass` of a launched record | [BYTES seg11:0x8015] |
+  | +0x14 | DGROUP:0x2f68 | the picture's overlay: 1 and 4 graphic 0xbf, 2 0xc4, 3 0xc5; 1 also leaves pool DGROUP:0x9328 out of the retarget | [BYTES seg11:0x307f seg11:0x308a seg11:0x3096 seg12:0x75d] |
   | +0x18 | DGROUP:0x2f6c | launch sound id, through seg10:0x7944 | [BYTES seg11:0x89fd] |
+  | +0x1a, +0x1c | DGROUP:0x2f6e, 0x2f70 | two words seg10:0x533a passes to the sheet render seg10:0x6ee6 | [BYTES seg10:0x53e3 seg10:0x53e8] |
   | +0x1e | DGROUP:0x2f72 | lifetime in frames | [BYTES seg12:0x0] |
   | +0x20 | DGROUP:0x2f74 | fuse distance; 0 for none | [BYTES seg12:0x7c0] |
   | +0x22 | DGROUP:0x2f76 | `blast_size` of a launched record | [BYTES seg11:0x7c12] |
   | +0x24 | DGROUP:0x2f78 | end kind: 1 explodes at the end of its lifetime; 4 and 6 get `on_destroy` seg7:0x2e02; a ship whose selected weapon is of kind 6 picks up a kind-6 missile it touches | [BYTES seg12:0x0 seg11:0x7c12 seg13:0xc11 seg13:0xc77] |
-  | +0x26 | DGROUP:0x2f7a | with animation 4, the picture's cell is word − 1 | [BYTES seg11:0x2ff6] |
+  | +0x26 | DGROUP:0x2f7a | with animation 4, the sheet's frame count for seg10:0x4412 and the picture's cell word − 1 | [BYTES seg10:0x5452 seg11:0x327e] |
   | +0x2e | DGROUP:0x2f82 | fuel cost per launch; 0 means the slot count is used instead | [BYTES seg11:0x7c12 seg13:0x136c] |
   | +0x34 | DGROUP:0x2f88 | the ambulance's price of the weapon | [BYTES seg16:0x5104 seg16:0x541c] |
   | +0x36 | DGROUP:0x2f8a | −1, or the weapon that replaces this one in the Standard edition ([shell.md](shell.md#intro-and-title-screen), **Plus content**); the ambulance lists a weapon whose word is −1 | [BYTES seg10:0x1fe8 seg16:0x5169] |
   | +0x38 | DGROUP:0x2f8c | not 0: seg12:0x0 calls seg4:0x5514 every 4 frames | [BYTES seg12:0x0] |
-  | +0x3a | DGROUP:0x2f8e | 0: an off-screen missile older than 20 frames ends | [BYTES seg12:0x0] |
+  | +0x3a | DGROUP:0x2f8e | 0: an off-screen missile older than 20 passes ends | [BYTES seg12:0x113 seg12:0x13c] |
   | +0x3c | DGROUP:0x2f90 | not 0: the missile looks for a target every 13 frames | [BYTES seg12:0xe5] |
   | +0x3e | DGROUP:0x2f92 | 0: the aim at a cloaked ship jitters | [BYTES seg12:0x896] |
   | +0x40 | DGROUP:0x2f94 | drag | [BYTES seg12:0x0] |
   | +0x42 | DGROUP:0x2f96 | not 0: a ship that touches the missile gains 20 fuel | [BYTES seg13:0x1e8d seg13:0x1edb] |
   | +0x46 | DGROUP:0x2f9a | 0: the player's use adds 3 to DGROUP:0x9432 | [BYTES seg11:0xacd1 seg11:0xacd8 seg11:0xacdf] |
 
-- Weapon 8 holds 23, 1, −1 and 0x172 at −8 … −2, 10 and 120 at +0x0c and +0x0e, 40 at +0x20 and 0x1c at +0x18. [BYTES seg10:0x22d8 seg10:0x22f0 seg10:0x22f3 seg10:0x2305 seg10:0x22ba seg10:0x22c0 seg10:0x22cc seg10:0x2308]
+- **Weapon 8**, RADAR-GUIDED MISSILES, holds 23, 1, −1 and 0x172 (370) at −8 … −2; name 194 at +0x00 and −1 at +0x02; 1 (front) at +0x04, 2 at +0x06, 1 at +0x08, kind 3 at +0x0a, 10 and 120 at +0x0c and +0x0e, 20 at +0x10, 0x1c at +0x18, 3 and 2 at +0x1a/+0x1c, lifetime 200 at +0x1e, fuse 40 at +0x20, 9 at +0x22, end kind 1 at +0x24, 0 at +0x2e, 1 at +0x3a and +0x3c, and 0 at +0x12, +0x14, +0x26, +0x38, +0x3e, +0x40 and +0x46. [BYTES seg10:0x22d8 seg10:0x22f0 seg10:0x22f3 seg10:0x2305 seg10:0x22f9 seg10:0x2302 seg10:0x22e1 seg10:0x231a seg10:0x22e4 seg10:0x2311 seg10:0x22ba seg10:0x22c0 seg10:0x2325 seg10:0x2308 seg10:0x2314 seg10:0x231e seg10:0x22c6 seg10:0x22cc seg10:0x22d2 seg10:0x22e7 seg10:0x2367 seg10:0x22ea seg10:0x22ed seg10:0x2347 seg10:0x234b seg10:0x235b seg10:0x2353 seg10:0x2357 seg10:0x235f seg10:0x236b]
 - The other offsets are [OPEN].
 
 ## Shot slots (9 × 0x94 bytes at DGROUP:0x6098)
-- The gun's shots live in DGROUP:0x594 + DGROUP:0x598 = 7 + 2 slots of 0x94 bytes. seg11:0x4e0a stores 7 in DGROUP:0x594, and the table ends at DGROUP:0x65cc, where the link table of seg11:0x947a starts. [BYTES seg11:0x4e19 seg12:0x3778 seg11:0x947a] seg8:0x3aec(i, j) updates slot j for i = 0 … 4 in each wave frame ([pitfalls.md](pitfalls.md)). [BYTES seg7:0x938 seg7:0x965 seg8:0x3aec]
+- The gun's shots live in DGROUP:0x594 + DGROUP:0x598 = 7 + 2 slots of 0x94 bytes. seg11:0x4e0a stores 7 in DGROUP:0x594, and the table ends at DGROUP:0x65cc, where the link table of seg11:0x947a starts. [BYTES seg11:0x4e19 seg12:0x3778 seg11:0x947a] seg8:0x3aec(j, i) updates slot j for i = 0 … 4 in each wave frame ([pitfalls.md](pitfalls.md)). [BYTES seg7:0x938 seg7:0x965 seg8:0x3aec]
+- The code indexes the slot as 0x4a words, [2][6] arrays included, and the fill's index 6 writes past them ([core.md](core.md#the-gun-seg110x4e0a), Trail). [BYTES seg11:0x511b seg11:0x5121 seg8:0x7ac seg8:0x7b3]
 
   | Offset | Size | Meaning | Evidence |
   |---|---|---|---|
-  | +0x00 + 0xc·a + 2k, +0x18 + 0xc·a + 2k | word | screen x and y of trail point k of barrel a; seg8:0x3aec moves the head by the owner's (vx, vy)·i / −50 | [BYTES seg8:0x3cf6 seg8:0x3d24] |
-  | +0x30, +0x3c | word | world x of barrel 0 and barrel 1 | [BYTES seg11:0x515f seg11:0x5168 seg11:0x516c] |
-  | +0x48, +0x54 | word | world y of barrel 0 and barrel 1 | [BYTES seg11:0x5170 seg11:0x5174 seg11:0x5178] |
-  | +0x68, +0x6a | word | convergence step of a two-barrel shot, 16 × (barrel 1 − barrel 0) / length, at least 1; every 16 frames barrel 0 gains (+0x68 >> 2, +0x6a >> 2) and barrel 1 loses it | [BYTES seg11:0x54a8 seg11:0x556e seg8:0x3aec] |
-  | +0x6c, +0x6e | word | 0x1c and 0x3e for a two-barrel shot; the reader is [OPEN] | [BYTES seg11:0x5572] |
+  | +0x00 + 0xc·a + 2k, +0x18 + 0xc·a + 2k | word | screen x and y of trail point k (0 … 5) of barrel a; seg8:0x764(j, k) sets point k from the world point, seg8:0x3aec moves the head by the owner's (vx, vy)·i / −50 and shifts the points | [BYTES seg8:0x787 seg8:0x78e seg8:0x3cf6 seg8:0x3d24 seg8:0x3e1a] |
+  | +0x30, +0x3c | word | world x of the head of barrel 0 and barrel 1; the fill writes −100 to the words +0x30 + 0xc·a + 2k for k = 0 … 6 first, and only the head is used after it | [BYTES seg11:0x5118 seg11:0x515f seg11:0x5168 seg11:0x516c] |
+  | +0x48, +0x54 | word | world y of barrel 0 and barrel 1, the same way | [BYTES seg11:0x5121 seg11:0x5170 seg11:0x5174 seg11:0x5178] |
+  | +0x60 | word | −100 from the fill's index 6 for barrel 1 | [BYTES seg11:0x5129] |
+  | +0x68, +0x6a | word | convergence step of a two-barrel shot, 16 × (barrel 1 − barrel 0) / length, at least 1; every 16 frames barrel 0 gains (+0x68 >> 2, +0x6a >> 2) and barrel 1 loses it | [BYTES seg11:0x54a8 seg11:0x556e seg8:0x3f04] |
+  | +0x6c, +0x6e | word | 0x1c and 0x3e from the two-barrel fill's dword store, the only access | [BYTES seg11:0x5572] |
+  | +0x70, +0x72 | word | velocity per sub-step | [BYTES seg11:0x51da seg11:0x51ed] |
   | +0x74 | word | lifetime in sub-steps, DGROUP:0x90ea / 10 | [BYTES seg11:0x525f seg11:0x5263 seg11:0x526a] |
-  | +0x76 | word | age; −1 = free. A new shot starts at 0, or at 15 when its shooter already owns a slot | [BYTES seg11:0x55ff seg11:0x5606 seg11:0x55c5] |
+  | +0x76 | word | age; −1 = free. A new shot starts at 0, or at 15 when its shooter already owns a busy slot | [BYTES seg11:0x55ff seg11:0x5606 seg11:0x55c5] |
   | +0x78 | word | barrel count, ship word +0x24 | [BYTES seg11:0x518e seg11:0x5192] |
-  | +0x7a, +0x7c | word | owner pool and record | [BYTES seg11:0x517f seg11:0x5186] |
-  | +0x7e | word | hits: a hit by a slot the player owns adds 1; cleared at fire | [BYTES seg11:0x560c seg8:0x3aec] |
+  | +0x7a, +0x7c | word | owner pool and record; a free slot keeps them, and the gun's slot scan reads them for free slots too | [BYTES seg11:0x517f seg11:0x5186 seg11:0x5056] |
+  | +0x7e | word | hits: a hit by a slot the player owns adds 1; cleared at fire | [BYTES seg11:0x560c seg8:0x3b75] |
   | +0x80 | word | cleared at fire; meaning [OPEN] | [BYTES seg11:0x5610] |
-  | +0x82 | word | 0 at fire; while not 0 the hit test ignores the byte +0x55 + j limit | [BYTES seg11:0x5297 seg8:0x6f3c] |
+  | +0x82 | word | 0 at fire; while not 0 the hit test ignores the near-miss byte +0x55 + j of the objects | [BYTES seg11:0x5297 seg8:0x6f87] |
   | +0x84, +0x86 | word | barrel alive, from ship bytes +0xe0 and +0xe1 | [BYTES seg11:0x519b seg11:0x519f seg11:0x51a4] |
-  | +0x90 | dword | 0 at fire; when it equals the sub-step counter DGROUP:0x5cc, seg8:0x3aec plays sound 0x11 and takes the velocity from +0x88/+0x8a. Its other writers are [OPEN] | [BYTES seg11:0x51f4 seg8:0x3aec seg7:0x95d] |
+  | +0x88, +0x8a | word | ricochet velocity, written only by the race routine seg11:0x5626 | [BYTES seg11:0x5737 seg11:0x575b] |
+  | +0x90 | dword | ricochet sub-step: 0 at fire, otherwise written only by seg11:0x5626; when it equals the sub-step counter DGROUP:0x5cc, seg8:0x3aec plays sound 0x11 and takes the velocity from +0x88/+0x8a | [BYTES seg11:0x51f4 seg11:0x5918 seg11:0x591c seg8:0x3c15] |
 
 - The slot's other fields are [OPEN].
 
 ## Other wave tables
-- **Missile entries,** DGROUP:0x66e4 + 0x1c·m, one per pool-6 record m: the weapon w (DGROUP:0x66e4), the launcher's pool and record (DGROUP:0x66e8, DGROUP:0x66ea), the age in frames (DGROUP:0x66ec), the steering mode, 2 = homing (DGROUP:0x66f4), and the lock flag (DGROUP:0x66fa). The word DGROUP:0x66e0 + 0x1c·m is −1 while the missile has no target. A missile does not collide with its launcher while its age is below 10. [BYTES seg8:0x6c67 seg8:0x6c71 seg8:0x6c7b seg8:0x6c84 seg8:0x6c97 seg11:0x7c12 seg12:0x0 seg12:0x7c0]
+- **Missile entries,** DGROUP:0x66e0 + 0x1c·m, one per pool-6 record: [below](#missile-entries-0x1c-bytes-at-dgroup0x66e0). [BYTES seg11:0x7c12 seg12:0x0]
 - **Defender entries,** DGROUP:0x52fe + 0x24k, one per pool-2 record k. Words +6 and +8 (DGROUP:0x5304, DGROUP:0x5306) hold an owner pool and record: an icon's capture hands the defenders whose owner is that icon to the capturing ship, and a ship's death sets word +0 to 15 for every entry aimed at that ship and records its killer. [BYTES seg13:0x1b5e seg13:0x1b6e seg13:0x1b79 seg13:0x1b83 seg13:0x1b8c seg13:0x1b93 seg8:0x45e0] The target test seg3:0x0 accepts a defender whose word +0 is 15 or whose owner is the player. [BYTES seg3:0x9b seg3:0xa2 seg3:0xac]
 - **Icon entries,** DGROUP:0x57a8 + 0x23·i, one per pool-0 record i [BYTES seg7:0x5b07 seg9:0xb43]:
   - word +0 (DGROUP:0x57a8): while it is not 0 the icon takes no damage; [BYTES seg7:0x234f seg7:0x2370]
@@ -317,6 +325,28 @@ Entry e lies at DGROUP:0x1e90 + 0x14e; the [effect frame](world.md#effect-frame-
   - +0x0c (DGROUP:0x9168) the DC of the 5-cell wing strip and +0x0e (DGROUP:0x916a) its mask DC; [BYTES seg13:0x44bd seg13:0x44f6]
   - +0x1a (DGROUP:0x9176) the frame counter, 0 while free and 1 at the start, and +0x1c (DGROUP:0x9178) the end count, 70. [BYTES seg8:0x2f1d seg13:0x45c0 seg13:0x45cc]
   - The other words are [OPEN].
+
+## Missile entries (0x1c bytes at DGROUP:0x66e0)
+One entry per pool-6 record m, at most 10 since the launcher stops at 10 records in use ([core.md](core.md#launch-seg110x7c12)). Fourteen words: [BYTES seg11:0x7c2b seg11:0x7c12 seg12:0x0]
+
+| Offset | DGROUP | Meaning | Evidence |
+|---|---|---|---|
+| +0x00, +0x02 | 0x66e0, 0x66e2 | target pool and record; pool −1 = none. The launch writes −1, or for kind 2 the ship's words +0x3e/+0x40; the retarget writes the target it adopts | [BYTES seg11:0x7f43 seg11:0x7f57 seg12:0x7aa seg12:0x7b1] |
+| +0x04 | 0x66e4 | weapon w, −1 = free; the destroy handler seg12:0x274a frees it | [BYTES seg11:0x7ebc seg11:0x7d37 seg11:0x7d8b seg12:0x2afd] |
+| +0x06 | 0x66e6 | [OPEN] | — |
+| +0x08, +0x0a | 0x66e8, 0x66ea | launcher pool and record; the pair test ignores the launcher while the age is below 10 | [BYTES seg11:0x89cb seg11:0x89d2 seg8:0x6c67] |
+| +0x0c | 0x66ec | age in mover passes: 0 at launch, +1 per pass, the lifetime at destruction; the placement writes 0x191 | [BYTES seg11:0x7eb1 seg11:0x8981 seg12:0x445 seg12:0x2af9 seg9:0x66a0] |
+| +0x0e | 0x66ee | for kind 1, the age after which the missile steers | [BYTES seg12:0x156] |
+| +0x10, +0x12 | 0x66f0, 0x66f2 | alternate target, steered at when the mode is not 2 | [BYTES seg12:0x843 seg12:0x848] |
+| +0x14 | 0x66f4 | steering mode, 2 at launch | [BYTES seg11:0x7ec4 seg12:0x805] |
+| +0x16 | 0x66f6 | 0 at launch | [BYTES seg11:0x7ec0] |
+| +0x18 | 0x66f8 | 0 at launch | [BYTES seg11:0x7eb5] |
+| +0x1a | 0x66fa | lock: the mover steers while it is not 0. 0 at launch, 1 when the retarget adopts a target, 0 when the steer jitters at a cloaked ship | [BYTES seg11:0x7f4b seg11:0x7f5d seg12:0x7a1 seg12:0x8a8 seg12:0x144] |
+
+- The analyst's table of the other writers (the boomerang end, seg4:0x5514's modes, the animation counter +0x16, the fizzle seg12:0xa26) is in work/analysis/m4/s2-missile.md §0.1; those rows are [OPEN].
+
+## Pool-1 fragments
+seg7:0x2768, the icon shatter, gives a pool-1 record it creates `extent` 160, `mass` 60, `max_damage` 14, `size` (20 << `Size`) >> 1, `gap` (6 << `Size`) >> 1, `src_y` = `gap`, `hit_sound` 0x12, dword `radar_color` 0x00808000, `capturable` 0, `owner_pool` −1, byte +0x2e = 0, `on_damage` seg7:0x2652, `radar_draw` seg11:0x3914, `on_destroy` seg7:0x2e02, and `state` 1 and then 0. Positions and velocities are in [core.md](core.md#shooting-an-icon-seg70x233c). [BYTES seg7:0x2897 seg7:0x28b4 seg7:0x28d5 seg7:0x28df seg7:0x28e9 seg7:0x28f9 seg7:0x2909 seg7:0x292c]
 
 ## Image slots
 - DGROUP:0x3974, DGROUP:0x39e8, DGROUP:0x3a5c and DGROUP:0x3ad0 are parallel word arrays 0x74 bytes apart, so each has 58 slots; seg10:0x522 frees slots 0 … 0x39 through seg10:0x552. DGROUP:0x39e8 + 2k holds slot k's memory DC, DGROUP:0x3974 + 2k the object it restores on release, DGROUP:0x3a5c + 2k its palette and DGROUP:0x3ad0 + 2k its bitmap. [BYTES seg10:0x544 seg10:0x552 seg10:0x562 seg10:0x5c2 seg10:0x5d3 seg10:0x5e1 seg10:0x5e7 seg10:0x5fb seg10:0x3afc]

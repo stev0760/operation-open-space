@@ -246,7 +246,13 @@ Ordinal 9 (ISPACE.DLL seg9:0xc42) plays id `id` with position `p`, hold flag `q`
 2. It recomputes p for the last played source by DGROUP:0x9290: mode 0 gives −6000, mode 1 the pool record (returning when a > DGROUP:0x9324), mode 2 the table, mode 3 the dword DGROUP:0x5144; mode 4 returns without a call and mode 5 passes an uninitialised p. For mode ≠ 0 it applies seg8:0x29ea and the DGROUP:0x9156 wrap with no DGROUP:0x9130 test, then calls ordinal 8(p, a = 1, b = 1, area = dword DGROUP:0x90ea); the listener offsets it computes at entry are overwritten by 1. [BYTES seg10:0x7b7f seg10:0x7b95 seg10:0x7cbc seg10:0x7cc0 seg10:0x7cc3 seg10:0x7cc9 seg10:0x7d30 seg10:0x7d3f]
 
 - Ordinal 9 also passes r = s = 1, so the listener is the play-area centre plus 1 px. [BYTES seg10:0x7820] Whether seg8:0x29ea returns view pixels, which would put the 3200 wrap on view-pixel offsets, is [OPEN].
-- **seg10:0x7944** takes the same (id, a, b, mode) arguments with an id read from a table: seg8:0x49dc, seg8:0x54e1 and seg8:0x5574 pass the ship hit sound DGROUP:0x9700 + 0xad·n, and seg11:0x89fd passes DGROUP:0x2f6c + 0x50·n. [BYTES seg8:0x49dc seg8:0x54e1 seg8:0x5574 seg11:0x89fd] Its body is [OPEN].
+- **seg10:0x7944** takes the same (id, a, b, mode) arguments with an id read from a table: seg8:0x49dc, seg8:0x54e1 and seg8:0x5574 pass the ship hit sound DGROUP:0x9700 + 0xad·n, and seg11:0x89fd passes DGROUP:0x2f6c + 0x50·n. [BYTES seg8:0x49dc seg8:0x54e1 seg8:0x5574 seg11:0x89fd] seg10:0x7944(id, a, b, mode, far name) (cdecl) is seg10:0x754a without its sequence logic: [BYTES seg10:0x7944]
+  1. It returns at once when DGROUP:0x920c = 3. [BYTES seg10:0x7952 seg10:0x7957]
+  2. p by mode: 1 returns when a > DGROUP:0x9324 (signed) and otherwise takes words +4/+6 (`x`, `y`) of record b of pool a; modes above 3 leave p uninitialised. [BYTES seg10:0x79c0 seg10:0x79c2 seg10:0x79c8 seg10:0x79da seg10:0x79de]
+  3. The listener words it computes from the player are overwritten by 1 before ordinal 9, as in seg10:0x754a; it has no id-0x6e test and no sequence switch. [BYTES seg10:0x7a49 seg10:0x7a4c seg10:0x7a4f seg10:0x79ae]
+  4. Only for a = DGROUP:0x9324, b = the player and the player's ship byte +0xec ≠ 0 does it first call ordinal 9 with id 0x69. [BYTES seg10:0x7ab8 seg10:0x7ac0 seg10:0x7acc seg10:0x7ad3 seg10:0x7aef]
+  5. On a successful play it stores id, a, b and mode in DGROUP:0x921c, 0x928c, 0x928e and 0x9290, p before seg8:0x29ea in DGROUP:0x3b98, and q in DGROUP:0x9226, so seg10:0x7b48 keeps the sound on its source; for a launch that is the missile. [BYTES seg10:0x79ec seg10:0x7b15 seg10:0x7b1c seg10:0x7b22 seg10:0x7b28 seg10:0x7b2e seg10:0x7b35 seg10:0x7b3c]
+  - The launcher's name argument DGROUP:0x1118 is an empty string. Whether ordinal 9 treats it as it treats seg10:0x754a's DGROUP:0x7e4 for a non-file id is [OPEN]. [BYTES DGROUP:0x1118 seg11:0x89fd]
 - **seg10:0x7480(code, flag)** is the music wrapper: [BYTES seg10:0x748d seg10:0x7499 seg10:0x74b7 seg10:0x74c9 seg10:0x74cd seg10:0x74d5 seg10:0x74f0 seg10:0x7504 seg10:0x7512 seg10:0x7524 seg10:0x7531 seg10:0x7538]
   1. Code 9 or 10 while DGROUP:0x9220 is 9 or 10 does nothing.
   2. Code 10 while DGROUP:0x9220 = 1 becomes 9.
@@ -507,7 +513,6 @@ The special ids are handled by ordinal 9 or by seg10:0x754a, not by a slot. [BYT
 ## Open questions
 - WaveMix 1.x's mixing arithmetic (8-bit sum and clipping), block length, latency and resampling decide the exact mix; they need a reading of `WAVEMIX.DLL`. [OPEN]
 - Whether WaveMix plays a wave L + 1 times for the loop word L of the MIXPLAYPARAMS (0 once, 0xFFFF forever), and whether a `WMIX_CLEARQUEUE` play posts `MM_WOM_DONE` (handled at ISPACE.DLL seg9:0x2adf) for the wave it replaces. ISPACE.DLL's bytes cannot settle either; a reading of `WAVEMIX.DLL` ordinal 7 `WaveMixPlay` and its mixing pump, or a WaveMix oracle run that plays 0x68 and counts the per-channel `MM_WOM_DONE` against the wave length, would. [OPEN] [BYTES ISPACE.DLL seg9:0x13a4 seg9:0x2adf]
-- The body of seg10:0x7944, the hit-sound wrapper, is not traced. [OPEN]
 - Whether a mode-5 preload ever reaches ordinal 9 outside seg18 mode depends on seg10:0x7896 returning −1 for its point. [OPEN]
 - The initial game wave volume ISPACE.DLL DGROUP:0x6a4 in STANDARD mode is BSS 0 until command 3 or ordinal 8 writes it. [OPEN]
 - `MixChannels` above 8 overruns the nine records at ISPACE.DLL DGROUP:0x1760, whose channel 8 is the no-priority value; the dialog offers 1–8. [OPEN]

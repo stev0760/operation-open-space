@@ -4,6 +4,7 @@
 #include <functional>
 #include <vector>
 
+#include "briefing/briefing.h"
 #include "briefing/lang_format.h"
 
 namespace is::hud {
@@ -54,7 +55,8 @@ std::string cut_name_code(std::string name) {
 
 bool message_code_ported(int code) {
     switch (code) {
-    case 10: case 11: case 12: case 13: case 82: case 83: case 84: case 91: case 94: case 112:
+    case 10: case 11: case 12: case 13: case 72: case 82: case 83: case 84: case 85: case 86: case 91:
+    case 94: case 111: case 112:
         return true;
     default: return false;
     }
@@ -129,6 +131,26 @@ void dispatch_message(MessageState& s, MessageHost& h, int recipient, int pool, 
     case 94:   // case 93: string 692 [BYTES seg3:0x109a-0x10a8]
     case 112:  // case 111: string 1064 [BYTES seg3:0x1089-0x1097]
         format2(code == 91 ? 0x2af : code == 94 ? 0x2b4 : 0x428, {FArg(4), FArg(0x2b0), FArg(h.pilot())});
+        break;
+    case 0x48:  // case 71: sound 0x67 (seg10:0x744c), string 652 [BYTES seg3:0xfdd-0xfea]
+        h.sound(0x67);
+        format2(0x28c, {});
+        break;
+    case 0x55:  // case 84 [BYTES seg3:0xe21-0xe56]
+        if (h.capture_defenders() == 0)
+            // string 574 with seg6:0x1010(DGROUP:0x9604, 100, 2): "1.0", "0.79" [BYTES seg3:0xe26
+            // seg3:0xe35]
+            format2(0x23e, {FArg(briefing::hundredths_text(w16(h.capture_value()), 2))});
+        else
+            // string 575 "%# Acquired." with (DGROUP:0x9602, 2530): %# takes 12530 for n != 1
+            // [BYTES seg3:0xe44 seg3:0xe4a seg3:0xe53]
+            format2(0x23f, {FArg(h.capture_defenders()), FArg(0x9e2)});
+        break;
+    case 0x56:  // case 85: string 680 with seg6:0x1010(DGROUP:0x9604, 100, 2) [BYTES seg3:0xe59-0xe78]
+        format2(0x2a8, {FArg(briefing::hundredths_text(w16(h.capture_value()), 2))});
+        break;
+    case 0x6f:  // case 110: string 1062 with the team name seg13:0x218a [BYTES seg3:0x118f-0x11b5]
+        format2(0x426, {FArg(h.team_name(rec))});
         break;
     default:
         h.todo(code);

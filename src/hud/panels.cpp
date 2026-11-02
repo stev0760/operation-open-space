@@ -46,13 +46,23 @@ void Panels::update(int arg, bool gate) {
     }
 }
 
+std::string score_text(std::uint32_t score) {
+    if (score == 0) return "000";  // DGROUP:0xa9e [BYTES seg11:0x519]
+    if ((score >> 16) & 0x8000u)   // the high word's sign [BYTES seg6:0xec9-0xecd]
+        return "-" + std::to_string(0u - score);  // neg lo; adc hi, 0; neg hi [BYTES seg6:0xed2-0xee1]
+    return std::to_string(score);
+}
+
 void Panels::score_digits() {
     const std::uint32_t score = h_.score();  // dword DGROUP:0x1e58
     if (score == s_.score_shown) return;    // seg11:0x4ff-0x504
     s_.score_shown = score;
-    // seg11:0x50f-0x532: "000" (DGROUP:0xa9e) for 0, else seg6:0xeb8(score) [OPEN: read as the
-    // decimal text of the dword from its call site].
-    const std::string text = score == 0 ? std::string("000") : std::to_string(score);
+    // seg11:0x50f-0x532: "000" (DGROUP:0xa9e) for 0, else seg6:0xeb8(score): "-" (DGROUP:0x489)
+    // and the 32-bit negation when the high word is negative, then seg6:0x10ce's unsigned
+    // decimal (s2-display-verify.md claims 28, 29) [BYTES seg11:0x519 seg6:0xec9-0xeed]. The
+    // narrow layout's seg11:0x2154 paints the '-' cell black (claim 28); what the wide layouts'
+    // seg10:0x94c4 draws for it is [OPEN].
+    const std::string text = score_text(score);
     Colour c;
     if (h_.score_alt())  // seg11:0x535-0x554: DGROUP:0x951c, then DGROUP:0x104c
         c = h_.score_alt_hi() ? 0x02FFC800 : 0x02FFFFFF;

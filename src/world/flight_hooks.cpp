@@ -25,6 +25,9 @@
 #include "world/gate_exit.h"
 #include "world/hooks.h"
 #include "world/player_sheet.h"
+#include "world/capture.h"
+#include "world/missile.h"
+#include "world/shots.h"
 #include "world/visibility.h"
 #include "world/world.h"
 
@@ -68,7 +71,13 @@ public:
     void turn_followup() override {
         if (g_links.turn_followup) g_links.turn_followup();
     }
-    void fire(int) override { todo_once("fire", "seg11:0x4e0a"); }
+    // seg11:0x4e0a and seg8:0x3aec are UpdateHost's defaults on the program's World (shots.h)
+    // (M4 s2 fixer).
+    // seg13:0x675e at the ship mover's head: the HUD's part (hud/wave.h pictures_tick) [BYTES
+    // seg13:0x15].
+    void seg13_675e() override {
+        if (g_links.pictures) g_links.pictures();
+    }
     void player_sprite() override {
         if (g_links.player_sprite) return g_links.player_sprite();
         todo_once("the player's sprite", "seg7:0x1208");
@@ -116,6 +125,23 @@ public:
     // seg10:0x754a(id, pool, rec, mode) through M7's engine (src/dialogs/audio_options.h
     // is::sound) (M4 s1 COLLIDE).
     void sound(int id, int pool, int rec, int mode) override { is::sound::play_at(id, pool, rec, mode); }
+    // ---- M4 s2 CAPTURE: the touch routine's and the icon mover's calls
+    // seg10:0x744c(id) through M7's engine.
+    void play(int id) override { is::sound::play(id); }
+    std::string lang(int id) override {
+        try {
+            if (g.store) return g.store->find_string(static_cast<std::uint16_t>(id)).value_or("");
+        } catch (const std::exception&) {
+        }
+        return {};
+    }
+    void seg18_551a(int, int) override { todo_once("weapons 0x18/0x1a", "seg18:0x551a"); }
+    void seg18_59ec(int, int) override { todo_once("weapons 0x19/0x1a", "seg18:0x59ec"); }
+    void seg7_4d86(int) override { todo_once("icon word DGROUP:0x57a8", "seg7:0x4d86"); }
+    void seg7_4ffe(int) override { todo_once("icon after DGROUP:0x57a8", "seg7:0x4ffe"); }
+    void seg7_5660(int) override { todo_once("icon heat -2", "seg7:0x5660"); }
+    void seg7_477e(int) override { todo_once("icon meets icon", "seg7:0x477e"); }
+    void icon_pool5_hit(int, int) override { todo_once("icon meets pool 5", "seg7:0x4a8a"); }
     CollideHost& collide_host() override;
     CollideGlobals& collide_globals() override;
     // ---- M4 s1 fixer: the stage's calls on the program's World
@@ -135,6 +161,7 @@ public:
 };
 
 CollideLinks g_collide_links;
+World* rt_world();
 
 // The program's collision calls out (M4 s1 COLLIDE).
 class ProgramCollideHost final : public CollideHost {
@@ -158,7 +185,8 @@ public:
     void seg8_81f8(int pool, int rec) override;
     void seg7_2080(int pool, int rec) override {
         if (g_collide_links.in_use) return g_collide_links.in_use(pool, rec);
-        todo_once("in-use counts", "seg7:0x2080");
+        // seg7:0x2080 on the program's World (missile.h recount_in_use) (M4 s2 fixer).
+        if (rt_world()) recount_in_use(rt_world()->pools, pool);
     }
     void flame_off(int ship) override;
     void erase(int x, int y, int w, int h) override {
@@ -168,6 +196,28 @@ public:
     void seg11_947a(int, int, int) override { todo_once("tether end", "seg11:0x947a"); }
     void wing_design(int) override { todo_once("wing design words", "seg14:0x3eda"); }
     void wing_taunts(int, int) override { todo_once("wing taunts", "seg8:0x2da6"); }
+    // ---- M4 s2 fixer: the icon's on_damage seg7:0x233c and its shatter (damage.h)
+    // seg7:0x5ae8(rec, arg) on the program's World (capture.h icon_counted).
+    void icon_gone(int rec, int arg) override;
+    // seg7:0x65aa(pool, rec): the IS_ICON column's row (hud refresh_object through WaveEndLinks).
+    void column_row(int pool, int rec) override {
+        if (wave_end_links().column_row) return wave_end_links().column_row(pool, rec);
+        todo_once("the icon column's row", "seg7:0x65aa");
+    }
+    // The crack and the fragment pictures on the strip DC DGROUP:0x3a02 (the HUD's GDI side).
+    void icon_crack(const CrackPlan& p) override {
+        if (g_collide_links.icon_crack) return g_collide_links.icon_crack(p);
+        todo_once("the icon crack", "seg7:0x23cf");
+    }
+    void fragment_bitmap(int r, std::int16_t side) override {
+        if (g_collide_links.fragment_bitmap) g_collide_links.fragment_bitmap(r, side);
+    }
+    void fragment_pictures(const FragmentPlan& p) override {
+        if (g_collide_links.fragment_pictures) return g_collide_links.fragment_pictures(p);
+        todo_once("the icon fragments' pictures", "seg7:0x2a20");
+    }
+    // The far call through +0x66 from seg7:0x2652 (call_on_destroy).
+    void on_destroy(int pool, int rec) override;
     std::int16_t other_damage(std::uint32_t id, int pool, int, std::int16_t) override {
         char buf[64];
         std::snprintf(buf, sizeof buf, "on_damage seg%u:0x%x pool %d", id >> 16, id & 0xffffu, pool);
@@ -255,6 +305,45 @@ Runtime& rt() {
 }
 
 KeyActions* default_actions_hud() { return rt().default_actions.hud; }
+World* rt_world() { return rt().world; }
+
+// The pool-6 mover's and the weapon system's calls (missile.h MissileLinks) on the program's
+// World (M4 s2 fixer); paint_weapons is the HUD's (src/hud/wave_win32.cpp).
+UpdateCtx make_ctx(Runtime& r);
+void bind_missile_links() {
+    MissileLinks& l = missile_links();
+    l.sound = [](int id, int pool, int rec, int mode) { rt().h().sound(id, pool, rec, mode); };  // seg10:0x754a
+    l.capture_count = [](int ship, int v) {  // seg13:0x4eec
+        if (rt().world) bump_w82(ship_at(*rt().world, ship), static_cast<std::int16_t>(v));
+    };
+    l.destroy = [](int pool, int rec) { rt().h().seg12_274a(pool, rec); };  // seg12:0x274a
+    l.on_destroy = [](int pool, int rec) {
+        Runtime& r = rt();
+        r.collide_host.u = &r.h();
+        r.collide_host.on_destroy(pool, rec);
+    };
+    l.to_screen = [](std::int16_t x, std::int16_t y) {  // seg8:0x29ea
+        const ScreenPoint p = flight_to_screen(x, y);
+        return Point16{p.x, p.y};
+    };
+    l.touch = [](int ship, std::int16_t pr) {  // seg13:0x16ac
+        Runtime& r = rt();
+        if (!r.world) return;
+        UpdateHost& h = r.h();
+        UpdateCtx local = make_ctx(r);
+        UpdateCtx& c = h.frame_ctx ? *h.frame_ctx : local;
+        CollideCtx x = frame_collide_ctx(c, *r.world);
+        CaptureCtx cc{x, c.flight, h.capture_host()};
+        ::is::world::touch(cc, ship, pr);
+    };
+    l.ship_touched = [](int ship) {  // seg13:0x6716
+        Runtime& r = rt();
+        if (!r.world) return;
+        UpdateCtx c = make_ctx(r);
+        ship_touched(c.flight, ship);
+    };
+    l.unported = [](const char* address, int, int) { todo_once("missile branch", address); };
+}
 
 UpdateCtx make_ctx(Runtime& r);
 
@@ -372,6 +461,15 @@ void DefaultHost::speed_display_end_3_6ec() {
 void DefaultHost::speed_display_end_7_119c() {
     if (g_links.info_target) return g_links.info_target();
     todo_once("the information display back to the target", "seg7:0x119c");
+}
+
+void ProgramCollideHost::icon_gone(int rec, int arg) {
+    Runtime& r = rt();
+    if (r.world) icon_counted(*r.world, rec, arg, r.g.ship_pool);  // seg7:0x5ae8
+}
+
+void ProgramCollideHost::on_destroy(int pool, int rec) {
+    with_effects([&](EffectCtx& c) { call_on_destroy(c, pool, rec); });  // [BYTES seg7:0x26b1]
 }
 
 void ProgramCollideHost::destroy(int pool, int rec) {
@@ -595,10 +693,11 @@ bool route_wave(shell::GameState& s, const shell::Input& in) {
 
 }  // namespace
 
-// seg10:0x754a's mode-1 and mode-3 points (sound.md "INSPACE wrappers" step 3): object words
-// +4, +6 of record b of pool a, and the dword DGROUP:0x5144 (effects.h EffectState::dg_5144);
-// mode 2's shot slots are M4 stage 2 [OPEN]. Step 4's seg8:0x29ea is the flight view's
-// (M4 s1 fixer, review M14) [BYTES seg10:0x76d9-0x775c seg10:0x778b].
+// seg10:0x754a's mode-1, mode-2 and mode-3 points (sound.md "INSPACE wrappers" step 3): object
+// words +4, +6 of record b of pool a; shot slot b's world head (+0x30, +0x48) + 12·row, row 1
+// when the slot's word +0x84 (barrel 0 alive) is 0, else row 0 (shots.h) (M4 s2 fixer); and the
+// dword DGROUP:0x5144 (effects.h EffectState::dg_5144). Step 4's seg8:0x29ea is the flight
+// view's (M4 s1 fixer, review M14) [BYTES seg10:0x76d9-0x775c seg10:0x778b].
 bool sound_source(int mode, int a, int b, int& x, int& y) {
     const World* w = rt().world;
     if (!w) return false;
@@ -607,6 +706,14 @@ bool sound_source(int mode, int a, int b, int& x, int& y) {
         const ObjectRecord& o = w->pools.rec(a, b);
         x = o.x;
         y = o.y;
+        return true;
+    }
+    if (mode == 2) {
+        if (b < 0 || b >= kShotSlots) return false;
+        const ShotState& s = shot_state();
+        const int row = s.word(b, shot::kAlive) == 0 ? 1 : 0;  // DGROUP:0x611c + 0x94·b
+        x = s.word(b, shot::kWorldX + 12 * row);              // DGROUP:0x60c8
+        y = s.word(b, shot::kWorldY + 12 * row);              // DGROUP:0x60e0
         return true;
     }
     if (mode == 3) {
@@ -705,6 +812,7 @@ void install_flight_hooks(App& app) {
     auto& h = app.game.hooks();
     Runtime& r = rt();
     r.default_host.prev_frame = h.frame[shell::kWave];
+    bind_missile_links();
     h.frame[shell::kWave] = [](shell::GameState& s) {
         rt().default_host.state = &s;
         wave_hook(s);
