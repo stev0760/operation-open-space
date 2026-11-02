@@ -19,14 +19,15 @@ Addresses without a module name are INSPACE.EXE, whose DGROUP is seg19. ISPACE.D
 |---|---|---|---|---|
 | MASTER.BOD, MASTER.SHP | INI `ShipPath`, with `\` appended when missing | fixed | seg14:0x3db6, seg14:0x3eda; ISPACE.DLL seg10:0x3f70, ISPACE.DLL seg10:0x406a; FACTORY.EXE seg4:0x277c, FACTORY.EXE seg4:0x283e | FACTORY.EXE seg4:0x24fa, FACTORY.EXE seg4:0x2316 |
 | `*.sav` | `LocalPath` + `Games` + `\` | INI `Restore`, `lastgame` or `demogame` | seg6:0x930a; ISPACE.DLL seg10:0x1a80 | seg6:0x885c |
-| `*.ded`, `*.don` | `LocalPath` + `Dead` + `\` | INI `Restore` or the pilot name, plus a counter when taken | seg6:0x6576 (score list) | seg6:0x885c |
+| `*.ded`, `*.don` | `LocalPath` + `Dead` + `\`; a renamed file `Path` + `Dead` + `\` | INI `Restore` or the pilot name, plus a counter when taken | seg6:0x6576 (score list), seg6:0x8776 (name check), seg6:0x7042 (purge, `.ded` only) | seg6:0x885c |
 | `<course>.rac` | INI `RacePath`, with `\` appended when missing | `LAZYLOOP`, `SDISPEED`, `GRANDPRI` | seg6:0x8b90 | seg6:0x8dfe |
 | `INSPACE.INI` | Windows directory (no path in the name) | fixed | everywhere | everywhere |
 
 [BYTES seg14:0x3e2f seg14:0x3f57 seg6:0x93d1 seg6:0x8a78 seg6:0x8bda seg6:0x8e49 seg6:0x6ef] [BYTES ISPACE.DLL seg10:0x3fdc seg10:0x40da seg10:0x1ba6] [BYTES FACTORY.EXE seg4:0x27b6 seg4:0x2878 seg4:0x26bf]
 
 - seg6:0x6d8 builds the directory strings at start-up. It reads `Path` into DGROUP:0x8f7a and `LocalPath` into DGROUP:0x9078, and appends `\` to `Path` when missing. It reads `Dead` into DGROUP:0x96c5 and `Games` into DGROUP:0x96b8 (each at most 10 characters) and appends `\` to both. It reads `RacePath` into DGROUP:0x900a and appends `\` when missing. [BYTES seg6:0x70a seg6:0x725 seg6:0x978 seg6:0x9a0 seg6:0x9c8]
-- The saved-game code prefixes `LocalPath` (DGROUP:0x9078). The one exception is the renaming loop for `.ded`/`.don` files, which prefixes `Path` (DGROUP:0x8f7a). [BYTES seg6:0x88be seg6:0x89f0]
+- The saved-game code prefixes `LocalPath` (DGROUP:0x9078). The two exceptions prefix `Path` (DGROUP:0x8f7a): the renaming loop for `.ded`/`.don` files and the purge of `.ded` files ([Writing](#writing)). [BYTES seg6:0x88be seg6:0x89f0 seg6:0x7042]
+  - When `Path` and `LocalPath` differ, the purge never sees the `.ded` files in `LocalPath`. A first attempt that finds this game's own `.ded` there overwrites it, because seg6:0x8776 accepts a file with the same game id. [BYTES seg6:0x7042 seg6:0x8776]
 - ISPACE.DLL's Restore Game dialog builds `LocalPath` + the fixed string `GAMES\` + name + `.sav`, so it ignores the INI `Games` key. [BYTES ISPACE.DLL seg10:0x1b37 seg10:0x1b55]
 
 ## MASTER.BOD: ship bodies
@@ -43,7 +44,7 @@ The file is an array of 44-byte (0x2c) records with no header. Every reader take
 | +0x00 | 21 | string | body name. A record whose name is empty is free; the import dialog reuses it and writes the name from its edit control | [BYTES FACTORY.EXE seg5:0x1f8e seg5:0x20ae] |
 | +0x15 | 2 | word | taken into DGROUP:0x977b + 0xad·n when the ship's SHP +0x07 is 12. All shipped records hold 1. Meaning [OPEN] | [BYTES seg14:0x1bce] [BYTES FACTORY.EXE seg4:0x45f8] [BYTES MASTER.BOD] |
 | +0x17 | 2 | word | the same for DGROUP:0x977d + 0xad·n and SHP +0x08 | [BYTES seg14:0x1c04] |
-| +0x19 | 1 | signed byte | the import dialog stores (bitmap measure − 8). seg14:0x1b84 stores its negation in DGROUP:0x96d6 + 0xad·n. Meaning [OPEN] | [BYTES FACTORY.EXE seg5:0x1ff4 seg5:0x2001] [BYTES seg14:0x1c7f seg14:0x1c86 seg14:0x1c88] |
+| +0x19 | 1 | signed byte | flame anchor radius. The import dialog stores (bitmap measure − 8). seg14:0x1b84 stores its negation in design word +0x04 (DGROUP:0x96d6 + 0xad·n). seg14:0xc42 turns a negative design value v into 4 − v − s, where s is the value it also writes to design words +0x00 and +0x02. seg10:0x16ba(n) then places the five flame anchors, design words +0x50 + 4k (DGROUP:0x9722 + 0xad·n + 4k, x then y, k = 0 … 4), at radius r = 2·(design +0x04 + 1), less 1 for k = 0, 3 and 4 and 1 more for k = 0 | [BYTES FACTORY.EXE seg5:0x1ff4 seg5:0x2001] [BYTES seg14:0x1c7f seg14:0x1c86 seg14:0x1c88 seg14:0xc50 seg14:0xc54 seg14:0xc58-0xc68] [BYTES seg10:0x16ea-0x170a seg10:0x1715-0x17f8 seg10:0x1861-0x18a4] |
 | +0x1a | 1 | signed byte | the import dialog stores 10. seg14:0x1b84 stores (value << `Size`) / 4 in DGROUP:0x970e + 0xad·n. Meaning [OPEN] | [BYTES FACTORY.EXE seg5:0x2009] [BYTES seg14:0x2070 seg14:0x2077] |
 | +0x1b | 1 | signed byte | strength base. seg14:0x1b84 computes base × 10 × (SHP armor / 4 + 100) / 100, stores it in DGROUP:0x9704 + 0xad·n and in word +0x44 of the ship's pool record, and stores that / 22 in DGROUP:0x9702 + 0xad·n and pool word +0x48 | [BYTES seg14:0x1e50 seg14:0x1e68 seg14:0x20bc seg14:0x210a] |
 | +0x1c | 1 | signed byte | stored in DGROUP:0x9712 + 0xad·n, which reaches ship-record word +0x0e. Meaning [OPEN] | [BYTES seg14:0x1ca1 seg14:0x1caa seg14:0x21b1] |
@@ -65,10 +66,10 @@ The file is an array of 44-byte (0x2c) records with no header. Every reader take
 
 | Bit | Checkbox | What seg14:0x1b84 does with it |
 |---|---|---|
-| 0x01 | 301 Body Thrust | DGROUP:0x9718 + 0xad·n = 1 when the bit is clear [BYTES seg14:0x1f41] |
-| 0x02 | 310 Shield | special ability 5 when bits 0x04 and SHP 0x08 are clear; DGROUP:0x9779 + 0xad·n = 1 and sound 5 is passed to seg10:0x754a [BYTES seg14:0x1dbd seg14:0x1dc9 seg14:0x1f9f seg14:0x1fb9] |
+| 0x01 | 301 Body Thrust | design word +0x46 (DGROUP:0x9718 + 0xad·n) = 1 when the bit is clear, else 0. seg14:0x1b84 copies it to ship byte +0xe4, which lets the flame be drawn ([structs.md](structs.md#ship-records-8--0x15a-bytes-at-dgroup0x7090)) [BYTES seg14:0x1f41-0x1f5a seg14:0x21da seg14:0x21de] |
+| 0x02 | 310 Shield | special ability 5 when bits 0x04 and SHP 0x08 are clear; DGROUP:0x9779 + 0xad·n = 1, else 0, and sound 5 is passed to seg10:0x754a. seg14:0x1b84 copies DGROUP:0x9779 to ship byte +0xe9 (DGROUP:0x7179) [BYTES seg14:0x1dbd seg14:0x1dc9 seg14:0x1f9f seg14:0x1fab seg14:0x1fb9 seg14:0x1fc8 seg14:0x21f2 seg14:0x21f6] |
 | 0x04 | 302 Pull-off Wings | special ability 3; DGROUP:0x9775 + 0xad·n = 6. When clear, the ship-record bytes +0xac and +0xad are zeroed [BYTES seg14:0x1d80 seg14:0x1d8c seg14:0x1f1f seg14:0x1ded seg14:0x1dfb] |
-| 0x08 | 309 Thrust Behind Ship | DGROUP:0x971a + 0xad·n = 1 [BYTES seg14:0x1d55 seg14:0x1d5c] |
+| 0x08 | 309 Thrust Behind Ship | design word +0x48 (DGROUP:0x971a + 0xad·n) = 1. seg10:0x5d3c then draws the ship over the flame; with the word 0 it draws the flame over the ship [BYTES seg14:0x1d55 seg14:0x1d5c] [BYTES seg10:0x5ecc-0x5f9b seg10:0x5fa2-0x6019] |
 | 0x40 | none | DGROUP:0x9774 + 0xad·n = 1 [BYTES seg14:0x1f71] |
 
 - The special-ability word is DGROUP:0x96fa + 0xad·n: 3 for bit 0x04, else 4 for the SHP cloak bit, else 5 for bit 0x02, else 0xffff. [BYTES seg14:0x1d8c seg14:0x1da8 seg14:0x1dc9 seg14:0x1dd6]
@@ -100,10 +101,12 @@ The file is an array of 65-byte (0x41) records with no header, counted like MAST
 | +0x38 | 9 | string | sound file base name (`.WAV` stripped); copied to DGROUP:0x9765 + 0xad·n | [BYTES FACTORY.EXE seg2:0xcae] [BYTES seg14:0x1c5a seg14:0x1c63] |
 
 - The flag bits of +0x09 set design-record words (each + 0xad·n):
-  - 0x10 sets DGROUP:0x9714 to 1.
-  - 0x01 sets DGROUP:0x9716 to 0, else 1, and 0x20 then ORs 0x20 into it.
-  - 0x08 sets DGROUP:0x971c to 1 and selects special ability 4.
-  - 0x04 sets DGROUP:0x971e to 1. [BYTES seg14:0x1eb4 seg14:0x1ed6 seg14:0x1efd seg14:0x1fd6 seg14:0x1ffd seg14:0x1d9c]
+  - 0x10 sets DGROUP:0x9714 to 1. [BYTES seg14:0x1eb4]
+  - 0x01 sets DGROUP:0x9716 (design word +0x44, the flame row) to 0, else 1, and 0x20 then ORs 0x20 into it. [BYTES seg14:0x1ed6-0x1eef seg14:0x1efd seg14:0x1f02-0x1f09]
+  - 0x08 (Cloak) sets DGROUP:0x971c (design word +0x4a) to 1, else 0, and selects special ability 4. seg14:0x1b84 copies the word to ship byte +0xe7 (DGROUP:0x7177). [BYTES seg14:0x1fd6 seg14:0x1fe2 seg14:0x1fef seg14:0x1d9c seg14:0x21ea seg14:0x21ee]
+  - 0x04 sets DGROUP:0x971e to 1. [BYTES seg14:0x1ffd]
+- **The flame row.** seg10:0x5d3c reads the ship's flame from row (design +0x44)·f of the two-row flame bitmap that ISPACE.DLL ordinal 18 renders ([ispace.md](ispace.md)), f being the strip cell. So a ship with bit 0x01 set takes row 0 and one with it clear row 1. [BYTES seg10:0x5da7 seg10:0x5feb seg10:0x5fee]
+  - With bit 0x20 set the word is 0x20 or 0x21, a row far outside the bitmap. Whether another step masks the bit, and what the blit then shows, is [OPEN]. [BYTES seg14:0x1f09 seg10:0x5feb]
 - In the Factory, FACTORY.EXE seg4:0x4cb0 sets or clears one bit of FACTORY.EXE DGROUP:0xf99, the edited ship's copy of +0x09. [BYTES FACTORY.EXE seg4:0x46b5 seg4:0x46b9 seg4:0x4ccb seg4:0x4cdc]
   - Bit 0x01 follows combo 180: FACTORY.EXE seg2:0xbe4 sets it when `CB_GETCURSEL` returns a non-zero index and clears it otherwise. [BYTES FACTORY.EXE seg2:0x1047 seg2:0x1100 seg2:0xc0d seg2:0xc1b seg2:0xc55 seg2:0xc5a]
   - Menu item 498 sets bit 0x20 and item 499 clears it. FACTORY.EXE seg2:0xbbb checks item 498 when the bit is set, and item 499 when it is clear. [BYTES FACTORY.EXE seg2:0x10a4 seg2:0x10a9 seg2:0x1285 seg2:0x12b6 seg2:0xbb4 seg2:0xbbb seg2:0xb5d]
@@ -115,23 +118,74 @@ The file is an array of 65-byte (0x41) records with no header, counted like MAST
 ## Saved games
 
 ### Names and triggers
-seg6:0x885c(named, kind) writes a saved game. `named` = 0 uses `lastgame`, or `demogame` when DGROUP:0x95bc = 0. Any other `named` uses the INI `Restore` value (at most 8 characters). `kind` 0 writes `.sav` into the Games directory, 1 `.ded` and 2 `.don` into the Dead directory. [BYTES seg6:0x88d2 seg6:0x88dd seg6:0x8980 seg6:0x898b seg6:0x8906 seg6:0x899f seg6:0x89b0 seg6:0x89bb]
+seg6:0x885c(named, kind) writes a saved game. `named` = 0 uses `lastgame`, or `demogame` when DGROUP:0x95bc = 0. Any other `named` uses the INI `Restore` value, read into a 9-byte buffer (at most 8 characters). `kind` 0 writes `.sav` into the Games directory, 1 `.ded` and 2 `.don` into the Dead directory. [BYTES seg6:0x886b seg6:0x88e5 seg6:0x8993 seg6:0x88d2 seg6:0x88dd seg6:0x8973 seg6:0x8980 seg6:0x898b seg6:0x8900 seg6:0x8906 seg6:0x899f seg6:0x89a4 seg6:0x89b0 seg6:0x89bb]
 
-| Call site | Arguments | File |
-|---|---|---|
-| seg7:0x687, seg9:0x31f0 | (0, 0) | `lastgame.sav` or `demogame.sav` |
-| seg6:0x9e56, seg10:0x8657 | (1, 0) | `<Restore>.sav` |
-| seg6:0x5e39 | (1, 1) | `<name>.ded` |
-| seg16:0x7235, after adding 50,000 to the score | (1, 2) | `<name>.don` |
+| Call site | Arguments | File | When |
+|---|---|---|---|
+| seg9:0x31f0 | (0, 0) | `lastgame.sav` or `demogame.sav` | at the end of seg9:0x2828, the wave-end roster update, when the player ship's byte +0xec ≠ 0, DGROUP:0x91f8 > 0, and DGROUP:0x95bc ≠ 0 or DGROUP:0x9516 = 0. seg9:0x6cc4, the entry of state 2 (the debriefing), clears DGROUP:0x92e4 and calls seg9:0x2828 |
+| seg7:0x687 | (0, 0) | `demogame.sav` | the demo's wave end ([shell.md](shell.md#screen-states)) |
+| seg6:0x9e56 | (1, 0) | `<Restore>.sav` | at the end of seg6:0x99b6, the save-time roster update ([Ship roster records](#ship-roster-records-0x7c-bytes)) |
+| seg10:0x8657 | (1, 0) | `<Restore>.sav` | the save step seg10:0x8568 with argument 0 or −1; arguments 1 to 3 go through seg6:0x99b6 ([shell.md](shell.md#exit)) |
+| seg6:0x5e39 | (1, 1) | `<name>.ded` | seg6:0x5d58, the entry of state 5 ([Retired games](#retired-games)) |
+| seg16:0x7235 | (1, 2) | `<name>.don` | after adding 50,000 to the score |
 
-[BYTES seg7:0x687 seg9:0x31f0 seg6:0x9e56 seg10:0x8657 seg6:0x5e39 seg16:0x7228 seg16:0x7235]
+[BYTES seg7:0x687 seg9:0x31d0 seg9:0x31d7 seg9:0x31de seg9:0x31e5 seg9:0x31f0 seg9:0x6ceb seg9:0x6d85 seg6:0x9e56 seg10:0x8632 seg10:0x863d seg10:0x8657 seg6:0x5e39 seg16:0x7228 seg16:0x7235]
 
-- The manual names LASTGAME (the end of each wave) and DEMOGAME (the demo pilot). [MANUAL High Scores]
-- A `.ded` or `.don` file needs a score of at least 1000. [BYTES seg6:0x887a]
-- For `.ded`/`.don`, when the fourth character of `Restore` is a space (as in `NEW GAME`, the value read back after New Game OK writes ` NEW GAME` [ORACLE newgame-0001]), the name is the pilot name (DGROUP:0x380c) cut to 7 characters, with spaces turned into NULs. [BYTES seg6:0x8911 seg6:0x891f seg6:0x8947]
-- seg6:0x8776 compares the game id of an existing file. If the file belongs to another game, the name becomes the first 5 characters plus a counter 1, 2, … until it is free. [BYTES seg6:0x89dc seg6:0x89f0 seg6:0x89fe]
-- With DGROUP:0x920c = 0 and DGROUP:0x95bc ≠ 0 the routine writes nothing. A manual save (`named` ≠ 0, `kind` = 0) then shows string 2324: "Game saving is a handy feature of the full version of Inner Space." [BYTES seg6:0x8887 seg6:0x888e seg6:0x88a3] [BYTES ENG_LANG.DLL STRING 146] id 2324 [ORACLE wave-0001]
-- seg6:0x930a loads `LocalPath` + Games + (`Restore`, or `demogame` when DGROUP:0x95bc = 0) + `.sav`. [BYTES seg6:0x9383 seg6:0x9396 seg6:0x93ae seg6:0x93bc]
+- The manual names LASTGAME (the end of each wave) and DEMOGAME (the demo pilot). It offers a save with Alt-S, on exit (Alt-X-S) and before ESC aborts to the intro. [MANUAL High Scores] The menu, the keys and the Save Game dialog, which writes `Restore`, are in [shell.md](shell.md#exit).
+- The demo saves and restores `demogame` only while DGROUP:0x9516 = 0, which DemoType 520 gives ([shell.md](shell.md#intro-and-title-screen)). [BYTES seg9:0x31e5]
+- A `.ded` or `.don` file needs a score of at least 1000: the writer returns 0 when the score dword DGROUP:0x1e58 is negative or below 1000. [BYTES seg6:0x8871 seg6:0x8876 seg6:0x8878 seg6:0x887a seg6:0x8880]
+- For `.ded`/`.don`, when the fourth character of `Restore` is a space (as in `NEW GAME`, the value read back after New Game OK writes ` NEW GAME` [ORACLE newgame-0001]), the name is the pilot name (DGROUP:0x380c) cut to 7 characters and then at its first space. [BYTES seg6:0x8911 seg6:0x891f seg6:0x8927 seg6:0x8947 seg6:0x894e]
+- **The limited trial.** With DGROUP:0x920c = 0 and DGROUP:0x95bc ≠ 0 the routine writes nothing and returns 0. Only a manual save (`named` ≠ 0, `kind` = 0) shows a message first, string 2324: "Game saving is a handy feature of the full version of Inner Space." The automatic save and the `.ded`/`.don` saves fail silently. [BYTES seg6:0x8887 seg6:0x888e seg6:0x8895 seg6:0x889b seg6:0x88a1 seg6:0x88a3 seg6:0x88aa] [BYTES ENG_LANG.DLL STRING 146] id 2324
+  - After Alt-S and Save in the trial the oracle saw the `Restore=<name>` INI write, the 2324 MessageBox (caption "Inner Space", flags 0x30, from seg16:0x6920) and no file write. [ORACLE wave-0001]
+- seg6:0x930a loads `LocalPath` + Games + (`Restore`, or `demogame` when DGROUP:0x95bc = 0) + `.sav` ([Reading](#reading)). [BYTES seg6:0x9383 seg6:0x9396 seg6:0x93ae seg6:0x93bc]
+
+### Writing
+seg6:0x885c works in this order. [BYTES seg6:0x885c]
+
+1. The score gate for `.ded`/`.don` and the trial gate above.
+2. seg6:0x7042 purges this game's retired files, for every kind. It scans `Path` + `Dead` + `*.ded`, reads the first 0x26 bytes of each file and deletes it (`OpenFile` mode 0x200, OF_DELETE) when its dword +0x00 equals the game id DGROUP:0x939a. `.don` files are never purged. [BYTES seg6:0x88b5 seg6:0x7075 seg6:0x70b4 seg6:0x7127]
+3. The name ([Names and triggers](#names-and-triggers)).
+4. For `.ded`/`.don` only, the free-name loop. seg6:0x8776(name) returns 1 for a missing file, a short header read or a file with the same game id, and 0 only for a readable file of another game. On 0 the name becomes `Path` + `Dead` + the first 5 characters of the base name + a decimal counter (1, 2, …) + `.don` or `.ded`, and is tested again. [BYTES seg6:0x8776 seg6:0x8819 seg6:0x89dc seg6:0x89f0 seg6:0x89fe seg6:0x8a06 seg6:0x8a21 seg6:0x8a29 seg6:0x8a4d seg6:0x8a58]
+5. `OpenFile` with mode 0x1002, OF_CREATE \| OF_READWRITE; an error returns 0. [BYTES seg6:0x8a75 seg6:0x8a78]
+6. The header block: `GlobalAlloc(0x42, 0x1a9)`, filled by seg6:0x8eea ([Header](#header)). [BYTES seg6:0x8a8a]
+7. When DGROUP:0x94ae (directory records) or DGROUP:0x95a4 (roster) is 0, the writer closes the file and returns 0. The header block is neither unlocked nor freed, and the created file stays empty. [BYTES seg6:0x8acf seg6:0x8ad6 seg6:0x8ab1 seg6:0x8ab4]
+8. The blocks ([Layout](#layout)): the header, the roster from DGROUP:0x6e24 with `GlobalSize(DGROUP:0x95a4)` bytes and, for `.sav` only, the directory records from DGROUP:0x69f4 with `GlobalSize(DGROUP:0x94ae)` bytes. [BYTES seg6:0x8aec seg6:0x8afa seg6:0x8b05 seg6:0x8b1e seg6:0x8b25 seg6:0x8b2f seg6:0x8b48]
+   - seg6:0x9e66 writes each block in `_lwrite` chunks of 0x7fff bytes and returns 0 on any short write, which makes the writer return 0. [BYTES seg6:0x9e66 seg6:0x9eae]
+
+### Reading
+seg6:0x930a restores a `.sav` file. Its callers are the ESC flow at the title and the demo start ([shell.md](shell.md#game-start-dialogs)), which also hold the trial's refusal with string 2325. [BYTES seg6:0x930a] [BYTES ENG_LANG.DLL STRING 146] id 2325
+
+1. Before opening the file it sets the game id DGROUP:0x939a to `time()` and the start date DGROUP:0x939e, DGROUP:0x93a0 to the current date. [BYTES seg6:0x933f seg6:0x9345 seg6:0x934e seg6:0x9354 seg6:0x9357]
+2. It opens the name ([Names and triggers](#names-and-triggers)) with `OpenFile` mode 0, and returns 0 when that fails. [BYTES seg6:0x93d1]
+3. It allocates the 0x1a9-byte header and reads `GlobalSize` bytes of it ([Layout](#layout)). [BYTES seg6:0x93e0 seg6:0x9409 seg6:0x944b]
+4. It frees the running game's roster (DGROUP:0x95a4) and directory block (DGROUP:0x94ae), and only then allocates the new ones with the sizes from the header and reads each. [BYTES seg6:0x944b seg6:0x945a seg6:0x946e seg6:0x9473 seg6:0x9487 seg6:0x94a4]
+5. **Failures.** A short read, or a failed header lock, calls seg6:0x9932(header, file, 0), which closes the file, frees the header and frees whatever DGROUP:0x94ae and DGROUP:0x95a4 hold, zeroing them, then returns 0. [BYTES seg6:0x9403 seg6:0x9457 seg6:0x9518 seg6:0x9522 seg6:0x9932]
+   - When the header read fails, those handles are still the running game's blocks, so a failed restore destroys the current game's roster and directory records. [BYTES seg6:0x944b seg6:0x9518]
+   - A failed `GlobalAlloc` (seg6:0x93f0, seg6:0x94b0, seg6:0x9549) returns 0 without closing the file. At the last two the old blocks are already freed, and DGROUP:0x6e24 or DGROUP:0x69f4 still points into a freed block. [BYTES seg6:0x93f0 seg6:0x94b0 seg6:0x9549]
+6. A header +0x171 that differs from `Size` (DGROUP:0x9156) is stored there, written to the INI and sets DGROUP:0x92e2 = 1. [BYTES seg6:0x95be seg6:0x95ca seg6:0x95e8 seg6:0x95ed]
+7. It loads the globals from the header ([Header](#header)). [BYTES seg6:0x95f3-0x9856]
+   - Header +0x26 and +0x28 go to bytes +0x5d and +0x5e, and +0x15a and +0x15c to words +0xd2 and +0xd0, of ship record 0 (DGROUP:0x70ed, DGROUP:0x70ee, DGROUP:0x7162, DGROUP:0x7160), not of the record DGROUP:0x9646 that the writer read. [BYTES seg6:0x962d seg6:0x9634 seg6:0x971c seg6:0x9724 seg6:0x8f43 seg6:0x8f52]
+   - Header +0x172 goes to word +0x18 of ship record DGROUP:0x9646. [BYTES seg6:0x9707-0x9713]
+   - Header +0x24 goes to DGROUP:0x91f8 and +0x2a to DGROUP:0x94a2. The current directory record's byte +0xad becomes 1 when it is 0. [BYTES seg6:0x963b seg6:0x9642 seg6:0x9645 seg6:0x964d seg6:0x9655]
+   - `PlayMode` DGROUP:0x9134 is forced to 1 when DGROUP:0x95bc = 0. [BYTES seg6:0x972d seg6:0x9737]
+   - Header +0x22, +0x160, +0x162, +0x164, +0x170 and the save date +0x1b … +0x1d are not read back; +0x15e is only tested (step 10). [BYTES seg6:0x95b4-0x9856 seg6:0x98ce]
+8. **The roster check.** With MASTER.BOD and MASTER.SHP loaded, records k = 0 … DGROUP:0x931a − 1 are checked; the last record, DGROUP:0x931a, is not. A byte +0x64 of 7 becomes 0. A word +0x00 not below the SHP count DGROUP:0x95aa becomes 1, and so does record 0's when seg14:0x455c rejects its ship. [BYTES seg6:0x986d seg6:0x9874 seg6:0x9881 seg6:0x9884 seg6:0x9892 seg6:0x98a4 seg6:0x98ac seg6:0x98af seg6:0x98b2]
+   - seg14:0x455c returns 1 while DGROUP:0x11aa ≠ 0. Otherwise it returns 0 for the ships whose MASTER.BOD word +0x21 is 178, 310, 320, 400, 440, 450, 520, 550, 560, 590, 600, 604, 605, 710, 720, 730, 750, 890, 900, 930 or 950, the list of ISPACE.DLL seg10:0x611c ([shell.md](shell.md#game-start-dialogs)). [BYTES seg14:0x455c seg14:0x4589-0x45f0]
+9. It sets DGROUP:0x92e4 = 1 and clears DGROUP:0x951c, DGROUP:0x104c and DGROUP:0x104e. [BYTES seg6:0x98bb seg6:0x98be seg6:0x98c1 seg6:0x98c4]
+10. When header +0x15e is below 100, every checked roster word +0x02 is divided by 10, unsigned for a value below −15000 as a signed word. [BYTES seg6:0x98ce seg6:0x9900]
+11. It closes the file, frees the header and returns 1. [BYTES seg6:0x9925]
+
+### Resuming
+- At the title the ESC flow skips the #5600 135 table reload for a restored game and keeps DGROUP:0x91f8, because DGROUP:0x92e4 = 1 ([shell.md](shell.md#game-start-dialogs)). [BYTES seg11:0x7a8b seg11:0x7a99 seg11:0x7ac4 seg11:0x7acb]
+- Navigation Enter then requests state 1 because DGROUP:0x92e4 ≠ 0. State 1 runs seg9:0xc06, which skips its new-game reset, and the briefing seg9:0x5cca, which raises DGROUP:0x91f8. So a game saved during wave N resumes at wave N + 1. [BYTES seg6:0x368c seg6:0x3693 seg9:0xc44 seg9:0xd5f seg9:0x5fbf] Confirming this on the oracle (save in wave 1 of a registered prefix, restore, read the briefing title) is [OPEN].
+- The wave set-up seg9:0x6624 calls seg14:0x0 with DGROUP:0x91f8 raised by one. seg14:0x0 builds a fresh one-record roster only when DGROUP:0x91f8 ≤ 1. [BYTES seg14:0x232 seg14:0x237 seg9:0x5e58 seg9:0x5e5d seg9:0x5e60]
+- The fresh record takes byte +0x64 = the SHP team byte +0x03, also stored in DGROUP:0x970a. It sets +0x38 … +0x3b = 100, +0x02 = 15, +0x1c = SHP byte +0x00, +0x1d = 1 or 2, +0x1f = 20 and +0x29 = the second weapon's id for a second weapon, and +0x72 … +0x75 = 1. It clears +0x3c … +0x63, +0x04 and +0x06 and the relation table (+0x08 and +0x12 = 0, +0x17 = 0xff), sets word +0x00 to seg14:0x2300's result and DGROUP:0x931a to 0. [BYTES seg14:0x335 seg14:0x373 seg14:0x37e seg14:0x391 seg14:0x39e seg14:0x3a6 seg14:0x3af seg14:0x3c4 seg14:0x3cc seg14:0x3e4 seg14:0x3e9 seg14:0x3f3]
+
+### Retired games
+- On GAME OVER, seg6:0x5d58 builds the score list with seg6:0x6576 first, so the running game is its entry 0, and then writes the `.ded` with seg6:0x885c(1, 1). It writes nothing when entered from state 9 (DGROUP:0x94cc ≠ 0), the path of the completion ending. [BYTES seg6:0x5df9 seg6:0x5e2d seg6:0x5e39 seg6:0x5d65]
+- The completion ending writes the `.don` at seg16:0x7235 ([Names and triggers](#names-and-triggers)).
+- The score list has no file of its own ([Score list](#score-list)). Its update at the game's end is the `.ded` or `.don` write together with the purge of the game's older `.ded` files ([Writing](#writing)).
+- A `.ded` or `.don` holds the header and the roster but no directory records. [BYTES seg6:0x8b25]
 
 ### Layout
 A file is up to three blocks back to back. Each block's length is its `GlobalSize`: the allocation rounded up to 32 bytes under Wine (see [Conventions](#conventions)). [BYTES seg6:0x8aec seg6:0x8b05 seg6:0x8b2f]
@@ -145,6 +199,7 @@ A file is up to three blocks back to back. Each block's length is its `GlobalSiz
 [BYTES seg6:0x93e0 seg6:0x9409 seg6:0x9492 seg6:0x9497 seg6:0x94a4 seg6:0x952a seg6:0x9531 seg6:0x953d seg6:0x8b5b]
 
 - The reader allocates each block with the same size, asks `GlobalSize` and reads that many bytes, so it fails on a file without the padding. [BYTES seg6:0x9409 seg6:0x944b seg6:0x94cc seg6:0x950c seg6:0x9565 seg6:0x95a5]
+- No oracle run has measured a saved file's length yet. A save under the oracle in a registered prefix, whose `.sav` should be 0x1c0 + `GlobalSize(roster)` + `GlobalSize(directory)` bytes long, would confirm the 0x1c0 header; that check is [OPEN].
 - In memory the roster grows by `GlobalReAlloc` to (n + 1) × 0x7c as ships join, starting from one 0x7c block, and the directory block grows by 0x297 per record. [BYTES seg14:0x256 seg14:0xee5 seg14:0xeeb seg6:0x370a seg6:0x3758 seg6:0x3760]
 
 ### Header
@@ -158,7 +213,7 @@ seg6:0x8eea fills the header and seg6:0x930a reads it back. "Player ship" fields
 | +0x1b | byte ×3 | save date, same encoding, from seg10:0x804c(0) | [BYTES seg6:0x90d5 seg6:0x90e3 seg6:0x90e7 seg6:0x90ee] |
 | +0x1e | dword | score (DGROUP:0x1e58) | [BYTES seg6:0x8f93 seg6:0x968a] |
 | +0x22 | word | SHP index of the player's roster record | [BYTES seg6:0x903d seg6:0x9043] |
-| +0x24 | word | DGROUP:0x91f8 | [BYTES seg6:0x8f5e] |
+| +0x24 | word | DGROUP:0x91f8, the wave number; Restore Game prints it as the wave reached (string 3000) | [BYTES seg6:0x8f5e] [BYTES seg10:0xa255] [BYTES ENG_LANG.DLL STRING 188] id 3000 |
 | +0x26, +0x28 | word | player ship bytes +0x5d and +0x5e, sign-extended | [BYTES seg6:0x8f48 seg6:0x8f57] |
 | +0x2a | word | DGROUP:0x94a2: index of the current directory record | [BYTES seg6:0x8f65] |
 | +0x2c | word | DGROUP:0x931c: the player's roster index | [BYTES seg6:0x8f6c] |
@@ -169,10 +224,10 @@ seg6:0x8eea fills the header and seg6:0x930a reads it back. "Player ship" fields
 | +0xb6, +0xe6, +0x116 | 24 words each | 8 × 3 word tables DGROUP:0x4eec, DGROUP:0x4fd0, DGROUP:0x6b10 | [BYTES seg6:0x9206 seg6:0x920f seg6:0x9218] |
 | +0x146 | 8 words | DGROUP:0x6b40 | [BYTES seg6:0x9236] |
 | +0x156, +0x158 | word | DGROUP:0x945c, DGROUP:0x945e | [BYTES seg6:0x924d seg6:0x9255] |
-| +0x15a, +0x15c | word | player ship words +0xd2 and +0xd0 | [BYTES seg6:0x8fd6 seg6:0x8fc7] |
-| +0x15e | word | 100–103: the average of the player's 3 or 4 words at ship +0x26 banded at 71, 46 and 28. A value below 100 marks an older file: the loader divides roster word +0x02 by 10 | [BYTES seg6:0x9185 seg6:0x9196 seg6:0x91a7 seg6:0x91b3 seg6:0x98ce seg6:0x98e7] |
-| +0x160 | word | number of directory records whose byte +0x1d0 is 2 | [BYTES seg6:0x9102 seg6:0x910d] |
-| +0x162 | word | player ship dword +0xdc, capped at 0x4fff6, / 10 | [BYTES seg6:0x9011] |
+| +0x15a, +0x15c | word | player ship words +0xd2 and +0xd0: the icons captured and destroyed. The Restore Game description prints them as CAPTURED and DESTROYED of a total +0x156 + +0x158 (string 3001, only when either is non-zero) | [BYTES seg6:0x8fd6 seg6:0x8fc7] [BYTES seg10:0xa265 seg10:0xa26e seg10:0xa276] [BYTES ENG_LANG.DLL STRING 188] id 3001 |
+| +0x15e | word | the ship's shape, 100–103: 100 when the average of the player ship's words +0x26 … is above 70, 101 above 45, 102 above 27, else 103. The average takes 4 words when the special-ability word of the ship's design (design word +0x28, DGROUP:0x96fa + 0xad·n, n = ship word +0x4e) is not −1, else 3. Restore Game prints string 311 + (value − 100): GOOD, FAIR, BAD, SORRY. A value below 100 marks an older file: the loader divides roster word +0x02 by 10 | [BYTES seg6:0x9131 seg6:0x9137 seg6:0x913d seg6:0x917d seg6:0x9185 seg6:0x9196 seg6:0x91a7 seg6:0x91b3 seg6:0x98ce seg6:0x98e7] [BYTES seg10:0xa184] [BYTES ENG_LANG.DLL STRING 20] ids 311–314 |
+| +0x160 | word | number of directory records whose byte +0x1d0 is 2, the completed directories. Restore Game compares it with +0x32 to choose strings 2500–2503 | [BYTES seg6:0x9102 seg6:0x910d] [BYTES seg10:0xa1f4] [BYTES ENG_LANG.DLL STRING 157] ids 2500–2503 |
+| +0x162 | word | the ship's credit: player ship dword +0xdc, in hundredths of an icon, capped at 0x4fff6 in the ship record itself, / 10. Restore Game prints v / 10 "." \|v mod 10\| ICONS OF CREDIT (string 3002) | [BYTES seg6:0x8fed-0x9003 seg6:0x9011] [BYTES seg10:0xa2c9 seg10:0xa2cc seg10:0xa2da] [BYTES ENG_LANG.DLL STRING 188] id 3002 |
 | +0x164 | word | player ship word +0xce | [BYTES seg6:0x9020] |
 | +0x166, +0x168 | word | DGROUP:0x93ac, DGROUP:0x94ca | [BYTES seg6:0x9061 seg6:0x9069] |
 | +0x16a | dword | rating (DGROUP:0x5078) | [BYTES seg6:0x8fa2 seg6:0x969b] |
@@ -185,36 +240,40 @@ seg6:0x8eea fills the header and seg6:0x930a reads it back. "Player ship" fields
 | +0x174, +0x17e | 10 bytes each | DGROUP:0xa14d, DGROUP:0xa157 | [BYTES seg6:0x9090 seg6:0x909c] |
 | +0x188, +0x189 | byte | read into DGROUP:0xa161 and DGROUP:0xa162; the writer leaves them 0 | [BYTES seg6:0x96f7 seg6:0x96ff] |
 | +0x18a | byte | DGROUP:0x967c | [BYTES seg6:0x9079] |
-| +0x18b | dword | DGROUP:0x5a8, the wave-frame counter of [globals.md](globals.md) | [BYTES seg6:0x8fb3] |
+| +0x18b | dword | DGROUP:0x5a8, the play time in frames ([timing.md](timing.md)). Restore Game prints it / 36 as minutes and seconds (string 3000) and writes the quotient back into its header buffer | [BYTES seg6:0x8fb3] [BYTES seg10:0xa130 seg10:0xa13f] [BYTES ENG_LANG.DLL STRING 188] id 3000 |
 | +0x18f | byte | DGROUP:0x9346 | [BYTES seg6:0x9071] |
 | +0x190, +0x191 | byte | DGROUP:0xa1cd / 128 and DGROUP:0xa1cd mod 128 | [BYTES seg6:0x9266 seg6:0x9274] |
 | +0x192 | 4 bytes | DGROUP:0xa193–0xa196 | [BYTES seg6:0x9296] |
 | +0x196 | byte | DGROUP:0xa1cf | [BYTES seg6:0x927c] |
 
 - The meanings of the fields that only name a DGROUP word are [OPEN].
-- Loading resets DGROUP:0x951c and DGROUP:0x104c to 0 and sets DGROUP:0x92e4 to 1. [BYTES seg6:0x98bb seg6:0x98be seg6:0x98c4]
+- What the reader does with the fields is in [Reading](#reading).
+- "Restore Game" in this table is INSPACE export 13, which writes the description of a save ([shell.md](shell.md#game-start-dialogs)). [BYTES seg10:0xa118]
+- The writers of DGROUP:0x5a8, and the [OPEN] question whether a new game resets it, are in [globals.md](globals.md#global-table). [DESIGN]
 
 ### Ship roster records (0x7c bytes)
-structs.md calls the index of one of these the ship's `roster_index`. Before a manual save, seg6:0x99b6 updates the record of each ship that has one, then calls seg6:0x885c(1, 0). [BYTES seg6:0x99b6 seg6:0x9e56]
+structs.md calls the index of one of these the ship's `roster_index`. Before a manual save, seg6:0x99b6 updates the record of each ship that has one, then calls seg6:0x885c(1, 0). It skips the whole update, of the roster and of the current directory record, when DGROUP:0x91f8 ≤ 0. It also sets DGROUP:0x931c to the player's `roster_index`. [BYTES seg6:0x99b6 seg6:0x99c5 seg6:0x99ca seg6:0x9e51 seg6:0x9e53 seg6:0x9e56 seg6:0x9d03] The fresh record of wave 1 is in [Resuming](#resuming).
 
 | Offset | Size | Content | Evidence |
 |---|---|---|---|
 | +0x00 | word | SHP index. The loader sets it to 1 when it is not below the SHP count, or for record 0 when seg14:0x455c rejects the ship | [BYTES seg6:0x9884 seg6:0x9892 seg6:0x98a4] |
-| +0x02 | word | ship dword +0xdc, capped at 0x4fff6, / 10 | [BYTES seg6:0x9b92] |
+| +0x02 | word | ship dword +0xdc, capped at 0x4fff6 in the ship record itself, / 10. The cap is a signed compare, so a negative value stays | [BYTES seg6:0x9b61 seg6:0x9b6d seg6:0x9b73 seg6:0x9b86 seg6:0x9b92] |
 | +0x04 | word | ship word +0xce | [BYTES seg6:0x9b55] |
 | +0x06 | word | ship word +0x82 | [BYTES seg6:0x9ae7] |
+| +0x08 + 2a, +0x12 + a, +0x17 + a | words, bytes, bytes, a = 0 … 4 | a five-entry table that seg14:0x421c keeps sorted; +0x17 + a holds another ship's roster index. Its meaning is [OPEN] | [BYTES seg14:0x421c seg6:0x9ad4] |
 | +0x1c | byte | ship word +0x1e / 40 | [BYTES seg6:0x9b00] |
 | +0x1d | byte | ship byte +0xcb, a count n | [BYTES seg6:0x9ac9] |
 | +0x1e, +0x28 | n bytes each | ship bytes +0xae… and +0xb8… | [BYTES seg6:0x9a9b seg6:0x9a84] |
 | +0x33 | byte | seg14:0x1b84 divides ship-record word +0x14 by (value + 10) / 10 for a ship that has a roster record ([MASTER.BOD](#masterbod-ship-bodies) +0x1d) | [BYTES seg14:0x2274 seg14:0x2279 seg14:0x2294 seg14:0x22a7] |
 | +0x38 | 4 bytes | ship words +0x26…+0x2c, cut to bytes; +0x38 is 0 when ship byte +0xec is 0. seg18:0x3d6 copies them back into the player's ship (DGROUP:0x9646) only | [BYTES seg6:0x9a39 seg6:0x9a5b] [BYTES seg18:0x4a7 seg18:0x4b6 seg18:0x4c0 seg18:0x4ca] |
 | +0x3c + k | byte | for roster record k: ship word +0x62 + 2j / 10, where j is the ship holding record k | [BYTES seg6:0x9a02] |
-| +0x64 | byte | the loader turns the value 7 into 0 | [BYTES seg6:0x986d seg6:0x9874] |
+| +0x64 | byte | team: the fresh record takes the SHP team byte +0x03. The loader turns the value 7 into 0 | [BYTES seg14:0x3e4 seg14:0x3e9 seg14:0x3f3] [BYTES seg6:0x986d seg6:0x9874] |
 | +0x72, +0x73 | byte | ship bytes +0xac and +0xad | [BYTES seg6:0x9b33 seg6:0x9b44] |
 | +0x74, +0x75 | byte | ship byte +0x24 and the low byte of ship word +0x0a | [BYTES seg6:0x9b11 seg6:0x9b22] |
-| +0x76 | byte | class 1–10 of a value derived from ship dword +0xdc and word +0xd8, banded [0, 28), [28, 34), [34, 40), [40, 48), [48, 55), [55, 63), [63, 70), [70, 80), [80, 97), [97, 114) by the tables DGROUP:0x952 and DGROUP:0x96c | [BYTES seg6:0x9bd4 seg6:0x9bda seg6:0x9bf7] [BYTES DGROUP:0x952] |
+| +0x76 | byte | class 1–10 of v = (ship dword +0xdc × 3 + word +0xd8) / 100: the first k with word DGROUP:0x952 + 2k ≤ v < word DGROUP:0x96c + 2k (signed), which gives the bands [0, 28), [28, 34), [34, 40), [40, 48), [48, 55), [55, 63), [63, 70), [70, 80), [80, 97), [97, 114). For a v outside them the byte takes the class of the last earlier ship of the same update that matched, or an uninitialised stack value when none did | [BYTES seg6:0x9ba6 seg6:0x9bb4 seg6:0x9bba seg6:0x9bcd seg6:0x9bd4 seg6:0x9bda seg6:0x9be3 seg6:0x9be6 seg6:0x9bf7] [BYTES DGROUP:0x952] |
 
-- The derivation of the +0x76 value through the runtime's long-arithmetic helpers, and the meanings of these fields, are [OPEN].
+- The meanings of these fields, the class of +0x76 included, are [OPEN].
+- seg14:0x421c inserts into the +0x08/+0x12/+0x17 table only when a flag is set that it overwrites for every ship of its loop, so in effect the last ship decides. [BYTES seg14:0x421c]
 
 ### Directory records (0x297 bytes)
 There is one record per directory the player has entered. DGROUP:0x94a2 indexes the current one. [BYTES seg6:0x36ce seg6:0x36f3]
@@ -224,14 +283,16 @@ There is one record per directory the player has entered. DGROUP:0x94a2 indexes 
 | +0xa0 … +0xa4 | bytes | the generator's object counts, copied back to the briefing on a revisit ([world.md](world.md#difficulty-inputs)); +0xa0, +0xa1: seg6:0x99b6 counts pool-3 records with word +0x18 = 0 and word +0x44 = 350, and the same for 1400 | [BYTES seg6:0x9d20 seg6:0x9d30 seg6:0x9d75 seg6:0x9d92 seg6:0x9dbc] |
 | +0xa3 | byte | the same count for pool-9 records with word +0x18 = 0 | [BYTES seg6:0x9d10 seg6:0x9d41 seg6:0x9d56] |
 | +0xad | byte | the gate count a revisited non-race directory takes ([world.md](world.md#difficulty-inputs)); the loader sets it to 1 in the current record when 0 | [BYTES seg6:0x9645] [BYTES seg9:0x3214] |
-| +0x14e, +0x150 | word | the DESTROYED and CAPTURED counts of the Navigation status line ([nav.md](nav.md#directory-records)) | [BYTES seg6:0x5b20 seg6:0x5994] |
+| +0x14e, +0x150 | word | the DESTROYED and CAPTURED counts of the Navigation status line ([nav.md](nav.md#directory-records)), counted by seg7:0x5ae8 ([core.md](core.md#counters-seg70x5ae8-and-seg70x5a46)) | [BYTES seg6:0x5b20 seg6:0x5994] [BYTES seg7:0x5b07 seg7:0x5b1c] |
 | +0xae | words | one per pool-8 record: word +0x1e, negated when that record's entry in the 0x34-byte table at DGROUP:0x3d5a holds −3 | [BYTES seg6:0x9dd7 seg6:0x9df2 seg6:0x9dfb seg6:0x9e23] |
 | +0xfe | words | the matching word +0x24 of that table entry | [BYTES seg6:0x9e2c seg6:0x9e41] |
 | +0x152 | 110 bytes | directory path; a new record copies it from DGROUP:0x6990 and a lookup compares it with DGROUP:0x6990 ([nav.md](nav.md#buffers)) | [BYTES seg6:0x36e4 seg6:0x377f] |
-| +0x1c0 | 8 bytes | roster indices present in the directory, 0xff = free | [BYTES seg6:0x9c53 seg6:0x9cc4 seg6:0x9cd5] |
+| +0x1c0 | 8 bytes | roster indices present in the directory, 0xff = free. In the current record seg6:0x99b6 removes a ship's index when its byte +0xec is 0, its word +0x82 is negative or it is the player's ship, and otherwise adds it at the first free byte when absent; with no free byte it is dropped | [BYTES seg6:0x9c03 seg6:0x9c0a seg6:0x9c11 seg6:0x9c53 seg6:0x9cc4 seg6:0x9cd5] |
 | +0x1d0 | byte | the directory's icon state: 2 complete (counts towards header +0x160), 1 icons remain, 0 placed with none left over ([world.md](world.md#programs-and-icons), [nav.md](nav.md#completion)) | [BYTES seg6:0x9102 seg6:0x598c seg9:0x2a seg9:0x114 seg9:0x99a seg9:0xab1] |
-| +0x1d2 + 2s | word | icon slot s's damage, clamped to 0 when negative ([world.md](world.md#programs-and-icons)) | [BYTES seg9:0x156] |
-| +0x1e2 | bitmap | icons already taken, bit n for icon number n ([nav.md](nav.md#directory-records)) | [BYTES seg9:0x156 seg9:0xac4] |
+| +0x1c8 + s | 8 bytes | icon slot s's flag at the wave end: 2 when the icon's byte +0x2f < 0 and 1 when its `capturable` (+0x53) = 2, 1 winning; written by seg9:0x2828 ([core.md](core.md#seg90x2828-the-wave-into-the-directory-record)) | [BYTES seg9:0x2f82 seg9:0x3077] |
+| +0x1d1 | byte | cleared at the briefing of a new directory ([core.md](core.md#counters-seg70x5ae8-and-seg70x5a46)); its meaning is [OPEN] | [BYTES seg9:0xbf0] |
+| +0x1d2 + 2s | word | icon slot s's damage, clamped to 0 when negative ([world.md](world.md#programs-and-icons)); seg7:0x233c mirrors an icon's `damage` into it ([core.md](core.md#shooting-an-icon-seg70x233c)) | [BYTES seg9:0x156] [BYTES seg7:0x2386] |
+| +0x1e2 | bitmap | icons already taken, captured or destroyed, bit n for icon number n, set by seg7:0x5a46 ([nav.md](nav.md#directory-records), [core.md](core.md#counters-seg70x5ae8-and-seg70x5a46)) | [BYTES seg9:0x156 seg9:0xac4] [BYTES seg7:0x5ad8] |
 
 - The Navigation fields are in [nav.md](nav.md#directory-records); the rest of the record is [OPEN].
 
@@ -303,7 +364,7 @@ Type I is an integer and S a string with its buffer size. "→" names the DGROUP
 | `Size` | I | 1 | [BYTES seg6:0xaf8 seg9:0x23f9 seg10:0x7fa9] [BYTES ISPACE.DLL seg9:0x17fe] | [BYTES seg6:0x95e8 seg9:0x23df seg10:0xa09d] [BYTES ISPACE.DLL seg9:0x21bb seg10:0x2646] | scale level → DGROUP:0x9156; saved in header +0x171 |
 | `SetSize` | I | 1 | [BYTES ISPACE.DLL seg10:0x1ff7] | [BYTES seg10:0xa0ba] [BYTES ISPACE.DLL seg9:0x21d0 seg10:0x265b] | written with `Size`; meaning [OPEN] |
 | `StratAsk` | I | 0 | [BYTES seg10:0xa988] [BYTES ISPACE.DLL seg10:0x26f5] | [BYTES seg10:0xaa6f] [BYTES ISPACE.DLL seg10:0x27d9] | while it is 0 or 10, New Game OK in Command mode asks strings 2850–2853, and Yes writes it + 1 ([shell.md](shell.md#game-start-dialogs)) [BYTES ISPACE.DLL seg10:0x26cd seg10:0x27a0 seg10:0x27d9] |
-| `SavePrompt` | I | 1 | [BYTES seg10:0x85a5] [BYTES ISPACE.DLL seg9:0x2d6a] | [BYTES ISPACE.DLL seg9:0x2f18] | [OPEN] |
+| `SavePrompt` | I | 1 | [BYTES seg10:0x85a5] [BYTES ISPACE.DLL seg9:0x2d6a] | [BYTES ISPACE.DLL seg9:0x2f18] | 0 skips the Save Game dialog on Save & Exit and on the abort's save while `Restore` holds a name (non-empty, no space at index 3), and the save goes ahead under that name ([shell.md](shell.md#exit)) [BYTES seg10:0x8585 seg10:0x85a5 seg10:0x85cd seg10:0x85d3] |
 | `Accept` | I | 0 | [BYTES seg11:0x7a28] | [BYTES ISPACE.DLL seg10:0x1290 seg10:0x5ded] | the dialog procedure ISPACE ordinal 39 (ISPACE.DLL seg10:0x124a) writes it when button 1 is pressed. It is the procedure of dialog #988 Important Information! ([ispace.md](ispace.md)), whose button 1 is I Accept. I Accept writes 42 (itoa) and seg10:0x5b24 in mode 0x5b writes 1. ESC at the title with DGROUP:0x920c = 2 opens #988 while the value is not 42 ([shell.md](shell.md#game-start-dialogs)) [BYTES ISPACE.DLL seg10:0x1290 seg10:0x5ded] [BYTES seg11:0x7a28 seg11:0x7a34] [BYTES ENG_LANG.DLL DIALOG 988] |
 | `PlusCount` | I | 13 | [BYTES seg10:0x880e] | [BYTES seg10:0x8852] | exit counter: seg10:0x87de adds 1 on each exit while DGROUP:0x11aa = 0 and DGROUP:0x920c is −1 or 3, and above 12 stores 0 and opens dialog #1872 ([shell.md](shell.md#exit)) [BYTES seg10:0x87eb seg10:0x8816 seg10:0x881f seg10:0x882d] |
 

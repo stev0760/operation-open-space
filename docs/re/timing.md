@@ -61,7 +61,7 @@ if not skip and counter >= N:
   - The poll runs only while DGROUP:0x1a is clear and field +0x18 of the DGROUP:0x1e30 record of index DGROUP:0x9646 (stride 0x70) is 0. [BYTES seg7:0x868] [BYTES seg7:0x87a]
   - The oracle counts 94 600 such passes in 8.2 s of wave. [ORACLE newgame-0002]
   - While DGROUP:0x9130 is set, the wave pass skips that work and the wave frame calls seg16:0x64fa instead of the world update. [BYTES seg7:0x594] [BYTES seg7:0xb6b]
-- **Wave frame:** when a wave frame is due, the game first runs seg8:0x3aec (the beam-slot update) in a loop of 5 × (DGROUP:0x594 + DGROUP:0x598) calls. It then runs seg8:0x3fbe (only while DGROUP:0x9430 > 0) and seg7:0x375a, and continues at seg7:0x9ce ([world.md](world.md#update-loop)). [BYTES seg7:0x942] [BYTES seg7:0x993]
+- **Wave frame:** when a wave frame is due, the game first runs seg8:0x3aec (the [shot-slot update](core.md#shot-update-seg80x3aec)) in a loop of 5 × (DGROUP:0x594 + DGROUP:0x598) calls. It then runs seg8:0x3fbe (only while DGROUP:0x9430 > 0) and seg7:0x375a, and continues at seg7:0x9ce ([world.md](world.md#update-loop)). [BYTES seg7:0x942] [BYTES seg7:0x993]
 - With the default rate of 36 (F = 28, S = 27) and a loop much faster than the frame rate, wave frames come 27, 28 or 29 ms apart. The adaptive threshold below keeps the average near 36 frames per second. [BYTES seg6:0xb9a] [BYTES seg7:0xac2]
 
 ## Rate settings
