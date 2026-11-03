@@ -25,6 +25,7 @@
 #include "world/gate_exit.h"
 #include "world/hooks.h"
 #include "world/player_sheet.h"
+#include "world/ambulance.h"
 #include "world/capture.h"
 #include "world/missile.h"
 #include "world/shots.h"
@@ -58,7 +59,15 @@ public:
     // Roster byte +0x33 from the World's roster, the record seg13:0x33d6 reads too (rating.h
     // RosterRecord::b33) [BYTES seg11:0x6644] (M5 s2 fixer, review M4).
     std::int16_t roster_byte_33(int roster) override;
-    void mover(Mover m) override { todo_once("wave mover", mover_address(m)); }
+    void mover(Mover m) override;
+    // ---- M4 s3 fixer: the ambulance on the program's World (ambulance.h; review H2)
+    // seg16:0xa2 at the pass's step 20 while pool 7 record 0 has `state` 0 [BYTES seg7:0xc61-0xc7a].
+    void seg16_a2() override;
+    // seg16:0x33a2 and seg16:0x3306 once the dword DGROUP:0x6da8 has passed [BYTES seg7:0xc7c-0xc8f].
+    bool seg16_33a2() override;
+    void seg16_3306() override;
+    // seg13:0x3748(i), the served ship's part of the ship mover (flight.cpp) [BYTES seg13:0x3748].
+    void seg13_3748(int ship) override;
     // The calls src/hud's integration links (WaveLinks, M3 s2 fixer); a missing link logs.
     void fuel_mass() override {
         if (g_links.fuel_mass) return g_links.fuel_mass();
@@ -255,6 +264,8 @@ public:
         if (!app::post(static_cast<UINT>(msg))) app::log("wave: the post failed");
     }
     void speed_step(int d) override;
+    // WM_KEYDOWN 'H' (seg11:0x6f7a-0x6fe8): ambulance.h ambulance_key_program (M4 s3 fixer, review H1).
+    void ambulance(bool ctrl, bool alt) override;
     void rescale_step(int d) override {
         todo_once("rescale " + std::to_string(d), "seg10:0x9a2a");
     }
@@ -365,10 +376,21 @@ void ProgramCollideHost::flame_off(int ship) {
 
 // The far call of a record's `on_destroy` (+0x66) [BYTES seg13:0x4a1d]: the two handlers the
 // port has, seg16:0x8e4 (a ship) and seg12:0x274a (the generic one); any other logs [OPEN].
+CollideCtx program_collide_ctx(Runtime& r);
+
 void call_on_destroy(EffectCtx& c, int pool, int rec) {
     const std::uint32_t id = obj(c.w, pool, rec).on_destroy.get();
     if (id == kDestroyShip) return ship_destroyed(c, pool, rec);
     if (id == kDestroyGeneric) return object_destroyed(c, pool, rec);
+    // seg7:0x2e02 (the pick-up) and seg12:0x6a60 (pool 11) through collide.h run_on_destroy
+    // (M4 s3 fixer, review M5) [BYTES seg7:0x2e02 seg12:0x6a60].
+    if (id == kDestroyPickup || id == kDestroyPool11) {
+        Runtime& r = rt();
+        if (!r.world) return;
+        r.collide_host.u = &r.h();
+        CollideCtx x = program_collide_ctx(r);
+        return run_on_destroy(x, pool, rec);
+    }
     char buf[64];
     std::snprintf(buf, sizeof buf, "on_destroy seg%u:0x%x pool %d", id >> 16, id & 0xffffu, pool);
     todo_once(buf, "seg13:0x4a1d");
@@ -537,6 +559,11 @@ void sync_in(Runtime& r, shell::GameState& s) {
     gl.detail = w.detail;
     gl.demons_gate = w.handover.demons_gate;
     gl.dg_9e49 = w.w9e49;
+    // DGROUP:0x952e, 0x9e5b and 0x6da8: the ambulance's words (ambulance.h), copied in as
+    // DGROUP:0x9e49 is (M4 s3 fixer, review H2) [DESIGN].
+    gl.dg_952e = w.w952e;
+    gl.dg_9e5b = ambulance_state().served_alive;
+    r.f.dg_6da8 = ambulance_state().reentry_due;
     gl.dg_9eb4 = static_cast<std::uint8_t>(w.w9eb4);
     gl.dg_94e2 = w.w94e2;
     gl.game_frames = w.frames;
@@ -627,6 +654,43 @@ void DefaultActions::speed_step(int d) {
     } catch (const std::exception& x) {
         app::log(std::string("INSPACE.INI: ") + x.what());
     }
+}
+
+void DefaultActions::ambulance(bool ctrl, bool alt) {
+    Runtime& r = rt();
+    if (!r.world) return;
+    const int code = ambulance_key_program(*r.world, r.g.now, ctrl, alt);
+    if (code != 0) app::log("wave: H, the ambulance's reply " + std::to_string(code) + " (seg11:0x6fd1)");
+    // The frame's copies of DGROUP:0x9e49 / 0x952e (the next sync_in copies them too) [DESIGN].
+    r.g.dg_9e49 = r.world->w9e49;
+    r.g.dg_952e = r.world->w952e;
+}
+
+void DefaultHost::mover(Mover m) {
+    // seg12:0x3e98 returns at once outside a kind-6 wave [BYTES seg12:0x3ea8-0x3eaf]: only a race
+    // wave misses its body (M4 s3 fixer, review L2).
+    if (m == Mover::k12_3e98 && rt().g.wave_kind != 6) return;
+    todo_once("wave mover", mover_address(m));
+}
+
+void DefaultHost::seg16_a2() {
+    Runtime& r = rt();
+    if (r.world && frame_ctx) ambulance_frame(*frame_ctx, *r.world);
+}
+
+bool DefaultHost::seg16_33a2() {
+    Runtime& r = rt();
+    return r.world && ambulance_reentry_clear_program(*r.world, r.g.now);
+}
+
+void DefaultHost::seg16_3306() {
+    Runtime& r = rt();
+    if (r.world) ambulance_reentry_program(*r.world, r.g, r.f);
+}
+
+void DefaultHost::seg13_3748(int ship) {
+    Runtime& r = rt();
+    if (r.world && frame_ctx) served_ship_move_program(frame_ctx->flight, *r.world, ship);
 }
 
 // The wave tick's frame count: every wave frame increments DGROUP:0x586; once the game clock

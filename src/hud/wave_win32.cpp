@@ -29,16 +29,21 @@
 #include "hud/wave.h"
 #include "hud/weapons.h"
 #include "shell/rng.h"
+#include "world/ambulance.h"
 #include "world/draw.h"
+#include "settings/settings.h"
 #include "world/entry_effect.h"
 #include "world/flight_hooks.h"
 #include "world/hooks.h"
 #include "world/icon_mover.h"
+#include "world/input.h"
 #include "world/missile.h"
+#include "world/pods.h"
 #include "world/player_sheet.h"
 #include "world/rock_images.h"
 #include "world/setup.h"
 #include "world/sprite.h"
+#include "world/tank.h"
 #include "world/visibility.h"
 #include "world/world.h"
 
@@ -78,6 +83,9 @@ world::SpriteGlobals sprite_globals() {
     s.dg_238e = fg.dg_238e;
     s.dg_952e = w().w952e;
     s.dg_9e49 = w().w9e49;
+    // DGROUP:0x9e47, the ambulance's lift (seg8:0xd04's state-6 alternate source with the lift at
+    // 15) (world/ambulance.h) (M4 s3 fixer, review M7).
+    s.dg_9e47 = world::ambulance_state().lift;
     s.dg_913a = w().w913a;
     s.dg_913c = w().w913c;
     // DGROUP:0x5ea8, the start-up's sparse-dot pattern brush (rock_images.h WaveGraphics::mask)
@@ -224,6 +232,74 @@ void radar_refresh() {
     g_radar.refresh(radar_inputs(), *g_blit);
 }
 
+// ---- the cloak and the shield (world/input.h) (M4 s3 FUEL)
+
+world::EntryContext entry_context();
+
+// The toggles' calls: the vanish through the entry effect (world/entry_effect.h), the flame
+// seg11:0xb09c outside the frame (world.h briefing_flame), M7's sounds, the ENG_LANG strings and
+// the pilot name DGROUP:0x380c (INI ThePlayer, 12 bytes, as the state-1 set-up reads it) [BYTES
+// seg10:0x8c].
+class HudSystemsHost final : public world::SystemsHost {
+public:
+    void vanish_buffer(int pool, int ship) override {
+        if (!ready()) return;
+        world::EntryContext c = entry_context();
+        world::entry_buffer(c, pool, ship);  // seg12:0x2556
+    }
+    void vanish_start(int mode, int pool, int ship) override {
+        if (!ready()) return;
+        world::EntryContext c = entry_context();
+        world::entry_start(c, static_cast<std::uint8_t>(mode), pool, ship);  // seg7:0x13b2
+    }
+    void shield_render(int) override { todo_once("the shield's sprite render", "seg10:0x7328"); }
+    void flame(int on, int ship) override { world::briefing_flame(w(), on, ship); }
+    void sound(int id, int pool, int rec, int mode) override { is::sound::play_at(id, pool, rec, mode); }
+    std::string lang(int id) override {
+        try {
+            if (g.store) return g.store->find_string(static_cast<std::uint16_t>(id)).value_or("");
+        } catch (const std::exception&) {
+        }
+        return {};
+    }
+    std::string pilot() override {
+        return g.ini ? g.ini->get_string(settings::kGameSection, "ThePlayer", "", 12) : std::string();
+    }
+    void strategy_line(const std::string& text) override {
+        // seg7:0x1f38 draws "Cmd Mode: " + DGROUP:0x8630 only in Strategy mode [BYTES seg7:0x1f45]
+        if (w().play_mode == 1) todo_once("the strategy command line", "seg7:0x1f38");
+        app::log("wave: seg3:0x332e " + text);
+    }
+};
+HudSystemsHost g_systems;
+
+world::SystemsCtx systems_ctx() {
+    const world::WaveGlobals& fg = world::flight_globals();
+    return world::SystemsCtx{w(), fg.now, fg.game_frames, g_systems};
+}
+
+// WM_KEYUP VK_CAPITAL (seg11:0x6dd6) ahead of the flight role's router (world/input.h
+// capslock_action) [BYTES seg11:0x6d19 seg11:0x6dd6-0x6e0a]. The remap seg11:0xb306 leaves
+// 0x14 as it is (its table holds letters) [DESIGN].
+bool caps_key(const shell::GameState& s, const shell::Input& in) {
+    if (s.state() != shell::kWave || in.msg != shell::kWmKeyUp || in.wparam != world::kVkCapital) return false;
+    if (world::flight_globals().dg_9130 != 0) return false;  // seg18:0xd4e, as route_wave [OPEN]
+    world::World& wd = w();
+    const int p = wd.player;
+    if (p < 0 || p >= world::kShipCount || wd.pools.records(wd.roles.ships) <= p) return false;
+    const world::ShipRecord& r = wd.ship(p);
+    const bool gated = r.lockout.get() > s.now() || wd.ship_object(p).state != 0;
+    world::WaveGlobals& fg = world::flight_globals();
+    fg.now = s.now();
+    world::SystemsCtx sc = systems_ctx();
+    switch (world::capslock_action(gated, wd.player_game, wd.play_mode, r.be9, r.be7)) {
+    case world::CapsAction::kShield: world::shield_toggle(sc, p); break;  // seg11:0x4b00(player)
+    case world::CapsAction::kCloak: world::cloak_toggle(sc, p); break;    // seg11:0x4c72(player)
+    case world::CapsAction::kNone: break;
+    }
+    return true;
+}
+
 void fuel_mass() {
     StatusHooks h;
     h.update = [](int arg) {
@@ -232,8 +308,16 @@ void fuel_mass() {
     h.score_shown = [] { return hud() ? hud()->panels().state().score_shown : 0u; };
     h.score = [] { return links().score ? links().score() : w().score; };  // DGROUP:0x1e58 (M4 s2 DISPLAY)
     h.design_mass = [](int d) { return world::design_mass(d); };
-    h.seg11_4c72 = [](int) { todo_once("fuel-out damage", "seg11:0x4c72"); };
-    h.seg3_332e = [](std::uint32_t) { todo_once("status message", "seg3:0x332e"); };
+    // The cloak's auto-off below 120 litres and its notice (world/input.h cloak_toggle,
+    // strategy_notice), the result ignored [BYTES seg11:0x1c8f-0x1c9e] (M4 s3 FUEL).
+    h.seg11_4c72 = [](int i) {
+        world::SystemsCtx sc = systems_ctx();
+        world::cloak_toggle(sc, i);
+    };
+    h.seg3_332e = [](std::uint32_t ids) {
+        world::SystemsCtx sc = systems_ctx();
+        world::strategy_notice(sc, ids);
+    };
     h.seg13_2dcc = [] { todo_once("radar brushes", "seg13:0x2dcc"); };
     h.seg11_1d7c = [] { world::repair_tick(); };  // the auto-repair (world/damage.h auto_repair) (M4 s1 fixer)
     status_tick(w(), world::flight_globals().now, g_status, h);
@@ -456,8 +540,20 @@ std::vector<std::pair<int, int>> wave_visible() {
     return v;
 }
 
+std::int16_t g_tank_made_for = -1;  // DGROUP:0x17c0, the DGROUP:0x9214 of slot 4's image
+
 void load_wave_resources() {
     if (!ready()) return;
+    // seg9:0x26f6's seg10:0x565a (the fuel tank, slot 4) and seg9:0x2733's seg10:0x42ee (the
+    // pods, slot 0x1d) [BYTES seg9:0x26f6 seg9:0x2733] (M4 s3 FUEL).
+    world::build_tank_image(*g_blit, g_images, w().w9214, g_tank_made_for);
+    world::build_pod_image(*g_blit, g_images);
+    // Image slot 5 (DGROUP:0x39f2), the logo strip seg10:0x39a8 builds once: the ambulance draws
+    // its cell from it (ambulance.cpp seg16:0xa2's head) [BYTES seg10:0x39b2 seg10:0x3a24]
+    // (shell.md "Strip") (M4 s3 fixer, review M7).
+    if (g_images[5] == world::kDcNone) {
+        if (gfx::ImagePtr logo = g.gfx->logo_strip()) g_images[5] = g_blit->bind(logo);
+    }
     // seg9:0x22b4's graphics chain: the rock images seg10:0x3a2e, the gate images seg10:0x3ea2
     // (seg9:0x26e5) and the wave's brushes [BYTES seg9:0x22b4 seg9:0x26e5] (M3 s4 fixer, review
     // H1).
@@ -502,6 +598,30 @@ void install_wave(app::App& app) {
     l.images = []() -> const world::ImageSlotTable* { return &g_images; };
     // seg7:0x119c(2, 0) at the speed or message display's end [BYTES seg7:0xbe3-0xbe7].
     l.info_target = [] { info_mode_119c(2); };
+    // ---- M4 s3 FUEL: the small movers' drawing and the ship systems
+    world::SmallMoverLinks& sm = world::small_mover_links();
+    sm.images = []() -> const world::ImageSlotTable* { return &g_images; };
+    sm.fragment_has_bitmap = [](int r) {  // DGROUP:0x4e94 + 2r != 0 [BYTES seg7:0x3336]
+        return r >= 0 && r < static_cast<int>(g_fragment_dc.size()) &&
+               g_fragment_dc[static_cast<std::size_t>(r)] != world::kDcNone;
+    };
+    // SelectObject(DGROUP:0x9288, DGROUP:0x4e94[r]) and seg8:0xb76(h, 3, DGROUP:0x9288, 0): the
+    // port's fragment image is its own DC [DESIGN ADR 0013] [BYTES seg7:0x333d-0x3388].
+    sm.draw_fragment = [](std::int16_t pr, int r) {
+        if (!ready() || r < 0 || r >= static_cast<int>(g_fragment_dc.size())) return;
+        world::SpriteGlobals sg = sprite_globals();
+        world::draw_sprite(w().pools, pr, 3, g_fragment_dc[static_cast<std::size_t>(r)], 0, sg, to_screen, *g_blit);
+        after_draw(sg);
+    };
+    world::set_systems_host(&g_systems);
+    {
+        auto& gh = app.game.hooks();
+        auto prev_route = gh.route_input;
+        gh.route_input = [prev_route](shell::GameState& st, const shell::Input& in) {
+            if (caps_key(st, in)) return;
+            if (prev_route) prev_route(st, in);
+        };
+    }
     // seg3:0x6ec from the collisions and the damage (hud/messages.h).
     world::collide_links().message = [](int ship, int pool, int rec, int code) {
         post_message(ship, pool, rec, code);
@@ -586,6 +706,32 @@ void install_wave(app::App& app) {
     // The frame host's calls into the sprite side (world/player_sheet.h SpriteLinks): the
     // entry seg7:0x1d0c's seg12:0x2556(14, i) and seg7:0x13b2(2, 14, i) [BYTES seg7:0x1e7f],
     // and the frame's seg7:0x158e [BYTES seg7:0x118a] (M5 s1 SPRITE).
+    // The ambulance's buffer, materialise and pick-up composite (world/ambulance.h
+    // AmbulanceLinks): seg12:0x2556, seg12:0x26a4 and seg7:0x13b2 through the entry effect as the
+    // ship's entry uses them, and seg13:0x3d40 (world/draw.h pickup_composite) (M4 s3 fixer,
+    // review M7).
+    world::AmbulanceLinks& al = world::ambulance_links();
+    al.buffer = [](int pool, int rec) {
+        if (!ready()) return;
+        world::EntryContext c = entry_context();
+        world::entry_buffer(c, pool, rec);
+    };
+    al.buffer_free = [](int pool, int rec) {
+        if (!ready()) return;
+        world::EntryContext c = entry_context();
+        world::entry_buffer_free(c, pool, rec);
+    };
+    al.effect = [](int mode, int pool, int rec) {
+        if (!ready()) return;
+        world::EntryContext c = entry_context();
+        world::entry_start(c, static_cast<std::uint8_t>(mode), pool, rec);
+    };
+    al.composite = [](std::int16_t den, std::int16_t num, int o_rec, int o_pool, int s_rec, int s_pool) {
+        if (!ready()) return;
+        world::DrawContext c = draw_context();
+        world::pickup_composite(c, den, num, o_rec, o_pool, s_rec, s_pool);
+        after_draw(c.g.sprite);
+    };
     world::SpriteLinks& sl = world::sprite_links();
     sl.ship_entered = [](int ship) {
         if (!ready()) return;

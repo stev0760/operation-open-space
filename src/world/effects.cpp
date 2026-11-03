@@ -4,6 +4,7 @@
 
 #include "world/missile.h"
 
+#include "world/collide.h"
 #include "world/death.h"
 
 namespace is::world {
@@ -382,6 +383,75 @@ void object_destroyed(EffectCtx& c, int pool, int rec) {
         c.host.pool6_destroyed(rec);
     }
     c.host.sound(0x45, pool, rec, 1);            // [BYTES seg12:0x2b0d]
+}
+
+// ---- seg7:0x2e02 (M4 s3 FUEL)
+
+void pickup_destroyed(CollideCtx& x, int pool, int rec) {
+    World& w = x.w;
+    if (!record_ok(w.pools, pool, rec)) return;  // [DESIGN] bounds
+    ObjectRecord& o = w.pools.rec(pool, rec);
+    if (o.state == 0) {  // [BYTES seg7:0x2e1f-0x2e24]
+        o.state = 1;     // [BYTES seg7:0x2e28]
+        x.h.erase(o.scr_x, o.scr_y, o.size, o.size);  // PatBlt BLACKNESS [BYTES seg7:0x2e2e-0x2e4f]
+        int e = 0;
+        for (; e < 4; ++e) {  // free, or of type <= 5 [BYTES seg7:0x2ffd-0x3013]
+            const EffectEntry& E = w.effects[ix(e)];
+            if (E.frame == kEffectFree || !(E.type > 5)) break;
+        }
+        if (e < 4) {
+            // DGROUP:0x5e98 + 2e / 0x5ea0 + 2e: the entry's source DC (released, then the
+            // fragment's bitmap, DGROUP:0x39f0, a pool-8 or a weapon image) [BYTES
+            // seg7:0x3015-0x306a] [OPEN: only the type-6 branch of seg8:0x3fbe reads it].
+            int id = 0;
+            if (pool == 1 || pool == 8) {
+                id = 0x1a;  // FLANGE [BYTES seg7:0x303f-0x3076 seg7:0x2e5c-0x2e79]
+            } else if (pool == 6) {
+                const std::int16_t W = w.pools.missile(rec).weapon;  // DGROUP:0x66e4 + 0x1c·rec
+                id = x.h.weapon_kind(W) == 6 ? 0x1a : 0x1f;          // DGROUP:0x2f78 [BYTES seg7:0x2e9e-0x2ea5]
+            } else if (pool == 4) {
+                id = 0x1f;  // SHATTER [BYTES seg7:0x2ea8-0x2ec2]
+            }
+            if (id != 0) x.h.sound(id, pool, rec, 1);  // seg10:0x754a(id, pool, rec, 1)
+            EffectState& st = effect_state();
+            EffectEntry& E = w.effects[ix(e)];
+            // An entry in use moves to the first free entry of 4 ... 44 (`jle` on -1: signed)
+            // [BYTES seg7:0x2eca-0x2f5e].
+            if (static_cast<std::int16_t>(E.frame) > -1) {
+                for (int j = 4; j < kEffectCount; ++j) {
+                    EffectEntry& F = w.effects[ix(j)];
+                    if (F.frame != kEffectFree) continue;
+                    F.frame = E.frame;
+                    F.end = E.end;
+                    F.pool = E.pool;
+                    F.rec = E.rec;
+                    F.start = E.start;
+                    F.type = E.type;
+                    F.side = E.side;
+                    F.brush = E.brush;  // +0x04, the step, is not copied
+                    st.sides.centre[ix(j)] = st.sides.centre[ix(e)];
+                    st.sides.point[ix(j)] = st.sides.point[ix(e)];
+                    break;
+                }
+            }
+            E.frame = 1;  // dword 0x00140001 [BYTES seg7:0x2f62-0x2f66]
+            E.end = 20;
+            w.w9430 = add16(w.w9430, 1);  // [BYTES seg7:0x2f6f]
+            E.type = 6;                   // [BYTES seg7:0x2f73]
+            E.side = idiv16(o.size, 5);   // [BYTES seg7:0x2f92-0x2f9b]
+            E.step = e > w.detail ? 2 : 1;  // [BYTES seg7:0x2f9f-0x2fb3]
+            E.pool = static_cast<std::int16_t>(pool);
+            E.rec = static_cast<std::int16_t>(rec);
+            st.sides.centre[ix(e)] = EffectPoint{o.scr_x, o.scr_y};  // DGROUP:0x5170 [BYTES seg7:0x2fe6-0x2fea]
+            st.sides.point[ix(e)] = EffectPoint{o.x, o.y};           // DGROUP:0x5224 [BYTES seg7:0x2fee-0x2ff3]
+        }
+    }
+    // The icon's column row, even when `state` was already 1 [BYTES seg7:0x3079-0x308e]
+    if (pool == 1) {
+        const std::int16_t icon =
+            rec >= 0 && rec < static_cast<int>(w.fragment_icon.size()) ? w.fragment_icon[ix(rec)] : std::int16_t{-1};
+        x.h.column_row(0, icon);
+    }
 }
 
 }  // namespace is::world

@@ -297,6 +297,107 @@ void draw_lines(World& w, std::int16_t ship_pool, DcId window_dc, LinkHooks* hoo
     }
 }
 
+// ---- seg13:0x3d40 (M4 s3 AMBFLIGHT) [OPEN: claims 45-48 unverified]
+
+namespace {
+
+std::int16_t min16(std::int16_t a, std::int16_t b) { return a < b ? a : b; }
+
+// One axis of the overlap: the part of a square at offset o (O's origin minus S's) that lies
+// under the other. `under` (part a, seg13:0x3f7c-0x400b): O's cell into S's buffer, source
+// offset in O and destination offset in S; else (part c, seg13:0x4219-0x42ae) S's pixels over
+// O's buffer, source offset in S and destination offset in O.
+struct Span {
+    std::int16_t src = 0, dst = 0, len = 0;
+};
+Span overlap_a(std::int16_t o, std::int16_t Bo, std::int16_t Ss) {
+    if (o < 0) return Span{sub16(0, o), 0, min16(add16(Bo, o), Ss)};
+    return Span{0, o, min16(sub16(Ss, o), Bo)};
+}
+Span overlap_c(std::int16_t o, std::int16_t Bo, std::int16_t Ss) {
+    if (o > 0) return Span{o, 0, min16(Bo, sub16(Ss, o))};
+    return Span{0, sub16(0, o), min16(add16(Bo, o), Ss)};
+}
+
+}  // namespace
+
+void pickup_composite(DrawContext& c, std::int16_t den, std::int16_t num, int o_rec, int o_pool,
+                      int s_rec, int s_pool) {
+    Pools& p = c.pools;
+    const auto ok = [&p](int pool, int rec) {
+        return pool >= 0 && pool < kPoolCount && rec >= 0 && rec < p.records(pool);
+    };
+    if (o_pool == 15 || !ok(o_pool, o_rec) || !ok(s_pool, s_rec)) return;  // [OPEN M6] seg13:0x3b88's pool 15
+    ObjectRecord& S = p.rec(s_pool, s_rec);
+    ObjectRecord& O = p.rec(o_pool, o_rec);
+    const DcId s3a = static_cast<DcId>(S.w3a), s3c = S.alt_dc;
+    const DcId o3a = static_cast<DcId>(O.w3a), o3c = O.alt_dc;
+    if (s3c == kDcNone || o3c == kDcNone) return;  // [DESIGN] no buffer to draw into
+    Blitter& out = c.out;
+    if (den == 0) den = 1;  // [BYTES seg13:0x3d4f]
+    // seg8:0x29ea of both positions; O's offset from S on the screen [BYTES seg13:0x3d5a-0x3dbf]
+    const Point16 ps = c.to_screen(S.x, S.y);
+    const Point16 po = c.to_screen(O.x, O.y);
+    const std::int16_t ox = sub16(po.x, ps.x), oy = sub16(po.y, ps.y);
+    const std::int16_t Ss = S.size, g = S.gap;
+    // lo16(Ss·num) / den: `imul word`, `cwd`, `idiv` (claim 45) [BYTES seg13:0x3de2-0x3de9]
+    const std::int16_t s2 = (den == -1 && mul16(Ss, num) == INT16_MIN) ? std::int16_t{0} : idiv16(mul16(Ss, num), den);
+    const std::int16_t off = add16(g, idiv16(sub16(Ss, s2), 2));  // `cwd; sub; sar` [BYTES seg13:0x3df0-0x3df7]
+    const std::int16_t A = O.size, ag = O.gap;                    // [BYTES seg13:0x3dfc-0x3e27]
+    const std::int16_t Bo = add16(mul16(ag, 2), A), Bs = add16(mul16(g, 2), Ss);
+    const std::int16_t cellS = add16(mul16(S.frame, add16(g, Ss)), g);
+    const std::int16_t cellO = add16(mul16(O.frame, add16(ag, A)), ag);
+    const std::int16_t lo = sub16(-2, A), hi = add16(Ss, 2);
+    const bool overlap = lo <= ox && lo <= oy && ox <= hi && oy <= hi;  // signed (claim 46) [BYTES seg13:0x3e2c-0x3e49]
+    if (!overlap) {  // [BYTES seg13:0x3e53-0x3f79]
+        out.pat_blt(o3c, 0, 0, Bo, Bo, kBlackness);
+        out.bit_blt(o3c, ag, ag, A, A, o3a, cellO, ag, kSrcCopy);
+        if (s2 == Ss) {
+            out.bit_blt(s3c, g, g, Ss, Ss, s3a, cellS, g, kSrcCopy);
+        } else {
+            out.set_stretch_mode(s3c, kColorOnColor);
+            out.pat_blt(s3c, 0, 0, Bs, Bs, kBlackness);
+            out.stretch_blt(s3c, off, off, s2, s2, s3a, cellS, g, Ss, Ss, kSrcCopy);
+        }
+    } else {  // [BYTES seg13:0x3f7c-0x43c8]
+        // a) O's cell under S's square, into S's buffer [BYTES seg13:0x3f7c-0x408e]
+        const Span ax = overlap_a(ox, Bo, Ss), ay = overlap_a(oy, Bo, Ss);
+        out.pat_blt(s3c, 0, 0, Bs, Bs, kBlackness);
+        out.bit_blt(s3c, add16(g, ax.dst), add16(g, ay.dst), ax.len, ay.len, o3a, add16(cellO, ax.src),
+                    add16(ag, ay.src), kSrcCopy);
+        // b) the (scaled) ship cell M and its mask K (seg10:0x6ec6: 1 where M is black); the
+        // palette selection of DGROUP:0x920e is the Blitter's (ADR 0007) [BYTES seg13:0x4093-0x4214]
+        const DcId M = out.create_image(Bs, Bs);
+        out.pat_blt(M, 0, 0, Bs, Bs, kBlackness);
+        if (s2 != Ss) {
+            out.set_stretch_mode(M, kColorOnColor);
+            out.stretch_blt(M, off, off, s2, s2, s3a, cellS, g, Ss, Ss, kSrcCopy);
+        } else {
+            out.bit_blt(M, g, g, Ss, Ss, s3a, cellS, g, kSrcCopy);
+        }
+        const DcId K = out.create_mask(M);
+        out.bit_blt(s3c, g, g, Ss, Ss, K, g, g, kSrcAnd);    // (claim 47) [BYTES seg13:0x41e4]
+        out.bit_blt(s3c, g, g, Ss, Ss, M, g, g, kSrcPaint);  // [BYTES seg13:0x420e]
+        // c) S over O's buffer where they overlap [BYTES seg13:0x4219-0x437e]
+        const Span cx = overlap_c(ox, Bo, Ss), cy = overlap_c(oy, Bo, Ss);
+        out.pat_blt(o3c, 0, 0, Bo, Bo, kBlackness);
+        out.bit_blt(o3c, ag, ag, A, A, o3a, cellO, ag, kSrcCopy);
+        out.bit_blt(o3c, add16(ag, cx.dst), add16(ag, cy.dst), cx.len, cy.len, K, add16(g, cx.src),
+                    add16(g, cy.src), kSrcAnd);    // [BYTES seg13:0x4340]
+        out.bit_blt(o3c, add16(ag, cx.dst), add16(ag, cy.dst), cx.len, cy.len, M, add16(g, cx.src),
+                    add16(g, cy.src), kSrcPaint);  // [BYTES seg13:0x4378]
+        out.delete_image(M);  // [BYTES seg13:0x4383-0x43c8]
+        if (K != kDcNone) out.delete_image(K);
+    }
+    // Both drawn through seg8:0xb76 (claim 48) [BYTES seg13:0x43cd-0x446a]
+    S.on_screen = 1;
+    S.src_x = cellS;
+    draw_sprite(p, pool_rec(s_pool, static_cast<std::int8_t>(s_rec) & 0xff), 1, s3a, 0, c.g.sprite, c.to_screen, out);
+    S.on_screen = 0;
+    O.src_x = cellO;
+    draw_sprite(p, pool_rec(o_pool, o_rec), 1, o3a, 0, c.g.sprite, c.to_screen, out);
+}
+
 DcId load_ship_body(Blitter& out, const fmt::BodyRecord& body) {
     if (body.bitmap_id == fmt::kBodyBitmapFromFile) return kDcNone;  // [OPEN]
     return out.load_graphic(body.bitmap_id, 0, -1);                   // [DESIGN ADR 0013] [OPEN]

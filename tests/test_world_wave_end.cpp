@@ -333,3 +333,22 @@ TEST_CASE("seg9:0x2cdb: the wave end writes credit / 10 and resources into the r
     CHECK(f.w.ships[0].wde == 4);
     CHECK(f.w.player_roster == 0);
 }
+
+TEST_CASE("seg9:0x2b5d: the wave end writes the damaged ship into the roster [ORACLE core-0001 core-0003]") {
+    // The user's bug of M4 s3: wave 2 came back with full systems, ammo and fuel. The wave end
+    // must run roster_from_ship for the ship (M4 s3 fixer, review H4).
+    EndFixture f;
+    f.w.roster.resize(1);
+    ShipRecord& s = f.w.ships[0];
+    s.roster_index = 0;
+    s.w26 = 39, s.w28 = 9, s.w2a = 39, s.w2c = 1;  // core-0001's carry-over
+    s.fuel = 1209;                                  // core-0003: roster byte 30
+    wave_into_directory(f.c);
+    const RosterRecord& r = f.w.roster[0];
+    CHECK(r.systems[0] == 39);
+    CHECK(r.systems[1] == 9);
+    CHECK(r.systems[2] == 39);
+    CHECK(r.systems[3] == 1);
+    CHECK(r.fuel40 == 30);
+    CHECK(f.host.calls.back() == "lastgame");  // seg9:0x31f0's seg6:0x885c(0, 0)
+}

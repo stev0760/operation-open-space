@@ -26,6 +26,19 @@ std::string icon_label(const std::string& string152, int rec);
 // " (FROZEN)", else none [BYTES seg3:0x27f seg3:0x28d seg3:0x2bd]. Returns the string id or 0.
 int icon_suffix_id(int b53);
 
+// seg3:0xf4's texts for a pool-1 target, the icon fragment [BYTES seg3:0x2cf-0x2ed seg3:0x40b-0x428
+// seg3:0x16ab] (work/analysis/m4/s3-fuel-verify.md claim 46) (M4 s3 FUEL): DGROUP:0x9628 = the
+// file name of the fragment's icon (DGROUP:0x57b4 + 0x23·DGROUP:0x6038[rec]), DGROUP:0x8718 =
+// seg3:0x1542(0, 1, rec, buf, 0) = string 892 "Icon Fragment^N" less its 2-character code, and
+// DGROUP:0x960a stays the empty DGROUP:0x13c0.
+constexpr int kStringIconFragment = 0x37c;  // 892 [BYTES seg3:0x16ab]
+std::string fragment_label(const std::string& string892);
+struct FragmentTexts {
+    std::string t9628, t8718;
+};
+// `icon_name` is the icon's file name, `string892` the loaded string.
+FragmentTexts fragment_target_texts(const std::string& icon_name, const std::string& string892);
+
 // ---- seg13:0x2206
 
 struct NextTargetHost {

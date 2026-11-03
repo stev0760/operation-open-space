@@ -173,6 +173,21 @@ void draw_lines(World& w, std::int16_t ship_pool, DcId window_dc, LinkHooks* hoo
 //   dissolve_pass(c)          seg7:0xbf2-0xc1a
 // and the movers from seg7:0xcd3 draw their own objects (seg8:0xb76, seg7:0x1208).
 
+// ---- the ambulance's pick-up and drop-off composite seg13:0x3d40 (M4 s3 AMBFLIGHT)
+
+// seg13:0x3d40(den, num, o_rec, o_pool, s_rec, s_pool) (near, `retf 0xc`) [BYTES
+// seg13:0x3d40-0x446a] [OPEN: s3-ambflight.md 4.2, claims 45-48 unverified]: the ship S scaled
+// to s2 = lo16(S.size·num) / den (the product's high word replaced by `cwd`), offset by gap +
+// (size - s2) / 2, drawn into its own buffer (+0x3c) and, where the two squares overlap on the
+// screen (-2 - O.size <= ox, oy <= S.size + 2, ox/oy the screen offset of O from S), masked
+// (seg10:0x6ec6, SRCAND then SRCPAINT) over the outer object O's buffer and O's cell under S's;
+// then both are drawn through seg8:0xb76 from their DC words +0x3a (the alternate source rule
+// of draw_sprite takes the buffers in state 3 and in state 6 with the lift at 15), S with
+// `on_screen` 1 around the call and left 0. The seg18 mode's outer pool 15 (seg13:0x3b88) is
+// [OPEN M6] and draws nothing here. Without a buffer DC the routine draws nothing [DESIGN].
+void pickup_composite(DrawContext& c, std::int16_t den, std::int16_t num, int o_rec, int o_pool,
+                      int s_rec, int s_pool);
+
 // ---- the ship bitmap table DGROUP:0x39e8 [OPEN]
 
 // What DGROUP:0x39e8[ship + 0x28] holds is [OPEN] (world.md Open questions, "Ship bitmaps").

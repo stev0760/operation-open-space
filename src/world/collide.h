@@ -204,6 +204,9 @@ public:
     // The far call through a record's `on_destroy` (+0x66) from seg7:0x2652 [BYTES seg7:0x26b1]
     // (the program's: flight_hooks.cpp call_on_destroy).
     virtual void on_destroy(int pool, int rec) { (void)pool, (void)rec; }
+    // seg7:0x5b68(pool, rec, arg), a smoke puff: the pod's expiry seg12:0x6a60 makes five (M4 s3
+    // FUEL) [OPEN: seg7:0x5b68 is not ported; the default makes none].
+    virtual void puff(int pool, int rec, int arg) { (void)pool, (void)rec, (void)arg; }
     // seg16:0x8e4(pool, ship), the ship's on_destroy (the death's owner).
     virtual void ship_destroyed(int pool, int ship) { (void)pool, (void)ship; }
     // PatBlt(DGROUP:0x13dc, x, y, w, h, BLACKNESS) of seg7:0x51f9.
@@ -279,8 +282,13 @@ void tail_b(CollideCtx& x, int flag);
 // seg8:0x5df2(T pool, T rec, X pool, X rec, a): the hit dispatcher; on_damage's result
 // [BYTES seg8:0x5df2-0x6989].
 std::int16_t dispatch(CollideCtx& x, int tp, int tr, int xp, int xr, std::int16_t a);
-// The far call through T's on_damage (+0x5e) of seg8:0x647c [BYTES seg8:0x647c].
+// The far call through T's on_damage (+0x5e) of seg8:0x647c [BYTES seg8:0x647c]. The tank's
+// seg12:0xdc4 is tank.h tank_damage (M4 s3 FUEL).
 std::int16_t call_on_damage(CollideCtx& x, int pool, int rec, std::int16_t a);
+// The far call through a record's `on_destroy` (+0x66) [BYTES seg7:0x26b1 seg12:0xe30
+// seg12:0x6b95]: seg7:0x2e02 (effects.h pickup_destroyed) and seg12:0x6a60 (pods.h
+// pod_destroyed) run here; every other handler goes to CollideHost::on_destroy (M4 s3 FUEL).
+void run_on_destroy(CollideCtx& x, int pool, int rec);
 // seg8:0x7be8(pool, rec, a, res): the kill scorer [BYTES seg8:0x7be8-0x7cdf].
 void kill_score(CollideCtx& x, int pool, int rec, std::int16_t a, std::int16_t res);
 // seg8:0x99ce(T pool, T rec, credit pool, credit rec, res) [BYTES seg8:0x99ce-0x9ab6].

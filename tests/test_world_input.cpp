@@ -25,6 +25,8 @@ public:
     void post_main(std::uint32_t m) override { posts.push_back(m); }
     void speed_step(int d) override { speeds.push_back(d); }
     void rescale_step(int d) override { scales.push_back(d); }
+    std::vector<std::pair<int, int>> ambulance_keys;  // (ctrl, alt)
+    void ambulance(bool ctrl, bool alt) override { ambulance_keys.emplace_back(ctrl ? 1 : 0, alt ? 1 : 0); }
 };
 
 KeyResult down(std::uint16_t key, const WaveGlobals& g, KeyState& ks, KeyActions& a,
@@ -137,7 +139,10 @@ TEST_CASE("input: the gate and the demo") {
     Recorder a;
     CHECK(down('T', g, ks, a, false, false, 1001) == KeyResult::kGated);  // lock-out after now
     CHECK(down('T', g, ks, a, false, false, 0, 100) == KeyResult::kGated);  // player off-world
-    CHECK(down('H', g, ks, a, false, false, 1001) == KeyResult::kNotMine);  // H passes the gate
+    CHECK(down('H', g, ks, a, false, false, 1001) == KeyResult::kHandled);  // H passes the gate (seg11:0x6f7a)
+    CHECK(a.ambulance_keys == std::vector<std::pair<int, int>>{{0, 0}});
+    CHECK(down('H', g, ks, a, true, false) == KeyResult::kHandled);
+    CHECK(a.ambulance_keys.back() == std::pair<int, int>{1, 0});
     CHECK(a.codes.empty());
     g.demo = 0;  // DGROUP:0x95bc = 0: only + - W
     CHECK(down('T', g, ks, a) == KeyResult::kHandled);

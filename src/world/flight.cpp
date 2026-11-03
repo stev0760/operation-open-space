@@ -588,6 +588,11 @@ void move_ships(FlightCtx& c) {
             s.anim_step = 1;
             ship_touched(c, i);
         } else if (s.be9 != 0 && o.on_screen != 0 && type > 0 && type < 7) {
+            // The shield's animation step, ship word +0x10 (the `type` read at the iteration top,
+            // [bp-0x22]): +1 while +0xea != 0 (sign-extended), else -1, from the shield toggle's 1
+            // (up) or 6 (down) to 7 or 0 (s3-fuel-verify.md claim 14) [BYTES seg13:0xd28 seg13:0x384
+            // seg13:0x3a0-0x3df]. The branch structure that reaches seg13:0x37f (only past the
+            // wings animation of seg13:0x2a3-0x33e) is the analyst's reading [OPEN] (M4 s3 FUEL).
             if (bea != 0)
                 s.type = add16(s.type, 1);
             else
@@ -595,7 +600,13 @@ void move_ships(FlightCtx& c) {
             flame(c, s.thrusting, i);
             ship_touched(c, i);
         }
-        {   // [BYTES seg13:0x3e3-0x4ae]: damage effects (M4) on the 0x134e cycle
+        {   // [BYTES seg13:0x3e3-0x4ae]: the cloak's and the shield's damage drop on the 0x134e cycle
+            // (s3-fuel-verify.md claim 15, CORRECTED): the block runs when c % (10 - max(5, 2d)) = 0
+            // with the ship on screen, or c % (18 - 4d) = 0, or in a kind-6 wave; a cloaked ship
+            // with system 3 < 50 rolls rand() % (2·+0x2c + 1) = 0 for seg11:0x4c72, else a shielded
+            // one for seg11:0x4b00; a non-zero return of either for the player gives seg3:0x332e
+            // (0x04090417: "Uncloaking Due To System Damage.") [BYTES seg13:0x3e3-0x430
+            // seg13:0x439-0x4a9] [MANUAL Special Ship Systems] (M4 s3 FUEL).
             const std::int16_t d2 = shl16(g.detail, 1);
             const std::int16_t div1 = sub16(10, d2 < 5 ? 5 : d2);
             const std::int16_t div2 = sub16(18, shl16(g.detail, 2));

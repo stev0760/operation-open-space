@@ -1,6 +1,8 @@
 // The wave's end (wave_end.h). 16-bit arithmetic as the original's (ADR 0013 decision 7).
 #include "world/wave_end.h"
 
+#include "world/roster.h"
+
 namespace is::world {
 
 namespace {
@@ -17,15 +19,20 @@ DeadlineResult wave_deadlines(WaveEndCtx& c) {
     World& w = c.w;
     shell::GameState& s = c.s;
     const std::uint32_t now = static_cast<std::uint32_t>(s.now());
-    // DGROUP:0x1e88, the ambulance [BYTES seg7:0x5ce-0x60b] [OPEN M6: its writer seg16:0x568 is
-    // not ported, so it stays 0].
+    // DGROUP:0x1e88, the ambulance [BYTES seg7:0x5ce-0x60b]: armed by the mover's states 3/4
+    // (ambulance.cpp, seg16:0x568) and rewritten every frame until the vanish's end stops the
+    // mover (s3-ambflight-verify.md claims 23, 52a).
     if (due(w.w1e88, now)) {
         w.w1e88 = 0;  // [BYTES seg7:0x5e1]
         if (w.player == w.w952e && w.w951a == 0) {
             c.host.ambulance_enter();  // state 6, DGROUP:0x914a = 0, seg16:0xcfe(1) [BYTES seg7:0x5fa seg7:0x608]
             return DeadlineResult::kEndPass;
         }
-        c.host.seg16_32a0();  // [BYTES seg7:0x60b]
+        // Every other case, a player served with DGROUP:0x951a != 0 included (claim 52a as
+        // corrected): seg16:0x32a0 [BYTES seg7:0x60b] (M4 s3 AMBFLIGHT).
+        AmbulanceCtx ac{w, c.amb ? *c.amb : ambulance_state(), now,
+                        c.amb_host ? *c.amb_host : linked_ambulance_host()};
+        ambulance_drop(ac);
     }
     // DGROUP:0x1e80 [BYTES seg7:0x610-0x705].
     if (due(w.w1e80, now)) {
@@ -151,28 +158,16 @@ void wave_into_directory(WaveEndCtx& c) {
     // The race tables (kind 6 with DGROUP:0x91f8 != 0 and QuickIntro or the demo) [OPEN M6]
     // [BYTES seg9:0x2828].
     c.host.meal_check();  // seg10:0x9672, seg10:0x552(4, 1), seg10:0x565a [BYTES seg9:0x2af0-0x2b0f]
-    // Per ship [BYTES seg9:0x2e64-0x2e78 seg9:0x2b88-0x2e54].
+    // Per ship [BYTES seg9:0x2e64-0x2e78 seg9:0x2b5d-0x2e59]: the flame off, then for a ship
+    // with a roster record (+0xd6 != -1) the ship -> roster write-back roster_from_ship (the
+    // systems, the weapons, fuel / 40, the wings, resources, the credit capped at 0x4fff6 in the
+    // ship too and / 10, the class and the directory's list +0x1c0) (roster.h, M4 s3 ROSTER).
+    // The class local [bp-0x10] keeps its value from ship to ship (ADR 0014 decision 5).
+    RosterUpdate u;
     for (int i = 0; i <= w.last_ship && ship_ok(i); ++i) {
         c.host.flame_off(i);  // seg11:0xb09c(0, i) [BYTES seg9:0x2e69]
-        ShipRecord& sh = w.ships[static_cast<std::size_t>(i)];
-        const int ri = sh.roster_index;
-        if (ri == -1) continue;  // [BYTES seg9:0x2e73 seg9:0x2e78]
-        // The credit dword +0xdc, capped at 0x4fff6 (signed) and stored back; roster +0x02 =
-        // credit / 10 (seg5:0x110) and +0x04 = `resources` (+0xce): the carry-over (core.md
-        // "Carry-over") [BYTES seg9:0x2cdb seg9:0x2d09 seg9:0x2d15].
-        std::int32_t credit = static_cast<std::int32_t>(static_cast<std::uint16_t>(sh.wdc) |
-                                                        (static_cast<std::uint32_t>(static_cast<std::uint16_t>(sh.wde)) << 16));
-        if (credit > 0x4fff6) credit = 0x4fff6;
-        sh.wdc = static_cast<std::int16_t>(static_cast<std::uint32_t>(credit) & 0xffff);
-        sh.wde = static_cast<std::int16_t>(static_cast<std::uint32_t>(credit) >> 16);
-        if (ri >= 0 && ri < static_cast<int>(w.roster.size())) {
-            RosterRecord& r = w.roster[static_cast<std::size_t>(ri)];
-            r.credit10 = static_cast<std::int16_t>(div32(credit, 10));
-            r.resources = word_at(sh, 0xce);
-        }
-        // The other roster writes (+0x3c + k, +0x38 ... +0x3b, +0x28/+0x1e, +0x1d, seg14:0x421c,
-        // +0x06, +0x1c, +0x74, +0x75, +0x72, +0x73, +0x76) and the directory's roster bytes
-        // +0x1c0: the port's RosterRecord does not hold them [OPEN] [BYTES seg9:0x2b88-0x2e54].
+        if (w.ships[static_cast<std::size_t>(i)].roster_index == -1) continue;  // [BYTES seg9:0x2e73 seg9:0x2e78]
+        roster_from_ship(w, i, u);
     }
     if (ship_ok(w.player)) w.player_roster = w.ships[static_cast<std::size_t>(w.player)].roster_index;  // [BYTES seg9:0x2e8c]
     if (w.frames > 500u) c.host.roster_ratings();  // [BYTES seg9:0x2e97] [OPEN]

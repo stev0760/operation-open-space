@@ -59,6 +59,9 @@ struct WaveEndLinks {
     std::function<void(int ship, int id)> message;      // seg3:0x6ec(ship, 7, 0, id)
     std::function<void(int rec, int arg)> icon_counted; // seg7:0x5ae8(rec, arg)
     std::function<std::int16_t(int design)> design_type;  // DGROUP:0x970a + 0xad·design
+    // seg6:0x885c(0, 0), LASTGAME at the wave end (src/dialogs program_save_lastgame) [BYTES
+    // seg9:0x31f0 seg7:0x687] [DESIGN ADR 0014] (M4 s3 fixer).
+    std::function<void()> save_lastgame;
 };
 WaveEndLinks& wave_end_links();
 // The entry effect's context of the wave's drawing side (src/hud wave_win32.cpp entry_context),

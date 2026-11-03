@@ -33,8 +33,10 @@
 #include "shell/command_table.h"
 #include "shell/options.h"
 #include "shell/rng.h"
+#include "briefing/hooks.h"  // high_score_links (M4 s3 SAVE)
 #include "world/flight_hooks.h"  // install_flight_hooks (M3 stage 2, flight)
 #include "world/hooks.h"
+#include "world/visit.h"  // the state-6 pace inputs (M4 s3 fixer)
 #include "hud/hooks.h"  // install_hud_hooks (M3 stage 2, the HUD)
 
 namespace is::app {
@@ -541,7 +543,11 @@ bool idle_step() {
     g.frame_running = true;  // DGROUP:0x968c
     // The help window's dialog pass seg17:0x60d8 replaces the tick while DGROUP:0x9460 is set
     // [OPEN] (M8, the Online Help window).
-    g.scheduler.set_pace(shell::pace_for_state(g.game.state()), now);
+    // State 6's pace inputs (timing.md): the gate and the slow phase of the visit (world/visit.h)
+    // (M4 s3 fixer, review M3).
+    const world::VisitState& vs = world::visit_state();
+    g.scheduler.set_pace(shell::pace_for_state(g.game.state(), {world::visit_pace_gate(vs), world::visit_pace_slow(vs)}),
+                         now);
     const bool ran_on = g.game.pass(now);
     if (ran_on && g.scheduler.due(now)) {
         g.game.frame();
@@ -823,7 +829,15 @@ void install_state_hooks() {
     };
     // The default until install_dialog_hooks (src/dialogs/hooks.cpp) puts in src/nav's window.
     h.open_navigation = [](shell::GameState&) { log_todo("Navigation window", "seg6:0x1c72"); };
-    h.save_scores = [](shell::GameState&) { log_todo("score list save", "seg6:0x626c"); };
+    // seg6:0x626c at the end of state 5: seg6:0x7266 (the particle blocks, not ported), seg6:0x717a
+    // (the score list) and the table DGROUP:0x94d8; it writes no file [BYTES seg6:0x626c-0x62b4]
+    // (s3-save.md claim 46). The saved game's part binds briefing::high_score_links().free.
+    h.save_scores = [](shell::GameState&) {
+        if (briefing::high_score_links().free)
+            briefing::high_score_links().free();
+        else
+            log_todo("score list free", "seg6:0x626c");
+    };
 }
 
 }  // namespace is::app

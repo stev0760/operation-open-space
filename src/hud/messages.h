@@ -5,7 +5,8 @@
 //
 // Ported from the bytes for M4 stage 1 (track SCREENS): the head seg3:0x6ec-0x83e, the switch
 // seg3:0x1346-0x1351, the cases of codes 10-13, 82-84, 91, 94 and 112 (and, M4 stage 2 track
-// DISPLAY, the capture's 0x48, 0x55, 0x56 and 0x6f), the tail seg3:0x14d6,
+// DISPLAY, the capture's 0x48, 0x55, 0x56 and 0x6f; M4 stage 3 track AMBFLIGHT, the ambulance's
+// replies 7, 8 and 132 and the low-fuel warning 9), the tail seg3:0x14d6,
 // seg10:0xa332's %S %s %d %? %R %< %> and its mode-2 split, and seg3:0x3498. Every other case of
 // the 192 is [OPEN]: the dispatcher shows the sender and switches the display, as the original's
 // head does, and leaves the two lines as they were; MessageHost::todo names the code.

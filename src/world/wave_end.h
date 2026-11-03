@@ -15,6 +15,7 @@
 #include <cstdint>
 
 #include "shell/game_state.h"
+#include "world/ambulance.h"
 #include "world/setup.h"
 #include "world/world.h"
 
@@ -64,10 +65,11 @@ public:
     virtual void race_credit() {}
     // seg9:0x6db0 (kind 6): every ship's fuel to its tank [OPEN M6] [BYTES seg9:0x6dc5].
     virtual void race_refuel() {}
-    // The ambulance: DGROUP:0x1e88 due with the player served (state 6, DGROUP:0x914a = 0,
-    // seg16:0xcfe) or seg16:0x32a0 otherwise [OPEN M6] [BYTES seg7:0x5fa seg7:0x60b].
+    // The ambulance: DGROUP:0x1e88 due with the player served and DGROUP:0x951a = 0: the
+    // seg7:0x5fa path, DGROUP:0x90f4 = 6, DGROUP:0x914a = 0, push 1, jmp seg7:0x18f =
+    // seg16:0xcfe(1) once in this tick (the VISIT track's state-6 entry) [BYTES seg7:0x5fa
+    // seg7:0x608] (s3-ambflight-verify.md claim 52a).
     virtual void ambulance_enter() {}
-    virtual void seg16_32a0() {}
     // The demo's end of seg7:0x62b-0x69a: seg6:0x92b8, state 8, seg9:0xd6c [OPEN: the demo].
     virtual void demo_seg6_92b8() {}
     // The roster rating loop seg9:0x2e97-0x2f74 (word +0x06 by the class/DGROUP:0x9334 rule,
@@ -82,12 +84,18 @@ struct WaveEndCtx {
     // seg9:0x2828's head (seg13:0x2688, DGROUP:0x9346, DGROUP:0x9332, DGROUP:0x932c and its
     // rand()) runs through the set-up's wave0_followups with this host; null skips it [DESIGN].
     SetupHost* setup = nullptr;
+    // The ambulance's words and calls for seg16:0x32a0; null: the program's ambulance_state()
+    // and linked_ambulance_host() (ambulance.h) [DESIGN].
+    AmbulanceState* amb = nullptr;
+    AmbulanceHost* amb_host = nullptr;
 };
 
 enum class DeadlineResult { kContinue, kEndPass };
 
 // seg7:0x5ce-0x707 [BYTES seg7:0x5ce-0x707]: with now = s.now() (DGROUP:0x1e50),
-//   - DGROUP:0x1e88 (armed, not above now): cleared; the ambulance [OPEN M6];
+//   - DGROUP:0x1e88 (armed, not above now): cleared; with the player served and DGROUP:0x951a
+//     = 0 the visit (WaveEndHost::ambulance_enter) and the pass ends, else seg16:0x32a0
+//     (ambulance.h ambulance_drop) and the block goes on (s3-ambflight-verify.md claim 52);
 //   - DGROUP:0x1e80 (armed, not above now, unsigned `ja` at seg7:0x627): in a player game
 //     PlayMode = 1 when > 1, DGROUP:0x1e84 = now when the player's `alive` (+0xec) = 0, else
 //     seg9:0x6bc2; then DGROUP:0x1e80 = 0 and the pass ends. The demo path (DGROUP:0x95bc = 0)

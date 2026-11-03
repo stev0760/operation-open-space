@@ -24,6 +24,7 @@
 #include "nav/nav.h"
 #include "shell/command_table.h"
 #include "world/flight_hooks.h"  // the wave's key latch (M3 stage 2, flight)
+#include "world/visit.h"  // the visit's click (M4 s3 fixer)
 
 namespace is::app {
 
@@ -593,8 +594,11 @@ LRESULT handle(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     case WM_VSCROLL:  // seg2:0x6a7: seg11:0x7798(code, pos), the HUD scrollbar
         hud::vscroll(LOWORD(wparam), HIWORD(wparam));
         return 0;
-    case WM_LBUTTONDOWN:  // seg16:0x638a, the ambulance screen's buttons (M4)
+    case WM_LBUTTONDOWN: {  // seg16:0x638a, the ambulance screen's monitor (world/visit.h) (M4 s3 fixer)
+        const POINT p = logical_point(lparam);
+        if (auto& f = is::world::visit_links().click) f(p.x, p.y);
         return 0;
+    }
     case WM_LBUTTONDBLCLK:  // seg2:0x65e
         if (g.calibrated && g.game.resizable()) double_click(lparam);
         return 0;

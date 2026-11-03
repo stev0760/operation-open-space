@@ -58,7 +58,7 @@ int find_free_effect(const EffectTable& t);
 struct PodRecord {
     std::int16_t kind = 0;       // DGROUP:0x8560: 1 player or outside Demon's Gate, 2 Demon's Gate, 3 flag 0
     std::int16_t resources = 0;  // DGROUP:0x8562: the ship's `resources` +0xce
-    Dword age;                   // DGROUP:0x8564: 0x01f40000 at the fill; the word +0x04 is the pick key [OPEN its role]
+    Dword age;                   // DGROUP:0x8564: low word the age in frames, high word (DGROUP:0x8566) the lifetime; 0x01f40000 at the fill (pods.h pod_age, pod_lifetime) [BYTES seg13:0x4bb3 seg12:0x6c74 seg12:0x6b80]
     std::int16_t pool = 0;       // DGROUP:0x8568: the ship pool
     std::int16_t rec = 0;        // DGROUP:0x856a: the ship
     std::array<std::int16_t, 10> weapon{};  // DGROUP:0x856c + 2j: ship byte +0xb8 + j, -1 unused
@@ -173,6 +173,24 @@ void ship_destroyed(EffectCtx& c, int pool, int ship);
 // the count unset in the original: the port takes 2 [DESIGN]); then with DGROUP:0x9430 > 10,
 // (35 - DGROUP:0x9430)·n/25, at least 1. All 16-bit.
 std::int16_t fragment_count(std::int16_t blast_size, std::int16_t detail, std::int16_t in_use);
+
+struct CollideCtx;
+
+// seg7:0x2e02(pool, rec), cdecl: the `on_destroy` of pool 1 (the icon fragments) and of the
+// time-of-day tanks [BYTES seg7:0x2e02-0x3099] (s3-fuel-verify.md claims 43-45 with 44's
+// additions; M4 s3 FUEL). Only while `state` = 0: `state` = 1, the square blacked; the first of
+// effect entries 0 ... 3 that is free or of type <= 5 becomes the break-up: the sound (0x1a for
+// pools 1 and 8 and for pool 6 with W(w)+0x24 = 6; 0x1f for pool 4 and the other pool-6 records;
+// none for any other pool), an entry still in use (+0x00 > -1, signed) first copied into the first
+// free entry of 4 ... 44 (every word but the step +0x04, and both side points), then +0x00 = 1,
+// +0x02 = 20, type 6, side = size / 5, step 2 when the entry's index is above `Detail` else 1,
+// pool, rec, the screen centre (+0x00, +0x02) and the world point (+0x04, +0x06), DGROUP:0x9430 +
+// 1 (DGROUP:0x9434 is not touched). No entry of 0 ... 3 qualifying does nothing more. Pool 1
+// always ends with seg7:0x65aa(0, DGROUP:0x6038 + 2·rec), the icon's column row. The source DCs
+// DGROUP:0x5e98 / 0x5ea0 of the entry (the fragment's bitmap, DGROUP:0x39f0, a pool-8 or weapon
+// image) serve only the type-6 branch of seg8:0x3fbe, which is not ported [OPEN]: the port keeps
+// none, so the break-up shows as the blacked square for 20 frames.
+void pickup_destroyed(CollideCtx& x, int pool, int rec);
 
 // seg12:0x274a(pool, rec), the generic destroy handler [BYTES seg12:0x274a-0x2b1d] (verified
 // claims 24-26; core.md "Fragments"): the index test, DGROUP:0x698c for pool 4, the square

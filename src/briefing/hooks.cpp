@@ -350,6 +350,11 @@ void set_wave(int wave) {
 }
 int wave() { return g_briefing ? g_briefing->wave() : 0; }
 
+HighScoreLinks& high_score_links() {
+    static HighScoreLinks l;
+    return l;
+}
+
 void set_debrief_box_hook(std::function<void(const DebriefBox&)> f) {
     g_debrief_box_hook = std::move(f);
     if (g_debrief) g_debrief->set_box_hook(g_debrief_box_hook);
@@ -431,19 +436,36 @@ void install_briefing_hooks(App& app) {
     h.repaint[shell::kDebriefing] = [](shell::GameState& s) {
         g_debrief->frame(s, 1);
     };
-    // State 5's entry seg6:0x5d58 [BYTES seg6:0x5d58-0x5f78]: sound 0x6e unless from state 9,
-    // the music track 5, or 11 for a score of 200000 or more with DGROUP:0x93a2 <= 3 or from
-    // state 9 [BYTES seg6:0x5d7c seg6:0x5e03-0x5e25], the black client. The score list
-    // seg6:0x6576, the particle effects and the table seg6:0x5f7a / seg6:0x62b6 are [OPEN]; the
-    // .ded save seg6:0x885c(1, 1) is ADR 0014's (the trial refuses it silently).
+    // State 5's entry seg6:0x5d58 [BYTES seg6:0x5d58-0x5f78]: sound 0x6e unless from state 9
+    // [BYTES seg6:0x5d65-0x5d7c], the black client [BYTES seg6:0x5dbd-0x5dd7], the score list
+    // seg6:0x6576 [BYTES seg6:0x5df9], the music: track 11 from state 9, or for a score dword of
+    // at least 200000 (0x30d40) with DGROUP:0x93a2 <= 3 (signed), else 5 [BYTES seg6:0x5dfc-0x5e25],
+    // then the .ded save, the table's deadline and seg6:0x5f7a(1) (high_score_links, M4 s3 SAVE).
     h.enter[shell::kHighScores] = [](shell::GameState& s) {
-        // DGROUP:0x90f4 = 9 sets DGROUP:0x94cc = 1 and skips the sound [BYTES seg6:0x5d65
-        // seg6:0x5d6c seg6:0x5d7a seg6:0x5d7c] (M4 s1 fixer, review M13).
         if (!s.from_ending()) g_host->sound(0x6e);
-        const world::World& w = world::current();
-        is::sound::music(w.score >= 200000u ? 11 : 5, 1);  // DGROUP:0x93a2 is not kept [OPEN]
         if (g.gfx && !g.gfx->surface().empty()) PatBlt(g.gfx->dc(), 0, 0, g.area.w, g.area.h, BLACKNESS);
-        todo_once("the high-score table", "seg6:0x5f7a");
+        const HighScoreLinks& l = high_score_links();
+        int rank = 0;
+        if (l.build_list)
+            rank = l.build_list();
+        else
+            todo_once("the score list", "seg6:0x6576");
+        const world::World& w = world::current();
+        const bool eleven = s.from_ending() || (w.score >= 200000u && rank <= 3);
+        is::sound::music(eleven ? 11 : 5, 1);
+        if (l.after_music)
+            l.after_music(s.from_ending());
+        else
+            todo_once("the high-score table", "seg6:0x5f7a");
+    };
+    // seg7:0x497 case 5: seg6:0x5f7a(0) (every DGROUP:0x9002-th pass in the original; the port
+    // tests every frame, the draw test being a deadline [DESIGN]) [BYTES seg7:0x472-0x487]; the
+    // repaint seg11:0x16a6: seg6:0x5f7a(1) [BYTES seg11:0x16a6].
+    h.frame[shell::kHighScores] = [](shell::GameState&) {
+        if (high_score_links().frame) high_score_links().frame(false);
+    };
+    h.repaint[shell::kHighScores] = [](shell::GameState&) {
+        if (high_score_links().frame) high_score_links().frame(true);
     };
     h.enter[shell::kBriefing] = [](shell::GameState& s) { enter_briefing(s); };
     h.frame[shell::kBriefing] = [](shell::GameState& s) {

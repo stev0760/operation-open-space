@@ -28,14 +28,22 @@
 #include "hud/screens.h"
 #include "hud/scrollbar.h"
 #include "hud/target.h"
+#include "hud/visit_win32.h"
 #include "hud/wave.h"
 #include "hud/weapons.h"
 #include "shell/rng.h"
+#include "world/ambulance.h"
 #include "world/flight.h"
 #include "world/flight_hooks.h"
 #include "world/hooks.h"
 #include "world/player_sheet.h"
+#include "world/missile.h"
+#include "world/purchases.h"
+#include "world/roster.h"
+#include "world/visit.h"
 #include "world/world.h"
+#include "dialogs/ambulance_options.h"
+#include "dialogs/audio_options.h"
 
 namespace is::hud {
 
@@ -488,6 +496,16 @@ public:
             t8718_ = icon_label(lang(0x98), r);
             if (r < w().pools.records(0))
                 if (const int id = icon_suffix_id(w().pools.rec(0, r).b53)) t8718_ += lang(id);
+        } else if (p == 1 && r >= 0 && r < static_cast<int>(w().fragment_icon.size())) {
+            // The icon fragment: its icon's file name and string 892 (hud/target.h
+            // fragment_target_texts) [BYTES seg3:0x2cf-0x2ed seg3:0x40b-0x428] (M4 s3 fixer, FUEL
+            // request 3). An icon index outside the table names nothing [DESIGN].
+            const int icon = w().fragment_icon[static_cast<std::size_t>(r)];
+            const std::string name =
+                icon >= 0 && icon < world::kIconRecords ? w().icons[static_cast<std::size_t>(icon)].name : std::string();
+            const FragmentTexts t = fragment_target_texts(name, lang(kStringIconFragment));
+            t9628_ = t.t9628;
+            t8718_ = t.t8718;
         } else if (p == 7) {
             // seg3:0x3aa-0x3d0: string 2211 "INNER SPACE" into the buffer (after a discarded
             // seg3:0x1542) and string 2212 "COMMAND" into DGROUP:0x960a [BYTES seg3:0x3b4
@@ -854,6 +872,268 @@ void close_hud() {
 
 }  // namespace
 
+
+// ---- M4 stage 3, track VISIT: state 6, the ambulance visit ---------------------------------------
+namespace {
+
+using app::now_tick;
+using shell::Tick;
+
+void visit_todo(const std::string& what, const char* address) {
+    static std::set<std::string> seen;
+    if (seen.insert(what).second) app::log_todo(what, address);
+}
+
+// The busy-waits of the visit: a GetCurrentTime loop without pumping, as the original's
+// [BYTES seg16:0x123b-0x1258]; the screen is shown before the wait [DESIGN: the port's surface
+// reaches the window only when presented].
+void busy_ms(int ms) {
+    app::present_frame();
+    const Tick t0 = now_tick();
+    while (now_tick() - t0 < static_cast<Tick>(ms)) Sleep(1);
+}
+
+// seg16:0x3784's calls out on the program (world/purchases.h).
+class ProgramPurchaseHost final : public world::WorldPurchaseHost {
+public:
+    ProgramPurchaseHost() : WorldPurchaseHost(world::current()) {
+        todo_log = visit_todo;
+        on_design_mass = [](int d) { return world::design_mass(d); };
+        on_game_state = [] { return g.game.state(); };
+        on_ini_main_ship = [] {
+            return g.ini ? g.ini->get_string(settings::kGameSection, "MainShip", "EAGLE", 20) : std::string("EAGLE");
+        };
+        // The design name DGROUP:0x9742: the player's design is INI MainShip's record (the
+        // ship set-up, src/world/hooks.cpp) [OPEN: the 0xad-byte design table is M5].
+        on_design_name = [](int) {
+            return g.ini ? g.ini->get_string(settings::kGameSection, "MainShip", "EAGLE", 20) : std::string();
+        };
+        // PostMessage(DGROUP:0xa7e / 0xa7c, WM_PAINT): the IS_INFO panels due (ADR 0013 decision 4).
+        on_post_info_paint = [] {
+            if (Hud* h = hud()) {
+                h->info().invalidate(kInfoTarget);
+                h->info().invalidate(kInfoWeapon);
+            }
+        };
+    }
+};
+
+ProgramPurchaseHost& purchase_host() {
+    static ProgramPurchaseHost h;
+    return h;
+}
+
+// seg16:0x2144's status data: the player's systems and fuel gauge, the design's lamp rows and
+// the shield and cloak bytes.
+VisitStatus visit_status() {
+    VisitStatus st;
+    world::World& w = world::current();
+    world::ShipRecord& P = w.ship(w.player);
+    for (int k = 0; k < 4; ++k) st.value[k] = world::system_word(P, k);
+    const std::int16_t tank = purchase_host().design_word(P.design_index, 0x1e);
+    st.value[4] = tank != 0 ? world::div32(static_cast<std::int32_t>(P.fuel) * 100, tank) : 0;  // seg5:0x110
+    for (int k = 0; k < 4; ++k) st.row[k] = purchase_host().design_word(P.design_index, 0x22 + 2 * k);
+    st.shield = P.be9 != 0;
+    st.cloak = P.be7 != 0;
+    return st;
+}
+
+std::unique_ptr<VisitGdi> g_visit_screen;
+
+// The visit's calls on the program (world/visit.h VisitHost).
+class ProgramVisitHost final : public world::VisitHost {
+public:
+    std::uint32_t now() override { return g.game.now(); }
+    std::uint32_t current_time() override { return now_tick(); }
+    void busy_wait(int ms) override { busy_ms(ms); }
+    void pump_wait(int ms) override { busy_ms(ms); }  // seg10:0x740c's pump [OPEN: the port presents only]
+    void sound(int id) override { is::sound::play(id); }
+    void sound_at(int id, int a, int b, int mode) override { is::sound::play_at(id, a, b, mode); }
+    std::string lang(int id) override { return lang_text(id); }
+    std::string ship_name(int) override { return lang_text(2702) + purchase_host().design_name(0); }
+    std::string pilot() override {
+        return g.ini ? g.ini->get_string(settings::kGameSection, "ThePlayer", "", 12) : std::string();
+    }
+    bool ctrl_held() override { return (GetKeyState(VK_CONTROL) & 0x8000) != 0; }
+    int w8f70() override { return 0; }  // DGROUP:0x8f70 [OPEN: its writer]
+    int calibrate() override { return 2000; }  // DGROUP:0x8ffc [OPEN: the port's Calibrate]
+    int depth() override { return g.depth; }
+    bool limited() override { return g.edition.edition == 0; }
+    void options_dialog() override;
+    void body_chooser() override { visit_todo("the New Ship Body chooser of a dead ship (M8)", "seg10:0x82a2"); }
+    void enter_calls() override {
+        close();  // seg11:0x2f0
+        visit_todo("the image-slot DCs freed and remade", "seg10:0xa856");
+    }
+    void palette_back() override {
+        if (g.gfx) {
+            g.gfx->palette_restore(0);    // seg10:0x6dd4(0)
+            g.gfx->palette_scheme(8, 0);  // seg10:0x6e76(8, 0)
+        }
+    }
+    void launch_enter() override {
+        visit_todo("the launch scene seg15:0xcb0 / seg15:0x10be in state 6 (the desk's)", "seg16:0x1b7c");
+        launch_due_ = now_tick() + 2800;  // [ORACLE core-0003: PREPARE FOR LAUNCH 37.477, back 40.297]
+    }
+    bool launch_frame() override { return static_cast<std::int32_t>(now_tick() - launch_due_) >= 0; }
+    void recreate_dcs() override {}
+    void seg18_7b2() override { visit_todo("seg18:0x7b2 after the visit", "seg16:0x1c3b"); }
+    void to_screen(std::int16_t x, std::int16_t y, std::int16_t& sx, std::int16_t& sy) override {
+        (void)x, (void)y;
+        sx = sy = -1000;  // seg8:0x29ea: the next frame's view places the ship [OPEN]
+    }
+    void watch_windows(int) override {}
+    void cursor_home() override { SetCursorPos(g.start_cursor.x, g.area.h); }
+    void music_back() override { is::sound::music(1, 1); }  // [OPEN: DGROUP:0x9220 = 2 gives 2]
+    void message(int ship, int code) override { post_message(ship, 7, 0, code); }
+    void repaint_wave() override { g.game.repaint(); }
+    void set_state(int s) override { g.game.set(s); }
+    void demon_end() override { visit_todo("the Inner Demon ending (M6)", "seg16:0x7210"); }
+    void demon_click() override { visit_todo("the Inner Demon subgame (M6)", "seg16:0x638a"); }
+    void box_2322() override { app::message_box_ids(g.main, 2322, -1); }
+    int rand() override { return shell::game_rng().rand(); }
+    void todo(const std::string& what, const char* address) override { visit_todo(what, address); }
+
+private:
+    Tick launch_due_ = 0;
+};
+
+ProgramVisitHost g_visit_host;
+
+world::VisitCtx visit_ctx() {
+    world::World& w = world::current();
+    world::VisitCtx c(w, world::shop(), world::visit_state(), g_visit_host, *g_visit_screen, purchase_host(),
+                      world::missile_state().words);
+    c.player_game = w.player_game != 0;
+    c.restored = w.restored;
+    c.plus = static_cast<std::int16_t>(g.edition.plus);
+    return c;
+}
+
+// DialogBox(0xc2): the Options dialog through the slot src/dialogs fills.
+void ProgramVisitHost::options_dialog() {
+    auto& run = ambulance_dialog_slot();
+    if (!run) {
+        visit_todo("the Ambulance Options dialog (the dialogs library's slot is empty)", "seg16:0x133f");
+        return;
+    }
+    world::World& w = world::current();
+    dialogs::ShopEnv e(w, world::shop(), purchase_host(), world::missile_state().words);
+    e.player_game = w.player_game != 0;
+    e.edition = static_cast<std::int16_t>(g.edition.edition);
+    e.plus = static_cast<std::int16_t>(g.edition.plus);
+    e.served = w.w952e;
+    e.lang = lang_text;
+    e.body_chooser = [] { visit_todo("the New Ship Body chooser (M8; the Limited edition keeps TRANSFORMER)", "seg10:0x82a2"); };
+    e.write_main_ship = [](const std::string& name) {
+        if (!g.ini) return;
+        g.ini->set(settings::kGameSection, "MainShip", name);
+        try {
+            g.ini->save();
+        } catch (const std::exception& x) {
+            app::log(std::string("INSPACE.INI: ") + x.what());
+        }
+    };
+    dialogs::AmbulanceEnv a;
+    a.env.instance = g.instance;
+    a.env.owner = g.main;  // DGROUP:0x16
+    a.env.store = g.store.get();
+    a.env.lang = lang_text;
+    a.env.sound = [](int id) { is::sound::play(id); };
+    a.env.todo = visit_todo;
+    a.env.screen_cx = GetSystemMetrics(SM_CXSCREEN);
+    a.env.screen_cy = GetSystemMetrics(SM_CYSCREEN);
+    a.shop = &e;
+    a.font = g.font;  // DGROUP:0x90fe
+    app::present_frame();
+    run(a);
+}
+
+}  // namespace
+
+// State 6's hooks: the frame (seg7:0x18f's seg16:0xcfe(0)), the repaint (seg11:0xafe case 6:
+// seg16:0xcfe(1)), the input (seg11:0x785e: WM_KEYUP VK_ESCAPE with DGROUP:0x93a6 = 0 reaches
+// seg16:0x638a(0, 0, 0, 1)) and the slots of world/visit.h [BYTES seg7:0x18f seg11:0x16b6
+// seg11:0x787c seg11:0x788b].
+void install_visit(app::App& app) {
+    g_visit_screen = std::make_unique<VisitGdi>([] { return g.gfx.get(); }, [] { return g_canvas.get(); }, visit_status,
+                                                [] {
+                                                    const world::World& w = world::current();
+                                                    return world::slot_image(world::kShipImageSlotBase + w.player);
+                                                });
+    g_visit_screen->lang = lang_text;
+    g_visit_screen->limited = [] { return g.edition.edition == 0; };
+    auto& h = app.game.hooks();
+    h.frame[shell::kAmbulance] = [](shell::GameState&) {
+        world::VisitCtx c = visit_ctx();
+        world::visit(c, 0);
+    };
+    h.repaint[shell::kAmbulance] = [](shell::GameState&) {
+        world::VisitCtx c = visit_ctx();
+        world::visit(c, 1);
+    };
+    auto prev_route = h.route_input;
+    h.route_input = [prev_route](shell::GameState& s, const shell::Input& in) {
+        if (s.state() == shell::kAmbulance) {
+            if (in.msg == shell::kWmKeyUp && in.wparam == shell::kVkEscape && world::visit_state().demon == 0) {
+                world::VisitCtx c = visit_ctx();
+                world::visit_click(c, 0, 0, 1);
+            }
+            return;
+        }
+        if (prev_route) prev_route(s, in);
+    };
+    world::VisitLinks& l = world::visit_links();
+    l.enter = [] {  // seg7:0x5fa-0x608
+        // DGROUP:0x9e5b / 0x9e5d: the pickup (seg16:0x441) wrote them in AmbulanceState; the visit
+        // and the Options dialog read the Shop's copy of the same words [DESIGN] (M4 s3 fixer).
+        world::shop().alive = world::ambulance_state().served_alive;
+        world::shop().sold_total = world::ambulance_state().sold;
+        g.game.set(shell::kAmbulance);
+        world::VisitCtx c = visit_ctx();
+        world::visit_begin(c);
+    };
+    l.wave_setup = [](int ship) {  // seg14:0xd32
+        world::World& w = world::current();
+        world::wave_setup_purchases(w, purchase_host(), world::missile_state().words, ship, w.player_game != 0,
+                                    w.restored, static_cast<std::int16_t>(g.edition.plus));
+        world::ambulance_state().set_served_alive_dword(1);  // seg16:0x3784's end [BYTES seg16:0x3b07]
+    };
+    // seg14:0xd32's seg16:0x3784(i, 1) for the placement (roster.h purchase_pass), the one port
+    // of seg16:0x3784 (world/purchases.h) (M4 s3 fixer, review M1).
+    world::set_purchase_pass([](world::World& w, int ship, int mode) {
+        if (mode == 1 && world::visit_links().wave_setup) return world::visit_links().wave_setup(ship);
+        world::PurchaseCtx p{w, world::shop(), world::missile_state().words, purchase_host(), w.player_game != 0,
+                             w.restored, static_cast<std::int16_t>(g.edition.plus)};
+        world::apply_purchases(p, ship, mode);
+        world::ambulance_state().set_served_alive_dword(1);
+    });
+    // The ambulance's calls out (world/ambulance.h AmbulanceLinks) that the HUD answers: the
+    // purchases of seg16:0x872 (seg16:0x3784(DGROUP:0x952e, 0)), seg3:0x6ec, seg11:0x2f8c, the
+    // sounds and the sprite (M4 s3 fixer, review H2 / H6).
+    world::AmbulanceLinks& al = world::ambulance_links();
+    al.purchases = [](int ship, int mode) {
+        world::World& w = world::current();
+        world::PurchaseCtx p{w, world::shop(), world::missile_state().words, purchase_host(), w.player_game != 0,
+                             w.restored, static_cast<std::int16_t>(g.edition.plus)};
+        world::apply_purchases(p, ship, mode);
+        world::ambulance_state().set_served_alive_dword(1);  // [BYTES seg16:0x3b07]
+    };
+    al.message = [](int recipient, int pool, int rec, int code) { post_message(recipient, pool, rec, code); };
+    al.weapon_picture = [] { weapon_picture_refresh(); };
+    al.sound = [](int id, int pool, int rec, int arg) { is::sound::play_at(id, pool, rec, arg); };
+    al.play = [](int id) { is::sound::play(id); };
+    al.draw_sprite = [](std::int16_t pr, int kind, int slot, int masked) {
+        if (world::wave_links().draw_sprite) world::wave_links().draw_sprite(pr, kind, slot, masked);
+    };
+    al.todo = [](const std::string& what, const char* address) { visit_todo(what, address); };
+    l.click = [](int x, int y) {
+        if (g.game.state() != shell::kAmbulance) return;
+        world::VisitCtx c = visit_ctx();
+        world::visit_click(c, x, y, 0);
+    };
+}
+
 }  // namespace is::hud
 
 namespace is::app {
@@ -877,6 +1157,7 @@ void install_hud_hooks(App& app) {
     app::icon_watch() = app::WatchToggle{[] { return icon_column_exists(); }, [] { icon_column_create(); },
                                          [] { icon_column_destroy(); }};
     install_wave(app);  // the wave's integration, src/hud/wave_win32.cpp (M3 s2 fixer)
+    install_visit(app);  // state 6, the ambulance visit (M4 s3 VISIT)
     // The palette message's InvalidateRect(main, NULL, TRUE) reaches the IS_INFO children too
     // (src/app/wndproc.cpp palette_message): both panels are due and paint after the next frame.
     app::children_invalidated() = [] {

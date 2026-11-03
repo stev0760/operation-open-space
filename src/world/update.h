@@ -12,6 +12,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <string>
 
 #include "world/capture.h"
@@ -234,6 +235,25 @@ public:
     virtual CollideHost& collide_host() { return forward_; }
     // The collision DGROUP words; the default is this host's own.
     virtual CollideGlobals& collide_globals() { return collide_globals_; }
+    // ---- M4 s3 FUEL: the cloak, the shield and the small movers (pools 1, 4 and 11)
+    // seg11:0x4c72(i), seg11:0x4b00(i) and seg3:0x332e(ids) from the ship mover: input.h
+    // cloak_toggle, shield_toggle and strategy_notice on the frame World with systems_host();
+    // 0 without a frame World.
+    std::int16_t seg11_4c72(int ship) override;
+    std::int16_t seg11_4b00(int ship) override;
+    void seg3_332e(std::uint32_t ids) override;
+    // The image table DGROUP:0x39e8; the default is small_mover_links().images (null: none).
+    virtual const ImageSlotTable* images();
+    // seg12:0xe5c(i) and seg12:0x129e(pool, rec), the pickup dissolves (tank.h, pods.h) on the
+    // frame World, drawn with blitter() and images().
+    virtual void tank_dissolve(int rec);
+    virtual void pod_dissolve(int pool, int rec);
+    // DGROUP:0x4e94 + 2r != 0: pool-1 record r has its own bitmap; and seg7:0x32d0's draw of it:
+    // SelectObject(DGROUP:0x9288, DGROUP:0x4e94[r]), seg8:0xb76(pool_rec, 3, DGROUP:0x9288, 0),
+    // the old bitmap back [BYTES seg7:0x333d-0x3388]. The defaults use small_mover_links().
+    virtual bool fragment_has_bitmap(int r);
+    virtual void draw_fragment(std::int16_t pool_rec, int r);
+
     // The frame's context while the movers run (set by wave_frame, move_rocks, move_gate).
     UpdateCtx* frame_ctx = nullptr;
 
@@ -249,6 +269,7 @@ private:
         void destroy(int pool, int rec) override { u->seg12_274a(pool, rec); }
         void flame_off(int ship) override;
         void erase(int x, int y, int w, int h) override;
+        void puff(int pool, int rec, int arg) override { u->puff(pool, rec, arg); }
     };
     class CaptureForward final : public CaptureHost {
     public:
@@ -268,6 +289,10 @@ private:
             u->collide_host().seg13_2714(a, b, c, d, e, f);
         }
         void seg4_5e8e(int a, int b, int c, int d) override { u->collide_host().seg4_5e8e(a, b, c, d); }
+        // The touch's first dissolve step of a tank (seg13:0x1cd8) and of a pod or pool-6 record
+        // (seg13:0x1f59) (M4 s3 FUEL).
+        void seg12_e5c(int rec) override { u->tank_dissolve(rec); }
+        void seg12_129e(int pool, int rec) override { u->pod_dissolve(pool, rec); }
     };
     class ShotForward final : public ShotHost {
     public:
@@ -288,6 +313,15 @@ private:
 // The program's World for UpdateHost::frame_world (null: none) (M3 s4 DRAW).
 void set_frame_world(World* w);
 
+// The drawing side's parts of the small movers (src/hud/wave_win32.cpp fills them; an empty slot
+// draws nothing) (M4 s3 FUEL).
+struct SmallMoverLinks {
+    std::function<const ImageSlotTable*()> images;          // DGROUP:0x39e8
+    std::function<bool(int r)> fragment_has_bitmap;         // DGROUP:0x4e94 + 2r != 0
+    std::function<void(std::int16_t pool_rec, int r)> draw_fragment;  // seg7:0x333d-0x3388
+};
+SmallMoverLinks& small_mover_links();
+
 // What the pass and the frame touch.
 struct UpdateCtx {
     FlightCtx flight;
@@ -300,6 +334,19 @@ struct UpdateCtx {
 
 // The collision context of the frame on World w (below).
 CollideCtx frame_collide_ctx(UpdateCtx& c, World& w);
+
+// The frame's context on the host while a mover runs; a nested scope keeps the outer one (the
+// movers of M4 s3 FUEL, called directly by tests as by wave_frame).
+struct MoverScope {
+    UpdateHost& h;
+    UpdateCtx* prev;
+    MoverScope(UpdateHost& host, UpdateCtx& c) : h(host), prev(host.frame_ctx) {
+        if (!prev) h.frame_ctx = &c;
+    }
+    ~MoverScope() { h.frame_ctx = prev; }
+    MoverScope(const MoverScope&) = delete;
+    MoverScope& operator=(const MoverScope&) = delete;
+};
 
 template <typename F>
 bool UpdateHost::with_shots(F f) {

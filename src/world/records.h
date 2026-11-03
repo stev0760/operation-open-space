@@ -546,12 +546,68 @@ constexpr std::int16_t pool_rec(int pool, int rec) {
 constexpr int pool_of(std::int16_t pr) { return static_cast<std::uint16_t>(pr) >> 8; }
 constexpr int rec_of(std::int16_t pr) { return static_cast<std::uint16_t>(pr) & 0xff; }
 
+// --- Ship roster record (0x7c bytes; formats.md "Ship roster records") -----------------------
+// One record per ship that crosses waves, in the block DGROUP:0x95a4 (far pointer DGROUP:0x6e24,
+// record r at + 0x7c·r) [BYTES seg14:0x252-0x26c seg14:0xee5]. The members sit at the record's
+// byte offsets with no padding (every word at an even offset; the static_asserts below check
+// each one), so the saved game's roster block is these bytes in order: roster_to_bytes and
+// roster_from_bytes (roster.h) copy them little-endian, field for field, for the SAVE track
+// (ADR 0014 decision 1). Rows beyond formats.md's table come from work/analysis/m4/s3-roster.md
+// with s3-roster-verify.md (claims 1, 5, 8, 16-18). A new record is zero everywhere seg14:0x0
+// writes nothing: GlobalAlloc(0x42) zero-fills [BYTES seg14:0x252 seg14:0x256 seg14:0x258].
+struct RosterRecord {
+    std::int16_t shp = 0;        // +0x00 MASTER.SHP index [BYTES seg14:0x2b0 seg14:0x1457]
+    std::int16_t credit10 = 0;   // +0x02 credit / 10: 15 for the player's new record [BYTES seg14:0x3cc seg9:0x2d15]
+    std::int16_t resources = 0;  // +0x04 ship word +0xce [BYTES seg14:0x3d8 seg9:0x2cdb]
+    std::int16_t w06 = 0;        // +0x06 ship word +0x82; the wave end's update seg9:0x2e97 [BYTES seg9:0x2c60 seg14:0x19b2]
+    std::array<std::int16_t, 5> rel_w{};  // +0x08 + 2a: seg14:0x421c's table, words [BYTES seg14:0x2fb] [OPEN meaning]
+    std::array<std::uint8_t, 5> rel_a{};  // +0x12 + a: bytes, 0 when fresh [BYTES seg14:0x2fb]
+    std::array<std::uint8_t, 5> rel_r{};  // +0x17 + a: another ship's roster index, 0xff free [BYTES seg14:0x313]
+    std::uint8_t fuel40 = 0;     // +0x1c fuel / 40 (an unsigned byte to seg14:0x18c9's `mul`) [BYTES seg9:0x2c6d seg14:0x18c9]
+    std::uint8_t slots = 0;      // +0x1d ship byte +0xcb [BYTES seg9:0x2c4f seg14:0x16da]
+    std::array<std::uint8_t, 10> count{};   // +0x1e + k ship bytes +0xae + k (slot 0 written, never read back) [BYTES seg9:0x2c21 seg14:0x173b]
+    std::array<std::uint8_t, 10> weapon{};  // +0x28 + k ship bytes +0xb8 + k; +0x30/+0x31 are slots 8, 9 [BYTES seg9:0x2c0a seg14:0x172f]
+    std::int8_t b32 = 0;                    // +0x32 the GUNS powerup, 0 when fresh (claim 1) [OPEN its reader's address]
+    std::array<std::int8_t, 5> b33{};       // +0x33 ... +0x37 the other powerups seg13:0x33d6 reads, 0 when fresh (claim 1)
+    std::array<std::int8_t, 4> systems{};   // +0x38 + k the low bytes of ship words +0x26 + 2k [BYTES seg9:0x2baa seg14:0x1786]
+    std::array<std::int8_t, 40> relation{}; // +0x3c + k: for roster record k, ship word +0x62 + 2j / 10 [BYTES seg9:0x2b88 seg14:0x1a2c]
+    std::int8_t team = 0;        // +0x64 the SHP team byte +0x03 [BYTES seg14:0x3f3]
+    std::array<char, 13> name{}; // +0x65 ... +0x71 the string seg9:0x5be0 writes [OPEN: seg9:0x5be0 unread]
+    std::uint8_t wing0 = 0;      // +0x72 ship byte +0xac [BYTES seg9:0x2cb9 seg14:0x1968]
+    std::uint8_t wing1 = 0;      // +0x73 ship byte +0xad [BYTES seg9:0x2cca seg14:0x1970]
+    std::int8_t barrels = 0;     // +0x74 the low byte of ship word +0x24 [BYTES seg9:0x2c97 seg14:0x198a]
+    std::int8_t b75 = 0;         // +0x75 the low byte of ship word +0x0a [BYTES seg9:0x2ca8 seg14:0x1993]
+    std::uint8_t cls = 0;        // +0x76 the class 1 ... 10 (DGROUP:0x952 bands) [BYTES seg9:0x2d91]
+    std::uint8_t met = 0;        // +0x77 waves played: +1 when +0x79 != DGROUP:0x91f8 [BYTES seg14:0x10a7 seg14:0x1a0f]
+    std::uint8_t run = 0;        // +0x78 a run of consecutive waves [BYTES seg14:0x19bc-0x19f3]
+    std::uint8_t last_wave = 0;  // +0x79 the last DGROUP:0x91f8 the ship played [BYTES seg14:0x1a1e]
+    std::uint8_t size = 0;       // +0x7a the class size seg14:0x11a8 writes back (s1-sprite.md claim 14)
+    std::uint8_t gap = 0;        // +0x7b the cell gap seg14:0x11a8 writes back [BYTES seg14:0x1337]
+};
+constexpr std::size_t kRosterRecordSize = 0x7c;
+constexpr int kRosterMaxIndex = 39;  // seg14:0xdd6 grows the block while DGROUP:0x931a <= 38 [BYTES seg14:0xdf0]
+
 // --- Layout checks ---------------------------------------------------------------------------
 static_assert(sizeof(Dword) == 4 && alignof(Dword) == 2, "Dword");
 static_assert(sizeof(ObjectRecord) == kObjectRecordSize, "object record 0x70");
 static_assert(sizeof(EffectEntry) == kEffectEntrySize, "effect entry 0x14");
 static_assert(sizeof(MissileSlot) == kMissileSlotSize, "missile entry 0x1c");
 static_assert(sizeof(ShipRecord) == kShipRecordSize, "ship record 0x15a");
+static_assert(sizeof(RosterRecord) == kRosterRecordSize, "roster record 0x7c");
+static_assert(offsetof(RosterRecord, credit10) == 0x02 && offsetof(RosterRecord, resources) == 0x04 &&
+                  offsetof(RosterRecord, w06) == 0x06 && offsetof(RosterRecord, rel_w) == 0x08 &&
+                  offsetof(RosterRecord, rel_a) == 0x12 && offsetof(RosterRecord, rel_r) == 0x17 &&
+                  offsetof(RosterRecord, fuel40) == 0x1c && offsetof(RosterRecord, slots) == 0x1d &&
+                  offsetof(RosterRecord, count) == 0x1e && offsetof(RosterRecord, weapon) == 0x28 &&
+                  offsetof(RosterRecord, b32) == 0x32 && offsetof(RosterRecord, b33) == 0x33 &&
+                  offsetof(RosterRecord, systems) == 0x38 && offsetof(RosterRecord, relation) == 0x3c &&
+                  offsetof(RosterRecord, team) == 0x64 && offsetof(RosterRecord, name) == 0x65 &&
+                  offsetof(RosterRecord, wing0) == 0x72 && offsetof(RosterRecord, wing1) == 0x73 &&
+                  offsetof(RosterRecord, barrels) == 0x74 && offsetof(RosterRecord, b75) == 0x75 &&
+                  offsetof(RosterRecord, cls) == 0x76 && offsetof(RosterRecord, met) == 0x77 &&
+                  offsetof(RosterRecord, run) == 0x78 && offsetof(RosterRecord, last_wave) == 0x79 &&
+                  offsetof(RosterRecord, size) == 0x7a && offsetof(RosterRecord, gap) == 0x7b,
+              "formats.md: roster record offsets");
 static_assert(sizeof(ShipTable) == kShipCount * kShipRecordSize, "ship table");
 static_assert(kDgShipRecords + kShipCount * kShipRecordSize == 0x7b60, "structs.md: next table at DGROUP:0x7b60");
 static_assert(kStartupRecords * kObjectRecordSize == kStartupBytes, "0x460 = ten records");

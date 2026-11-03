@@ -7,6 +7,7 @@
 #include <exception>
 
 #include "assets/asset_store.h"
+#include "briefing/save_text.h"
 #include "dialogs/preview.h"
 #include "nav/fs.h"
 #include "gfx/win16_edit.h"
@@ -31,6 +32,10 @@ const assets::AssetStore* g_store = nullptr;
 constexpr const wchar_t* kLevClass = L"LevClass";
 constexpr int kPreviewId = 100;
 
+// The dialog being created: the owner-draw lists send WM_MEASUREITEM before WM_INITDIALOG
+// hands the procedure its object (M4 s3 VISIT) [DESIGN].
+thread_local Dialog* g_creating = nullptr;
+
 INT_PTR CALLBACK dialog_proc(HWND h, UINT msg, WPARAM w, LPARAM l) {
     Dialog* d = nullptr;
     if (msg == WM_INITDIALOG) {
@@ -38,6 +43,7 @@ INT_PTR CALLBACK dialog_proc(HWND h, UINT msg, WPARAM w, LPARAM l) {
         SetWindowLongPtrW(h, DWLP_USER, l);
     } else {
         d = reinterpret_cast<Dialog*>(GetWindowLongPtrW(h, DWLP_USER));
+        if (!d && msg == WM_MEASUREITEM) d = g_creating;
     }
     if (!d) return FALSE;
     // No exception may unwind through user32's frames [DESIGN].
@@ -332,9 +338,12 @@ int Dialog::run_modal() {
     }
     modal_ = true;
     const gfx::Win16EditScope edits;  // the Win16 edit borders (gfx/win16_edit.h) [DESIGN]
+    Dialog* const outer = g_creating;  // a nested modal (the Sell dialog over the Options)
+    g_creating = this;
     const INT_PTR r = DialogBoxIndirectParamW(env_.instance,
                                               reinterpret_cast<const DLGTEMPLATE*>(t.data()),
                                               env_.owner, dialog_proc, reinterpret_cast<LPARAM>(this));
+    g_creating = outer;
     hwnd_ = nullptr;
     return static_cast<int>(r);
 }
@@ -344,11 +353,15 @@ HWND Dialog::create_modeless() {
     const auto t = env_.store->dialog_template(template_, {}, DS_NOFAILCREATE);
     modal_ = false;
     const gfx::Win16EditScope edits;  // the Win16 edit borders (gfx/win16_edit.h) [DESIGN]
-    return CreateDialogIndirectParamW(env_.instance, reinterpret_cast<const DLGTEMPLATE*>(t.data()),
-                                      env_.owner, dialog_proc, reinterpret_cast<LPARAM>(this));
+    Dialog* const outer = g_creating;
+    g_creating = this;
+    HWND r = CreateDialogIndirectParamW(env_.instance, reinterpret_cast<const DLGTEMPLATE*>(t.data()),
+                                        env_.owner, dialog_proc, reinterpret_cast<LPARAM>(this));
+    g_creating = outer;
+    return r;
 }
 
-INT_PTR Dialog::handle(HWND h, UINT msg, WPARAM w, LPARAM) {
+INT_PTR Dialog::handle(HWND h, UINT msg, WPARAM w, LPARAM l) {
     switch (msg) {
     case WM_INITDIALOG:
         hwnd_ = h;
@@ -362,9 +375,11 @@ INT_PTR Dialog::handle(HWND h, UINT msg, WPARAM w, LPARAM) {
         return FALSE;  // every procedure sets the focus itself
     case WM_COMMAND:
         command(LOWORD(w), HIWORD(w));
-        return TRUE;
+        return command_result(LOWORD(w));
     default: break;
     }
+    INT_PTR r = FALSE;
+    if (message(msg, w, l, r)) return r;
     return FALSE;
 }
 
@@ -558,11 +573,15 @@ void RestoreGame::fill(int index) {  // ISPACE.DLL seg10:0x1a80
         ship_name = ships_.records[static_cast<std::size_t>(ship_)].name;
     set_text(329, ship_name);
     set_text(269, std::to_string(h->score));  // ltoa
-    // Edit 330: INSPACE.EXE export 13 (seg10:0xa118) formats strings 3000-3002 and 3027 from
-    // the header with the formatter seg10:0xa332, whose %A conversion is not documented
-    // [OPEN]. The port leaves the edit empty.
-    set_text(330, "");
-    todo("saved-game description (INSPACE export 13) [OPEN]", "seg10:0xa118");
+    // Edit 330: INSPACE.EXE export 13 (seg10:0xa118) formats strings 3000-3002 (and 3027 with the
+    // Online Help window open: DGROUP:0x9460 = 0 at the title, so never here) from the header
+    // (briefing/save_text.h restore_description) [BYTES seg10:0xa118-0xa321] (M4 s3 fixer,
+    // SAVE request 2; s3-save.md correction 8).
+    if (bytes.size() >= kSaveHeaderRead)
+        set_text(330, briefing::restore_description(bytes.data(), std::string(), [this](int id) { return lang(id); },
+                                                    false));
+    else
+        set_text(330, "");
     InvalidateRect(GetDlgItem(hwnd_, kPreviewId), nullptr, TRUE);
 }
 
@@ -990,4 +1009,16 @@ int ordinal10(Env& env, int cmd) {
 }
 
 }  // namespace is::dialogs
+
+// M4 s3 VISIT: the Ambulance Options dialog reaches the program through the HUD's slot
+// (src/hud/visit_win32.h): ishud does not link isdialogs, and this object is linked into every
+// program that opens a dialog, so its initialiser fills the slot at start-up [DESIGN].
+#include "dialogs/ambulance_options.h"
+#include "hud/visit_win32.h"
+namespace {
+const bool g_ambulance_dialog_registered = [] {
+    is::hud::ambulance_dialog_slot() = [](is::dialogs::AmbulanceEnv& a) { return is::dialogs::run_ambulance_options(a); };
+    return true;
+}();
+}  // namespace
 #endif

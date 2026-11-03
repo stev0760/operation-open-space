@@ -5,7 +5,10 @@
 
 #include "world/bounce.h"
 #include "world/damage.h"
+#include "world/effects.h"
 #include "world/missile.h"
+#include "world/pods.h"
+#include "world/tank.h"
 
 namespace is::world {
 
@@ -445,20 +448,36 @@ std::int16_t call_on_damage(CollideCtx& x, int pool, int rec, std::int16_t a) {
     if (id == kDamageShip) return ship_damage(x, pool, rec, a);
     if (id == kDamageRock) return rock_damage(x, pool, rec, a);
     if (id == kDamageIcon) return icon_damage(x, pool, rec, a);  // seg7:0x233c (M4 s2 GUN)
+    if (id == kDamagePool4) return tank_damage(x, pool, rec, a);  // seg12:0xdc4 (M4 s3 FUEL)
     // seg7:0x2652, the generic handler of the missiles and the other generic records (missile.h
     // generic_on_damage); its far call through +0x66 is CollideHost::on_destroy (M4 s2 fixer).
     if (id == kDamageGeneric) {
         struct Forward final : MissileHost {
-            CollideHost& h;
-            explicit Forward(CollideHost& c) : h(c) {}
-            void on_destroy(int p, int r) override { h.on_destroy(p, r); }
-        } f{x.h};
+            CollideCtx& cx;
+            explicit Forward(CollideCtx& xx) : cx(xx) {}
+            void on_destroy(int p, int r) override { run_on_destroy(cx, p, r); }
+        } f{x};
         return generic_on_damage(x.w.pools, pool, rec, a, f);
     }
     // The ship set-up does not write the ship pool's slot yet (seg14:0x2158, the set-up's
     // owner): a ship record without one takes seg8:0x45e0 [DESIGN].
     if (id == 0 && pool == x.g.ship_pool) return ship_damage(x, pool, rec, a);
     return x.h.other_damage(id, pool, rec, a);
+}
+
+void run_on_destroy(CollideCtx& x, int pool, int rec) {
+    const std::uint32_t id = obj(x.w, pool, rec).on_destroy.get();
+    if (id == kDestroyPickup) return pickup_destroyed(x, pool, rec);  // seg7:0x2e02
+    if (id == kDestroyPool11) {                                       // seg12:0x6a60
+        PodDestroyOut d;
+        d.erase = [&x](int px, int py, int pw, int ph) { x.h.erase(px, py, pw, ph); };
+        d.puff = [&x](int p, int r, int arg) { x.h.puff(p, r, arg); };
+        d.to_screen = [&x](std::int16_t wx, std::int16_t wy) {
+            return world_to_screen(x.view, wx, wy, x.g.wave_kind, x.g.dg_9eb5, x.g.dg_9130);
+        };
+        return pod_destroyed(x.w, pool, rec, d);
+    }
+    x.h.on_destroy(pool, rec);
 }
 
 std::int16_t dispatch(CollideCtx& x, int tp, int tr, int xp, int xr, std::int16_t a) {

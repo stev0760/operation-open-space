@@ -1,4 +1,4 @@
-"""Mechanical facts of docs/re/core.md and of the M4 stage 0, M5 stage 1-2 and M3 stage 4
+"""Mechanical facts of docs/re/core.md and of the M4 stage 0 and 3, M5 stage 1-2 and M3 stage 4
 readings in docs/re/{structs,globals,formats,ispace,pitfalls,world}.md.
 
 The listing model, the fixtures and the helpers come from test_re_facts.py; this
@@ -12,7 +12,7 @@ import struct
 from collections import defaultdict
 
 from test_re_facts import (  # noqa: F401  (ins, isp and dgroup are pytest fixtures)
-    A, _IMM_RE, _calls, _cstr, _eng, _texts, _trunc, dgroup, ins, is_write, isp, s16,
+    A, _IMM_RE, _calls, _cstr, _eng, _sites, _texts, _trunc, dgroup, ins, is_write, isp, s16,
     unpacked_seg,
 )
 
@@ -1371,3 +1371,171 @@ def test_launch_constants(ins, dgroup):
     assert _texts(ins, expect) == expect
     assert (dgroup[0x1118], dgroup[0x76D]) == (0, 0)
     assert 36 + 5 == 41
+
+
+# ------------------------------------------------------------------ M4 stage 3: fuel, the ambulance, the save
+
+
+def test_m4s3_strings():
+    """core.md Fuel, The ambulance, The visit, The options dialog; formats.md Score list and
+    The header's readers: the ids and texts of the stage-3 strings."""
+    expect = {121: "FUEL LEVEL LOW. SEEK FUEL ASAP", 866: "LOADING NEW BODY...", 1033: "Uncloaking ",
+              1047: "Due To System Damage.", 1048: "Because I'm Low On Gas.", 1153: " REPAIR",
+              1154: "REPAIRS COMPLETE.", 1157: "%S REQUIRED", 1158: "YOUR CREDIT IS NOW %s ICONS. ",
+              1159: "TOTAL ITEMS SOLD: %s ICONS.", 1173: "TRANSFERRING %s ICONS... ",
+              1174: "TRANSFER COMPLETE. ", 1175: "%S IN PROGRESS..", 1176: "REFUEL%< COMPLETE.%>",
+              1177: "REFUELING", 1179: "TOTAL COST OF WORK: %s ICONS.", 1180: "PREPARE FOR LAUNCH",
+              1181: "LOADING %S...", 1182: "RELOADING %S...", 1183: "YOU'RE IN %S SHAPE, %s",
+              1184: "%D HAS LANDED..", 1185: "%<INSTALLING %>DOUBLE GUNS", 1199: "UNLOADING %S...",
+              1971: "UNIFYING FORCES", 1972: "POWERUP %S...", 2020: "WELL DONE, %s",
+              2021: "YOU'RE DEAD, %s", 2022: "PREPARE TO LEAVE INNER SPACE", 2027: "CLICK HERE TO PLAY",
+              2105: "ALIVE", 2106: "DEAD", 2107: "DONE!", 2330: "ORDER FULL GAME TO SEE ",
+              2331: "WHAT APPEARS HERE.", 2500: "%d OF THEM", 2501: "ALL OF THEM", 2502: "NONE OF THEM",
+              2503: "IT", 2516: "BASIC REPAIRS", 2517: "WING REPAIR", 2527: "%D HAS NO RESOURCES...",
+              2529: "SOME OF IT", 2540: "REFUELING %D..."}
+    assert {k: _eng(k) for k in expect} == expect
+    assert [(k >> 4) + 1 for k in (121, 1033, 1047, 1153, 1176, 1184, 1972, 2105, 2330, 2500, 2527, 2529)] == [
+        8, 65, 66, 73, 74, 75, 124, 132, 146, 157, 158, 159]
+
+
+def test_m4s3_routine_frames(ins):
+    """core.md Fuel, The small movers, The ambulance; formats.md Writing and Reading: the return
+    sizes that make each stage-3 routine Pascal (retf n) or cdecl (retf)."""
+    expect = {"seg3:0x332e": {"retf 4"}, "seg8:0x2658": {"retf 8"}, "seg7:0x3400": {"retf 2"},
+              "seg6:0x9e66": {"retf 0xa"}, "seg10:0xa118": {"retf 8"}, "seg11:0x4c72": {"retf"},
+              "seg11:0x4b00": {"retf"}, "seg12:0xdc4": {"retf"}, "seg12:0xe5c": {"retf"},
+              "seg7:0x2e02": {"retf"}, "seg16:0xb4e": {"retf"}, "seg16:0x3784": {"retf"},
+              "seg16:0x2e3c": {"retf"}, "seg14:0x4006": {"retf"}, "seg6:0x9932": {"retf"},
+              "seg6:0x885c": {"retf"}, "seg6:0x8776": {"retf"}, "seg16:0x33a2": {"retf"},
+              "seg16:0x3306": {"retf"}, "seg16:0x32a0": {"retf"}, "seg12:0x6a60": {"retf"},
+              "seg13:0x4ba0": {"retf"}, "seg16:0xa2": {"retf"}, "seg16:0xcfe": {"retf"}}
+    assert {f: _rets(ins, f) for f in expect} == expect
+
+
+def test_m4s3_notice_pushes(ins):
+    """core.md The command-line notice: the Pascal dword pushes give (1033, 1048) from the fuel
+    tick and (1033, 1047) from the damage drop; DGROUP:0x5c0 = now + 1200."""
+    expect = {"seg11:0x1c98": "push 0x4090418", "seg13:0x4a3": "push 0x4090417",
+              "seg13:0x4a9": "call far seg3:0x332e", "seg3:0x33a1": "add eax, 0x4b0",
+              "seg3:0x33a7": "mov dword ptr [0x5c0], eax", "seg3:0x33b1": "retf 4"}
+    assert _texts(ins, expect) == expect
+    assert (0x04090418 >> 16, 0x04090418 & 0xFFFF, 0x04090417 & 0xFFFF) == (1033, 1048, 1047)
+
+
+def test_m4s3_single_writers(ins, dgroup):
+    """globals.md Global table: DGROUP:0x9600 written once and never cleared, DGROUP:0x5bc never
+    written by address (0 in the file), DGROUP:0x5c0 never read by address, DGROUP:0x111e and
+    DGROUP:0x9596 never read, DGROUP:0x93a2 written only at seg6:0x68eb, DGROUP:0x945c/0x945e
+    counted over the run, DGROUP:0x934e and DGROUP:0x6e10 with their writers."""
+    def split(lo, hi):
+        r = ins.refs(lo, hi)
+        return sorted(_sites(i for i in r if is_write(i)), key=A), sorted(_sites(i for i in r if not is_write(i)), key=A)
+    assert split(0x9600, 0x9601) == (["seg9:0x6833"], ["seg7:0xd20"])
+    assert ins.stored_value(ins.at("seg9:0x6833")) == 1
+    assert split(0x5BC, 0x5BF) == ([], ["seg7:0x7f3"]) and dgroup[0x5BC:0x5C0] == b"\0\0\0\0"
+    assert split(0x5C0, 0x5C3)[1] == []
+    assert split(0x5C0, 0x5C3)[0] == ["seg3:0x33a7", "seg3:0x340e", "seg3:0x3455", "seg4:0x69af",
+                                      "seg7:0x187e", "seg11:0x65a2", "seg13:0x19bc", "seg13:0x69dc"]
+    assert split(0x111E, 0x111F) == (["seg16:0xe2", "seg16:0xea", "seg16:0x337", "seg16:0x5b2",
+                                      "seg16:0x620", "seg16:0x8cd", "seg16:0x118a", "seg16:0x32f8"], [])
+    assert split(0x9596, 0x9597) == (["seg16:0x4e1"], [])
+    assert split(0x93A2, 0x93A3)[0] == ["seg6:0x68eb"]
+    assert split(0x945C, 0x945F)[0] == ["seg6:0x97fe", "seg6:0x9806", "seg7:0x5b0c", "seg7:0x5b3d"]
+    assert split(0x934E, 0x934F)[0] == ["seg9:0x6524", "seg11:0x1f1e"]
+    assert split(0x6E10, 0x6E13) == (["seg13:0x38e5", "seg16:0x47c", "seg16:0x4d7"],
+                                     ["seg16:0x4b6", "seg16:0x517"])
+    assert split(0x9E4F, 0x9E50)[1] == ["seg16:0x210"]
+
+
+def test_m4s3_ambulance_deadlines(ins):
+    """core.md The mover and The visit: the deadlines 750 (pickup), 1300 (state 2), 1000 or 4000
+    (states 3 and 4), 1400 (dispatch), 1200 (phase 64), 3000 (re-entry), 2500 (phase 10),
+    500 and 40 (the monitor typing) and 6000 (phase 60)."""
+    expect = {"seg16:0x476": "add eax, 0x2ee", "seg16:0x47c": "mov dword ptr [0x6e10], eax",
+              "seg16:0x4d1": "add eax, 0x514", "seg16:0x4d7": "mov dword ptr [0x6e10], eax",
+              "seg16:0x556": "add ax, 0x3e8", "seg16:0x562": "add ax, 0xfa0",
+              "seg16:0x568": "mov word ptr [0x1e88], ax", "seg16:0xbef": "mov word ptr [0x9e4b], 0x578",
+              "seg16:0x1bfb": "mov word ptr [0x9e4b], 0x4b0", "seg16:0x1c25": "add eax, 0xbb8",
+              "seg16:0x1c2b": "mov dword ptr [0x6da8], eax", "seg16:0x1194": "add eax, 0x9c4",
+              "seg16:0x119a": "mov dword ptr [0x1c44], eax", "seg16:0x2ecf": "add eax, 0x1f4",
+              "seg16:0x2ed5": "mov dword ptr [0x1c60], eax", "seg16:0x2eed": "add ax, 0x28",
+              "seg16:0x2ef3": "mov word ptr [0x1c60], ax", "seg16:0x1b2b": "add ax, 0x1770",
+              "seg16:0x1178": "mov dword ptr [0x9e41], 0x32ffff",
+              "seg16:0x1181": "mov dword ptr [0x9e45], 0xf0005"}
+    assert _texts(ins, expect) == expect
+    assert (0x2EE, 0x514, 0x3E8, 0xFA0, 0x578, 0x4B0, 0xBB8, 0x9C4, 0x1F4, 0x1770) == (
+        750, 1300, 1000, 4000, 1400, 1200, 3000, 2500, 500, 6000)
+    assert (s16(0x32FFFF & 0xFFFF), 0x32FFFF >> 16, 0xF0005 & 0xFFFF, 0xF0005 >> 16) == (-1, 50, 5, 15)
+
+
+def test_m4s3_steering_and_push_off(ins):
+    """core.md The mover, steps 10 and 11: tab·500 − v·40 over the 16-bit mass with the heading
+    table DGROUP:0x1050/0x1052; the push-off reads the odd pool-12 records (k·0xe0 + 0x74) and
+    adds −3·tab/4, 42·d/dist and ∓25·d/dist."""
+    expect = {"seg16:0x67a": "imul ax, word ptr [si + 0x1050], 0x1f4",
+              "seg16:0x680": "imul cx, word ptr [bp - 0x24], 0x28", "seg16:0x686": "cdq",
+              "seg16:0x687": "idiv word ptr es:[bx + 0x44]",
+              "seg16:0x68e": "imul ax, word ptr [si + 0x1052], 0x1f4",
+              "seg16:0x6d0": "imul si, word ptr [bp - 4], 0xe0", "seg16:0x6d5": "les bx, ptr [0x1e28]",
+              "seg16:0x6d9": "push dword ptr es:[bx + si + 0x74]", "seg16:0x6ef": "cmp ax, 0x96",
+              "seg16:0x6fa": "imul ax, word ptr [bx + 0x1050], 3", "seg16:0x705": "sar ax, 2",
+              "seg16:0x726": "imul ax, word ptr [bp - 0x18], 0x2a",
+              "seg16:0x746": "imul ax, word ptr [bp - 0x1a], -0x19",
+              "seg16:0x752": "add word ptr es:[bx + 0xc], ax",
+              "seg16:0x756": "imul ax, word ptr [bp - 0x18], 0x19",
+              "seg16:0x762": "add word ptr es:[bx + 0xe], ax"}
+    assert _texts(ins, expect) == expect
+    assert ins.at("seg16:0x686").raw == b"\x99"
+    assert (0xE0, 0x74) == (2 * 0x70, 0x70 + 4)                # record 2k + 1, +0x04 (x, y)
+
+
+def test_m4s3_intercept_root(ins):
+    """core.md The intercept: seg8:0x1290 floors g at 3 and returns (N / g + g) sar 1."""
+    expect = {"seg8:0x129d": "cmp dword ptr [bp + 6], 3", "seg8:0x12a2": "jge seg8:0x12ac",
+              "seg8:0x12a4": "mov dword ptr [bp + 6], 3", "seg8:0x12ac": "mov eax, dword ptr [bp + 0xa]",
+              "seg8:0x12b2": "idiv dword ptr [bp + 6]", "seg8:0x12b6": "add eax, dword ptr [bp + 6]",
+              "seg8:0x12ba": "sar eax, 1"}
+    assert _texts(ins, expect) == expect
+
+
+def test_m4s3_gates(ins):
+    """world.md Placement step 8, core.md Calling it: the race-only refuel and the −300 reply
+    test; the pod record's age 0 and limit 500."""
+    expect = {"seg9:0x6901": "cmp word ptr [0x9320], 6", "seg9:0x6906": "jne seg9:0x693c",
+              "seg9:0x6909": "call seg9:0x6db0", "seg9:0x6cee": "cmp word ptr [0x9320], 6",
+              "seg9:0x6cf3": "jne seg9:0x6cf9", "seg9:0x6cf6": "call seg9:0x6db0",
+              "seg11:0x6fcc": "cmp ax, 0xfed4", "seg11:0x6fcf": "jge seg11:0x6fd6",
+              "seg13:0x4bb3": "mov dword ptr [bx - 0x7a9c], 0x1f40000"}
+    assert _texts(ins, expect) == expect
+    assert ins.call_sites("seg9:0x6db0") == ["seg9:0x6909", "seg9:0x6cf6"]
+    assert s16(0xFED4) == -300 and (0x1F40000 & 0xFFFF, 0x1F40000 >> 16) == (0, 500)
+    assert (-0x7A9C) & 0xFFFF == 0x8564
+
+
+def test_m4s3_header_offsets(ins):
+    """formats.md Header and The header's readers: export 13 divides +0x18b by 36 unsigned and
+    writes it back; the header block is 0x1a9 bytes, GMEM_ZEROINIT."""
+    expect = {"seg10:0xa12a": "mov eax, dword ptr es:[bx + 0x18b]", "seg10:0xa130": "mov ecx, 0x24",
+              "seg10:0xa136": "xor edx, edx", "seg10:0xa139": "div ecx",
+              "seg10:0xa13f": "mov dword ptr es:[bx + 0x18b], eax"}
+    assert _texts(ins, expect) == expect
+    assert 0x1A9 + 0x17 == 0x1C0 and (0x7C + 0x1F) & ~0x1F == 0x80 and (0x297 + 0x1F) & ~0x1F == 0x2A0
+    assert 0x1C0 + 0x80 + 0x2A0 == 1248 and 0x1C0 + 3 * 0x80 + 0x2A0 == 1504   # core-0003's files
+
+
+READER_ORDER = [0x939A, 0x939E, 0x93A0, 0x70ED, 0x70EE, 0x91F8, 0x94A2, 0x931C, 0x9432, 0x964A, 0x94A4,
+                0x931A, 0x1E58, 0x5078, 0x93AC, 0x94CA, 0x9346, 0x967C, 0xA161, 0xA162, 0x7162, 0x7160, 0x9134,
+                0x94AC, 0x5A8, 0x945C, 0x945E, 0xA1CD, 0xA1CF, 0x1318]
+
+
+def test_m4s3_reader_step7_order(ins):
+    """formats.md Reading step 7: the first direct store to each global inside seg6:0x95f3-0x9856
+    comes in the documented order."""
+    lo, hi = A("seg6:0x95f3")[1], A("seg6:0x9856")[1]
+    first = {}
+    for g in READER_ORDER:
+        w = [i for i in ins.writers(g, g + 1) if i.seg == 6 and lo <= i.off <= hi]
+        assert w, hex(g)
+        first[g] = min(i.off for i in w)
+    offs = [first[g] for g in READER_ORDER]
+    assert offs == sorted(offs), [hex(g) for g in sorted(READER_ORDER, key=first.get)]

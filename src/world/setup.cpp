@@ -3,6 +3,10 @@
 // the readings that go beyond world.md are listed in the stage report for a verifier. Portable.
 #include "world/setup.h"
 
+#include "world/ambulance.h"
+#include "world/purchases.h"
+#include "world/roster.h"
+
 #include "world/shots.h"
 
 #include "world/draw.h"
@@ -177,6 +181,25 @@ void new_game(World& w) {
     }
     w.w986.fill(1);
     w.w986[5] = 2;  // DGROUP:0x990
+    // On every path (claim 28): bytes DGROUP:0xa18f ... 0xa192 = 1, DGROUP:0x953e ... 0x9541 = 0,
+    // DGROUP:0x9542 + k = DGROUP:0x9564 + k = 0 for k = 1 ... 26, DGROUP:0x9563 = 0 and
+    // DGROUP:0xa161 = 0xff [BYTES seg9:0xcd7 seg9:0xcdd seg9:0xcee seg9:0xcfe-0xd07 seg9:0xd14
+    // seg9:0xd18 seg9:0xd25 seg9:0xd33] (M4 s3 ROSTER). The dword DGROUP:0x5018 = -1 at
+    // seg9:0xcdd is the SCORE panel's (src/hud panels.h score_shown) [OPEN: its reset].
+    w.ba18f.fill(1);
+    // The shop's to-do flags live in purchases.h Shop, their one home (M4 s3 fixer, review M2)
+    // [DESIGN]; this clears only the bytes seg9:0xc06 clears (not the powerups 0x955d ... or
+    // UNIFY 0x957f).
+    {
+        Shop& sh = shop();
+        sh.basic = sh.wing = sh.refuel = sh.double_guns = 0;  // DGROUP:0x953e ... 0x9541
+        for (int k = 1; k <= 26; ++k) {
+            sh.bought[static_cast<std::size_t>(k)] = 0;  // DGROUP:0x9542 + k
+            sh.sold[static_cast<std::size_t>(k)] = 0;    // DGROUP:0x9564 + k
+        }
+        sh.new_body = 0;  // DGROUP:0x9563
+    }
+    w.ba161 = 0xff;
     // The death and the passage deadlines, on every path (M4 s1 END) [BYTES seg9:0xd28
     // seg9:0xd2b seg9:0xd2f].
     w.w1e84 = 0;
@@ -1688,6 +1711,7 @@ void place(World& w, SetupHost& h) {
     place_gates(w, h);                                                         // [BYTES seg9:0x6854]
     w.clock = now_of(h);                                                  // [BYTES seg9:0x6859]
     p.set_in_use(7, 0);
+    ambulance_placement(ambulance_state());  // DGROUP:0x9e5b, 0x9e4b, 0x9e45 = 0 [BYTES seg9:0x6865-0x686d] (M4 s3 fixer)
     w.w9e49 = 10;
     p.rec(7, 0).state = 1;  // the ambulance, DGROUP:0x1e14 [BYTES seg9:0x6876 seg9:0x687a] (claim 71)
     // seg14:0x3eda, seg14:0x0(-1), seg14:0x4074 [BYTES seg9:0x685e seg9:0x6883 seg9:0x688a seg9:0x6890]
@@ -1705,13 +1729,17 @@ void place(World& w, SetupHost& h) {
             r.w36 = -1;
         }
     }
-    // A race's seg9:0x6db0 and its sounds are M6 [OPEN].
+    // seg9:0x6db0 (every ship's fuel to its design tank) only in a kind-6 wave; its three
+    // sounds are M6 [OPEN M6]. Every other wave keeps the roster's fuel (roster.h ship_from_roster)
+    // [BYTES seg9:0x6901 seg9:0x6906 seg9:0x6909] (M4 s3 ROSTER, claim 25).
+    if (w.kind == 6) refuel_all(w);
     w.w1e6c = w.clock + 10000;
     // seg11:0xae94 and seg11:0x2f8c (the weapon picture) run only for wave 1 or a restored game;
     // the program runs them at the wave start (src/hud/wave_win32.cpp) [BYTES seg9:0x6951
     // seg9:0x6958 seg9:0x695c seg9:0x695e seg9:0x6963] (M3 s4 fixer, review M6).
     w.picture_due = w.wave == 1 || w.restored != 0;
-    w.restored = 0;
+    // DGROUP:0x92e4 stays set through the restored first wave: seg9:0x6cc4 clears it at the
+    // debriefing entry (wave_end.cpp debrief_entry) [BYTES seg9:0x6ceb] (M4 s3 ROSTER).
     say(h, "world: placement seg9:0x6624 wave " + std::to_string(w.wave) + ", gate 0 at (" +
                std::to_string(p.rec(kPoolGatePosts, 0).x) + ", " + std::to_string(p.rec(kPoolGatePosts, 0).y) +
                "), " + std::to_string(p.in_use(kPoolRocks)) + " rocks");
@@ -1731,6 +1759,7 @@ void enter_briefing(World& w, SetupHost& h) {
     w.pools.rec(7, 0).state = 1;  // the ambulance, DGROUP:0x1e14 [BYTES seg9:0x5d42 seg9:0x5d46] (claim 71)
     w.w9e49 = 10;
     w.w952e = -1;
+    ambulance_briefing_entry(ambulance_state(), w);  // DGROUP:0x9e5b = 1, DGROUP:0x1e88 = 0 [BYTES seg9:0x5d35 seg9:0x5d58] (M4 s3 fixer)
     // seg10:0x5b30: the strip for N = the pool-0 in-use count, blacked [BYTES seg10:0x5b3d].
     w.strip_slots = w.pools.in_use(kPoolIcons);
     for (StripCell& c : w.strip) c = StripCell{};

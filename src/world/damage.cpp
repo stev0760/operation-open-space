@@ -24,6 +24,9 @@ std::int16_t roster_byte(const World& w, const ShipRecord& s, int k) {
     return w.roster[static_cast<std::size_t>(s.roster_index)].b33[static_cast<std::size_t>(1 + k)];
 }
 
+// The system words +0x26 ... +0x2c. ADR 0014 decision 6: a repaired system can stand at 101;
+// no routine of this file indexes a table with a system word (seg8:0x45e0 subtracts and
+// compares, seg11:0x1d7c adds below 0x52), so none needs the 101 guard [DESIGN] (M4 s3 ROSTER).
 std::int16_t& sys(ShipRecord& s, int k) { return s.roster_word(k); }
 
 }  // namespace

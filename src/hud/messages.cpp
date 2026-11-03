@@ -1,4 +1,5 @@
-// seg3:0x6ec and its formatter parts (messages.h). M4 stage 1, track SCREENS.
+// seg3:0x6ec and its formatter parts (messages.h). M4 stage 1, track SCREENS; codes 7, 8, 9
+// and 132 M4 stage 3, track AMBFLIGHT.
 #include "hud/messages.h"
 
 #include <functional>
@@ -55,6 +56,7 @@ std::string cut_name_code(std::string name) {
 
 bool message_code_ported(int code) {
     switch (code) {
+    case 7: case 8: case 9: case 132:
     case 10: case 11: case 12: case 13: case 72: case 82: case 83: case 84: case 85: case 86: case 91:
     case 94: case 111: case 112:
         return true;
@@ -105,6 +107,32 @@ void dispatch_message(MessageState& s, MessageHost& h, int recipient, int pool, 
         split_lines(s.text, s.line1, s.line2);
     };
     switch (code) {  // seg3:0x1351 on code - 1 [BYTES seg3:0x1346-0x1351]
+    // M4 stage 3, track AMBFLIGHT: the H key's replies (s3-ambflight.md 1.4, verified claim 2)
+    // and the low-fuel warning (s3-fuel.md 2.2, verified claim 16).
+    case 7:  // case 6 [BYTES seg3:0xcbb seg3:0xcc4 seg3:0xcc9 seg3:0xbb4 seg3:0xbb8 seg3:0xbc0]
+        // seg10:0x744c(0x33), RESCUE.WAV; string 110 "Hold Your Horses, %s. Rescue Unit
+        // Dispatched." with the pilot name DGROUP:0x380c [BYTES ENG_LANG.DLL STRING 7] id 110
+        h.sound(0x33);
+        format2(0x6e, {FArg(h.pilot())});
+        break;
+    case 8:  // case 7 [BYTES seg3:0xcde seg3:0xce8 seg3:0x8d9 seg3:0x8dd seg3:0x8e5]
+        // seg10:0x744c(0x2c); string 348 "Sorry! Ambulance Service Is Busy At This Time."
+        // [BYTES ENG_LANG.DLL STRING 22] id 348
+        h.sound(0x2c);
+        format2(0x15c, {});
+        break;
+    case 9:  // case 8 [BYTES seg3:0xcee seg3:0xcf0 seg3:0xcf6 seg3:0xcf8 seg3:0x8d9 seg3:0x8dd]
+        // seg10:0x744c(0x2c); string 121 "FUEL LEVEL LOW. SEEK FUEL ASAP" [BYTES ENG_LANG.DLL
+        // STRING 8] id 121
+        h.sound(0x2c);
+        format2(0x79, {});
+        break;
+    case 132:  // case 131 [BYTES seg3:0xcce seg3:0xcd8 seg3:0x8d9]
+        // seg10:0x744c(0x2c); string 1136 "Sorry! You Have No Credit. Help Is Not Coming."
+        // [BYTES ENG_LANG.DLL STRING 72] id 1136
+        h.sound(0x2c);
+        format2(0x470, {});
+        break;
     case 10:
     case 11:
     case 12:  // cases 9-11 [BYTES seg3:0xd2d-0xd83]

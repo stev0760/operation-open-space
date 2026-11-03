@@ -244,11 +244,33 @@ public:
     EffectTable effects{};    // DGROUP:0x1e90
     std::int16_t player = 0;      // DGROUP:0x9646
     std::int16_t last_ship = 0;   // DGROUP:0x9316
-    // The roster DGROUP:0x6e24 (0x7c-byte records; the port keeps the bytes it reads, rating.h)
-    // and DGROUP:0x931c, the player's roster index. seg14:0x0 makes record 0 for the player at
-    // wave <= 1 [BYTES seg14:0x232-0x3d8 seg14:0x42a-0x432] (M5 s2 BRIEFING).
+    // The roster DGROUP:0x6e24 (the block DGROUP:0x95a4 of 0x7c-byte records, records.h
+    // RosterRecord) and DGROUP:0x931c, the player's roster index (src/world/roster.h). The
+    // highest index DGROUP:0x931a is roster.size() - 1: the port keeps the count in the vector,
+    // so its writers (seg14:0x287 = 0, seg14:0xecd + 1, seg10:0x38d6 = 0 with the block freed,
+    // seg6:0x967f from header +0x34) size the vector [DESIGN] (roster.h roster_last).
+    // seg14:0x0 makes record 0 for the player when DGROUP:0x91f8 <= 1 [BYTES seg14:0x232-0x3f3]
+    // (M4 s3 ROSTER).
     std::vector<RosterRecord> roster;
-    std::int16_t player_roster = 0;  // DGROUP:0x931c
+    std::int16_t player_roster = 0;  // DGROUP:0x931c [BYTES seg14:0x240 seg9:0x2e8c seg6:0x9d03 seg6:0x9663]
+    // DGROUP:0x95b4: seg14:0x2300's best score, -1000 when no record matched; seg14:0xdd6 adds a
+    // record only when it is above DGROUP:0x95b2 [BYTES seg14:0x317f seg14:0xde5-0xdec]
+    // [OPEN: DGROUP:0x95b2's writer].
+    std::int16_t w95b2 = 0, w95b4 = 0;
+    // DGROUP:0x11aa, the Plus edition (shell/edition.h `plus`): 0 remaps the weapons through
+    // word +0x36 of the weapon table (DGROUP:0x2f8a + 0x50·w) and lets seg14:0x455c reject ships
+    // [BYTES seg14:0x33a seg14:0x16e5 seg14:0x4567].
+    std::int16_t w11aa = 0;
+    // The 10-byte arrays DGROUP:0xa14d and DGROUP:0xa157 (header +0x174, +0x17e), zeroed with the
+    // player's fresh roster record [BYTES seg14:0x3fc-0x410].
+    std::array<std::uint8_t, 10> ba14d{}, ba157{};
+    // The dwords DGROUP:0x8e08 + 4i = 1000000 at every seg14:0x1430(i) [BYTES seg14:0x155b] [OPEN: reader].
+    std::array<std::uint32_t, 8> d8e08{};
+    // The bytes DGROUP:0xa18f ... 0xa192 = 1 and DGROUP:0xa161 = 0xff that seg9:0xc06 sets on
+    // every path [BYTES seg9:0xcd7 seg9:0xd33]. The shop's to-do flags DGROUP:0x953e ... 0x9563
+    // it clears beside them live in purchases.h Shop (shop()) [DESIGN].
+    std::array<std::uint8_t, 4> ba18f{};
+    std::uint8_t ba161 = 0;
     // The design words seg13:0x33d6 reads, by design index (ship word +0x4e) [DESIGN: the port
     // has no 0xad-byte design table yet; the ship set-up fills the player's design 0].
     std::array<DesignRating, kShipCount> design_ratings{};
@@ -414,7 +436,8 @@ public:
     std::int16_t w9604 = 0;
     // DGROUP:0x9602: the defenders the last icon capture took over [BYTES seg13:0x1b5e seg13:0x1b97].
     std::int16_t w9602 = 0;
-    // DGROUP:0x945c / DGROUP:0x945e: icons captured / destroyed this wave (seg7:0x5ae8)
+    // DGROUP:0x945c / DGROUP:0x945e: icons captured / destroyed over the whole game (seg7:0x5ae8;
+    // globals.md, s3-save.md correction 7)
     // [BYTES seg7:0x5b0c seg7:0x5b3d]. The live-icon count DGROUP:0x91fc is icons_b.
     std::int16_t w945c = 0, w945e = 0;
     // DGROUP:0x9498 is Pools::bad_index_count (records.h): the capture's "value < 0" also counts there.

@@ -26,6 +26,17 @@ std::string icon_label(const std::string& string152, int rec) {
     return s + std::to_string(w16(rec));
 }
 
+std::string fragment_label(const std::string& string892) {
+    std::string s = string892;
+    // The gender code "^N" off, as the analysis reads seg3:0x1542's tail from seg3:0x196d (mode 0) [OPEN]
+    s.erase(s.size() >= 2 ? s.size() - 2 : 0);
+    return s;
+}
+
+FragmentTexts fragment_target_texts(const std::string& icon_name, const std::string& string892) {
+    return FragmentTexts{icon_name, fragment_label(string892)};  // [BYTES seg3:0x2de seg3:0x428]
+}
+
 int icon_suffix_id(int b53) {
     if (b53 == 2) return 0x8a0;  // seg3:0x27f: 2208
     if (b53 == 0) return 0x8a1;  // seg3:0x28d: 2209

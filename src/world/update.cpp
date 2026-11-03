@@ -4,8 +4,11 @@
 #include "world/rock_images.h"
 
 #include "world/damage.h"
+#include "world/fragments.h"
 #include "world/icon_mover.h"
 #include "world/missile.h"
+#include "world/pods.h"
+#include "world/tank.h"
 
 namespace is::world {
 
@@ -90,6 +93,75 @@ void UpdateHost::Forward::erase(int x, int y, int w, int h) {
 
 void UpdateHost::CaptureForward::erase(int x, int y, int w, int h) {
     if (Blitter* out = u->blitter()) out->pat_blt(kDcWindow, x, y, w, h, kBlackness);
+}
+
+// ---- M4 s3 FUEL: the cloak, the shield and the small movers
+
+namespace {
+SmallMoverLinks g_small_links;
+}  // namespace
+
+SmallMoverLinks& small_mover_links() { return g_small_links; }
+
+std::int16_t UpdateHost::seg11_4c72(int ship) {
+    if (!frame_ctx) return 0;
+    World* w = frame_world(frame_ctx->flight.pools);
+    if (!w) return 0;
+    SystemsCtx sc{*w, frame_ctx->flight.g.now, frame_ctx->flight.g.game_frames, systems_host()};
+    return cloak_toggle(sc, ship);  // seg11:0x4c72 [BYTES seg13:0x45f]
+}
+
+std::int16_t UpdateHost::seg11_4b00(int ship) {
+    if (!frame_ctx) return 0;
+    World* w = frame_world(frame_ctx->flight.pools);
+    if (!w) return 0;
+    SystemsCtx sc{*w, frame_ctx->flight.g.now, frame_ctx->flight.g.game_frames, systems_host()};
+    return shield_toggle(sc, ship);  // seg11:0x4b00 [BYTES seg13:0x491]
+}
+
+void UpdateHost::seg3_332e(std::uint32_t ids) {
+    if (!frame_ctx) return;
+    World* w = frame_world(frame_ctx->flight.pools);
+    if (!w) return;
+    SystemsCtx sc{*w, frame_ctx->flight.g.now, frame_ctx->flight.g.game_frames, systems_host()};
+    strategy_notice(sc, ids);  // seg3:0x332e [BYTES seg13:0x4a3]
+}
+
+const ImageSlotTable* UpdateHost::images() {
+    return g_small_links.images ? g_small_links.images() : nullptr;
+}
+
+namespace {
+DissolveOut dissolve_out(UpdateHost& h) {
+    DissolveOut d;
+    d.out = h.blitter();
+    d.images = h.images();
+    d.window_dc = kDcWindow;
+    d.player_sprite = [&h] { h.player_sprite(); };
+    d.in_use = [&h](int pool, int rec) { h.collide_host().seg7_2080(pool, rec); };
+    return d;
+}
+}  // namespace
+
+void UpdateHost::tank_dissolve(int rec) {
+    if (!frame_ctx) return;
+    if (World* w = frame_world(frame_ctx->flight.pools)) ::is::world::tank_dissolve(*w, rec, dissolve_out(*this));
+}
+
+void UpdateHost::pod_dissolve(int pool, int rec) {
+    if (!frame_ctx) return;
+    World* w = frame_world(frame_ctx->flight.pools);
+    if (!w) return;
+    ::is::world::pod_dissolve(*w, pool, rec, dissolve_out(*this),
+                              [this](int wpn, int off) { return weapon_word(wpn, off); });
+}
+
+bool UpdateHost::fragment_has_bitmap(int r) {
+    return g_small_links.fragment_has_bitmap ? g_small_links.fragment_has_bitmap(r) : false;
+}
+
+void UpdateHost::draw_fragment(std::int16_t pr, int r) {
+    if (g_small_links.draw_fragment) g_small_links.draw_fragment(pr, r);
 }
 
 void UpdateHost::set_design_word_22(int design, std::int16_t v) {
@@ -432,7 +504,10 @@ void wave_frame(UpdateCtx& c) {
         move_icons(c, *w);
     else
         h.mover(Mover::k7_309c);
-    h.mover(Mover::k7_32d0);
+    if (World* w = h.frame_world(c.flight.pools))  // seg7:0x32d0, pool 1 (fragments.h) (M4 s3 FUEL)
+        move_fragments(c, *w);
+    else
+        h.mover(Mover::k7_32d0);
     h.mover(Mover::k7_40c4);
     if (World* w = h.frame_world(c.flight.pools))  // seg12:0x0, the pool-6 mover (missile.h) (M4 s2 fixer)
         move_missiles(*w, c);
@@ -442,8 +517,20 @@ void wave_frame(UpdateCtx& c) {
     h.mover(Mover::k6_7c14);
     if (World* w = h.frame_world(c.flight.pools); w && w->w9456 > 0) h.mover(Mover::k7_5e04);
     h.mover(Mover::k12_3148);
-    h.mover(Mover::k12_6b1e);
-    if (f.dg_9600 != 0) h.mover(Mover::k12_ae4);
+    // seg12:0x6b1e (pool 11), seg12:0xae4 (pool 4) while DGROUP:0x9600 != 0, then seg12:0x3e98(0)
+    // [BYTES seg7:0xd1b seg7:0xd20 seg7:0xd27 seg7:0xd2e] (s3-fuel-verify.md claim 58) (M4 s3 FUEL).
+    // DGROUP:0x9600 has one writer, seg9:0x6833 (= 1), and nothing clears it: once a placement
+    // has run, the pool-4 mover runs on every later frame of the session (verified claim 57).
+    if (World* w = h.frame_world(c.flight.pools)) {
+        move_pods(c, *w);
+        if (f.dg_9600 != 0) move_tanks(c, *w);
+    } else {
+        h.mover(Mover::k12_6b1e);
+        if (f.dg_9600 != 0) h.mover(Mover::k12_ae4);
+    }
+    // seg12:0x3e98(0) returns at once unless the wave is kind 6 [BYTES seg12:0x3ea8-0x3eaf]; its
+    // race body, which calls the tank respawn seg12:0x4f4e at seg12:0x3ee5, is M6 [OPEN]: the
+    // stub stays, so outside a race a taken tank is not respawned, as in the original.
     h.mover(Mover::k12_3e98);
     // [BYTES seg7:0xd34-0xd78]
     if (passed(f.music_due, g.now) && f.dg_950 == 0 && f.race == 0 && g.demons_gate == 0 &&

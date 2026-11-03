@@ -1,6 +1,9 @@
 // The wave's input (input.h).
 #include "world/input.h"
 
+#include "world/collide.h"
+#include "world/world.h"
+
 namespace is::world {
 
 // ---- KeyLatch [DESIGN ADR 0013 decision 6]
@@ -159,6 +162,9 @@ KeyResult key_message(std::uint32_t msg, std::uint16_t key, const WaveGlobals& g
     case 'B':  // seg11:0x71d4: the frame-rate display [BYTES seg11:0x6e6a] (M3 s2 fixer)
         act.show_frame_rate();
         return KeyResult::kHandled;
+    case 'H':  // seg11:0x6f7a: the ambulance (ambulance.h ambulance_key) [BYTES seg11:0x6f7a-0x6fe8] (M4 s3 fixer)
+        act.ambulance(ctrl, alt);
+        return KeyResult::kHandled;
     case 'M':  // seg11:0x71a9: the message display [BYTES seg11:0x6e9a] (M3 s2 fixer)
         act.show_messages();
         return KeyResult::kHandled;
@@ -217,6 +223,108 @@ JoyPost joystick_button(WaveGlobals& g, const JoyState& js, JoyButtons& jb, int 
     case 6: return {kWmKeyUp, 0x14};
     default: return {};
     }
+}
+
+// ---- the cloak and the shield (M4 s3 FUEL)
+
+namespace {
+SystemsHost g_null_systems;
+SystemsHost* g_systems = nullptr;
+std::int16_t g_9522 = 0;
+
+// `sub/sbb` of frame# DGROUP:0x1e68 - dword +0x152, then hi = 0 and lo < 0x96 (`jb`): the
+// 150-frame wait [BYTES seg11:0x4c9d-0x4cb8 seg11:0x4b45-0x4b60].
+bool within_150(std::uint32_t frames, std::uint32_t last) { return frames - last < 150u; }
+}  // namespace
+
+SystemsHost& systems_host() { return g_systems ? *g_systems : g_null_systems; }
+void set_systems_host(SystemsHost* h) { g_systems = h; }
+std::int16_t& dg_9522() { return g_9522; }
+
+// seg11:0x4c72 [BYTES seg11:0x4c72-0x4d16]
+std::int16_t cloak_toggle(SystemsCtx& c, int i) {
+    World& w = c.w;
+    if (i < 0 || i >= kShipCount || i >= w.pools.records(w.roles.ships)) return 0;  // [DESIGN] bounds
+    ShipRecord& s = w.ship(i);
+    ObjectRecord& o = w.ship_object(i);
+    const bool action_player = i == w.player && w.play_mode == 0;  // [BYTES seg11:0x4c8e-0x4c9b]
+    if (s.be7 == 0) return 0;                                       // [BYTES seg11:0x4c82]
+    if (!action_player && within_150(c.frames, ship_dword(s, 0x152))) return 0;
+    if (s.be8 == 0 && s.fuel < 120) return 0;                       // [BYTES seg11:0x4cbf-0x4ccb]
+    if (s.beb != 0) return 0;                                       // [BYTES seg11:0x4cd2-0x4cd7]
+    const int pool = w.roles.ships;                                 // DGROUP:0x9324
+    if (s.be8 != 0) {  // off [BYTES seg11:0x4cd9-0x4d08]
+        c.h.vanish_buffer(pool, i);
+        s.w2e = 2;
+        c.h.vanish_start(2, pool, i);
+        s.be8 = 0;
+    } else {  // on [BYTES seg11:0x4d1c-0x4da0]
+        if (s.w2c == 0) return 0;
+        if (!action_player && s.w2c <= 40) return 0;                // jle 0x28 [BYTES seg11:0x4d3e]
+        set_ship_dword(s, 0x14a, static_cast<std::uint32_t>(static_cast<std::uint16_t>(o.x)) |
+                                     (static_cast<std::uint32_t>(static_cast<std::uint16_t>(o.y)) << 16));
+        set_ship_dword(s, 0x14e, c.now);                            // [BYTES seg11:0x4d6f-0x4d73]
+        c.h.vanish_buffer(pool, i);
+        s.w2e = 2;
+        c.h.vanish_start(1, pool, i);
+        s.be8 = 1;
+    }
+    set_ship_dword(s, 0x152, c.frames);  // [BYTES seg11:0x4d0d-0x4d11]
+    return 1;
+}
+
+// seg11:0x4b00 [BYTES seg11:0x4b00-0x4c66]
+std::int16_t shield_toggle(SystemsCtx& c, int i) {
+    World& w = c.w;
+    if (i < 0 || i >= kShipCount || i >= w.pools.records(w.roles.ships)) return 0;  // [DESIGN] bounds
+    ShipRecord& s = w.ship(i);
+    const ObjectRecord& o = w.ship_object(i);
+    if (s.w2c < 50 && s.bea == 0) return 0;     // [BYTES seg11:0x4b0b-0x4b1e]
+    if (s.type >= 1 && s.type <= 6) return 0;   // [BYTES seg11:0x4b23-0x4b34]
+    // The 150-frame wait (s3-fuel-verify.md claim 11, CORRECTED) [BYTES seg11:0x4b36-0x4b60].
+    const bool action_player = i == w.player && w.play_mode == 0;
+    if (!action_player && within_150(c.frames, ship_dword(s, 0x152))) return 0;
+    if (s.bea != 0) {  // down [BYTES seg11:0x4b6e-0x4ba1]
+        s.type = 6;
+        g_9522 = -1;
+        s.w20 = sub16(o.size, 2);
+        s.w22 = 1;
+        s.bea = 0;
+    } else {  // up [BYTES seg11:0x4ba8-0x4bdf]
+        s.type = 1;
+        g_9522 = 1;
+        s.w20 = sub16(o.size, 12);
+        s.w22 = 7;
+        s.bea = 1;
+    }
+    c.h.shield_render(i);                 // seg10:0x7328 [BYTES seg11:0x4be4-0x4c37]
+    set_ship_dword(s, 0x152, c.frames);   // [BYTES seg11:0x4c3a-0x4c3e]
+    if (s.thrusting != 0) c.h.flame(1, i);  // seg11:0xb09c(i, 1) [BYTES seg11:0x4c43-0x4c50]
+    c.h.sound(5, w.roles.ships, i, 1);    // SHIELD.WAV [BYTES seg11:0x4c53-0x4c63]
+    return 1;
+}
+
+// seg3:0x332e [BYTES seg3:0x332e-0x33b1]
+void strategy_notice(SystemsCtx& c, std::uint32_t ids) {
+    auto cut = [](std::string t) {  // LoadString's cchMax 40 [BYTES seg3:0x3355-0x3392]
+        if (t.size() > 39) t.resize(39);
+        return t;
+    };
+    World& w = c.w;
+    w.w8630 = c.h.pilot() + ": " + cut(c.h.lang(static_cast<int>(ids >> 16))) +
+              cut(c.h.lang(static_cast<int>(ids & 0xffffu)));  // DGROUP:0x13d6 ": "
+    w.w058c = 1;                 // [BYTES seg3:0x3397]
+    w.w05c0 = c.now + 1200u;     // [BYTES seg3:0x339d-0x33a7]
+    c.h.strategy_line(w.w8630);  // seg7:0x1f38 draws it only while PlayMode = 1 (M8) [BYTES seg7:0x1f45]
+}
+
+CapsAction capslock_action(bool gated, std::int16_t demo, std::int16_t play_mode, std::uint8_t has_shield,
+                           std::uint8_t has_cloak) {
+    if (gated || demo == 0) return CapsAction::kNone;  // [BYTES seg11:0x6c9b-0x6cd1 seg11:0x6d19]
+    if (play_mode != 0) return CapsAction::kNone;      // [BYTES seg11:0x6dd6-0x6ddb]
+    if (has_shield != 0) return CapsAction::kShield;   // [BYTES seg11:0x6ddf-0x6df1]
+    if (has_cloak != 0) return CapsAction::kCloak;     // [BYTES seg11:0x6df6-0x6e0a]
+    return CapsAction::kNone;
 }
 
 }  // namespace is::world

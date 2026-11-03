@@ -106,6 +106,9 @@ public:
     // seg10:0x7e1c's PostMessage(DGROUP:0xa7c, WM_PAINT) after it set DGROUP:0xa76 = 4: the
     // left display repaints in its new mode [BYTES seg10:0x7e3f].
     virtual void info_repaint() {}
+    // WM_KEYDOWN 'H' (seg11:0x6f7a-0x6fe8): Ctrl / Alt / the call seg16:0xb4e with its reply
+    // (ambulance.h ambulance_key) (M4 s3 fixer).
+    virtual void ambulance(bool ctrl, bool alt) { (void)ctrl, (void)alt; }
     // A key of the switch that a later stage ports: wParam and the case's address.
     virtual void unported(std::uint32_t msg, std::uint16_t key, const char* address) {
         (void)msg, (void)key, (void)address;
@@ -149,6 +152,81 @@ std::int32_t zoom_minus(std::int32_t zoom);
 // gives 104, at least 4, anything above 104 becomes 1200 [BYTES seg10:0x7e5b seg10:0x7e86
 // seg10:0x7f0b].
 int speed_step_rate(int rate, int d);
+
+// --- The cloak and the shield (work/analysis/m4/s3-fuel.md 1.2-1.4 with s3-fuel-verify.md) ------
+// M4 stage 3, track FUEL. The toggles work on the program's World (its ship records and the
+// ship pool's objects); the routines they call in other parts go through SystemsHost.
+
+class World;
+
+// The calls of the two toggles and of seg3:0x332e out of this file; the defaults do nothing.
+class SystemsHost {
+public:
+    virtual ~SystemsHost() = default;
+    // seg12:0x2556(DGROUP:0x9324, i) then seg7:0x13b2(mode, DGROUP:0x9324, i), the vanish of
+    // core.md "The vanish" (entry_effect.h entry_buffer, entry_start) [BYTES seg11:0x4ce9
+    // seg11:0x4cfe seg11:0x4d81 seg11:0x4d96]. The caller writes ship word +0x2e = 2 between them.
+    virtual void vanish_buffer(int pool, int ship) { (void)pool, (void)ship; }
+    virtual void vanish_start(int mode, int pool, int ship) { (void)mode, (void)pool, (void)ship; }
+    // seg10:0x7328(...), the ship sprite render ISPACE.DLL ordinal 17's wrapper into the sheet DC
+    // DGROUP:0x3a38[i] with 1, 0x63, after a shield toggle [BYTES seg11:0x4be4-0x4c37] [OPEN: no
+    // port of ordinal 17].
+    virtual void shield_render(int ship) { (void)ship; }
+    // seg11:0xb09c(i, on): the flame (world.h briefing_flame outside the frame) [BYTES seg11:0x4c50].
+    virtual void flame(int on, int ship) { (void)on, (void)ship; }
+    // seg10:0x754a(id, pool, rec, mode).
+    virtual void sound(int id, int pool, int rec, int mode) { (void)id, (void)pool, (void)rec, (void)mode; }
+    // LoadString(DGROUP:0x9212, id, buf, 40) and the pilot name DGROUP:0x380c (seg3:0x332e).
+    virtual std::string lang(int id) { return (void)id, std::string{}; }
+    virtual std::string pilot() { return {}; }
+    // seg7:0x1f38's draw of DGROUP:0x8630 in Strategy mode (PlayMode 1): M8 [OPEN].
+    virtual void strategy_line(const std::string& text) { (void)text; }
+};
+// The program's SystemsHost (src/hud/wave_win32.cpp sets it); a do-nothing host before.
+SystemsHost& systems_host();
+void set_systems_host(SystemsHost* h);
+
+// DGROUP:0x9522: 1 at a shield raise, -1 at a lower (seg11:0x4b74, seg11:0x4bb4); its readers
+// are [OPEN] for this track.
+std::int16_t& dg_9522();
+
+// What the toggles read beyond the World: now DGROUP:0x1e50 and the frame count DGROUP:0x1e68.
+struct SystemsCtx {
+    World& w;
+    std::uint32_t now = 0;
+    std::uint32_t frames = 0;
+    SystemsHost& h;
+};
+
+// seg11:0x4c72(i) [BYTES seg11:0x4c72-0x4d16] (verified claims 6-9): the cloak toggle; 1 when it
+// toggled. 0 without `has_cloak` +0xe7; for any ship but the player in PlayMode 0 within 150
+// frames (unsigned 32-bit frame# - dword +0x152) of the last toggle; switching on with fuel < 120
+// (signed); while byte +0xeb != 0. Off: the vanish mode 2, +0xe8 = 0. On: system 3 (+0x2c) != 0
+// and, unless the action player, > 40; dword +0x14a = the object's (x, y), +0x14e = now, the
+// vanish mode 1, +0xe8 = 1. Both store frame# in +0x152.
+std::int16_t cloak_toggle(SystemsCtx& c, int i);
+// seg11:0x4b00(i) [BYTES seg11:0x4b00-0x4c66] (verified claims 11 CORRECTED, 12, 13): the shield
+// toggle; 1 when it toggled. 0 when system 3 < 50 (signed) and +0xea = 0, while the animation word
+// +0x10 is 1 ... 6, and for any ship but the action player within 150 frames of +0x152. Down:
+// +0x10 = 6, DGROUP:0x9522 = -1, ship word +0x20 = object size - 2, +0x22 = 1, +0xea = 0. Up:
+// +0x10 = 1, DGROUP:0x9522 = 1, +0x20 = size - 12, +0x22 = 7, +0xea = 1. Then seg10:0x7328,
+// +0x152 = frame#, seg11:0xb09c(i, 1) while thrusting, sound 5 (SHIELD.WAV).
+std::int16_t shield_toggle(SystemsCtx& c, int i);
+// seg3:0x332e(a, b), Pascal [BYTES seg3:0x332e-0x33b1] (verified claims 3-5): DGROUP:0x8630 =
+// pilot + ": " + string a + string b (each LoadString at most 39 characters), DGROUP:0x58c = 1,
+// dword DGROUP:0x5c0 = now + 1200 (a dead store: the frame's gate reads DGROUP:0x5bc). `ids` is
+// the pushed dword, a in the high word (0x04090418: 1033 "Uncloaking ", 1048 "Because I'm Low
+// On Gas.").
+void strategy_notice(SystemsCtx& c, std::uint32_t ids);
+
+// WM_KEYUP VK_CAPITAL in seg11:0x6b64 (seg11:0x6dd6) [BYTES seg11:0x6d19 seg11:0x6dd6-0x6e0a]
+// (verified claim 10): the key switch's gate (the player's lock-out or `state`) and the WM_KEYUP
+// demo filter DGROUP:0x95bc != 0 come first; then nothing while PlayMode != 0; else the shield
+// toggle when the player has `has_shield` +0xe9, else the cloak toggle with `has_cloak` +0xe7.
+enum class CapsAction : std::uint8_t { kNone, kShield, kCloak };
+constexpr std::uint16_t kVkCapital = 0x14;
+CapsAction capslock_action(bool gated, std::int16_t demo, std::int16_t play_mode, std::uint8_t has_shield,
+                           std::uint8_t has_cloak);
 
 // --- Joystick (world.md "Joystick") -----------------------------------------------------------
 // DGROUP:0x1018: the 5 x 5 stick table, y * 5 + x, a heading or -1 [BYTES DGROUP:0x1018].

@@ -46,8 +46,9 @@ void fill_pod(EffectCtx& c, int ship, int rec, int flag);
 // pod and seg7:0x2080(11, -1) follows (with every word <= 0 the original uses an unset index: the
 // port drops no pod then [DESIGN]). With flag != 0 the first live ship whose design word
 // DGROUP:0x970a is 3, or 7 with ship byte +0x5e > 1, is sent after it: words +0x52 = 0, +0x32 =
-// +0x06 = 11, +0x34 = +0x08 = rec, +0x38 = +0x3c = 2. The pool-11 mover seg12:0x6b1e and the
-// pickup are not ported: the pod lies inert [OPEN M4 stage 2].
+// +0x06 = 11, +0x34 = +0x08 = rec, +0x38 = +0x3c = 2. The "largest word" is the age: the oldest
+// pod gives way. The pool-11 mover seg12:0x6b1e is pods.h move_pods (M4 s3 FUEL); what the pickup
+// gives the ship is M5.
 void drop_pod(EffectCtx& c, int ship, int flag);
 
 }  // namespace is::world

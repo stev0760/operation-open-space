@@ -79,8 +79,11 @@ DeadlineResult run_wave_deadlines(shell::GameState& s) {
 #include "shell/rng.h"
 #include "world/draw.h"
 #include "world/flight_hooks.h"
+#include "world/missile.h"
+#include "world/roster.h"
 #include "world/setup.h"
 #include "world/update.h"
+#include "world/visit.h"
 
 namespace is::world {
 
@@ -140,55 +143,24 @@ std::filesystem::path ship_dir() {
     return g.asset_dir;
 }
 
-// The player's ship of seg14's set-up as far as flight needs it (M3 s2 fixer): the set-up's
-// player alone (ship_setup_minimal), then the flight values seg14:0x1c8c-0x1f4d and
-// seg14:0x21a0-0x22f2 (flight.h flight_design, apply_flight_design) from the MASTER.SHP record
-// named by INI `MainShip` (the New Game dialog's choice, "EAGLE" by default) and its MASTER.BOD
-// body. Which record seg14 reads for the player is [OPEN] (M5); the oracle's wave 1 flies
-// MainShip's TRANSFORMER [ORACLE wave-0001]. The fuel 40 x the SHP fuel-tank byte is the
-// oracle's DGROUP:0x70ae = 0x528 for TRANSFORMER's 33 [ORACLE probe-0001] [OPEN: its writer].
-// The player has roster record 0 (below). The ship sheet (seg14:0x11a8 through ISPACE.DLL
-// ordinal 2) belongs to the placement's seg14:0x0(-1) at the briefing entry: the drawing side
-// builds it in its on_briefing_placement hook (briefing_entry) [BYTES seg9:0x688a seg14:0xd32].
+// The player's ship of seg14's set-up seg14:0x0(-1) at the placement seg9:0x6624 (M4 s3 ROSTER;
+// src/world/roster.h for the order): the set-up's player alone (ship_setup_minimal), the roster
+// choice (the fresh record of wave 1 with seg14:0x2300's MainShip pick, or DGROUP:0x931c's
+// record), the design seg14:0x1b84 (flight.h flight_design, apply_flight_design with roster byte
+// +0x33, rating.h) from the SHP record that roster +0x00 names and its MASTER.BOD body, the
+// roster -> ship fill seg14:0x1430 (roster.h ship_from_roster: systems, weapons, ammo, fuel,
+// credit and resources carried from the last wave end, no refill), the cell sizes, and
+// seg16:0x3784(i, 1) only for a fresh ship, wave 1 or a restored first wave (roster.h
+// purchase_due / purchase_pass) [BYTES seg14:0x232-0x47e seg14:0x1430-0x1b82 seg14:0xd1a-0xd32].
+// The ship sheet (seg14:0x11a8 through ISPACE.DLL ordinal 2) belongs to the placement's
+// seg14:0x0(-1) at the briefing entry: the drawing side builds it in its on_briefing_placement
+// hook (briefing_entry) [BYTES seg9:0x688a seg14:0xd32]. seg11:0xae94's weapon slot +0x18 runs
+// at the wave start (src/hud/wave_win32.cpp, World::picture_due) [BYTES seg9:0x6951].
 void ship_setup_player(World& w) {
     ship_setup_minimal(w);
     g_design_mass.fill(0);
     ShipRecord& s = w.ship(w.player);
     ObjectRecord& o = w.ship_object(w.player);
-    // seg14:0x0 at DGROUP:0x91f8 <= 1 (the first briefing's placement, the wave incremented
-    // around it): the player's roster record 0 with +2 = 15 and +4 = 0, DGROUP:0x931c =
-    // DGROUP:0x9646 = 0, and ship 0's +0xd6 = 0 and +0x4e = 0 [BYTES seg14:0x232 seg14:0x23e-0x243
-    // seg14:0x3cc seg14:0x3d8 seg14:0x42a-0x432]. A later wave keeps the record; its +2 and +4
-    // come back from the ship at the load (seg9:0x2cce-0x2d15: +4 = +0xce, +2 = min(+0xdc,
-    // 0x4fff6) / 10) [BYTES seg9:0x2cce seg9:0x2ce8 seg9:0x2d15] (M5 s2 BRIEFING); the port makes
-    // that update here in the placement, from the same ship words [DESIGN]; whether anything
-    // writes them between the load and the placement is [OPEN].
-    if (w.wave <= 1 || w.roster.empty()) {
-        w.roster.assign(1, RosterRecord{});
-        w.roster[0].credit10 = 15;
-        w.roster[0].resources = 0;
-    } else {
-        std::int32_t credit = static_cast<std::int32_t>(static_cast<std::uint16_t>(s.wdc)) |
-                              (static_cast<std::int32_t>(s.wde) << 16);
-        if (credit > 0x4fff6) credit = 0x4fff6;
-        w.roster[0].credit10 = lo16(credit / 10);
-        w.roster[0].resources = word_at(s, 0xce);
-    }
-    w.player_roster = 0;
-    s.roster_index = 0;
-    s.design_index = 0;
-    // seg14:0xd0a: ship word +0x50 = the ship's own index, the image slot 0x28 + i of its sheet
-    // [BYTES seg14:0xd03-0xd0a].
-    s.sprite_slot = w.player;
-    // seg14:0x1430 with a roster record: credit dword +0xdc = 10 x roster word +2 and resources
-    // +0xce = roster word +4 [BYTES seg14:0x1997-0x19aa]; seg16:0x3784(i, 1) leaves them
-    // [BYTES seg16:0x3792-0x37a8 seg14:0xd2d-0xd32].
-    {
-        const std::int32_t credit = 10 * static_cast<std::int32_t>(w.roster[0].credit10);
-        s.wdc = static_cast<std::int16_t>(credit & 0xffff);
-        s.wde = static_cast<std::int16_t>(credit >> 16);
-        set_word_at(s, 0xce, w.roster[0].resources);
-    }
     // seg14 gives a ship record radar_draw seg11:0x37a0 and the radar brush of design word
     // DGROUP:0x96fe + 0xad·n, which seg14:0x1e08 sets to 7 on every path (the player's own
     // marker takes WHITE_BRUSH) [BYTES seg14:0x2141 seg14:0x20d7 seg14:0x1e08] (M3 s4 fixer:
@@ -198,38 +170,57 @@ void ship_setup_player(World& w) {
     o.radar_brush = 7;
     o.on_damage.set(kDamageShip);
     o.on_destroy.set(kDestroyShip);
+    s.sprite_slot = w.player;  // seg14:0xd0a: ship word +0x50 = i, the image slot 0x28 + i [BYTES seg14:0xd03-0xd0a]
     if (!g.store) return;
     try {
         std::string name = "EAGLE";
         if (g.ini) name = g.ini->get_string(settings::kGameSection, "MainShip", "EAGLE", 20);
         const assets::Ships ships = g.store->ships(ship_dir());
-        const fmt::ShipRecord* shp = ships.find(name);
-        if (!shp && !ships.ships.records.empty()) shp = &ships.ships.records.front();
-        const fmt::BodyRecord* body = shp ? ships.body(*shp) : nullptr;
-        if (!shp || !body) {
-            log("world: ship set-up: no MASTER.SHP record for " + name + " [OPEN]");
+        const RosterPlacement rp = roster_placement(w, ships.ships, ships.bodies, name, shell::game_rng());
+        if (rp.pick.rewrite && g.ini) {
+            // seg14:0x2300's `MainShip=TRANSFORMER` [BYTES seg14:0x240a seg14:0x2420].
+            g.ini->set(settings::kGameSection, "MainShip", "TRANSFORMER");
+            try {
+                g.ini->save();
+            } catch (const std::exception& x) {
+                log(std::string("INSPACE.INI: ") + x.what());
+            }
+        }
+        if (rp.fresh_roster)
+            log("world: ship set-up: fresh roster, MainShip \"" + rp.pick.name + "\" -> SHP index " +
+                std::to_string(rp.pick.index) + " (DGROUP:0x95b4 = " + std::to_string(w.w95b4) + ")");
+        if (rp.shp_index < 0) {
+            log("world: ship set-up: MASTER.SHP holds no record [OPEN]");
             return;
         }
+        const fmt::ShipRecord* shp = &ships.ships.records[static_cast<std::size_t>(rp.shp_index)];
+        const fmt::BodyRecord* body = ships.body(*shp);
+        if (!body) {
+            log("world: ship set-up: no MASTER.BOD body for " + shp->name + " [OPEN]");
+            return;
+        }
+        const RosterRecord* r = roster_at(w, s.roster_index);
+        // seg14:0x1b84 inside seg14:0x1430 [BYTES seg14:0x14e5]; the turn takes roster +0x33
+        // for a ship with a record [BYTES seg14:0x2274-0x22a7].
         const FlightDesign d = flight_design(shp->thruster, shp->armor, body->strength_base,
                                              body->byte_1c, body->byte_1d, body->flags, shp->flags);
-        apply_flight_design(s, o, d, w.player_game != 0, static_cast<std::uint32_t>(app::now_tick()), 0);
+        apply_flight_design(s, o, d, w.player_game != 0, static_cast<std::uint32_t>(app::now_tick()),
+                            r ? std::int16_t{r->b33[0]} : std::int16_t{0});
         g_design_mass[0] = d.mass;
-        // seg14:0x1430: ship bytes +0x5d / +0x5e = design bytes DGROUP:0x9776 / 0x9777 + 0xad n,
-        // the SHP attitudes +4 / +5 [BYTES seg14:0x158e-0x15aa seg14:0x2040]; the design words
-        // of seg13:0x33d6 (rating.h) (M5 s2 BRIEFING).
         // seg14:0x1b84 stores SHP +0x1f, the ship's hit sound, in the design word DGROUP:0x9700
         // + 0xad n and in object word +0x42, which seg8:0x45e0 plays through seg10:0x7944 on every
         // hit (0x07 for TRANSFORMER) [BYTES seg14:0x1e18 seg14:0x1e2d seg14:0x20c0 seg14:0x20d3]
         // [ORACLE core-0001] (M4 s1 fixer).
         o.hit_sound = static_cast<std::int16_t>(shp->hit_sound);
-        set_byte_at(s, 0x5d, shp->to_friends);
-        set_byte_at(s, 0x5e, shp->to_enemies);
-        w.design_ratings[0] = design_rating(*shp, *body);
+        // The design words of seg13:0x33d6 (rating.h) (M5 s2 BRIEFING).
+        w.design_ratings[static_cast<std::size_t>(s.design_index >= 0 && s.design_index < kShipCount ? s.design_index : 0)] =
+            design_rating(*shp, *body);
+        // seg14:0x1430's roster -> ship fill (roster.h) [BYTES seg14:0x1430-0x1b82].
+        ship_from_roster(w, w.player, *shp);
         // seg14:0x0's three muzzle-table calls for design 0 (shots.h fill_muzzles), from the
         // design words the World holds (design_words_from_world: +0x2a only) [BYTES seg14:0xcdc
         // seg14:0xce6 seg14:0xcf0] (M4 s2 fixer).
         fill_muzzles(shot_state(), 0, design_words_from_world(w, 0));
-        w.roster[0].shp = static_cast<std::int16_t>(shp - ships.ships.records.data());
         // The cell sizes +0x20, +0x22, +0x24 (seg14:0x11a8's raw side and gap, seg14:0x0's
         // scaling; setup.h ship_cell_raw, ship_cell_sizes). The raw side is the body DIB's
         // height; TRANSFORMER's #4000 60 is 132 x 33, so Size 1 gives extent 264 and size 33,
@@ -243,33 +234,26 @@ void ship_setup_player(World& w) {
             // With a roster record seg14:0x11a8 writes the raw side and gap to roster bytes
             // +0x7a / +0x7b (s1-sprite.md claim 14), the class size of the briefing's ship page
             // [BYTES seg14:0x131c seg14:0x1337 seg17:0x22b9-0x22e3] (M5 s2 BRIEFING).
-            w.roster[0].size = static_cast<std::uint8_t>(raw.side);
+            if (RosterRecord* rr = roster_at(w, s.roster_index)) {
+                rr->size = static_cast<std::uint8_t>(raw.side);
+                rr->gap = static_cast<std::uint8_t>(raw.gap);
+            }
             o.src_y = o.gap;  // seg9:0x6624's +0x12 = +0x24 follows (setup.cpp place)
         } else {
             log("world: ship set-up: body " + body->name + " reads a .DIB file [OPEN]; no cell size");
         }
-        s.fuel = static_cast<std::int16_t>(40 * shp->fuel_tank);
-        // The oracle's ship record 0 in wave 1 holds +0x0c = 205, +0x0e = 25 and +0x14 = 21 (the
-        // values above), the system words +0x26 ... +0x2c = 100 (thrust and the go flag need
-        // +0x2a, world.md "Go flag"), weapon slot +0x18 = 1 holding the SHP weapon byte at +0xb9
-        // with 20 rounds at +0xaf, slot 0 with 1 at +0xae, and +0xcb = 2 [ORACLE probe-0001
-        // work/probe/dumps/wave-inspace.bin]; their writers in seg14 are [OPEN] (M3 s2 fixer).
-        for (int k = 0; k < 4; ++k) s.roster_word(k) = 100;
-        s.weapon_slot = 1;
-        set_byte_at(s, 0xae, 1);
-        set_byte_at(s, 0xaf, 20);
-        set_byte_at(s, 0xb9, shp->weapon);
-        set_byte_at(s, 0xcb, 2);
-        // The gun's barrel count +0x24 = 1 and the barrel flags +0xe0 = +0xe1 = 1, which the gun
-        // copies into each shot slot (+0x78, +0x84, +0x86) [ORACLE probe-0001
-        // work/probe/dumps/wave-inspace.bin DGROUP:0x70b4 DGROUP:0x7170 DGROUP:0x7171]
-        // [BYTES seg11:0x518e seg11:0x519b] (M4 s2 fixer); their writer in seg14 is [OPEN].
-        s.w24 = 1;
-        set_byte_at(s, 0xe0, 1);
-        set_byte_at(s, 0xe1, 1);
-        log("world: ship set-up: the player flies " + shp->name + " (thrust " + std::to_string(s.thrust) +
-            ", drag " + std::to_string(s.drag) + ", turn " + std::to_string(s.turn) + ", mass " +
-            std::to_string(o.mass) + ", fuel " + std::to_string(s.fuel) + ")");
+        // seg14:0xd1a-0xd32: seg16:0x3784(i, 1) for a fresh ship, wave 1 or the restored first
+        // wave; it repairs to 100, sets the gun flags +0x24 / +0xe0 / +0xe1 from +0x0a and the
+        // wings, and fills the tank (the oracle's wave 1: systems 100, +0x24 = 1, +0xe0 = +0xe1 =
+        // 1, fuel 0x528 for TRANSFORMER) [BYTES seg14:0xd32 seg16:0x3468 seg16:0x3e80] [ORACLE
+        // probe-0001]. In later waves every value above comes from the roster (core-0001's
+        // 39, 9, 39, 1) [ORACLE core-0001].
+        if (purchase_due(w, rp.fresh_ship)) purchase_pass(w, w.player, 1);
+        log("world: ship set-up: the player flies " + shp->name + " (wave " + std::to_string(w.wave) +
+            (rp.fresh_roster ? ", fresh roster" : "") + ", thrust " + std::to_string(s.thrust) + ", drag " +
+            std::to_string(s.drag) + ", turn " + std::to_string(s.turn) + ", mass " + std::to_string(o.mass) +
+            ", fuel " + std::to_string(s.fuel) + ", systems " + std::to_string(s.w26) + "/" + std::to_string(s.w28) +
+            "/" + std::to_string(s.w2a) + "/" + std::to_string(s.w2c) + ")");
     } catch (const std::exception& x) {
         log(std::string("world: ship set-up: ") + x.what());
     }
@@ -324,6 +308,7 @@ void read_inputs(World& w, bool new_entry) {
     w.shift = static_cast<std::int16_t>(4 - w.size);  // DGROUP:0x9150
     w.play_mode = static_cast<std::int16_t>(g.play_mode);
     w.w920c = static_cast<std::int16_t>(g.edition.edition);  // DGROUP:0x920c (shell.md "Editions")
+    w.w11aa = static_cast<std::int16_t>(g.edition.plus);     // DGROUP:0x11aa (shell/edition.h)
     w.player_game = 1;  // DGROUP:0x95bc: the port has no demo yet
     // DGROUP:0x94a6, the icon count of Navigation's last selection (seg6:0x4368's sum), which
     // the generator and the debriefing read (M4 s1 END) [BYTES seg6:0x589b seg9:0x70e7].
@@ -534,7 +519,11 @@ public:
     }
     void removed(int pool, int rec) override {
         if (pool == 0 || pool == 14) return;  // a no-op for pools 0 and 14 (s1-end.md 1c.6)
-        todo_once("seg7:0x2080 for pool " + std::to_string(pool) + " record " + std::to_string(rec), "seg7:0x2080");
+        // seg7:0x2080 on the program's World (missile.h recount_in_use): the in-use count drops
+        // past the record, so the ambulance's pool 7 reads 0 after its vanish and the next H is
+        // not refused as busy (M4 s3 fixer, review M8) [BYTES seg7:0x2080].
+        (void)rec;
+        recount_in_use(g_world.pools, pool);
     }
     // seg7:0x5ae8 on the program's World (capture.h icon_counted) unless a link replaces it
     // (M4 s2 CAPTURE).
@@ -603,7 +592,9 @@ public:
     void free_blocks() override {}  // seg6:0x7266: the port holds no such blocks [DESIGN]
     void flame_off(int ship) override { briefing_flame(g_world, 0, ship); }  // seg11:0xb09c(0, i)
     void meal_check() override { todo_once("the meal re-check", "seg10:0x9672"); }
+    // seg6:0x885c(0, 0) [BYTES seg9:0x31f0 seg7:0x687] [DESIGN ADR 0014] (M4 s3 fixer).
     void save_lastgame() override {
+        if (wave_end_links().save_lastgame) return wave_end_links().save_lastgame();
         todo_once("LASTGAME (stage 3, ADR 0014)", "seg6:0x885c");
     }
     void debriefing_started() override {
@@ -620,11 +611,25 @@ public:
     }
     void hall_of_justice() override { todo_once("the Hall of Justice", "seg9:0x6c62"); }
     void race_credit() override { todo_once("the race credit", "seg9:0x6be3"); }
-    void race_refuel() override { todo_once("the race refuel", "seg9:0x6db0"); }
-    void ambulance_enter() override { todo_once("the ambulance's state 6", "seg7:0x5fa"); }
-    void seg16_32a0() override { todo_once("seg16:0x32a0", "seg7:0x60b"); }
+    void race_refuel() override { refuel_all(g_world); }  // seg9:0x6db0 (roster.h) [BYTES seg9:0x6cf6]
+    // seg7:0x5fa-0x608: state 6, DGROUP:0x914a = 0, seg16:0xcfe(1) (visit.h visit_links().enter,
+    // bound by src/hud) (M4 s3 fixer, review H3).
+    void ambulance_enter() override {
+        if (visit_links().enter) return visit_links().enter();
+        todo_once("the ambulance's state 6", "seg7:0x5fa");
+    }
     void demo_seg6_92b8() override { todo_once("the demo's seg6:0x92b8", "seg7:0x64d"); }
-    void roster_ratings() override { todo_once("the roster rating loop", "seg9:0x2e97"); }
+    // seg9:0x2e97-0x2f74 on the program's World with MASTER.SHP (roster.h roster_ratings)
+    // [BYTES seg9:0x2e97].
+    void roster_ratings() override {
+        try {
+            if (!g.store) return todo_once("the roster rating loop without the asset store", "seg9:0x2e97");
+            const assets::Ships ships = g.store->ships(ship_dir());
+            ::is::world::roster_ratings(g_world, ships.ships);
+        } catch (const std::exception& x) {
+            log(std::string("world: roster ratings: ") + x.what());
+        }
+    }
 };
 
 ProgramGateHost g_gate_host;
@@ -677,6 +682,8 @@ void install_world_hooks(App& app) {
     g_walker = std::make_unique<nav::Walker>(*g_fs, [](const std::string& s) { app::log("world fs " + s); });
     g_icons = std::make_unique<Win32IconReader>(*g_fs);
     power_on(g_world);
+    // The roster routines' stubs log through the program's TODO facility (roster.h) (M4 s3 ROSTER).
+    set_roster_todo([](const std::string& what, const char* address) { todo_once(what, address); });
     set_frame_world(&g_world);  // the frame's own drawing reads this World (update.h, M3 s4 DRAW)
     auto& h = app.game.hooks();
     // The state-1 entry: seg10:0x0 (the greeting, then the load) or seg9:0x60bc after the

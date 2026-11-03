@@ -104,6 +104,19 @@ public:
 protected:
     virtual void init() = 0;
     virtual void command(int id, int code) { (void)id, (void)code; }
+    // The procedure's return for WM_COMMAND id (TRUE for every ISPACE procedure; INSPACE's
+    // seg16:0x4104 returns 1 for IDOK only [BYTES seg16:0x4279 seg16:0x4296]).
+    virtual INT_PTR command_result(int id) const {
+        (void)id;
+        return TRUE;
+    }
+    // Any other message (WM_DRAWITEM, WM_MEASUREITEM ...): true when handled, with `result` the
+    // procedure's return (M4 s3 VISIT). WM_MEASUREITEM of an owner-draw list arrives before
+    // WM_INITDIALOG; it reaches the dialog being created (hwnd() still null).
+    virtual bool message(UINT msg, WPARAM w, LPARAM l, INT_PTR& result) {
+        (void)msg, (void)w, (void)l, (void)result;
+        return false;
+    }
 
     void end(int result);
     // seg10:0x602a(hDlg, 0): the bold font to push buttons, the normal one to the rest, and

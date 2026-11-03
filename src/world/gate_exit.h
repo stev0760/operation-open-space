@@ -67,7 +67,11 @@ void gate_exit(GateExitCtx& c, int pool, int rec);
 // whose word +0x2e = 2 gets byte +0x2e = 0xfe (and the PlayMode message, correction 13); anything
 // else `state` 1, seg7:0x65aa, the 800 award, the pool-6 weapon reset or +0x2e = 0xff with
 // seg12:0x3778, then seg12:0x26a4, seg7:0x2080 and seg2:0x170e. The slot's common tail
-// (seg7:0x1acb) stays entry_effect.cpp's end_slot.
+// (seg7:0x1acb) stays entry_effect.cpp's end_slot. For the ambulance (pool 7, the vanish of
+// seg16:0xa2's states 3/4 and of the park seg16:0x8a0) this is where its `state` becomes 1 and
+// byte +0x2e 0xff, which stops the frame's calls of seg16:0xa2 and lets seg16:0xb4e re-place it
+// (s3-ambflight.md 2.2, 2.6) [OPEN: the verifier left what seg7:0x13b2(1, 7, 0) does to A.state
+// unchecked; this is the port's reading of seg7:0x18b7 and seg7:0x19d1] (M4 s3 AMBFLIGHT).
 void vanish_end(GateExitCtx& c, int pool, int rec);
 
 // The award's search of the 8-entry hit history [BYTES seg7:0x18f1-0x1945]: the first k whose

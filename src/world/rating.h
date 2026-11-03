@@ -38,18 +38,7 @@ struct DesignRating {
 };
 DesignRating design_rating(const fmt::ShipRecord& shp, const fmt::BodyRecord& body);
 
-// The bytes of a 0x7c-byte roster record (far DGROUP:0x6e24, docs/re/formats.md "Ship roster
-// records") that the briefing and seg13:0x33d6 read.
-struct RosterRecord {
-    std::int16_t shp = 0;        // +0x00 the SHP index
-    std::int16_t credit10 = 0;   // +0x02 credit / 10: 15 for the player's new record [BYTES seg14:0x3cc]
-    std::int16_t resources = 0;  // +0x04: 0 for the player's new record [BYTES seg14:0x3d8]
-    std::array<std::int8_t, 5> b33{};  // +0x33 ... +0x37, the upgrades seg13:0x33d6 reads; 0 in a
-                                       // new record (GMEM_ZEROINIT, no store found in seg14:0x0's
-                                       // set-up) [BYTES seg14:0x252-0x258] [OPEN: their writers]
-    std::uint8_t met = 0;        // +0x77: 0 in a new record [BYTES seg14:0x10a7]
-    std::uint8_t size = 0;       // +0x7a the class size seg14:0x11a8 writes back (s1-sprite.md claim 14)
-};
+// RosterRecord, the 0x7c-byte roster record, is records.h's.
 
 // The signed bytes DGROUP:0x1332 + w that seg13:0x33d6 adds per weapon w (initialised data, no
 // writer found) [BYTES DGROUP:0x1332-0x1351]. Where the table ends is [OPEN]: the port holds

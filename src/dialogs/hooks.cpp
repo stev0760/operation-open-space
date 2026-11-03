@@ -18,7 +18,9 @@
 #include "briefing/hooks.h"
 #include "dialogs/audio_options.h"
 #include "dialogs/dialogs.h"
+#include "dialogs/save_game.h"
 #include "help/help.h"
+#include "formats/bytes.h"
 #include "formats/res16.h"
 #include "intro/intro.h"
 #include "nav/enter.h"
@@ -196,14 +198,6 @@ void write_log(int cmd, int result) {
     app::log(buf);
 }
 
-// seg6:0x930a's open of the save: <LocalPath><Games>\<name>.sav [BYTES seg6:0x9383
-// seg6:0x9396 seg6:0x93ae seg6:0x93bc].
-std::filesystem::path save_path(const std::string& name) {
-    std::string games = ini_string("Games", "", 11);
-    if (!games.empty() && games.back() != '\\') games += '\\';
-    return g.local_path / path_of(games + name + ".sav");
-}
-
 // The intro's side of the game-start flow.
 class Flow final : public intro::GameStart {
 public:
@@ -225,27 +219,11 @@ public:
             MessageBoxW(g.main, wide(lang(2325)).c_str(), L"Inner Space", MB_ICONEXCLAMATION);
             return 0;
         }
-        stamp_dates();  // [BYTES seg6:0x933f seg6:0x934e]
-        const std::string name = player ? ini_string("Restore", "", 9) : std::string("demogame");
-        const auto p = save_path(name);
-        HANDLE f = CreateFileW(p.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
-                               FILE_ATTRIBUTE_NORMAL, nullptr);
-        if (f == INVALID_HANDLE_VALUE) {
-            app::log("restore: " + fmt::path_utf8(p) + " does not open");
-            return 0;
-        }
-        std::vector<std::uint8_t> header(kSaveHeaderRead);
-        DWORD got = 0;
-        if (!ReadFile(f, header.data(), static_cast<DWORD>(header.size()), &got, nullptr)) got = 0;
-        CloseHandle(f);
-        header.resize(got);
-        const auto h = parse_save_header(header);
-        g_session.wave = h ? h->wave : 0;  // DGROUP:0x91f8 = +0x24 [BYTES seg6:0x9637]
-        briefing::set_wave(g_session.wave);  // the briefing's copy is the word's one home (M4 s1 fixer)
-        g_session.restored = 1;            // DGROUP:0x92e4 [BYTES seg6:0x98c4]
-        todo_once("saved-game loader: roster, directory records and the header's globals",
-                  "seg6:0x930a");
-        return 1;
+        // The reader with ADR 0014 decisions 1, 2, 7 and 9 (save_game.h): step 1's id and date,
+        // the file, the blocks into the World, nav::records() and the session, DGROUP:0x92e4 = 1
+        // in both the session and the World (setup.cpp's new-game reset skips) [BYTES
+        // seg6:0x933f seg6:0x98c4] (M4 s3 SAVE).
+        return program_restore(player);
     }
     void load_table() override {  // seg10:0x38e0 [BYTES seg10:0x38ff seg10:0x3963]
         try {
@@ -260,7 +238,7 @@ public:
     void delete_demo_save() override {
         // seg6:0x92b8 deletes <LocalPath><Games>demogame.sav; the port never deletes the
         // user's files (ADR 0002) [DESIGN].
-        todo_once("delete demogame.sav (the port writes no saved games yet)", "seg6:0x92b8");
+        todo_once("delete demogame.sav", "seg6:0x92b8");
     }
     void stamp_dates() override {
         // seg10:0x804c(1) = time(), seg10:0x804c(0) = DX tm_year, AX tm_mday | tm_mon << 8
@@ -292,6 +270,7 @@ public:
         return dialogs::drive_text(g_session.drive, lang(937), name);
     }
     void open_navigation() override {
+        sync_records_to_nav();  // the one byte store's counters into Navigation's view (M4 s3 SAVE)
         nav::attach(g.main, g.font);
         nav::open(1, g_session.drive);
     }
@@ -358,7 +337,10 @@ int dialog(int cmd) {  // seg10:0x82a2
             g.play_mode = ini_int("PlayMode", 0);       // DGROUP:0x9134
             g_session.pilot = ini_string("ThePlayer", "", 20);  // DGROUP:0x380c [BYTES seg10:0x8490]
             // Restore into a 9-byte buffer [BYTES seg10:0x84ac]
-            if (ini_string("Restore", "", 9).find(' ') != std::string::npos) g_flow.stamp_dates();
+            if (ini_string("Restore", "", 9).find(' ') != std::string::npos) {
+                g_flow.stamp_dates();
+                save_new_game();  // a new game's granularity is 32 (ADR 0014 decision 1) [DESIGN]
+            }
         }
     }
     music(-3);  // [BYTES seg10:0x853d]
@@ -377,15 +359,14 @@ int save_step(int arg) {  // seg10:0x8568
         g_session.key_hold = app::now_tick() + 500;  // [BYTES seg10:0x8612 seg10:0x8624]
     }
     if (r != 0) {
-        if (g.edition.edition == 0 && player() != 0) {
-            // seg6:0x885c writes nothing in the limited version; a manual save shows 2324
-            // (formats.md "Names and triggers") [BYTES seg6:0x8887 seg6:0x888e seg6:0x88a3].
-            MessageBoxW(g.main, wide(lang(2324)).c_str(), L"Inner Space", MB_ICONEXCLAMATION);
-        } else if (arg == -1 || arg == 0) {
-            todo_once("saved-game writer seg6:0x885c(1, 0) (<Restore>.sav)", "seg6:0x885c");
-        } else {
-            todo_once("roster update and save seg6:0x99b6", "seg6:0x99b6");
-        }
+        // seg10:0x863d: arguments 0 and -1 call seg6:0x885c(1, 0) directly, 1 ... 3 the
+        // roster update seg6:0x99b6, which ends in seg6:0x885c(1, 0); the trial's refusal (2324)
+        // is the writer's, after the roster update (verify claims 24, 25) [BYTES seg10:0x8657
+        // seg6:0x9e56 seg6:0x8887]. The writer's result is ignored [BYTES seg10:0x865c].
+        if (arg == -1 || arg == 0)
+            program_save(1, 0, player());
+        else
+            program_roster_save(player());
         if (save_destroys_window(arg) && g.main) DestroyWindow(g.main);  // seg10:0x864c
     }
     music(-3);  // [BYTES seg10:0x8679]
@@ -536,6 +517,8 @@ void install_dialog_hooks(App& app) {
     // seg9:0x6cc4's DGROUP:0x92e4 = 0 [BYTES seg9:0x6ceb] in the game-start flow's copy (M4 s1
     // fixer).
     world::wave_end_links().clear_restored = [] { g_session.restored = 0; };
+    // LASTGAME at the wave end, seg6:0x885c(0, 0) [BYTES seg9:0x31f0] [DESIGN ADR 0014] (M4 s3 fixer).
+    world::wave_end_links().save_lastgame = [] { program_save_lastgame(); };
     h.play_mode = [] { return g.play_mode; };
     h.player = [] { return player(); };
     h.request_state = [](int s) { request_state(s); };
@@ -546,7 +529,10 @@ void install_dialog_hooks(App& app) {
     // Enter hands the directory DGROUP:0x38c8 and the wave DGROUP:0x91f8 to the briefing.
     // The wave reached the briefing when the game-start flow wrote it (the restore, the new
     // game's clear) (M4 s1 fixer).
-    h.entered = [](const std::string& dir) { briefing::set_selection(dir); };
+    h.entered = [](const std::string& dir) {
+        sync_records_from_nav();  // Enter's record into the one byte store (M4 s3 SAVE)
+        briefing::set_selection(dir);
+    };
     // seg2:0x190a(5, 0): the main window's command 0xcb runs it (shell::command_table) [DESIGN].
     h.help = [] { post(WM_COMMAND, 0xcb, 0); };
     h.torn_down = [] { return g.torn_down; };
@@ -593,9 +579,12 @@ void install_dialog_hooks(App& app) {
     };
     // seg6:0x1c72(1) from the debriefing's deadline (seg7:0x3ac) and the other callers.
     g.game.hooks().open_navigation = [](shell::GameState&) {
+        sync_records_to_nav();  // (M4 s3 SAVE)
         nav::attach(g.main, g.font);
         nav::open(1, g_session.drive);
     };
+    // State 5's score list, .ded save and table (save_game.h, M4 s3 SAVE).
+    install_high_scores();
 }
 
 }  // namespace is::app
