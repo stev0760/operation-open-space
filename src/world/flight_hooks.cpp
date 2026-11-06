@@ -444,6 +444,7 @@ void with_effects(F f) {
                 g_links.images ? g_links.images() : nullptr,
                 effect_to_screen, &r.f.dg_943a,
                 &r.f.dg_943c};
+    c.dg_b0c = &r.h().collide_globals().w0b0c;  // DGROUP:0xb0c, one word (M4 s4 fixer, C006)
     f(c);
 }
 

@@ -130,6 +130,14 @@ void ship_from_roster(World& w, int i, const fmt::ShipRecord& shp);
 // seg14:0xd1a-0xd32: seg16:0x3784(i, 1) runs when the slot's fresh flag is set, DGROUP:0x91f8 =
 // 1 or seg14:0x0's argument is not -1 [BYTES seg14:0xd1a seg14:0xd20 seg14:0xd27 seg14:0xd32].
 bool purchase_due(const World& w, bool fresh, int arg = -1);
+// Whether seg16:0x3468(i, 3), which seg16:0x3784(i, 1) always calls, rebuilds ship i's sheet
+// with seg14:0x11a8(i): only when the placement ran seg16:0x3784 (World::sheet_due), the
+// new-body flag DGROUP:0x9563 is 0 (else the body switch, M8), and not when the design's
+// special-ability word +0x28 is -1 while the slot DGROUP:0x3a38 + 2i already holds a DC. A
+// later wave without the local flag keeps the old sheet (world.md Ship sheets, Path; C067)
+// [BYTES seg14:0xd1a seg14:0xd32 seg16:0x38d2 seg16:0x3477 seg16:0x348e seg16:0x34a0
+// seg16:0x3547 seg16:0x362b] (M4 s4 fixer).
+bool placement_rebuilds_sheet(bool sheet_due, std::uint8_t new_body, std::int16_t special, bool slot_has_dc);
 
 // seg16:0x3784(i, mode), the VISIT track's purchases (src/world/purchases.*): the program binds
 // it here (the fixer); unbound, purchase_pass runs the mode-1 fallback below [DESIGN].

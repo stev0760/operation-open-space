@@ -321,7 +321,8 @@ void ship_from_roster(World& w, int i, const fmt::ShipRecord& shp) {
     // [BYTES seg14:0x14ad-0x14ca]. Ship byte +0x147 = 0 [BYTES seg14:0x14d3].
     S.radar_hide = 0;
     // The table DGROUP:0x7186 + 0x15a·i + 9j + k = 0, k = 0 ... 8, j = 0 ... DGROUP:0x9316: ship
-    // bytes +0xf6 + 9j + k (s3-roster.md writes +0x96 for the same address) [BYTES seg14:0x150b]
+    // bytes +0xf6 + 9j + k (s3-roster.md writes +0x96 for the same address), which the
+    // debriefing's ranking sums (structs.md +0xf6, C082) [BYTES seg14:0x150b seg9:0x8227]
     // [OPEN: the field's meaning].
     for (int j = 0; j <= w.last_ship && j < kShipCount; ++j)
         for (int k = 0; k < 9; ++k) set_byte_at(S, 0xf6 + 9 * j + k, 0);
@@ -454,6 +455,11 @@ void ship_from_roster(World& w, int i, const fmt::ShipRecord& shp) {
 }
 
 bool purchase_due(const World& w, bool fresh, int arg) { return fresh || w.wave == 1 || arg != -1; }
+
+bool placement_rebuilds_sheet(bool sheet_due, std::uint8_t new_body, std::int16_t special, bool slot_has_dc) {
+    if (!sheet_due || new_body != 0) return false;   // [BYTES seg14:0xd1a seg16:0x3547]
+    return !(special == -1 && slot_has_dc);          // [BYTES seg16:0x3477-0x34a9]
+}
 
 void set_purchase_pass(PurchasePass f) { purchase_fn() = std::move(f); }
 

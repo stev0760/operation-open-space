@@ -77,6 +77,8 @@ struct VisitState {
     int start_y = 0, end_y = 0;    // DGROUP:0x92d8, DGROUP:0x92d6
     int pos10 = 0;                 // DGROUP:0x17fa
     int speed = 150;               // DGROUP:0x17f6
+    std::int16_t flag = 0;         // DGROUP:0x17fc, the descent's flag (core.md "The descent", step 3)
+    std::int16_t flag_prev = 0;    // DGROUP:0x17f8, the flag at the previous call (sound.md "The descent")
     std::uint32_t descent_due = 0; // seg15:0x3590 sub-step 1's 1000 ms [OPEN: busy or not]
     int pad_off = 0;               // DGROUP:0x181c
     int pad_max = 0;               // seg15:0x4c76's [bp-0x26] = s4 + 0x3e
@@ -102,8 +104,10 @@ public:
     // seg15:0x3590 sub-step 0's tail: the black screen, the pad (seg15:0x482e) and the panels
     // (seg16:0x1f78) [BYTES seg15:0x3590-0x374a] [OPEN].
     virtual void descent_start(const VisitLayout& l) = 0;
-    // seg15:0x374c's frame: the ship at y over the pad [OPEN: summarised].
-    virtual void descent_frame(const VisitLayout& l, int y, int s4, bool braking) = 0;
+    // seg15:0x374c's frame: the ship at y over the pad, its source row picked by the flag
+    // DGROUP:0x17fc (DGROUP:0x3ce8 + 2·flag) [BYTES seg15:0x3b2b-0x3b31] [OPEN: the drawing is
+    // summarised].
+    virtual void descent_frame(const VisitLayout& l, int y, int s4, int flag) = 0;
     // seg16:0x2144, the whole visit screen (panels, monitors, labels, bars, the pad strip).
     virtual void redraw(const VisitLayout& l, int phase, int saved_phase, bool left_on) = 0;
     // Phase 2: the ship at (x, y), s4 x s4, SRCAND / SRCPAINT from the ship's DCs, and the pad

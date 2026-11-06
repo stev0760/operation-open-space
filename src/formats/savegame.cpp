@@ -370,7 +370,7 @@ std::string ScoreEntry::file() const {
 namespace {
 void put_text(ScoreEntry& e, std::size_t off, std::size_t room, const std::string& s) {
     for (std::size_t i = 0; i < room; ++i) e.b[off + i] = 0;
-    const std::size_t n = std::min(s.size(), room - 1);  // bounded at the field [DESIGN]
+    const std::size_t n = std::min(s.size(), room - 1);  // bounded at the field [DESIGN ADR 0014 decision 9]
     for (std::size_t i = 0; i < n; ++i) e.b[off + i] = static_cast<std::uint8_t>(s[i]);
 }
 }  // namespace

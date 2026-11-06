@@ -12,12 +12,18 @@
 //   %#  takes (n, id): n in decimal (seg6:0xf1a), a space, string id for n = 1, else id + 10000
 //       [BYTES seg10:0xa558-0xa5e7]. %d takes n alone.
 //   %?  takes (flag, id0, id1): string id1 when flag >= 1, else id0 [BYTES seg10:0xa77c-0xa7a4].
-//   %S %A %V take a string id; a trailing '^' is dropped [BYTES seg10:0xa4c9].
+//   %S %A %V take a string id (at most 79 characters, LoadString's 80-byte buffer); a trailing
+//       two-character caret pair such as "^N" is cut (buf[len - 2] = '^') [BYTES seg10:0xa4c9
+//       seg10:0xa4f7 seg10:0xa50b] (M4 s4 fixer, C076).
 //   %s %a %v take a string; %l a dword in decimal (seg6:0xeb8); %% a '%'.
-//   %N %n   CR LF, except in briefing phase 11 (DGROUP:0x93aa = 0xb) [BYTES seg10:0xa6e3-0xa701].
-//   %R  takes (m, base): string rand() % m + base [BYTES seg10:0xa7b4].
-//   %D  takes (pool, rec, type): the object name of seg3:0x1542 (the caller supplies it as text,
-//       FArg::s, since the name tables are the world's) [BYTES seg10:0xa754].
+//   %N %n   CR LF whenever output is on: the phase-11 test (DGROUP:0x93aa = 0xb) also needs a
+//       stack byte that holds the directive letter, so it never holds [BYTES seg10:0xa6e3-0xa701]
+//       (M4 s4 fixer, C076).
+//   %R  takes (m, base): string rand() % m + base, rand() drawn even while output is off, no
+//       caret cut [BYTES seg10:0xa7b4 seg10:0xa7c4 seg10:0xa7d3].
+//   %D  takes (pool, rec, type): the object name of seg3:0x1542, upper-cased for codes 0, 2, 4
+//       and 7 (shell.md "%# and %D"); the caller supplies it as text, FArg::s, since the name
+//       tables are the world's [DESIGN] [BYTES seg10:0xa754 seg10:0xa787 seg10:0xa7ba].
 //   Any other %x skips three characters and takes nothing [BYTES seg10:0xa42f].
 //   '^' before P, F, M or N is dropped with that letter (the caret codes) [BYTES seg10:0xa3d9].
 // Mode 0 appends to `buf`, modes 1 and 2 overwrite it; mode 2's split into the two message lines
@@ -48,7 +54,7 @@ struct FArg {
 };
 
 using LangLookup = std::function<std::string(int)>;
-// `phase` is DGROUP:0x93aa, `rand` the game's rand() for %R (unset: 0).
+// `phase` is DGROUP:0x93aa (it changes nothing: see %N), `rand` the game's rand() for %R (unset: 0).
 std::string lang_format(const std::string& fmt, const std::vector<FArg>& args, const LangLookup& lang,
                         int phase = 0, const std::function<int()>& rand = {});
 // seg10:0xa332(buf, id, mode, ...): LoadString(id) formatted, appended (mode 0) or replacing.

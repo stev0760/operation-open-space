@@ -22,7 +22,7 @@ constexpr std::size_t kDirRecordSize = 0x297;     // [BYTES seg6:0x952a]
 constexpr std::size_t kPilotSize = 20;            // +0x04 ... +0x17
 constexpr std::size_t kScoreHead = 0x26;          // the bytes seg6:0x6576 and seg6:0x7042 read [BYTES seg6:0x6759 seg6:0x70f4]
 // ADR 0014 decision 1, validation: +0x34 is 0 ... 254 (a roster index is a byte, 0xff free) and
-// a .sav's +0x32 is 1 ... 98 (the records a 64 KB block holds) [DESIGN].
+// a .sav's +0x32 is 1 ... 98 (the records a 64 KB block holds) [DESIGN ADR 0014 decision 1].
 constexpr int kMaxRosterLast = 254;
 constexpr int kMaxDirRecords = 98;
 
@@ -108,8 +108,9 @@ struct Header {
 
     // The pilot up to its NUL (at most 20 bytes).
     std::string pilot_name() const;
-    // lstrcpy(H + 4, pilot) bounded at the field: at most 19 bytes and a NUL [DESIGN: the
-    // original's copy is unbounded; INI ThePlayer is read into 20 bytes, so it fits].
+    // lstrcpy(H + 4, pilot) bounded at the field: at most 19 bytes and a NUL [DESIGN ADR 0014
+    // decision 9: the original's copy is unbounded; INI ThePlayer is read into 20 bytes, so it
+    // fits].
     void set_pilot(const std::string& s);
 };
 
@@ -225,7 +226,7 @@ struct ScoreList {
     int skipped = 0;               // files skipped by decision 9
 };
 // Steps 3 to 5: each file appended (an unopenable or short file is skipped, ADR 0014 decision
-// 9, where the original gives up the whole list [DESIGN]); a file of the running game whose
+// 9, where the original gives up the whole list [DESIGN ADR 0014 decision 9]); a file of the running game whose
 // score is not above it is dropped; the rank pass; the order pass with the ship reset (above
 // shp_count - 1, signed, or refused by `ship_ok`, seg14:0x455c) [BYTES seg6:0x6680-0x6c6c].
 ScoreList build_score_list(const RunningGame& g, const std::vector<ScoreFile>& files, int shp_count,

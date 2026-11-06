@@ -553,7 +553,8 @@ void ambulance_move(UpdateCtx& u, AmbulanceCtx& c) {
     }
 }
 
-// ---------------------------------------------------------------- seg13:0x3748 [OPEN]
+// ---------------------------------------------------------------- seg13:0x3748
+// core.md "The ship's part" (C036-C043) [BYTES seg13:0x3748-0x3b7c].
 
 void served_ship_move(FlightCtx& f, AmbulanceCtx& c, int i) {
     World& w = c.w;
@@ -565,16 +566,16 @@ void served_ship_move(FlightCtx& f, AmbulanceCtx& c, int i) {
     ObjectRecord& S = p.rec(sp, i);
     ShipRecord& Sship = w.ships[static_cast<std::size_t>(i)];
     AmbulanceHost& h = c.host;
-    if (w.w9e49 == 3) {  // [OPEN claims 37-40] [BYTES seg13:0x3757-0x3971]
-        if (Sship.bec == 0) {  // [BYTES seg13:0x3760-0x377b]
-            a.served_alive = 0;
-            Sship.bec = 1;
-        }
+    if (w.w9e49 == 3) {  // State 3, into A [BYTES seg13:0x3757-0x3971] (C037-C040)
+        // DGROUP:0x9e5b = 0 for a dead ship, and `alive` = 1 on every call (M4 s4 fixer, C039)
+        // [BYTES seg13:0x3766 seg13:0x3772 seg13:0x377b].
+        if (Sship.bec == 0) a.served_alive = 0;
+        Sship.bec = 1;
         // The centre sums at [bp-0x16] ... [bp-0x10] are never read; the distance takes the raw
-        // positions, A first (claim 37) [BYTES seg13:0x3796 seg13:0x37c8 seg13:0x37f8].
+        // positions, A first (C036) [BYTES seg13:0x3796 seg13:0x37c8 seg13:0x37f8].
         std::int16_t dx = 0, dy = 0;
         const std::int16_t D = distance_cells(A.x, A.y, S.x, S.y, dx, dy);
-        if (a.served_alive == 0) {  // a dead ship spins as it is pulled in (claim 40) [BYTES seg13:0x3800-0x3860]
+        if (a.served_alive == 0) {  // a dead ship spins as it is pulled in (C039) [BYTES seg13:0x3800-0x3860]
             S.angle = 1;
             if (Sship.turn_acc < 1) {
                 S.frame = turn_step(Sship, S, S.frame);  // seg13:0x100c
@@ -584,7 +585,7 @@ void served_ship_move(FlightCtx& f, AmbulanceCtx& c, int i) {
                 Sship.turn_acc = sub16(Sship.turn_acc, 1);
             }
         }
-        if (D < 5) {  // signed (claim 38) [BYTES seg13:0x3864-0x3902]
+        if (D < 5) {  // signed (C037, C038) [BYTES seg13:0x3864-0x3902]
             S.vx = 0;
             S.vy = 0;
             h.buffer_free(sp, i);    // seg12:0x26a4(DGROUP:0x9324, DGROUP:0x952e)
@@ -597,7 +598,7 @@ void served_ship_move(FlightCtx& f, AmbulanceCtx& c, int i) {
             w.w9e49 = 4;                // [BYTES seg13:0x38d5]
             a.due = c.now + 1100u;     // dword DGROUP:0x6e10 [BYTES seg13:0x38e5]
             S.x = add16(A.x, 2);        // [BYTES seg13:0x38e9-0x38fe]
-        } else {  // (claim 39) [BYTES seg13:0x3904-0x3971]
+        } else {  // (C038) [BYTES seg13:0x3904-0x3971]
             A.frame = a.frame;
             h.composite(add16(a.pickup_dist, 50), add16(D, 50), 0, kAmb, i, sp);  // seg13:0x3d40
             S.vx = div16(mul16(dx, 70), D);  // 3-operand 16-bit `imul`; `cwd; idiv` [BYTES seg13:0x3947]
@@ -606,15 +607,15 @@ void served_ship_move(FlightCtx& f, AmbulanceCtx& c, int i) {
         }
         return;
     }
-    if (w.w9e49 != 6 || A.b2e != 0) return;  // [OPEN claim 41] [BYTES seg13:0x3976 seg13:0x397f]
+    if (w.w9e49 != 6 || A.b2e != 0) return;  // State 6, out of A (C040-C043) [BYTES seg13:0x3976 seg13:0x397f seg13:0x3983]
     if (a.lift == 15) {  // [BYTES seg13:0x398c]
         std::int16_t dx = 0, dy = 0;
         std::int16_t D = distance_cells(A.x, A.y, S.x, S.y, dx, dy);
-        if (dx == 0 && dy == 0) {  // one dword store 0x000afff6 over [bp-6], [bp-4] (claim 43) [BYTES seg13:0x3a15-0x3a21]
+        if (dx == 0 && dy == 0) {  // one dword store 0x000afff6 over [bp-6], [bp-4] (C042) [BYTES seg13:0x3a15-0x3a21]
             dx = -10;
             D = 10;
         }
-        if (D > a.pickup_dist || Sship.bec == 0) {  // the ship is out (claim 41) [BYTES seg13:0x3a29-0x3a93]
+        if (D > a.pickup_dist || Sship.bec == 0) {  // the drop-off ends (C040) [BYTES seg13:0x3a29-0x3a93]
             h.sound(0x23, kAmb, 0, 1);
             h.buffer_free(sp, i);
             h.buffer_free(kAmb, 0);
@@ -624,7 +625,7 @@ void served_ship_move(FlightCtx& f, AmbulanceCtx& c, int i) {
             recount_in_use(p, kAmb);  // seg7:0x2080(7, -1)
             w.w9e49 = 8;
             Sship.radar_hide = 0;     // +0x147
-        } else if (D != 0) {  // pushed out, away from A (claim 42) [BYTES seg13:0x3a9b-0x3b2c]
+        } else if (D != 0) {  // pushed out, away from A, the composite before the velocities (C041) [BYTES seg13:0x3a9b-0x3b2c]
             A.frame = a.frame;
             const std::int16_t m = D < a.pickup_dist ? D : a.pickup_dist;
             h.composite(add16(a.pickup_dist, 50), add16(m, 50), 0, kAmb, i, sp);
@@ -633,7 +634,7 @@ void served_ship_move(FlightCtx& f, AmbulanceCtx& c, int i) {
             S.frame = direction16(S.vy, S.vx);  // seg8:0x19b0(num = vy, den = vx)
             integrate(f, 1, pool_rec(sp, i));
         }
-    } else if (a.lift == 2) {  // (claim 44) [BYTES seg13:0x3b46-0x3b55]
+    } else if (a.lift == 2) {  // lift below 15 (C043) [BYTES seg13:0x3b46-0x3b55]
         h.sound(0x23, kAmb, 0, 1);
     } else if (a.lift == 14) {  // [BYTES seg13:0x3b57-0x3b77]
         if (w.w952e == w.player) h.play(0x6e);  // seg10:0x744c(0x6e): the sounds stop
@@ -715,8 +716,9 @@ void ambulance_frame(UpdateCtx& u, World& w) {
     AmbulanceState& a = ambulance_state();
     AmbulanceCtx c{w, a, u.flight.g.now, g_linked};
     ambulance_move(u, c);
-    // The frame's copies of the same DGROUP words [DESIGN]: the ship mover runs after this in
-    // the frame and reads them (flight.cpp).
+    // The frame's copies of the same DGROUP words [DESIGN] (ADR 0013, Consequences: the flight
+    // globals copied between World and the frame state): the ship mover runs after this in the
+    // frame and reads them (flight.cpp).
     u.flight.g.dg_9e49 = w.w9e49;
     u.flight.g.dg_952e = w.w952e;
     u.flight.g.dg_9e5b = a.served_alive;
@@ -732,7 +734,7 @@ void ambulance_reentry_program(World& w, WaveGlobals& g, FrameGlobals& f) {
     AmbulanceState& a = ambulance_state();
     AmbulanceCtx c{w, a, g.now, g_linked};
     ambulance_reentry(c);
-    g.dg_9e49 = w.w9e49;  // the frame's copies [DESIGN]
+    g.dg_9e49 = w.w9e49;  // the frame's copies [DESIGN] (ADR 0013, Consequences)
     f.dg_6da8 = a.reentry_due;
 }
 

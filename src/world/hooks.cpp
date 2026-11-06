@@ -207,10 +207,12 @@ void ship_setup_player(World& w) {
         apply_flight_design(s, o, d, w.player_game != 0, static_cast<std::uint32_t>(app::now_tick()),
                             r ? std::int16_t{r->b33[0]} : std::int16_t{0});
         g_design_mass[0] = d.mass;
-        // seg14:0x1b84 stores SHP +0x1f, the ship's hit sound, in the design word DGROUP:0x9700
-        // + 0xad n and in object word +0x42, which seg8:0x45e0 plays through seg10:0x7944 on every
-        // hit (0x07 for TRANSFORMER) [BYTES seg14:0x1e18 seg14:0x1e2d seg14:0x20c0 seg14:0x20d3]
-        // [ORACLE core-0001] (M4 s1 fixer).
+        // seg14:0x1b84 stores SHP word +0x1f, the ship's hit sound, in the design word +0x2e
+        // (DGROUP:0x9700 + 0xad n) and in object word +0x42. seg8:0x45e0 plays the design word
+        // through seg10:0x7944 on every hit, since DGROUP:0xb0a stays 0, and does not read +0x42
+        // there (0x07 for TRANSFORMER) (structs.md Callbacks of the ship pool, The ship's hit
+        // sound; C085) [BYTES seg14:0x1e18 seg14:0x1e2d seg14:0x20c0 seg14:0x20d3 seg8:0x49bc]
+        // [BYTES MASTER.SHP] [ORACLE core-0001] [ORACLE probe-0001] (M4 s1 fixer, s4 fixer).
         o.hit_sound = static_cast<std::int16_t>(shp->hit_sound);
         // The design words of seg13:0x33d6 (rating.h) (M5 s2 BRIEFING).
         w.design_ratings[static_cast<std::size_t>(s.design_index >= 0 && s.design_index < kShipCount ? s.design_index : 0)] =
@@ -245,10 +247,12 @@ void ship_setup_player(World& w) {
         // seg14:0xd1a-0xd32: seg16:0x3784(i, 1) for a fresh ship, wave 1 or the restored first
         // wave; it repairs to 100, sets the gun flags +0x24 / +0xe0 / +0xe1 from +0x0a and the
         // wings, and fills the tank (the oracle's wave 1: systems 100, +0x24 = 1, +0xe0 = +0xe1 =
-        // 1, fuel 0x528 for TRANSFORMER) [BYTES seg14:0xd32 seg16:0x3468 seg16:0x3e80] [ORACLE
-        // probe-0001]. In later waves every value above comes from the roster (core-0001's
+        // 1, fuel 0x528 for TRANSFORMER; structs.md Ship records, Probe values, C035) [BYTES
+        // seg14:0xd32 seg16:0x3468 seg16:0x3e80] [ORACLE probe-0001]. In later waves every value
+        // above comes from the roster (core-0001's
         // 39, 9, 39, 1) [ORACLE core-0001].
-        if (purchase_due(w, rp.fresh_ship)) purchase_pass(w, w.player, 1);
+        w.sheet_due = purchase_due(w, rp.fresh_ship);  // the sheet's path (C067) (M4 s4 fixer)
+        if (w.sheet_due) purchase_pass(w, w.player, 1);
         log("world: ship set-up: the player flies " + shp->name + " (wave " + std::to_string(w.wave) +
             (rp.fresh_roster ? ", fresh roster" : "") + ", thrust " + std::to_string(s.thrust) + ", drag " +
             std::to_string(s.drag) + ", turn " + std::to_string(s.turn) + ", mass " + std::to_string(o.mass) +
@@ -468,10 +472,11 @@ void briefing_entry() {
     if (g_icons) g_icons->clear();
     auto h = make_host();
     enter_briefing(w, *h);
-    // seg9:0x6624's seg14:0x0(-1) builds every ship's sheet (seg16:0x3784 -> seg16:0x3468 ->
-    // seg14:0x11a8) and flame strip (seg10:0x5d3c) inside the briefing entry, before the text
-    // [BYTES seg9:0x5e5d seg9:0x688a seg14:0xc7e seg14:0xd32 seg16:0x362b]: the drawing side
-    // registers that work here (M5 s2 BRIEFING).
+    // seg9:0x6624's seg14:0x0(-1) builds the sheets (seg16:0x3784 -> seg16:0x3468 ->
+    // seg14:0x11a8, only under World::sheet_due and roster.h placement_rebuilds_sheet's tests)
+    // and the flame strips (seg10:0x5d3c) inside the briefing entry, before the text [BYTES
+    // seg9:0x5e5d seg9:0x688a seg14:0xc7e seg14:0xd32 seg16:0x362b]: the drawing side registers
+    // that work here (M5 s2 BRIEFING; world.md Ship sheets, Path, C067).
     if (g_on_placement) g_on_placement(w);
     build_strip(w);
     bind_flight_world(&w);

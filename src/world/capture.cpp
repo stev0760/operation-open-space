@@ -203,8 +203,9 @@ bool capture_icon(CaptureCtx& c, int ship, std::int16_t pr) {
     return true;
 }
 
-// The pod's weapons (seg13:0x1dea-0x1e8a): for j = 1 ... 9 a weapon u != -1 adds its count to
-// the slot holding u (capped at 100), or takes a new slot through seg12:0x6d64.
+// The pod's weapons (seg13:0x1dea-0x1e8a; core.md Other touches, A kind-1 pod, C029): for j =
+// 1 ... 9 a weapon u != -1 adds its count to the slot k = 1 ... +0xcb - 1 holding u (capped at
+// 100, signed), or takes a new slot through seg12:0x6d64; entry j = 0 is never handed over.
 void pod_weapons(CaptureCtx& c, int ship, int rec) {
     World& w = c.x.w;
     PodRecord& P = pod(rec);
@@ -227,14 +228,17 @@ void pod_weapons(CaptureCtx& c, int ship, int rec) {
     }
 }
 
-// Pools 11 and 6 (seg13:0x1cec-0x1f95): false for the jumps to the tail before the writes.
+// Pools 11 and 6 (seg13:0x1cec-0x1f95; core.md "Other touches", Pools 11 and 6, C026-C030):
+// the exits jump to the tail before the writes.
 void touch_pod(CaptureCtx& c, int ship, std::int16_t pr) {
     World& w = c.x.w;
     WaveGlobals& g = c.x.g;
     const int pool = pool_of(pr), rec = rec_of(pr);
     ObjectRecord& O = obj(w, pool, rec);
     ShipRecord& S = ship_at(w, ship);
-    if (S.bea != 0 || O.race_status != 0) return;  // [BYTES seg13:0x1cff seg13:0x1d1a]
+    // The +0xea test never succeeds, since exit 4 has returned for a shielded ship (C026)
+    // [BYTES seg13:0x1cff seg13:0x1d1a seg13:0x1733].
+    if (S.bea != 0 || O.race_status != 0) return;
     // A dead ship's own pod: straight to the tail (verified claim 31) [BYTES seg13:0x1d24-0x1d3e]
     if (pool == 11 && pod(rec).rec == ship && S.bec == 0) return;
     O.race_status = 10;  // [BYTES seg13:0x1d50-0x1d6c]
@@ -246,7 +250,7 @@ void touch_pod(CaptureCtx& c, int ship, std::int16_t pr) {
         if (w.w94b2 != 0) w.w913e = 1;
         c.h.message(g.player, 7, 0, 0xb5);
     }
-    if (pool == 11 && pod(rec).kind == 1) {  // [BYTES seg13:0x1db5-0x1de2] (M5)
+    if (pool == 11 && pod(rec).kind == 1) {  // [BYTES seg13:0x1db5-0x1de2] (C029)
         w.w9604 = pod(rec).resources;
         S.set_resources(add16(S.resources(), w.w9604));
         c.h.message(ship, 7, 0, 0x56);
@@ -273,7 +277,7 @@ void touch_pod(CaptureCtx& c, int ship, std::int16_t pr) {
     rivals(c, pr, ship);         // [BYTES seg13:0x1f41]
     bump_w82(S, 50);             // [BYTES seg13:0x1f4d]
     c.h.seg12_129e(pool, rec);   // [BYTES seg13:0x1f59] [OPEN]
-    // [BYTES seg13:0x1f61-0x1f90] (M5)
+    // [BYTES seg13:0x1f61-0x1f90] (C030); seg13:0xb6f2 is the computer pilots' (M5)
     if (c.h.team(S.design_index) != 7 && pool == 11 && pod(rec).kind == 1 && g.demons_gate == 0)
         c.h.seg13_b6f2(ship, 2);
 }

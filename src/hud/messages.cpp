@@ -1,5 +1,5 @@
 // seg3:0x6ec and its formatter parts (messages.h). M4 stage 1, track SCREENS; codes 7, 8, 9
-// and 132 M4 stage 3, track AMBFLIGHT.
+// and 132 M4 stage 3, track AMBFLIGHT; codes 0x75 ... 0x77 M4 stage 4.
 #include "hud/messages.h"
 
 #include <functional>
@@ -58,7 +58,7 @@ bool message_code_ported(int code) {
     switch (code) {
     case 7: case 8: case 9: case 132:
     case 10: case 11: case 12: case 13: case 72: case 82: case 83: case 84: case 85: case 86: case 91:
-    case 94: case 111: case 112:
+    case 94: case 111: case 112: case 0x75: case 0x76: case 0x77:
         return true;
     default: return false;
     }
@@ -100,8 +100,8 @@ void dispatch_message(MessageState& s, MessageHost& h, int recipient, int pool, 
     const int W = h.width();
     // seg10:0xa332(DGROUP:0x8db0, id, 2, ...): mode 2 writes from the start and splits the text
     // into DGROUP:0x8768 and DGROUP:0x87b8 (seg3:0x3498) [BYTES seg10:0xa831-0xa843].
-    // DGROUP:0x93aa is the briefing's phase, 18 in a wave; only phase 11 changes %N, which no
-    // message string holds, so the port passes 0 [DESIGN].
+    // DGROUP:0x93aa, the briefing's phase, changes nothing in the formatter (%N always writes CR
+    // LF, shell.md Formatter, Other directives; C076), so the port passes 0.
     const auto format2 = [&](int id, const std::vector<FArg>& args) {
         briefing::lang_format_into(s.text, id, 2, args, lang, 0, rnd);
         split_lines(s.text, s.line1, s.line2);
@@ -176,6 +176,21 @@ void dispatch_message(MessageState& s, MessageHost& h, int recipient, int pool, 
         break;
     case 0x56:  // case 85: string 680 with seg6:0x1010(DGROUP:0x9604, 100, 2) [BYTES seg3:0xe59-0xe78]
         format2(0x2a8, {FArg(briefing::hundredths_text(w16(h.capture_value()), 2))});
+        break;
+    // The ship-credited codes of a destroyed target (core.md Messages, Ship-credited codes; the
+    // hit dispatcher's seg8:0x6589-0x66e8) (M4 s4 fixer, C021): sound 0x3b through seg10:0x744c,
+    // then seg3:0x8d9's seg10:0xa332(DGROUP:0x8db0, id, 2) with no argument.
+    case 0x75:  // case 116: string 1409 "Not Bad! Lets Get Every Last Virus!" [BYTES seg3:0x11d0 seg3:0x11da] [BYTES ENG_LANG.DLL STRING 89] id 1409
+        h.sound(0x3b);
+        format2(0x581, {});
+        break;
+    case 0x76:  // case 117: string 1410 "Right On!!! You're Quite A Pilot!" [BYTES seg3:0x11e0 seg3:0x11ea]
+        h.sound(0x3b);
+        format2(0x582, {});
+        break;
+    case 0x77:  // case 118: 1411 when the player's goal pool (ship word +0x32) is the literal 14, else 1412 [BYTES seg3:0x11f0 seg3:0x11fe seg3:0x1207 seg3:0x120f]
+        h.sound(0x3b);
+        format2(h.ship_goal_pool(player) == 0xe ? 0x583 : 0x584, {});
         break;
     case 0x6f:  // case 110: string 1062 with the team name seg13:0x218a [BYTES seg3:0x118f-0x11b5]
         format2(0x426, {FArg(h.team_name(rec))});

@@ -297,7 +297,7 @@ void draw_lines(World& w, std::int16_t ship_pool, DcId window_dc, LinkHooks* hoo
     }
 }
 
-// ---- seg13:0x3d40 (M4 s3 AMBFLIGHT) [OPEN: claims 45-48 unverified]
+// ---- seg13:0x3d40 (M4 s3 AMBFLIGHT; core.md "The ship's part", seg13:0x3d40 steps 1-5, C044-C047)
 
 namespace {
 
@@ -327,7 +327,10 @@ void pickup_composite(DrawContext& c, std::int16_t den, std::int16_t num, int o_
     const auto ok = [&p](int pool, int rec) {
         return pool >= 0 && pool < kPoolCount && rec >= 0 && rec < p.records(pool);
     };
-    if (o_pool == 15 || !ok(o_pool, o_rec) || !ok(s_pool, s_rec)) return;  // [OPEN M6] seg13:0x3b88's pool 15
+    // The seg18 mode's outer pool 15 (seg13:0x3b88) is M6: the original still refreshes and
+    // draws the ship's buffer for it (steps 3 and 5), the port draws nothing [BYTES seg13:0x3e4f
+    // seg13:0x3e57 seg13:0x444e].
+    if (o_pool == 15 || !ok(o_pool, o_rec) || !ok(s_pool, s_rec)) return;
     ObjectRecord& S = p.rec(s_pool, s_rec);
     ObjectRecord& O = p.rec(o_pool, o_rec);
     const DcId s3a = static_cast<DcId>(S.w3a), s3c = S.alt_dc;
@@ -340,7 +343,7 @@ void pickup_composite(DrawContext& c, std::int16_t den, std::int16_t num, int o_
     const Point16 po = c.to_screen(O.x, O.y);
     const std::int16_t ox = sub16(po.x, ps.x), oy = sub16(po.y, ps.y);
     const std::int16_t Ss = S.size, g = S.gap;
-    // lo16(Ss·num) / den: `imul word`, `cwd`, `idiv` (claim 45) [BYTES seg13:0x3de2-0x3de9]
+    // lo16(Ss·num) / den: `imul word`, `cwd`, `idiv` (C044) [BYTES seg13:0x3de2-0x3de9]
     const std::int16_t s2 = (den == -1 && mul16(Ss, num) == INT16_MIN) ? std::int16_t{0} : idiv16(mul16(Ss, num), den);
     const std::int16_t off = add16(g, idiv16(sub16(Ss, s2), 2));  // `cwd; sub; sar` [BYTES seg13:0x3df0-0x3df7]
     const std::int16_t A = O.size, ag = O.gap;                    // [BYTES seg13:0x3dfc-0x3e27]
@@ -348,7 +351,7 @@ void pickup_composite(DrawContext& c, std::int16_t den, std::int16_t num, int o_
     const std::int16_t cellS = add16(mul16(S.frame, add16(g, Ss)), g);
     const std::int16_t cellO = add16(mul16(O.frame, add16(ag, A)), ag);
     const std::int16_t lo = sub16(-2, A), hi = add16(Ss, 2);
-    const bool overlap = lo <= ox && lo <= oy && ox <= hi && oy <= hi;  // signed (claim 46) [BYTES seg13:0x3e2c-0x3e49]
+    const bool overlap = lo <= ox && lo <= oy && ox <= hi && oy <= hi;  // signed (C045) [BYTES seg13:0x3e2c-0x3e49]
     if (!overlap) {  // [BYTES seg13:0x3e53-0x3f79]
         out.pat_blt(o3c, 0, 0, Bo, Bo, kBlackness);
         out.bit_blt(o3c, ag, ag, A, A, o3a, cellO, ag, kSrcCopy);
@@ -376,7 +379,7 @@ void pickup_composite(DrawContext& c, std::int16_t den, std::int16_t num, int o_
             out.bit_blt(M, g, g, Ss, Ss, s3a, cellS, g, kSrcCopy);
         }
         const DcId K = out.create_mask(M);
-        out.bit_blt(s3c, g, g, Ss, Ss, K, g, g, kSrcAnd);    // (claim 47) [BYTES seg13:0x41e4]
+        out.bit_blt(s3c, g, g, Ss, Ss, K, g, g, kSrcAnd);    // (C046) [BYTES seg13:0x41e4]
         out.bit_blt(s3c, g, g, Ss, Ss, M, g, g, kSrcPaint);  // [BYTES seg13:0x420e]
         // c) S over O's buffer where they overlap [BYTES seg13:0x4219-0x437e]
         const Span cx = overlap_c(ox, Bo, Ss), cy = overlap_c(oy, Bo, Ss);
@@ -389,7 +392,7 @@ void pickup_composite(DrawContext& c, std::int16_t den, std::int16_t num, int o_
         out.delete_image(M);  // [BYTES seg13:0x4383-0x43c8]
         if (K != kDcNone) out.delete_image(K);
     }
-    // Both drawn through seg8:0xb76 (claim 48) [BYTES seg13:0x43cd-0x446a]
+    // Both drawn through seg8:0xb76, each src_x rewritten first and kept (C047) [BYTES seg13:0x43cd-0x446a]
     S.on_screen = 1;
     S.src_x = cellS;
     draw_sprite(p, pool_rec(s_pool, static_cast<std::int8_t>(s_rec) & 0xff), 1, s3a, 0, c.g.sprite, c.to_screen, out);

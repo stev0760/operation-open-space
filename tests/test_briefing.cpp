@@ -722,6 +722,20 @@ TEST_CASE("briefing: the ship page of phase 11") {
     CHECK(r.h.flames == want);
 }
 
+TEST_CASE("briefing: the fly-in's height and width are 16-bit (C064)") {
+    // h = lo16(size·scale%)/100, w = lo16(h·width%)/100 (shell.md Phase 11, Fly-in) [BYTES
+    // seg17:0x2503-0x2511 seg17:0x2521-0x252c]: at the hold (scale 300, width 100) a size of
+    // 120 gives lo16(36000) = -29536, so h = w = -295.
+    Rig r;
+    r.setup.player.size = 120;
+    r.start();
+    REQUIRE(r.until_phase(11));
+    while (r.s.briefing_skip() == 0) r.tick();
+    const auto blits = r.c.with("slot 40 ");
+    REQUIRE(blits.size() > 10);
+    CHECK(blits.back().find(" -295 -295 5 5 33 33") != std::string::npos);
+}
+
 TEST_CASE("briefing: phase 11 skips the ship when its slot is empty") {
     Rig r;
     r.c.slots = false;

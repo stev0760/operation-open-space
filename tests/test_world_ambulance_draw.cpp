@@ -1,5 +1,5 @@
 // M4 stage 3, track AMBFLIGHT: the pick-up composite seg13:0x3d40 (src/world/draw.h
-// pickup_composite; s3-ambflight.md 4.2, claims 45-48 unverified [OPEN]): the scaled size, the
+// pickup_composite; core.md "The ship's part", seg13:0x3d40, C044-C047): the scaled size, the
 // separate and the overlapping paths, the mask, and the two sprite draws from the buffers.
 #include <cstdint>
 

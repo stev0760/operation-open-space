@@ -106,7 +106,8 @@ void fill_pod(EffectCtx& c, int ship, int rec, int flag) {
     po.x = sub16(add16(idiv16(so.extent, 2), so.x), idiv16(po.extent, 2));
     po.x = add16(po.x, idiv16(mul16(heading_dx(h8), so.extent), 16));
     po.x = imod16(po.x, wrap);
-    // y: the same, the offset taken % 25600 before the add [BYTES seg13:0x4da0-0x4e40].
+    // y: the same, the offset taken % 25600 before the add and the sum after, all signed
+    // remainders (core.md The dropped pod, The pod's position, C083) [BYTES seg13:0x4da0-0x4e40].
     po.y = sub16(add16(idiv16(so.extent, 2), so.y), idiv16(po.extent, 2));
     po.y = add16(po.y, imod16(idiv16(mul16(heading_dy(h8), so.extent), 16), wrap));
     po.y = imod16(po.y, wrap);

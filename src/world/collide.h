@@ -5,8 +5,9 @@
 // on_damage (+0x5e) are in damage.h.
 //
 // Sources: the listings (isre asm) of every routine named, read with work/analysis/m4/s1-hit.md
-// and its verification s1-hit-verify.md (claims 22, 25 and 29 as the verifier corrected them;
-// claims 37 and 38 unchecked and tagged [OPEN] at their sites) and s1-bounce.md. The pair
+// and its verification s1-hit-verify.md (claims 22, 25 and 29 as the verifier corrected them),
+// the M4 stage 4 verification of the credit bookkeeping, the gates and the destroyed block
+// (core.md "Hit dispatcher", C008-C025) and s1-bounce.md. The pair
 // orientation word follows ADR 0015 decision 1. All arithmetic keeps the original's widths
 // (ADR 0013 decision 7). The routines and tables other parts of the port own are reached
 // through CollideHost, whose defaults do nothing; each names its address.
@@ -88,10 +89,14 @@ struct CollideGlobals {
     std::int16_t dB = 0, dA = 0;          // DGROUP:0x9436, 0x9438
     std::int16_t hit_pool = 0, hit_rec = 0;  // DGROUP:0x943e, 0x9440: the player's last target
     std::uint32_t hit_time = 0;           // dword DGROUP:0x52d8
-    // DGROUP:0xb0a (0 in the image): non-zero makes seg8:0x45e0 play sound 7 in place of the
-    // design's hit sound; no writer but the clear at seg8:0x4d43 [BYTES DGROUP:0xb0a seg8:0x4d43].
+    // DGROUP:0xb0a (0 in the image and every probe-0001 dump): non-zero would make seg8:0x45e0
+    // play sound 7 in place of the design's hit sound; its only writer, seg8:0x4d43, stores 0, so
+    // it stays 0 [BYTES DGROUP:0xb0a seg8:0x4d43 seg8:0x49bc] [ORACLE probe-0001] (C084).
     std::int16_t w0b0a = 0;
-    // DGROUP:0xb0c (1 in the image), written by seg8:0x5b88-0x5bb8 [BYTES DGROUP:0xb0c].
+    // DGROUP:0xb0c (1 in the image), the program's one copy: the blast seg8:0x5ab0 writes it
+    // through EffectCtx::dg_b0c (0 around its dispatcher call when the entry's frame counter is
+    // not 0) and the dispatcher reads it at seg8:0x616a and seg8:0x6589 [BYTES DGROUP:0xb0c
+    // seg8:0x5b88 seg8:0x5b99 seg8:0x5bb8 seg8:0x616a seg8:0x6589] (M4 s4 fixer, C006, C084).
     std::int16_t w0b0c = 1;
     // DGROUP:0x104c: the player takes no damage while it is set (the HUD's score_alt_hi) [OPEN:
     // its writer]; DGROUP:0x95a6 (seg8:0x2cd8's design recompute runs while 0) [OPEN];
@@ -185,7 +190,9 @@ public:
     virtual void seg13_b6f2(int ship, int code) { (void)ship, (void)code; }
     virtual void seg13_2714(int a, int b, int c, int d, int e, int f) { (void)a, (void)b, (void)c, (void)d, (void)e, (void)f; }
     virtual std::int16_t seg13_2688(int a, int b) { return (void)a, (void)b, 0; }
-    virtual void seg13_2e60(int a, int b, int c) { (void)a, (void)b, (void)c; }
+    // seg13:0x2e60(j, cr, 4) in declaration order (Pascal, `retf 6`, the 4 at [bp+6]) [BYTES
+    // seg8:0x6827 seg13:0x2f2c] (M4 s4 fixer, C024).
+    virtual void seg13_2e60(int ship, int killer, int code) { (void)ship, (void)killer, (void)code; }
     virtual void seg4_5e8e(int a, int b, int c, int d) { (void)a, (void)b, (void)c, (void)d; }
     virtual void seg4_7d36(int a, int b, int c) { (void)a, (void)b, (void)c; }
     virtual void seg4_7636(int rec, int cp, int cr, int kill) { (void)rec, (void)cp, (void)cr, (void)kill; }

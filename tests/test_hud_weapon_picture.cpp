@@ -52,7 +52,8 @@ TEST_CASE("hud weapon picture: the overlay, the names and W+0x06") {
     CHECK(p.sx == 4);
     CHECK(p.side_plain == 28);  // (21 << 2) / 3
     // w10 REAR-DEPLOYED MINES: name 0xc4, W(10)-8 = 22 (block 9's +0x48): side 88 / 3 = 29;
-    // +0x06 = 4 with +0x26 = 6: (6 - 1)·(22 + 6) + 6
+    // +0x06 = 4 with +0x26 = 6: (6 - 1)·(22 + 6) + 6 (core.md Selection and the weapon display,
+    // C032) [ORACLE probe-0001]
     p = weapon_picture(t, 10);
     CHECK(p.name == 0xc4);
     CHECK(p.overlay == 0);

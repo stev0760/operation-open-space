@@ -65,8 +65,14 @@ TEST_CASE("seg10:0xa332: %< groups join with \", \" and \" AND\", %# and %? pick
     CHECK(lang_format(lang(3010), {0, 870, 1997, 0, 0, 2510, 3, 2511}, lang) == "YOU PLAYED FOR 3 SECONDS");
     CHECK(lang_format(lang(3004), {1, 4600L}, lang) == "SCORE: 4600\r\n\r\n");
     CHECK(lang_format(lang(3004), {0, 4600L}, lang) == "\r\n");
-    // %N is dropped in briefing phase 11 [BYTES seg10:0xa6ec].
-    CHECK(lang_format(lang(3004), {1, 4600L}, lang, 0xb) == "SCORE: 4600");
+    // %N writes CR LF in briefing phase 11 too: the test needs a byte that holds the
+    // directive letter (shell.md Formatter, Other directives; C076) [BYTES seg10:0xa6ec].
+    CHECK(lang_format(lang(3004), {1, 4600L}, lang, 0xb) == "SCORE: 4600\r\n\r\n");
+    // %S cuts a trailing caret pair at buf[len - 2], not a lone trailing caret (C076).
+    const LangLookup carets = [](int id) {
+        return id == 1 ? std::string("Icon ^N") : id == 2 ? std::string("A^") : std::string("%S|%A|%V");
+    };
+    CHECK(lang_format("%S|%A|%V", {1, 2, 1}, carets) == "Icon |A^|Icon ");
     CHECK(lang_format("%%^Pa%z", {}, lang) == "%a");
 }
 

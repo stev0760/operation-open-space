@@ -302,6 +302,12 @@ public:
     // The placement's test at seg9:0x6951 (wave 1 or DGROUP:0x92e4 != 0) for its seg11:0xae94
     // and seg11:0x2f8c calls, kept for the wave start's port of them [DESIGN] [BYTES seg9:0x6951].
     bool picture_due = false;
+    // seg14:0xd1a's test for the player at the last placement (its local flag [bp-0x54], wave 1
+    // or an argument != -1: roster.h purchase_due), so seg16:0x3784(i, 1) ran and with it
+    // seg16:0x3468(i, 3)'s sheet build (world.md Ship sheets, Path; C067) [DESIGN: kept for the
+    // drawing side's build at the briefing entry] [BYTES seg14:0xd1a seg14:0xd32 seg16:0x38d2]
+    // (M4 s4 fixer).
+    bool sheet_due = true;
     std::int16_t star_count = 0;  // DGROUP:0x9152, the stars in the table
     std::int16_t star_wanted = 0; // DGROUP:0x9154, the count by Detail (seg6:0xe36)
     std::int16_t star_base = 0;   // DGROUP:0x9154 before the port's first seg6:0xe36 [DESIGN]

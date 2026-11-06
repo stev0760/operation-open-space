@@ -2,7 +2,7 @@
 // work/analysis/m4/s1-death.md sections 1-3, verified in s1-death-verify.md): the frame
 // routine seg8:0x3fbe (the fireballs of slot 10 at DGROUP:0xb70's offsets, 8 frames and the
 // blackout, the waits and KABOOM of type 1, DGROUP:0x9430 and DGROUP:0x9434), the blast
-// seg8:0x5ab0 ([OPEN]: unverified), a ship's death seg16:0x8e4 with its rand() order, the
+// seg8:0x5ab0 (core.md The blast, C001-C007), a ship's death seg16:0x8e4 with its rand() order, the
 // generic destroy seg12:0x274a with its fragment counts and rand() order, and seg10:0x5102.
 #include <array>
 #include <cstdint>
@@ -30,7 +30,12 @@ struct Host : EffectHost {
     std::int16_t kind = 0;
     void sound(int id, int pool, int rec, int mode) override { calls.push_back({"sound", id, pool, rec, mode}); }
     void player_sprite() override { calls.push_back({"player"}); }
-    void hit(int p, int r, int sp, int sr, std::int16_t amount) override { calls.push_back({"hit", p, r, sp, sr, amount}); }
+    void hit(int p, int r, int sp, int sr, std::int16_t amount) override {
+        calls.push_back({"hit", p, r, sp, sr, amount});
+        b0c_seen.push_back(b0c ? *b0c : -99);
+    }
+    std::int16_t* b0c = nullptr;  // DGROUP:0xb0c as the dispatcher would read it
+    std::vector<int> b0c_seen;
     void pieces(int k) override { calls.push_back({"pieces", k}); }
     void seg11_aece() override { calls.push_back({"aece"}); }
     std::int16_t design_kind(int) override { return kind; }
@@ -57,8 +62,11 @@ struct Fixture {
                     return Point16{static_cast<std::int16_t>(x >> 3), static_cast<std::int16_t>(y >> 3)};
                 },
                 &d943a, &d943c};
+    std::int16_t b0c = 1;  // CollideGlobals::w0b0c, the dispatcher's DGROUP:0xb0c
 
     Fixture() {
+        c.dg_b0c = &b0c;
+        host.b0c = &b0c;
         clear_effects(w.effects);
         w.W = 1024;
         w.H = 683;
@@ -368,7 +376,7 @@ TEST_CASE("effects: seg12:0x274a, the fragments' rand() order, the player's 1500
     CHECK(f.out.calls[0] == pat_blt_call(kDcWindow, 40, 50, 22, 22, kBlackness));
 }
 
-TEST_CASE("effects: the blast seg8:0x5ab0 (unverified reading) [OPEN]") {
+TEST_CASE("effects: the blast seg8:0x5ab0 (core.md The blast, C001-C007)") {
     Fixture f;
     // Source: a dying ship (pool 14, record 0) with blast_size 9 at the point (8000, 8000).
     f.w.pools.rec(kPoolShips, 0).blast_size = 9;
@@ -388,7 +396,11 @@ TEST_CASE("effects: the blast seg8:0x5ab0 (unverified reading) [OPEN]") {
     CHECK(f.host.calls[0] == Call{"hit", 3, 0, kPoolShips, 0, -42});
     CHECK(r.flame == 4);  // +2, +2 more under 150
     CHECK(f.d943a == kPoolShips);
-    CHECK(f.st.dg_b0c == 1);
+    // DGROUP:0xb0c: 0 during the dispatcher call when the frame counter is not 0, 1 after it;
+    // the dispatcher reads the same word (M4 s4 fixer, C006, C084) [BYTES seg8:0x5b88-0x5bb8].
+    REQUIRE(f.host.b0c_seen.size() == 1);
+    CHECK(f.host.b0c_seen[0] == 0);
+    CHECK(f.b0c == 1);
     // v = ((9·250)/(100/10)) / ((350 + 100)/100) = 225 / 4 = 56; vx += 56·64/100 = 35.
     CHECK(r.vx == 35);
     CHECK(r.vy == 0);
@@ -403,6 +415,13 @@ TEST_CASE("effects: the blast seg8:0x5ab0 (unverified reading) [OPEN]") {
     f.in.dg_1318 = 7;
     blast(f.c, 0);
     CHECK(f.host.calls.empty());
+    // Frame counter 0: DGROUP:0xb0c stays 1 for the call.
+    f.in.dg_1318 = 6;
+    f.w.effects[0].frame = 0;
+    f.host.b0c_seen.clear();
+    blast(f.c, 0);
+    REQUIRE(f.host.b0c_seen.size() == 1);
+    CHECK(f.host.b0c_seen[0] == 1);
 }
 
 TEST_CASE("effects: seg8:0x3fbe calls the blast at frame 6 of types 4 and 5") {

@@ -40,6 +40,8 @@
 #include "world/missile.h"
 #include "world/pods.h"
 #include "world/player_sheet.h"
+#include "world/purchases.h"
+#include "world/roster.h"
 #include "world/rock_images.h"
 #include "world/setup.h"
 #include "world/sprite.h"
@@ -419,9 +421,30 @@ void build_player_sheet(world::World& wd) {
     req.sel = world::sheet_sel(quick, g.game.state(), wd.frames, i, wd.player);
     req.scale = world::sheet_scale_flag(wd.size, 0, req.sel);
     req.size_level = wd.size;
-    const world::SheetBuild b = world::rebuild_ship_sheet(*g_blit, g_images, s, o, i, req, render_sheet);
+    // seg16:0x3468(i, 3) builds the sheet only under seg14:0xd1a's test and its own early return
+    // (world.md Ship sheets, Path; C067) (M4 s4 fixer): a later wave without seg14:0x0's local
+    // flag keeps the old sheet in the slot, and seg14:0x0's +0x5b and flame strip then read that
+    // sheet, here the pixels of its last build [DESIGN].
+    static world::SheetBuild last;
+    const bool has_dc = g_images[static_cast<std::size_t>(req.slot)] != world::kDcNone;
+    const std::int16_t special =
+        s.design_index >= 0 && s.design_index < world::kShipCount
+            ? wd.design_ratings[static_cast<std::size_t>(s.design_index)].special
+            : std::int16_t{-1};
+    world::SheetBuild b;
+    if (world::placement_rebuilds_sheet(wd.sheet_due, world::shop().new_body, special, has_dc)) {
+        b = world::rebuild_ship_sheet(*g_blit, g_images, s, o, i, req, render_sheet);
+        last = b;
+    } else {
+        b = last;
+        o.w3a = static_cast<std::int16_t>(g_images[static_cast<std::size_t>(req.slot)]);  // the slot's DC
+        app::log("hud: seg16:0x3468 keeps ship " + std::to_string(i) + "'s sheet (wave " + std::to_string(wd.wave) + ")");
+    }
     // seg14:0x11a8's tail after every build path: the launched weapons' images seg10:0x533a
-    // into slots 0x30 ... 0x38 and W(w)-4 [BYTES seg14:0x13f3-0x1425] (M4 s2 fixer).
+    // into slots 0x30 ... 0x38 and W(w)-4 [BYTES seg14:0x13f3-0x1425] (M4 s2 fixer). The port
+    // runs it at every placement, also when the sheet is kept, so a later wave has the images
+    // of the roster's weapons [DESIGN] [OPEN: which path builds them in the original then].
+
     fill_weapon_words(wd);
     const int wsheets = world::build_weapon_sheets(*g_blit, g_images, wd.pools, world::missile_state().words, s,
                                                    world::weapon_sheet_sel(quick, g.game.state(), wd.frames),
@@ -764,9 +787,9 @@ void install_wave(app::App& app) {
         const world::DcId dc = g_images[static_cast<std::size_t>(slot)];
         return dc == world::kDcNone ? nullptr : g_blit->image(dc);
     });
-    // seg9:0x6624's seg14:0x0(-1) at the briefing entry builds the sheets and the flame strip
-    // (seg16:0x3784 -> seg16:0x3468 -> seg14:0x11a8, seg14:0xc7e) [BYTES seg9:0x688a seg14:0xd32
-    // seg16:0x362b] (M5 s2 BRIEFING). Nothing rebuilds them at the wave start, so phase 11's
+    // seg9:0x6624's seg14:0x0(-1) at the briefing entry builds the sheets, under world.md Ship
+    // sheets' Path tests (C067), and the flame strip (seg16:0x3784 -> seg16:0x3468 ->
+    // seg14:0x11a8, seg14:0xc7e) [BYTES seg9:0x688a seg14:0xd32 seg16:0x362b] (M5 s2 BRIEFING). Nothing rebuilds them at the wave start, so phase 11's
     // flame pastes stay in the sheet [BYTES seg9:0x60bc] (s2-briefing.md, "Flame pastes").
     world::on_briefing_placement([](world::World& wd) {
         refresh_player_design();
@@ -778,7 +801,8 @@ void install_wave(app::App& app) {
         if (ready()) world::refresh_shot_brushes(*g_blit);  // the shot and star brushes [DESIGN ADR 0007]
         // seg9:0x695e-0x6963: seg11:0xae94 and seg11:0x2f8c (the weapon picture), only when the
         // placement saw DGROUP:0x91f8 = 1 or DGROUP:0x92e4 != 0 (World::picture_due) [BYTES
-        // seg9:0x6951-0x695c] (M3 s4 fixer, review M6). seg11:0xae94 is unread [OPEN].
+        // seg9:0x6951-0x695c] (M3 s4 fixer, review M6); seg11:0xae94 as core.md "The ship
+        // between waves", Weapon picture, reads it [BYTES seg11:0xae9e-0xaec0].
         if (wd.picture_due) {
             // seg11:0xae94: unless DGROUP:0x92e4 != 0, slot 1 when byte +0xcb > 1, else 0
             // (hud/weapons.h wave_start_slot) (M4 s2 DISPLAY).

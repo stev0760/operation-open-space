@@ -1903,6 +1903,9 @@ void start_wave(World& w, SetupHost& h) {
     // seg3:0x45a(2) and seg11:0x3cc2(player, 0) (the HUD, whose seg11:0xafe seeds rand) follow
     // [BYTES seg9:0x64ae seg9:0x64ba]: hud::wave_start() runs seg3:0x45a(2) (M3 s3 fixer).
     w.w0a76 = 2;
+    // The player's +0x5d / +0x5e / +0xd0 / +0xd2 reset while DGROUP:0x91f8 <= 1, the first two
+    // waves (structs.md +0x5d, +0x5e; C071) [BYTES seg9:0x64ce seg9:0x64d3 seg9:0x64e3 seg9:0x64f9
+    // seg9:0x64fd].
     if (w.wave < 2) {
         set_ship_byte(me, 0x5d, 2);
         set_ship_byte(me, 0x5e, 2);

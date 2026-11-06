@@ -132,6 +132,8 @@ void muzzle_1460(ShotState& s, int n, const DesignWords& d) {
     }
 }
 
+// seg10:0x1620, the rear muzzle table (core.md The muzzle tables; C033, C034): r = design word
+// +0x02, a from 270, /127 and /(-127).
 void muzzle_1620(ShotState& s, int n, const DesignWords& d) {
     const std::int16_t S = d.w2a;   // [BYTES seg10:0x1634]
     const std::int16_t r = d.w02;   // [BYTES seg10:0x163b]

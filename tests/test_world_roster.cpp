@@ -334,3 +334,19 @@ TEST_CASE("roster: seg9:0x6db0 refuels to the design tank; a computer ship joins
     w.w95b4 = 0;
     CHECK(roster_add(w, 1, r.ships.records[2], 2, 7, r.rng) == 7);
 }
+
+TEST_CASE("roster: the sheet's path seg14:0xd1a -> seg16:0x3784 -> seg16:0x3468 (M4 s4, C067)") {
+    // world.md Ship sheets, Path: built only when the placement ran seg16:0x3784(i, 1), the
+    // new-body flag is 0, and not with design word +0x28 = -1 while the slot holds a DC.
+    CHECK(placement_rebuilds_sheet(true, 0, 3, true));
+    CHECK(placement_rebuilds_sheet(true, 0, -1, false));
+    CHECK_FALSE(placement_rebuilds_sheet(true, 0, -1, true));
+    CHECK_FALSE(placement_rebuilds_sheet(false, 0, 3, true));  // a later wave without the flag
+    CHECK_FALSE(placement_rebuilds_sheet(true, 1, 3, true));   // the new body (M8)
+    World w;
+    w.wave = 2;
+    CHECK_FALSE(purchase_due(w, false));
+    CHECK(purchase_due(w, true));
+    w.wave = 1;
+    CHECK(purchase_due(w, false));
+}

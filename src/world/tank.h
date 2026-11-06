@@ -3,10 +3,13 @@
 // on_damage seg12:0xdc4 ("volatile": the wobble and the spontaneous explosion), the pickup
 // dissolve seg12:0xe5c and the tank image seg10:0x565a. M4 stage 3, track FUEL.
 //
-// The respawn seg12:0x4f4e is called only by seg12:0x3e98, which returns at once unless the wave
-// is kind 6 (a race) [BYTES seg12:0x3ea8-0x3eaf seg12:0x3ee5]: outside a race a collected or
-// destroyed tank stays gone for the wave. seg12:0x3e98's race body (and with it seg12:0x4f4e,
-// which places the course's tanks from DGROUP:0x9ebf and DGROUP:0x9f40) is M6 [OPEN].
+// The respawns (core.md "The fuel tank", Respawns; C080): the race respawn seg12:0x4f4e is called
+// only by seg12:0x3e98, which returns at once unless the wave is kind 6 (a race) [BYTES
+// seg12:0x3ea8-0x3eaf seg12:0x3ee5], and a kind-7 (duel) wave's frame calls seg12:0x515e instead
+// [BYTES seg7:0xe71 seg7:0xe78], which brings an idle tank back while a ship runs below 40 % of
+// its tank. Outside a race or a duel a collected or destroyed tank stays gone for the wave (the
+// only other `state` = 0 writer is the placement seg9:0xdf6 [BYTES seg9:0xf55]). Both respawns
+// are M6 (races and duels), not ported (M4 s4 fixer).
 //
 // 16-bit arithmetic as the original's (ADR 0013 decision 7). Portable, no Win32.
 #pragma once

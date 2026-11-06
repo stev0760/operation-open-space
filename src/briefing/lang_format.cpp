@@ -12,6 +12,7 @@ std::string decimal(long v) { return std::to_string(v); }
 
 std::string lang_format(const std::string& f, const std::vector<FArg>& args, const LangLookup& lang,
                         int phase, const std::function<int()>& rand) {
+    (void)phase;  // DGROUP:0x93aa: %N's test reads it but never changes the output (C076)
     std::string out;
     std::size_t next = 0;
     auto take = [&]() -> FArg { return next < args.size() ? args[next++] : FArg(0); };
@@ -84,9 +85,14 @@ std::string lang_format(const std::string& f, const std::vector<FArg>& args, con
         case 'A':
         case 'S':
         case 'V': {  // [BYTES seg10:0xa4c9]
+            // LoadString into the 80-byte [bp-0x68] [BYTES seg10:0xa4dd seg10:0xa4df]; the cut at
+            // buf[len - 2] when that byte is '^' drops a trailing caret pair such as ^N [BYTES
+            // seg10:0xa4f7 seg10:0xa50b] (M4 s4 fixer, C076). A string shorter than 2 reads the
+            // bytes below the buffer in the original; the port leaves it whole [DESIGN].
             std::string s = load(take().v);
+            if (s.size() > 0x4f) s.resize(0x4f);
             if (on) {
-                if (!s.empty() && s.back() == '^') s.pop_back();
+                if (s.size() >= 2 && s[s.size() - 2] == '^') s.resize(s.size() - 2);
                 out += s;
             }
             break;
@@ -99,8 +105,11 @@ std::string lang_format(const std::string& f, const std::vector<FArg>& args, con
             break;
         }
         case 'N':
-        case 'n':  // [BYTES seg10:0xa6e3]
-            if (on && phase != 0xb) out += "\r\n";
+        case 'n':
+            // CR LF whenever output is on: the phase-11 test also needs the byte [bp-0x6a] to be
+            // 0, and that byte holds the directive letter [BYTES seg10:0xa3c9 seg10:0xa6e3
+            // seg10:0xa6ec seg10:0xa6f3 seg10:0xa701] (M4 s4 fixer, C076).
+            if (on) out += "\r\n";
             break;
         case 'R': {  // [BYTES seg10:0xa7b4]
             const FArg m = take();

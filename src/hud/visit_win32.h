@@ -50,7 +50,7 @@ public:
     void landing_scene(const world::VisitLayout& l, const std::string& slow_text) override;
     int incoming(int first) override;
     void descent_start(const world::VisitLayout& l) override;
-    void descent_frame(const world::VisitLayout& l, int y, int s4, bool braking) override;
+    void descent_frame(const world::VisitLayout& l, int y, int s4, int flag) override;
     void redraw(const world::VisitLayout& l, int phase, int saved_phase, bool left_on) override;
     void ship_on_pad(const world::VisitLayout& l, int x, int y, int s4, int strip_h) override;
     void pad_strip(const world::VisitLayout& l, int offset, int s4) override;
@@ -73,6 +73,12 @@ public:
     std::function<std::string(int)> lang;
     // DGROUP:0x920c = 0, the Limited edition.
     std::function<bool()> limited;
+    // The first cell of the ship's wave sheet, heading 0 on row 0: (gap, gap) with side `size`,
+    // the pool-14 object's +0x24 and +0x22 (src/world/draw.cpp player_cell) (M4 s4 fixer).
+    struct Cell {
+        int x = 0, y = 0, side = 0;
+    };
+    std::function<Cell()> ship_cell;
 
 private:
     HDC screen() const;

@@ -1539,3 +1539,332 @@ def test_m4s3_reader_step7_order(ins):
         first[g] = min(i.off for i in w)
     offs = [first[g] for g in READER_ORDER]
     assert offs == sorted(offs), [hex(g) for g in sorted(READER_ORDER, key=first.get)]
+
+
+# ------------------------------------------------------------------ M4 stage 4: the verified readings
+
+
+def _w16(vals: list) -> list:
+    """The pushed immediates as 16-bit words (None kept)."""
+    return [None if v is None else v & 0xFFFF for v in vals]
+
+
+def test_m4s4_routine_frames(ins):
+    """core.md Death and the explosion, Hit dispatcher, The ship's part: the return sizes that
+    make the blast, the root, the composite and the stage-4 callees Pascal or cdecl."""
+    expect = {"seg8:0x5ab0": {"retf 2"}, "seg8:0x1290": {"retf 8"}, "seg8:0x285a": {"retf 0x10"},
+              "seg13:0x3d40": {"retf 0xc"}, "seg13:0x2e60": {"retf 6"}, "seg13:0x2688": {"retf"},
+              "seg8:0x81f8": {"retf"}, "seg15:0x374c": {"retf"}}
+    assert {f: _rets(ins, f) for f in expect} == expect
+    assert ins.call_sites("seg13:0x3748") == ["seg13:0xac"]
+    assert ins.call_sites("seg15:0x374c") == ["seg15:0x36bc", "seg15:0x36cf"]
+    assert [ins.at(a).text for a in ("seg15:0x36b9", "seg15:0x36cc")] == ["push 1", "push 0"]
+    assert ins.call_sites("seg8:0x81f8") == ["seg8:0x6259", "seg8:0x7290"]
+
+
+def test_m4s4_blast(ins):
+    """core.md The blast seg8:0x5ab0: the DGROUP:0x1318 > 6 return, the 2v sar Size scaling and
+    the 100 floor, the (min(B, 7) + 8)·15 range, B·600/d·15/seg8:0x1290(mass, 25), the heat
+    adds, the DGROUP:0xb0c writes around the dispatch and the B·250 push."""
+    expect = {"seg8:0x5aec": "cmp word ptr [0x1318], 6", "seg8:0x5af1": "jle seg8:0x5af6",
+              "seg8:0x5d28": "mov cl, byte ptr [0x9156]", "seg8:0x5d2c": "add ax, ax",
+              "seg8:0x5d2e": "sar ax, cl", "seg8:0x5d47": "cmp word ptr [0x9130], 0",
+              "seg8:0x5d4e": "cmp word ptr [0x90f4], 6", "seg8:0x5d55": "shl word ptr [bp - 0xe], 1",
+              "seg8:0x5d5e": "cmp word ptr [bp - 0xe], 0x64", "seg8:0x5d64": "mov word ptr [bp - 0xe], 0x64",
+              "seg8:0x5d77": "mov ax, word ptr es:[bx + si + 0x48]", "seg8:0x5d7d": "cmp ax, 7",
+              "seg8:0x5d85": "add ax, 8", "seg8:0x5d88": "imul ax, ax, 0xf",
+              "seg8:0x5d9c": "imul ax, cx, 0x258", "seg8:0x5db5": "mov ax, word ptr es:[bx + si + 0x44]",
+              "seg8:0x5dbc": "push 0", "seg8:0x5dbe": "push 0x19", "seg8:0x5dc0": "call far seg8:0x1290",
+              "seg8:0x5dc5": "cmp ax, 1", "seg8:0x5b22": "imul ax, word ptr [bp - 0x14], 0xf",
+              "seg8:0x5b2c": "cmp word ptr [bp - 0xa], 2", "seg8:0x5b32": "mov ax, 3",
+              "seg8:0x5b49": "add byte ptr es:[bx + di + 0x2f], 2", "seg8:0x5b4e": "cmp word ptr [bp - 0xe], 0x96",
+              "seg8:0x5b70": "cmp byte ptr es:[bx + si + 0x2f], 9", "seg8:0x5b88": "mov word ptr [0xb0c], 1",
+              "seg8:0x5b92": "cmp word ptr [bx + 0x1e90], 0", "seg8:0x5b99": "mov word ptr [0xb0c], 0",
+              "seg8:0x5ba2": "neg ax", "seg8:0x5bb2": "call seg8:0x5df2", "seg8:0x5bb8": "mov word ptr [0xb0c], 1",
+              "seg8:0x5bd4": "mov dx, 0x64", "seg8:0x5be6": "mov cx, 0xa",
+              "seg8:0x5c0c": "imul ax, word ptr es:[bx + di + 0x48], 0xfa"}
+    assert _texts(ins, expect) == expect
+    assert (0x258, 0x96, 0xFA, 0x19, 0x64) == (600, 150, 250, 25, 100)
+    # seg8:0x1290(N, g) = (N / g + g) >> 1 with N = mass, g = 25: mass 101 (a pod) gives 14
+    assert (101 // 25 + 25) >> 1 == 14
+
+
+def test_m4s4_credit_bookkeeping(ins):
+    """core.md Hit dispatcher, Credit bookkeeping: the cp test (9, 2, DGROUP:0x9324), the +0xa4
+    stamp, seg13:0x2714(j, cr, 5, 10, 0, −1), the DGROUP:0xb0c gate and the a/2, a/4, a/3 adds."""
+    expect = {"seg8:0x60b7": "cmp word ptr [bp - 0x10], 9", "seg8:0x60bd": "cmp word ptr [bp - 0x10], 2",
+              "seg8:0x60c3": "mov ax, word ptr [0x9324]", "seg8:0x60cb": "jmp seg8:0x6303",
+              "seg8:0x60de": "cmp word ptr [bx + 0x70c8], 1", "seg8:0x60fe": "mov word ptr [bx + 0x7134], ax",
+              "seg8:0x6102": "mov word ptr [bx + 0x7136], dx", "seg8:0x616a": "cmp word ptr [0xb0c], 0",
+              "seg8:0x620e": "cmp word ptr [bx + 0x70c8], 4", "seg8:0x6221": "add word ptr [0x9432], ax",
+              "seg8:0x6247": "cmp word ptr [bp + 0xa], 0xa", "seg8:0x6259": "call seg8:0x81f8",
+              "seg8:0x6286": "mov word ptr [0x943e], ax", "seg8:0x628c": "mov word ptr [0x9440], cx",
+              "seg8:0x6298": "mov word ptr [0x52d8], cx", "seg8:0x62b1": "sub ax, dx", "seg8:0x62b3": "sar ax, 1",
+              "seg8:0x62be": "mov ax, word ptr [0x934a]", "seg8:0x62d0": "and dx, 3", "seg8:0x62d5": "sar ax, 2",
+              "seg8:0x62ef": "cmp byte ptr es:[bx + si + 0x53], 1", "seg8:0x62f9": "mov cx, 3",
+              "seg8:0x62fd": "idiv cx", "seg8:0x62ff": "add word ptr [0x9432], ax"}
+    assert _texts(ins, expect) == expect
+    assert 0x7134 - 0x7090 == 0xA4 and 0x70C8 - 0x7090 == 0x38
+    assert _w16(_imm_pushes(ins, "seg8:0x6146", 6)) == [None, None, 5, 0xA, 0, 0xFFFF]   # (j, cr, 5, 10, 0, −1)
+    assert _imm_pushes(ins, "seg8:0x6259", 2) == [None, None]                       # (T pool, T rec)
+    assert ins.at("seg8:0x6252").text == "push word ptr [bp + 8]"
+
+
+def test_m4s4_dead_ship_pod_gates(ins):
+    """core.md Hit dispatcher, Gates: the two tests that clear the dispatch flag [bp − 6] for a
+    dead ship and its own pod (owner word DGROUP:0x856a + 0x34·rec)."""
+    expect = {"seg8:0x6382": "cmp word ptr [bp + 6], 0xb", "seg8:0x6388": "mov ax, word ptr [0x9324]",
+              "seg8:0x6397": "cmp word ptr [bx - 0x7a96], ax", "seg8:0x63a1": "cmp byte ptr [bx + 0x717c], 0",
+              "seg8:0x63a8": "mov word ptr [bp - 6], 0", "seg8:0x63ba": "cmp byte ptr [bx + 0x717c], 0",
+              "seg8:0x63c1": "cmp word ptr [bp + 0xa], 0xb", "seg8:0x63ce": "cmp word ptr [bx - 0x7a96], ax",
+              "seg8:0x63d4": "mov word ptr [bp - 6], 0"}
+    assert _texts(ins, expect) == expect
+    assert (-0x7A96) & 0xFFFF == 0x856A and 0x717C - 0x7090 == 0xEC
+
+
+def test_m4s4_destroyed_target_calls(ins):
+    """core.md Hit dispatcher, A destroyed target: the message codes and the seg13:0x2714
+    arguments of messages 0x75 … 0x77, the +200 kill bonus and seg13:0x2e60(j, cr, 4)."""
+    # cdecl pushes, the first argument first: seg3:0x6ec(c, DGROUP:0x9324, +0x58 or j, code)
+    for site, code in (("seg8:0x65a5", 0x75), ("seg8:0x660d", 0x76), ("seg8:0x6661", 0x77),
+                       ("seg8:0x66d7", 0x77)):
+        assert _imm_pushes(ins, site, 4)[3] == code, site
+    assert [ins.at(a).text for a in ("seg8:0x659e", "seg8:0x6604", "seg8:0x66d0")] == \
+        ["push word ptr [0x9324]"] * 3
+    assert _imm_pushes(ins, "seg8:0x65bc", 6)[2:] == [0xF, 0x28, 0, 6]           # 15, 40, 0, 6
+    assert _imm_pushes(ins, "seg8:0x6678", 6)[2:] == [0x3C, 0x78, 0, 8]          # 60, 120, 0, 8
+    assert _imm_pushes(ins, "seg8:0x66c3", 6)[2:] == [0x1E, 0x32, 0, 6]          # 30, 50, 0, 6
+    assert _w16(_imm_pushes(ins, "seg8:0x67fe", 6))[2:] == [0xFFCE, 0xFF6A, 1, 0xFFFF]  # −50, −150, 1, −1
+    assert (s16(0xFFCE), s16(0xFF6A)) == (-50, -150)
+    expect = {"seg8:0x6589": "cmp word ptr [0xb0c], 0", "seg8:0x6593": "cmp cx, 9",
+              "seg8:0x65f5": "cmp word ptr [bx + 0x70e6], ax", "seg8:0x67e9": "add word ptr [0x9432], 0xc8",
+              "seg8:0x6835": "jl seg8:0x680d", "seg8:0x681d": "jle seg8:0x682c",
+              "seg8:0x6825": "push 4", "seg8:0x6827": "call far seg13:0x2e60"}
+    assert _texts(ins, expect) == expect
+    assert ins.at("seg8:0x682c").text == "inc word ptr [bp - 0x18]"   # no add sp: Pascal
+
+
+def test_m4s4_ship_credit_strings(ins):
+    """core.md Messages: codes 0x75 … 0x77 play 0x3b and format 1409 … 1412; 0x77 tests the
+    player's goal pool against the literal 14."""
+    expect = {1409: "Not Bad! Lets Get Every Last Virus!", 1410: "Right On!!! You're Quite A Pilot!",
+              1411: "He's Gone! You Don't Know How Much I Appreciate That!",
+              1412: "Thanks For Helping Me With That. It Makes Life Easier."}
+    assert {k: _eng(k) for k in expect} == expect
+    assert (0x581, 0x584, (1409 >> 4) + 1, (1412 >> 4) + 1) == (1409, 1412, 89, 89)
+    assert ins.at("seg3:0x11fe").text == "cmp word ptr [bx + 0x70c2], 0xe"
+    for site in ("seg3:0x11d0", "seg3:0x11e0", "seg3:0x11f0"):
+        assert ins.at(site).text == "push 0x3b", site
+
+
+def test_m4s4_pod_touch(ins):
+    """core.md Other touches, pools 11 and 6: the record writes, the kind tests (2 and 1 only),
+    the kind-2 globals, the kind-1 weapon loop j = 1 … 9 with its 100 cap, and seg13:0xb6f2(ship, 2)."""
+    expect = {"seg13:0x1d1a": "cmp byte ptr es:[bx + si + 0x51], 0", "seg13:0x1d31": "cmp word ptr [bx - 0x7a96], cx",
+              "seg13:0x1d50": "mov byte ptr es:[bx + di + 0x51], 0xa",
+              "seg13:0x1d5d": "mov word ptr es:[bx + di + 0x18], 1",
+              "seg13:0x1d6c": "mov word ptr es:[bx + si + 0x48], ax",
+              "seg13:0x1d7a": "cmp word ptr [bx - 0x7aa0], 2", "seg13:0x1d81": "mov word ptr [0x1318], 1",
+              "seg13:0x1d8c": "les bx, ptr [0x1e30]", "seg13:0x1d90": "mov byte ptr es:[bx + si + 0x54], 0",
+              "seg13:0x1d9c": "mov word ptr [0x913e], 1", "seg13:0x1dbf": "cmp word ptr [bx - 0x7aa0], 1",
+              "seg13:0x1dc9": "mov ax, word ptr [bx - 0x7a9e]", "seg13:0x1dd5": "add word ptr [bx + 0x715e], ax",
+              "seg13:0x1dea": "mov word ptr [bp - 6], 1", "seg13:0x1e14": "cmp word ptr [si - 0x7a94], ax",
+              "seg13:0x1e1f": "add ax, word ptr [si - 0x7a80]", "seg13:0x1e23": "cmp ax, 0x64",
+              "seg13:0x1e2f": "mov word ptr [si - 0x7a94], 0xffff", "seg13:0x1e4e": "call far seg12:0x6d64",
+              "seg13:0x1e68": "mov byte ptr [bx + si + 0x713d], cl", "seg13:0x1e6f": "cmp word ptr [bp - 6], 0xa",
+              "seg13:0x1f6c": "cmp word ptr [bx - 0x68f6], 7", "seg13:0x1f84": "cmp word ptr [0x92e8], 0",
+              "seg13:0x1f8b": "push 2", "seg13:0x1f90": "call far seg13:0xb6f2"}
+    assert _texts(ins, expect) == expect
+    assert [(-d) & 0xFFFF for d in (0x7AA0, 0x7A9E, 0x7A96, 0x7A94, 0x7A80, 0x68F6)] == \
+        [0x8560, 0x8562, 0x856A, 0x856C, 0x8580, 0x970A]
+    assert (0x856C - 0x8560, 0x8580 - 0x8560, 0x713D - 0x7090) == (0xC, 0x20, 0xAD)
+    kinds = [(i.addr, i.ops[1]) for i in ins.func_insns("seg13:0x16ac")
+             if i.mnem == "cmp" and i.mem is not None and i.mem.disp == 0x8560]
+    assert kinds == [("seg13:0x1d7a", "2"), ("seg13:0x1dbf", "1"), ("seg13:0x1f7d", "1")]
+    assert ins.at("seg13:0x4bd5").text == "mov word ptr [bp - 4], 1"     # the fill starts at j = 1
+
+
+def test_m4s4_tank_respawns(ins):
+    """core.md The fuel tank, Respawns: seg12:0x4f4e has one call, in seg12:0x3e98 (kind 6 only);
+    the kind-7 frame calls seg12:0x515e."""
+    assert ins.call_sites("seg12:0x4f4e") == ["seg12:0x3ee5"]
+    assert ins.call_sites("seg12:0x515e") == ["seg7:0xe78"]
+    assert ins.owners(*A("seg12:0x3ee5")) == {"seg12:0x3e98"} and ins.owners(*A("seg7:0xe78")) == {"seg7:0x0"}
+    expect = {"seg12:0x3ea8": "cmp word ptr [0x9320], 6", "seg7:0xe71": "cmp word ptr [0x9320], 7"}
+    assert _texts(ins, expect) == expect
+
+
+def test_m4s4_turn_and_weapon_10(ins):
+    """core.md The turn: h − cur = 8 turns up (cmp 9 before the inc); Selection and the weapon
+    display: weapon 10's words from seg10:0x1fb2 give S = 29 and source x 146 at Size 1."""
+    expect = {"seg13:0xfe3": "sub ax, word ptr [bp + 0x10]", "seg13:0xfe6": "cmp ax, 9",
+              "seg13:0xfe9": "jge seg13:0xff1", "seg13:0xfeb": "inc word ptr [bp + 0x10]"}
+    assert _texts(ins, expect) == expect
+    w10 = 0x2F54 + 0x50 * 10
+    stores = {"seg10:0x27ad": (w10 + 0x26, 6), "seg10:0x27b3": (w10 - 8, 22), "seg10:0x27b9": (w10, 0xC4),
+              "seg10:0x27f8": (w10 + 0x06, 4), "seg10:0x280c": (w10 + 0x14, 0)}
+    for site, (disp, val) in stores.items():
+        i = ins.at(site)
+        assert i.mnem == "mov" and i.abs_ds and i.mem.disp == disp, (site, i.text)
+        assert ins.stored_value(i) == val, site
+        assert ins.owners(i.seg, i.off) == {"seg10:0x1fb2"}, site
+    a, size = 22, 1
+    b = 6 if a % 2 == 0 else 4
+    a_s, b_s = (a << size) >> 1, (b << size) >> 1
+    assert ((a << 2) // 3, (6 - 1) * (a_s + b_s) + b_s, b_s) == (29, 146, 6)
+
+
+def test_m4s4_rear_muzzle_table(ins):
+    """core.md The muzzle tables: seg10:0x1620 takes S = design word +0x2a, r = +0x02, a = 270,
+    divides by 127 and −127 and steps a by (k + 1) % 2 + 22."""
+    expect = {"seg10:0x1634": "mov ax, word ptr [bx - 0x6904]", "seg10:0x163b": "mov ax, word ptr [bx - 0x692c]",
+              "seg10:0x1647": "mov word ptr [bp - 0xa], 0x10e", "seg10:0x1651": "call far seg6:0x720c",
+              "seg10:0x165a": "mov cx, 0x7f", "seg10:0x1678": "mov word ptr [bx + 0x7ba0], cx",
+              "seg10:0x1683": "call far seg6:0x71b2", "seg10:0x168c": "mov cx, 0xff81",
+              "seg10:0x1694": "mov word ptr [di + 0x7ba2], si", "seg10:0x16a4": "add dx, 0x16",
+              "seg10:0x16a7": "sub word ptr [bp - 0xa], dx", "seg10:0x16aa": "cmp word ptr [bp - 6], 0x10"}
+    assert _texts(ins, expect) == expect
+    assert ((-0x6904) & 0xFFFF, (-0x692C) & 0xFFFF) == (0x96D2 + 0x2A, 0x96D2 + 0x02)
+    assert (0x10E, s16(0xFF81), 0x7BA0) == (270, -127, 0x7B60 + 4 * 16)
+
+
+def test_m4s4_ambulance_ship_part(ins):
+    """core.md The ship's part: distance 5, the 0x0032ffff dword, now + 1100, x + 2, the d·70/D
+    and d·−50/D velocities, the 0x000afff6 guard, the drop-off's writes and the composite's ROPs."""
+    expect = {"seg13:0x3757": "cmp word ptr [0x9e49], 3", "seg13:0x3772": "mov word ptr [0x9e5b], ax",
+              "seg13:0x377b": "mov byte ptr [bx + 0x717c], 1", "seg13:0x381d": "cmp word ptr [bx + 0x70a6], 1",
+              "seg13:0x3841": "call seg13:0x100c", "seg13:0x3864": "cmp word ptr [bp - 4], 5",
+              "seg13:0x38b2": "mov dword ptr [0x9e41], 0x32ffff", "seg13:0x38bb": "mov word ptr [0x9e45], 5",
+              "seg13:0x38c5": "mov word ptr [0x9e4f], ax", "seg13:0x38d5": "mov word ptr [0x9e49], 4",
+              "seg13:0x38df": "add eax, 0x44c", "seg13:0x38e5": "mov dword ptr [0x6e10], eax",
+              "seg13:0x38f1": "inc ax", "seg13:0x38f2": "inc ax",
+              "seg13:0x392c": "imul ax, word ptr [bp - 6], 0x46", "seg13:0x3976": "cmp word ptr [0x9e49], 6",
+              "seg13:0x398c": "cmp word ptr [0x9e47], 0xf", "seg13:0x3a21": "mov dword ptr [bp - 6], 0xafff6",
+              "seg13:0x3a6a": "mov word ptr [0x9e43], 0x32", "seg13:0x3a70": "mov word ptr [0x9e4f], 0",
+              "seg13:0x3a79": "mov word ptr [0x9e41], ax", "seg13:0x3a87": "mov word ptr [0x9e49], 8",
+              "seg13:0x3a93": "mov byte ptr [bx + 0x71d7], 0", "seg13:0x3ad4": "imul ax, word ptr [bp - 6], -0x32",
+              "seg13:0x41e4": "push 0x8800c6", "seg13:0x420e": "push 0xee0086",
+              "seg13:0x4340": "push 0x8800c6", "seg13:0x4378": "push 0xee0086"}
+    assert _texts(ins, expect) == expect
+    assert (0x44C, 0x46, s16(0xAFFF6 & 0xFFFF), 0xAFFF6 >> 16) == (1100, 70, -10, 10)
+    assert ins.call_sites("seg13:0x3d40")[:2] == ["seg13:0x3929", "seg13:0x3ad1"]
+
+
+def test_m4s4_phase_64_free_spot(ins):
+    """core.md Phase 64: the rectangle (x − 800, y − 1200, x + 2240, y + 1200), PtInRect on the
+    records' dword +0x04, and the bounds 1040, 720, (DGROUP:0x5a0 − 130)·8, (DGROUP:0x5a2 − 90)·8."""
+    expect = {"seg16:0x1c66": "sub ax, 0x320", "seg16:0x1c6d": "sub ax, 0x4b0", "seg16:0x1c74": "add ax, 0x8c0",
+              "seg16:0x1c7b": "add ax, 0x4b0", "seg16:0x1cbf": "push dword ptr es:[bx + si + 4]",
+              "seg16:0x1ccd": "cmp word ptr [bp - 0x5a], 0x410", "seg16:0x1cd4": "cmp word ptr [bp - 0x58], 0x2d0",
+              "seg16:0x1cde": "sub ax, 0x82", "seg16:0x1ce1": "shl ax, 3",
+              "seg16:0x1cec": "sub ax, 0x5a", "seg16:0x1cef": "shl ax, 3"}
+    assert _texts(ins, expect) == expect
+    assert "PtInRect" in ins.at("seg16:0x1cc4").text and "SetRect" in ins.at("seg16:0x1c7f").text
+    assert (0x320, 0x4B0, 0x8C0, 0x410, 0x2D0, 0x82, 0x5A) == (800, 1200, 2240, 1040, 720, 130, 90)
+
+
+def test_m4s4_descent(ins):
+    """core.md The descent seg15:0x374c: start y = end y − 300, speed 150 then −3 or −5 (Calibrate
+    < 1300) clamped to 50 … 120, the flag thresholds 10 and 60, and the step 2·speed / 5, 3, 6 or 4."""
+    expect = {"seg15:0x3870": "sub ax, 0x12c", "seg15:0x38d7": "imul ax, word ptr [0x92d8], 0xa",
+              "seg15:0x38f8": "mov word ptr [0x17f6], 0x96", "seg15:0x38fe": "jmp seg15:0x3914",
+              "seg15:0x3917": "sub ax, 0xa", "seg15:0x3926": "sub ax, 0x3c", "seg15:0x393d": "add ax, 0x3c",
+              "seg15:0x394f": "cmp word ptr [0x8ffc], 0x514", "seg15:0x395a": "sub ax, 3",
+              "seg15:0x3962": "sub ax, 5", "seg15:0x3965": "cmp ax, 0x32", "seg15:0x3970": "cmp ax, 0x78",
+              "seg15:0x3982": "mov word ptr [0x17f6], 0", "seg15:0x3b9f": "mov word ptr [bp - 0xa], 5",
+              "seg15:0x3ba4": "mov word ptr [bp - 0xc], 3", "seg15:0x3bab": "mov word ptr [bp - 0xa], 6",
+              "seg15:0x3bb0": "mov word ptr [bp - 0xc], 4", "seg15:0x3bd0": "add word ptr [0x17fa], ax",
+              "seg15:0x3be6": "mov word ptr [0x92d8], 0xffff"}
+    assert _texts(ins, expect) == expect
+    assert (0x12C, 0x96, 0x514, 0x32, 0x78) == (300, 150, 1300, 50, 120)
+    assert min(max(150 - 3, 50), 120) == 120 and min(max(150 - 5, 50), 120) == 120
+
+
+def test_m4s4_rock_split_offsets(ins):
+    """core.md Rocks: the parent's state = 1 and the three dword offsets (0, −10), (15, 12),
+    (−15, 13), each added as 8·d to the parent's position read at that moment."""
+    expect = {"seg7:0x51cc": "mov word ptr es:[bx + si + 0x18], 1",
+              "seg7:0x521b": "mov dword ptr [bp - 0x10], 0xfff60000",
+              "seg7:0x5627": "mov dword ptr [bp - 0x10], 0xc000f",
+              "seg7:0x5632": "mov dword ptr [bp - 0x10], 0xdfff1",
+              "seg7:0x5234": "shl ax, 3", "seg7:0x5237": "add ax, word ptr es:[bx + di + 4]"}
+    assert _texts(ins, expect) == expect
+    pairs = [(s16(v & 0xFFFF), s16(v >> 16)) for v in (0xFFF60000, 0xC000F, 0xDFFF1)]
+    assert pairs == [(0, -10), (15, 12), (-15, 13)]
+
+
+def test_m4s4_pod_position(ins):
+    """core.md The pod's position: tab[(heading + 8) & 15]·extent / 16, x reduced after the add,
+    y reduced before and after, all by 8·DGROUP:0x5a0 or 8·DGROUP:0x5a2."""
+    expect = {"seg13:0x4d64": "sub bl, 0xf8", "seg13:0x4d67": "and bx, 0xf",
+              "seg13:0x4d6d": "mov ax, word ptr [bx + 0x1050]", "seg13:0x4d71": "imul word ptr es:[si + 0x20]",
+              "seg13:0x4d76": "and dx, 0xf", "seg13:0x4d7b": "sar ax, 4",
+              "seg13:0x4d84": "add word ptr es:[bx + si + 4], ax", "seg13:0x4d88": "mov dx, word ptr [0x5a0]",
+              "seg13:0x4d9a": "idiv cx", "seg13:0x4d9c": "mov word ptr es:[bx + si + 4], dx",
+              "seg13:0x4e05": "mov ax, word ptr [bx + 0x1052]", "seg13:0x4e16": "mov dx, word ptr [0x5a2]",
+              "seg13:0x4e20": "idiv bx", "seg13:0x4e28": "add word ptr es:[bx + si + 6], dx",
+              "seg13:0x4e3e": "idiv cx", "seg13:0x4e40": "mov word ptr es:[bx + si + 6], dx"}
+    assert _texts(ins, expect) == expect
+    assert (8 - 0xF8) & 0xFF == 0x10                 # sub 0xf8 adds 8 modulo 256
+
+
+def test_m4s4_single_writers(ins, dgroup):
+    """globals.md Global table, structs.md Ship records: DGROUP:0xb0a (0, written only with 0) and
+    DGROUP:0xb0c (1) in the image; the writers of DGROUP:0x1318 and DGROUP:0x9e5b; ship word +0x50
+    written only at seg14:0xd0a; bytes +0xf6 cleared at seg14:0x150b; bytes +0x5d/+0x5e."""
+    def split(lo, hi):
+        r = ins.refs(lo, hi)
+        return sorted(_sites(i for i in r if is_write(i)), key=A), sorted(_sites(i for i in r if not is_write(i)), key=A)
+    assert dgroup[0xB0A:0xB0E] == b"\0\0\x01\0"
+    assert split(0xB0A, 0xB0B) == (["seg8:0x4d43"], ["seg8:0x494e", "seg8:0x49bc"])
+    assert ins.stored_value(ins.at("seg8:0x4d43")) == 0
+    assert split(0xB0C, 0xB0D) == (["seg8:0x5b88", "seg8:0x5b99", "seg8:0x5bb8"], ["seg8:0x616a", "seg8:0x6589"])
+    assert split(0x1318, 0x1319)[0] == ["seg6:0x9856", "seg11:0x7406", "seg13:0x1d81", "seg14:0x435",
+                                        "seg18:0x4563", "seg18:0x45f3", "seg18:0x470f", "seg18:0x472c",
+                                        "seg18:0x4855", "seg18:0x5fba"]
+    assert "seg13:0x3772" in split(0x9E5B, 0x9E5C)[0]
+    w50 = [i.addr for i in ins.insns if i.mem is not None and is_write(i)
+           and i.mem.disp <= 0x70E1 and i.mem.disp + i.mem.size > 0x70E0]
+    assert w50 == ["seg14:0xd0a"]
+    assert ins.at("seg14:0xd03").text == "mov ax, word ptr [bp - 6]"
+    assert ins.at("seg14:0x150b").text == "mov byte ptr [bx + si + 0x7186], 0"
+    assert ins.at("seg14:0x14fd").text == "imul si, word ptr [bp - 4], 9"
+    assert (0x7186 - 0x7090, 0xF6 + 9 * 7 + 8) == (0xF6, 0x13D)
+    expect = {"seg14:0x1596": "mov al, byte ptr [bx + si - 0x688a]", "seg14:0x159f": "mov byte ptr [bx + si + 0x70ed], al",
+              "seg9:0x64ce": "cmp word ptr [0x91f8], 1", "seg9:0x64d3": "jg seg9:0x6501",
+              "seg9:0x64e3": "mov byte ptr [bx + si + 0x70ed], 2", "seg9:0x64f9": "mov word ptr [bx + 0x7162], ax",
+              "seg9:0x64fd": "mov word ptr [bx + 0x7160], ax"}
+    assert _texts(ins, expect) == expect
+    assert ((-0x688A) & 0xFFFF, 0x70ED - 0x7090) == (0x96D2 + 0xA4, 0x5D)
+
+
+def test_m4s4_ship_hit_sound(ins):
+    """structs.md Callbacks of the ship pool: SHP word +0x1f → design word +0x2e → object +0x42,
+    and seg8:0x45e0 pushes the design word; MASTER.SHP's TRANSFORMER holds 7."""
+    expect = {"seg14:0x1e18": "mov cx, word ptr es:[bx + si + 0x1f]", "seg14:0x1e1e": "mov word ptr [bx - 0x6900], cx",
+              "seg14:0x20c0": "mov ax, word ptr [si - 0x6900]", "seg14:0x20d3": "mov word ptr es:[bx + di + 0x42], ax",
+              "seg8:0x49d8": "push word ptr [bx - 0x6900]"}
+    assert _texts(ins, expect) == expect
+    assert (-0x6900) & 0xFFFF == 0x9700 == 0x96D2 + 0x2E
+    from conftest import ORIGINAL, require
+    from isre import szdd
+    shp = szdd.expand(require(ORIGINAL / "shipdisk" / "MASTER.SH1").read_bytes())
+    rec = shp[65:130]
+    assert rec[10:21] == b"TRANSFORMER" and struct.unpack_from("<H", rec, 0x1F)[0] == 7
+
+
+def test_m4s4_probe_values():
+    """structs.md Probe values, globals.md DGROUP:0xb0a/0xb0c, core.md Selection: the probe-0001
+    wave dump's gun words, barrel bytes, the two flags, weapon 10's words and design 0's +0x2e."""
+    from test_re_facts import WORK
+    from conftest import require
+    dumps = WORK / "probe" / "dumps"
+    wave = require(dumps / "wave-inspace.bin").read_bytes()
+    nav = (dumps / "navigation-inspace.bin").read_bytes() if (dumps / "navigation-inspace.bin").exists() else None
+    w = lambda d, o: struct.unpack_from("<h", d, o)[0]
+    assert (w(wave, 0x709A), w(wave, 0x70B4), wave[0x7170], wave[0x7171]) == (1, 1, 1, 1)
+    if nav is not None:
+        assert (w(nav, 0x709A), w(nav, 0x70B4), nav[0x7170], nav[0x7171]) == (0, 0, 0, 0)
+    assert (w(wave, 0xB0A), w(wave, 0xB0C)) == (0, 1)
+    assert [w(wave, o) for o in (0x3274, 0x327A, 0x3288, 0x329A, 0x326C, 0x9156)] == [196, 4, 0, 6, 22, 1]
+    assert w(wave, 0x9700) == 7 and wave[0x96D2 + 0x70:0x96D2 + 0x7B] == b"TRANSFORMER"

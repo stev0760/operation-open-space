@@ -73,7 +73,8 @@ struct EffectState {
     EffectSides sides;              // DGROUP:0x5170, DGROUP:0x5224
     std::int16_t dg_5144 = 0;       // DGROUP:0x5144/0x5146: the point a mode-3 sound (KABOOM) plays at
     std::int16_t dg_5146 = 0;
-    std::int16_t dg_b0c = 1;        // DGROUP:0xb0c, 1 in the image, 0 while the blast's dispatcher call runs [BYTES DGROUP:0xb0c]
+    // DGROUP:0xb0c is CollideGlobals::w0b0c, which the blast reaches through EffectCtx::dg_b0c
+    // (M4 s4 fixer, C006, C084).
     std::int16_t dg_95a8 = 0;       // DGROUP:0x95a8 = 1 at the demo player's death [BYTES seg16:0xaea]
     // DGROUP:0x698c (now + 10000 when a pool-4 record is destroyed) is World::w698c [BYTES seg12:0x279a].
     std::array<PodRecord, kPodRecords> pods{};  // DGROUP:0x8560
@@ -138,6 +139,12 @@ struct EffectCtx {
     // The weapon words DGROUP:0x2f54 seg12:0x274a reads for a pool-6 record; null reads the
     // program's (missile.h missile_state) (M4 s2 MISSILE).
     const WeaponWords* weapons = nullptr;
+    // DGROUP:0xb0c, the dispatcher's word (CollideGlobals::w0b0c): the blast sets it to 0 around
+    // its dispatcher call when the entry's frame counter is not 0, so the dispatcher skips the
+    // defender block and messages 0x75 / 0x76 for blast hits [BYTES seg8:0x5b88 seg8:0x5b92
+    // seg8:0x5b99 seg8:0x5bb8 seg8:0x616a seg8:0x6589] (M4 s4 fixer, C006, C084). Null writes
+    // nothing.
+    std::int16_t* dg_b0c = nullptr;
 };
 
 // seg8:0x3fbe(k) [BYTES seg8:0x3fbe-0x45db] (verified claims 1, 4-13):
@@ -156,9 +163,10 @@ struct EffectCtx {
 void effect_frame(EffectCtx& c, int k);
 
 // seg8:0x5ab0(k), the blast of a type 4 or 5 entry at its frame 6: area damage and push for
-// every object of pools DGROUP:0x9326 ... DGROUP:0x9324 near the entry's world point. Ported
-// from the analyst's reading (s1-death.md section 2, claims 15-22), which no verifier has
-// checked [OPEN]; the seg18 doubling (DGROUP:0x90f4 = 6) is not ported [OPEN].
+// every object of pools DGROUP:0x9326 ... DGROUP:0x9324 near the entry's world point (core.md
+// "Death and the explosion", The blast, steps 1-7, C001-C007) [BYTES seg8:0x5ab0-0x5de6]. The
+// seg18 doubling of d, dx and dy (DGROUP:0x9130 != 0 and DGROUP:0x90f4 = 6) [BYTES seg8:0x5d47
+// seg8:0x5d55] is the seg18 mode's (M6), not ported.
 void blast(EffectCtx& c, int k);
 
 // seg16:0x8e4(pool, ship), a ship's `on_destroy` [BYTES seg16:0x8e4-0xb4c] (verified claims 2-4,

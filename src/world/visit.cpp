@@ -89,6 +89,61 @@ void bar_k(VisitCtx& c, int k, int v) {
 // waits) [BYTES seg16:0x11c6 seg16:0x1460].
 bool passed(std::uint32_t now, std::uint32_t d) { return d < now; }
 
+// seg15:0x374c(first) in state 6, the descent's step (core.md "The descent", steps 1-5,
+// C050-C054; sound.md Catalogue "The descent", C052) [BYTES seg15:0x374c-0x3bf9] (M4 s4 fixer).
+// The drawing between the sound and the step is VisitScreen::descent_frame's. Every word is
+// 16-bit signed, as the original's (ADR 0013 decision 7). The state-8 store DGROUP:0x92d8 = -1
+// at the return [BYTES seg15:0x3bdf seg15:0x3be6] is the desk launch's, not the visit's.
+int descent_step(VisitCtx& c, bool first) {
+    VisitState& v = c.v;
+    const bool slow = c.h.calibrate() < 0x514;  // Calibrate DGROUP:0x8ffc < 1300 [BYTES seg15:0x394f seg15:0x3b97]
+    std::int16_t end = lo16(v.end_y), start = lo16(v.start_y), pos = lo16(v.pos10);
+    if (first) {
+        // 1. The end y = pad top DGROUP:0x3cb2 - s4 + pad height DGROUP:0x3c9a - 10, the start
+        // y = end - 300 [BYTES seg15:0x385e seg15:0x386d seg15:0x3870].
+        const std::int16_t pad_top = sub16(sub16(lo16(v.lay.H), lo16(v.lay.pad_c)), 0x34);
+        end = sub16(add16(sub16(pad_top, lo16(v.s4)), lo16(v.lay.pad_c)), 10);
+        start = sub16(end, 0x12c);
+        // 2. The fast flag DGROUP:0x928 before the position store [BYTES seg15:0x3876 seg15:0x38d2].
+        if (v.fast != 0) start = add16(end, 1);
+        pos = mul16(start, 10);  // [BYTES seg15:0x38d7]
+        v.flag = 0;              // DGROUP:0x17fc [BYTES seg15:0x38e1]
+        v.flag_prev = 0;         // DGROUP:0x17f8 [BYTES seg15:0x38e4]
+        v.speed = 150;           // DGROUP:0x17f6 [BYTES seg15:0x38f8]
+    } else if (v.fast != 0) {    // 2. [BYTES seg15:0x3900 seg15:0x3907 seg15:0x390b seg15:0x3911]
+        start = add16(end, 1);
+        pos = mul16(start, 10);
+    }
+    // 3. The flag DGROUP:0x17fc [BYTES seg15:0x3914-0x3949].
+    if (mul16(sub16(end, 10), 10) < pos)
+        v.flag = 1;
+    else if (mul16(sub16(end, 60), 10) < pos)
+        v.flag = 0;
+    else if (mul16(add16(start, 60), 10) < pos)
+        v.flag = 1;
+    // 4. The speed, so the first call's 150 never survives [BYTES seg15:0x394f-0x3982] (C050).
+    std::int16_t sp = sub16(lo16(v.speed), slow ? 3 : 5);
+    if (sp < 0x32) sp = 0x32;
+    if (sp > 0x78) sp = 0x78;
+    if (v.fast != 0) sp = 0;
+    v.speed = sp;
+    // The IGNITE sound on each change of the flag to 0 [BYTES seg15:0x3988-0x39a3] (C052).
+    if (v.flag == 0 && v.flag != v.flag_prev) c.h.sound(0x20);
+    v.flag_prev = v.flag;
+    v.end_y = end;
+    v.start_y = start;
+    v.pos10 = pos;
+    // The frame: the ship at y = DGROUP:0x17fa / 10, its source row DGROUP:0x3ce8 + 2·flag
+    // [BYTES seg15:0x39d2 seg15:0x39d8 seg15:0x3b2b-0x3b31].
+    c.scr.descent_frame(v.lay, idiv16(pos, 10), v.s4, v.flag);
+    // 5. The step 2·speed / d, d = 5 (flag 0) or 3 (flag set), 6 and 4 at Calibrate >= 1300; the
+    // return without a clamp [BYTES seg15:0x3b97-0x3bf1] (C053, C054).
+    const std::int16_t d = v.flag == 0 ? std::int16_t(slow ? 5 : 6) : std::int16_t(slow ? 3 : 4);
+    pos = add16(pos, idiv16(add16(sp, sp), d));
+    v.pos10 = pos;
+    return mul16(end, 10) < pos ? 1 : 0;
+}
+
 // seg15:0x3590, the descent of phase 1 [BYTES seg15:0x3590-0x374a] [OPEN: seg15:0x3caa,
 // seg15:0x1eac and the palette ramps are summarised].
 void descent(VisitCtx& c) {
@@ -97,45 +152,20 @@ void descent(VisitCtx& c) {
     case 0:
         if (c.scr.incoming(0) == 0) return;
         // seg15:0x1328(1), seg15:0x1eac, the black screen, the fades and ramps, seg15:0x482e
-        // (the pad) and seg15:0x374c(1).
+        // (the pad) and seg15:0x374c(1), whose return is dropped [BYTES seg15:0x36b9 seg15:0x36bc].
         c.scr.descent_start(v.lay);
-        {
-            // seg15:0x374c(1): the end y = pad top - s4 + pad_c - 10 and the start 0x136 - 10
-            // above it; the speed starts at 150 [BYTES seg15:0x374c] (s3-visit.md 2.1).
-            const int pad_top = v.lay.H - v.lay.pad_c - 0x34;
-            v.end_y = pad_top - v.s4 + v.lay.pad_c - 10;
-            v.start_y = v.end_y - 0x136 + 10;
-            v.pos10 = v.start_y * 10;
-            v.speed = 150;
-        }
+        descent_step(c, true);
         v.descent = 1;
         return;
-    case 1: {
-        // seg15:0x374c(0) each tick until it returns 1: the speed falls by 3 (Calibrate < 1300)
-        // or 5 a call, kept within 50 ... 120; the position (x 10) grows by 2·speed/5 [OPEN:
-        // summarised; the braking near the ends is not ported]; with DGROUP:0x928 the ship is
-        // set down at once [OPEN].
-        bool done = false;
-        if (v.fast != 0) {
-            v.pos10 = v.end_y * 10;
-            done = true;
-        } else {
-            v.speed -= c.h.calibrate() < 1300 ? 3 : 5;
-            v.speed = std::clamp(v.speed, 50, 120);
-            v.pos10 += 2 * v.speed / 5;
-            if (v.pos10 >= v.end_y * 10) {
-                v.pos10 = v.end_y * 10;
-                done = true;
-            }
-        }
-        c.scr.descent_frame(v.lay, v.pos10 / 10, v.s4, v.speed <= 60);
-        if (done) {
+    case 1:
+        // seg15:0x374c(0) each tick until it returns 1, then sound 9 and 1000 ms [BYTES
+        // seg15:0x36cc-0x36ef].
+        if (descent_step(c, false) != 0) {
             c.h.sound(9);
             v.descent_due = c.h.now() + 1000;
             v.descent = 2;
         }
         return;
-    }
     default:
         if (v.descent_due != 0 && !passed(c.h.now(), v.descent_due)) return;
         v.descent_due = 0;

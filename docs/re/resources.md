@@ -100,7 +100,7 @@ Other modules [BYTES INSPACE.SCR DIALOG] [BYTES INSTALL.EXE DIALOG] [BYTES thewo
 ENG_LANG.DLL holds 1,446 strings, ids 110–12,546. [BYTES ENG_LANG.DLL STRING] Texts that the oracle saw at run time:
 - 2326 + 2327: "With Limited Inner Space, you can only use the Transformer ship." + " If you order the full game package, all ships are available." This is the demo-limit message box. [BYTES ENG_LANG.DLL STRING 146] [ORACLE newgame-0001]
 - 2338 "Limited Inner Space" is the main window title. 2140 "Inner Space Navigation" titles the Navigation window. 1149 "NEW GAME, STARTING AT WAVE 1." fills the Restore Game description. [BYTES ENG_LANG.DLL STRING 147] [BYTES ENG_LANG.DLL STRING 134] [BYTES ENG_LANG.DLL STRING 72] [ORACLE newgame-0001]
-- 3032 `IT'S %<%S %S%>%<%S%>, %s!%NI HOPE YOU'RE READY TO PLAY..%N%N`, with 597 "Saturday" and 639 "Morning" nearby. These are the first intro lines. The `%<`, `%>`, `%S` and `%N` escapes are [OPEN]. [BYTES ENG_LANG.DLL STRING 190] [ORACLE newgame-0001]
+- 3032 `IT'S %<%S %S%>%<%S%>, %s!%NI HOPE YOU'RE READY TO PLAY..%N%N`, with 597 "Saturday" and 639 "Morning" nearby. These are the first intro lines. The `%<`, `%>`, `%S` and `%N` directives are defined under [shell.md](shell.md#screen-states) (the formatter seg10:0xa332's groups and other directives). [BYTES ENG_LANG.DLL STRING 190] [ORACLE newgame-0001]
 
 ## Custom types
 

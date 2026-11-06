@@ -25,11 +25,13 @@ DcId slot_dc(const EffectCtx& c, int slot) {
     return c.images && slot >= 0 && slot < kImageSlots ? (*c.images)[ix(slot)] : kDcNone;
 }
 
-// seg8:0x1290(a, b) = (b / max(a, 3) + max(a, 3)) >> 1, 32-bit (s1-death.md claim 20, not
-// verified) [BYTES seg8:0x1290] [OPEN].
-std::int16_t mass_scale(std::int16_t a, std::int16_t b) {
-    const std::int32_t m = a > 3 ? a : 3;
-    return lo16(sar32(static_cast<std::int32_t>(b) / m + m, 1));
+// seg8:0x1290(N, g) in declaration order (Pascal, `retf 8`): g = 3 when g < 3, then the low
+// word of (N / g + g) sar 1, 32-bit (core.md "The intercept", C005) [BYTES seg8:0x129d
+// seg8:0x12a4 seg8:0x12b2 seg8:0x12b6 seg8:0x12ba] (M4 s4 fixer: the parameters in the
+// original's order).
+std::int16_t mass_scale(std::int32_t n, std::int32_t g) {
+    const std::int32_t m = g > 3 ? g : 3;
+    return lo16(sar32(n / m + m, 1));
 }
 
 }  // namespace
@@ -151,15 +153,15 @@ void effect_frame(EffectCtx& c, int k) {
     if (k < 4 && e.type == 6) c.host.piece_free(k);  // [BYTES seg8:0x458e-0x45cd] [OPEN]
 }
 
-// seg8:0x5ab0 [BYTES seg8:0x5ab0-0x5dee]. Read from the listing by the analyst (s1-death.md
-// section 2) and by this port; no independent verifier has checked it [OPEN].
+// seg8:0x5ab0 [BYTES seg8:0x5ab0-0x5de6] (core.md "Death and the explosion", The blast,
+// C001-C007).
 void blast(EffectCtx& c, int k) {
     if (k < 0 || k >= kEffectCount) return;
     World& w = c.w;
     const EffectEntry& e = w.effects[ix(k)];
     const std::int16_t sp = e.pool, sr = e.rec, type = e.type;  // [bp-6], [bp-8], [bp-4]
     const EffectPoint pt = c.st.sides.point[ix(k)];               // [bp-0x24], [bp-0x22]
-    if (c.in.dg_1318 > 6) return;  // [BYTES seg8:0x5aec seg8:0x5af1] [OPEN]
+    if (c.in.dg_1318 > 6) return;  // signed [BYTES seg8:0x5aec seg8:0x5af1 seg8:0x5af3] (C001)
     if (!record_ok(w.pools, sp, sr)) return;  // [DESIGN] bounds
     Pools& pools = w.pools;
     for (int p = w.roles.radar_first; p <= w.roles.ships && p < kPoolCount; ++p) {  // [BYTES seg8:0x5af6 seg8:0x5dd6]
@@ -177,8 +179,9 @@ void blast(EffectCtx& c, int k) {
                 const ObjectRecord& o = pools.rec(p, r);
                 d = distance_cells(o.x, o.y, pt.x, pt.y, dx, dy);  // seg8:0x285a [BYTES seg8:0x5d20]
             }
-            // (2v) >> Size for d, dx, dy [BYTES seg8:0x5d28-0x5d44]; the seg18 doubling with
-            // DGROUP:0x90f4 = 6 is not ported [OPEN M6].
+            // (2v) sar Size for d, dx, dy [BYTES seg8:0x5d28 seg8:0x5d2c seg8:0x5d2e seg8:0x5d38
+            // seg8:0x5d42] (C003); the seg18 doubling (DGROUP:0x9130 != 0, DGROUP:0x90f4 = 6)
+            // [BYTES seg8:0x5d47 seg8:0x5d55] is M6's.
             d = sar16(shl16(d, 1), w.size & 15);
             dx = sar16(shl16(dx, 1), w.size & 15);
             dy = sar16(shl16(dy, 1), w.size & 15);
@@ -187,7 +190,7 @@ void blast(EffectCtx& c, int k) {
             const std::int16_t bc = b > 7 ? std::int16_t{7} : b;
             if (!(mul16(add16(bc, 8), 15) > d)) continue;  // [BYTES seg8:0x5d85-0x5d90]
             std::int16_t amount = idiv16(mul16(b, 600), d);  // [BYTES seg8:0x5d9c-0x5da4]
-            std::int16_t m = mass_scale(25, pools.rec(p, r).mass);  // [BYTES seg8:0x5dc0]
+            std::int16_t m = mass_scale(pools.rec(p, r).mass, 25);  // seg8:0x1290(mass, 25) [BYTES seg8:0x5dc0] (C005)
             if (m < 1) m = 1;                                       // [BYTES seg8:0x5dc5-0x5dcd]
             amount = idiv16(mul16(amount, 15), m);                  // [BYTES seg8:0x5b22-0x5b29]
             if (p == 2) amount = mul16(amount, 3);                  // [BYTES seg8:0x5b2c-0x5b38]
@@ -200,10 +203,12 @@ void blast(EffectCtx& c, int k) {
             }
             if (c.dg_943a) *c.dg_943a = sp;  // [BYTES seg8:0x5b7c-0x5b85]
             if (c.dg_943c) *c.dg_943c = sr;
-            c.st.dg_b0c = 1;  // [BYTES seg8:0x5b88-0x5b99]
-            if (e.frame != 0) c.st.dg_b0c = 0;
+            // DGROUP:0xb0c, the dispatcher's word (M4 s4 fixer, C006, C084) [BYTES seg8:0x5b88
+            // seg8:0x5b92 seg8:0x5b99].
+            if (c.dg_b0c) *c.dg_b0c = 1;
+            if (c.dg_b0c && e.frame != 0) *c.dg_b0c = 0;
             c.host.hit(p, r, sp, sr, sub16(0, amount));  // seg8:0x5df2 [BYTES seg8:0x5bb2]
-            c.st.dg_b0c = 1;                             // [BYTES seg8:0x5bb8]
+            if (c.dg_b0c) *c.dg_b0c = 1;                 // [BYTES seg8:0x5bb8]
             // The push, with the record read again after the dispatcher [BYTES seg8:0x5bbe-0x5c98].
             if (!record_ok(pools, p, r) || !record_ok(pools, sp, sr)) continue;  // [DESIGN]
             ObjectRecord& o = pools.rec(p, r);

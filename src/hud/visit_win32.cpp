@@ -82,16 +82,19 @@ void VisitGdi::draw_pad(HDC d, int x, int y, int w, int h) {
 
 void VisitGdi::draw_ship(HDC d, int x, int y, int s4) {
     // The ship's DCs DGROUP:0x3cdc / 0x3cde (SRCAND then SRCPAINT) [BYTES seg16:0xe0b
-    // seg16:0xe2a] are the desk's frames; the port stretches the wave sheet's first cell into
-    // s4 x s4 over black [OPEN: seg15:0x9e6's frames are not reachable from the HUD].
+    // seg16:0xe2a] are the desk's frames; the port stretches the wave sheet's first cell
+    // (ship_cell: heading 0, row 0) into s4 x s4 over black, one ship as the oracle's pad shows
+    // [DESIGN] [ORACLE core-0003] [OPEN: seg15:0x9e6's frames are not reachable from the HUD]
+    // (M4 s4 fixer: the crop was a square of the whole sheet, a block of cells).
     gfx::ImagePtr img = ship_ ? ship_() : nullptr;
-    if (!img || s4 <= 0) return;
-    const int side = std::min(img->width(), img->height());
+    if (!img || s4 <= 0 || !ship_cell) return;
+    const Cell c = ship_cell();
+    if (c.side <= 0 || c.x + c.side > img->width() || c.y + c.side > img->height()) return;
     SetStretchBltMode(d, COLORONCOLOR);
-    StretchBlt(d, x, y, s4, s4, img->hdc(), 0, 0, side, side, SRCPAINT);
+    StretchBlt(d, x, y, s4, s4, img->hdc(), c.x, c.y, c.side, c.side, SRCPAINT);
 }
 
-void VisitGdi::descent_frame(const world::VisitLayout& l, int y, int s4, bool) {
+void VisitGdi::descent_frame(const world::VisitLayout& l, int y, int s4, int) {
     HDC s = screen();
     if (!s) return;
     const int px = l.W / 2 - l.pad_w / 2, py = l.H - l.pad_c - 0x34;

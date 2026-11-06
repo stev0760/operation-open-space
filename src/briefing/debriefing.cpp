@@ -90,7 +90,9 @@ std::string debrief_text(const DebriefInputs& in, const LangLookup& lang, int ph
             page += t;  // [BYTES seg9:0x80da seg9:0x80fb seg9:0x8117-0x8142]
         }
     }
-    // 11. Up to three ships the player dealt with most [BYTES seg9:0x81e5-0x8445].
+    // 11. Up to three ships the player dealt with most: per slot the largest positive sum of the
+    // eight signed bytes +0xf6 + 9·player + j, the first on ties, the filled slots a prefix
+    // (core.md The debriefing, step 7, The ranking; C078) [BYTES seg9:0x81e5-0x8445].
     {
         std::array<int, 3> sel{-1, -1, -1};
         std::array<int, 3> best{};

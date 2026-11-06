@@ -4,6 +4,7 @@
 // the launch), the repair step ending at 101 for an odd value (ADR 0014 decision 6), the charge
 // into debt and the free spot of phase 64 (work/analysis/m4/s3-visit.md section 1 with
 // s3-visit-verify.md; the oracle's core-0003).
+#include <algorithm>
 #include <map>
 #include <string>
 #include <vector>
@@ -33,10 +34,11 @@ struct Screen final : VisitScreen {
     std::string typed;
     std::vector<std::pair<int, int>> bars;  // (y, v)
     int scrolls = 0, redraws = 0;
+    std::vector<std::pair<int, int>> frames;  // descent_frame's (y, flag)
     void landing_scene(const VisitLayout&, const std::string&) override {}
     int incoming(int) override { return 1; }
     void descent_start(const VisitLayout&) override {}
-    void descent_frame(const VisitLayout&, int, int, bool) override {}
+    void descent_frame(const VisitLayout&, int y, int, int flag) override { frames.push_back({y, flag}); }
     void redraw(const VisitLayout&, int, int, bool) override { ++redraws; }
     void ship_on_pad(const VisitLayout&, int, int, int, int) override {}
     void pad_strip(const VisitLayout&, int, int) override {}
@@ -74,7 +76,8 @@ struct Host final : VisitHost {
     std::string pilot() override { return "YOUR NAME"; }
     bool ctrl_held() override { return false; }
     int w8f70() override { return 0; }
-    int calibrate() override { return 2000; }
+    int cal = 2000;
+    int calibrate() override { return cal; }
     int depth() override { return 32; }
     bool limited() override { return true; }
     void options_dialog() override { ++dialogs; }
@@ -134,6 +137,81 @@ struct Rig {
 };
 
 }  // namespace
+
+// seg15:0x374c, the descent (core.md "The descent", steps 1-5; sound.md "The descent") (M4 s4).
+TEST_CASE("seg15:0x374c: the descent's first call, flag, speed, step and IGNITE") {
+    Rig r;
+    r.v.phase = 1;
+    r.v.s4 = 72;
+    // end = (768 - pad_c - 0x34) - 72 + pad_c - 10 = 634; start = end - 300 = 334.
+    const int end = 768 - 0x34 - 72 - 10, start = end - 300;
+    visit(r.c, 0);  // sub-step 0: seg15:0x374c(1)
+    REQUIRE(r.v.descent == 1);
+    CHECK(r.v.end_y == end);
+    CHECK(r.v.start_y == start);
+    // The first call's 150 falls to 145 and is clamped to 120 (C050); the flag stays 0; the
+    // step at Calibrate >= 1300 with the flag 0 is 2·120 / 6 = 40 (C053, C054).
+    CHECK(r.v.speed == 120);
+    CHECK(r.v.flag == 0);
+    CHECK(r.v.pos10 == 10 * start + 40);
+    REQUIRE(r.scr.frames.size() == 1);
+    CHECK(r.scr.frames[0] == std::pair<int, int>{start, 0});
+    CHECK(r.h.sounds.empty());
+    // Later calls: the speed falls by 5 to 50; the flag is 1 past (start + 60)·10, 0 past
+    // (end - 60)·10 and 1 past (end - 10)·10.
+    int calls = 0;
+    std::vector<int> flags;
+    while (r.v.descent == 1 && calls < 1000) {
+        const int before = r.v.pos10;
+        const int sp = std::max(50, std::min(120, r.v.speed - 5));
+        int f = r.v.flag;
+        if ((end - 10) * 10 < before)
+            f = 1;
+        else if ((end - 60) * 10 < before)
+            f = 0;
+        else if ((start + 60) * 10 < before)
+            f = 1;
+        visit(r.c, 0);
+        ++calls;
+        CHECK(r.v.speed == sp);
+        CHECK(r.v.flag == f);
+        CHECK(r.v.pos10 == before + 2 * sp / (f == 0 ? 6 : 4));
+        if (flags.empty() || flags.back() != f) flags.push_back(f);
+    }
+    CHECK(flags == std::vector<int>{0, 1, 0, 1});
+    // One IGNITE at the change to 0, then sound 9 at the end; no clamp of the position.
+    CHECK(r.h.sounds == std::vector<int>{0x20, 9});
+    CHECK(r.v.pos10 > 10 * end);
+    CHECK(r.v.descent == 2);
+}
+
+TEST_CASE("seg15:0x374c: Calibrate below 1300 steps by 3 with the divisors 5 and 3") {
+    Rig r;
+    r.h.cal = 1000;
+    r.v.phase = 1;
+    visit(r.c, 0);
+    const int start = r.v.start_y;
+    CHECK(r.v.speed == 120);                  // 150 - 3, clamped
+    CHECK(r.v.pos10 == 10 * start + 240 / 5);  // flag 0: d = 5
+    visit(r.c, 0);
+    CHECK(r.v.speed == 117);
+    CHECK(r.v.pos10 == 10 * start + 48 + 234 / 5);
+}
+
+TEST_CASE("seg15:0x374c: DGROUP:0x928 sets the ship down at end + 1 with speed 0") {
+    Rig r;
+    r.v.phase = 1;
+    r.v.fast = 1;
+    visit(r.c, 0);
+    const int end = r.v.end_y;
+    CHECK(r.v.start_y == end + 1);
+    CHECK(r.v.pos10 == 10 * (end + 1));  // the step adds 2·0 / 4
+    CHECK(r.v.speed == 0);
+    CHECK(r.v.flag == 1);  // (end - 10)·10 < pos
+    visit(r.c, 0);         // returns 1 at once: 10·end < pos
+    CHECK(r.v.descent == 2);
+    CHECK(r.h.sounds == std::vector<int>{9});
+}
 
 TEST_CASE("seg16:0x1f78 / seg16:0x27ea: the 1024 x 768 layout") {
     const VisitLayout l = visit_layout(1024, 768);

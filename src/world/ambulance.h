@@ -4,7 +4,7 @@
 // mover seg16:0xa2 (states 0 ... 9), the intercept heading seg8:0x2658 with its square root
 // seg8:0x1290, the park seg16:0x8a0, seg16:0x872, the drop-off of a computer ship seg16:0x32a0,
 // the re-entry test seg16:0x33a2 and the re-entry seg16:0x3306, and the served ship's part
-// seg13:0x3748 (claims 37-48 were not checked by the verifier: tagged [OPEN]).
+// seg13:0x3748 (core.md "The ship's part", verified in M4 stage 4: C036-C047).
 //
 // A = the ambulance, pool 7 record 0 (far DGROUP:0x1e14). S = the served ship, pool DGROUP:0x9324
 // record DGROUP:0x952e (World::w952e). DGROUP:0x9e49 (the ambulance's state) is World::w9e49 and
@@ -100,7 +100,7 @@ public:
         (void)pool_rec, (void)kind, (void)slot, (void)masked;
     }
     // seg13:0x3d40(den, num, o_rec, o_pool, s_rec, s_pool), the pick-up composite (draw.h
-    // pickup_composite) [OPEN: claims 45-48 unverified].
+    // pickup_composite; core.md "The ship's part", seg13:0x3d40, C044-C047).
     virtual void composite(std::int16_t den, std::int16_t num, int o_rec, int o_pool, int s_rec, int s_pool) {
         (void)den, (void)num, (void)o_rec, (void)o_pool, (void)s_rec, (void)s_pool;
     }
@@ -178,7 +178,7 @@ void ambulance_reentry(AmbulanceCtx& c);
 
 // ---- the served ship's part
 
-// seg13:0x3748(i) [BYTES seg13:0x3748-0x3b7c] [OPEN: claims 37-48 unverified]: the ship mover's
+// seg13:0x3748(i) [BYTES seg13:0x3748-0x3b7c] (core.md "The ship's part", C036-C043): the ship mover's
 // call for ship DGROUP:0x952e while 1 <= DGROUP:0x9e49 <= 6 (flight.cpp, FlightHost::seg13_3748).
 // State 3 pulls the ship into A at 70 a frame and, within 5 cells, sets state 4 with a 1100 ms
 // deadline; state 6 (A byte +0x2e = 0) pushes it out at 50 a frame with the lift at 15, plays

@@ -4,8 +4,8 @@
 // (M5 s2 BRIEFING).
 //
 // The listing was read from `isre pack seg13:0x33d6` (work/world/m5s2/briefing/pack-seg13_0x33d6.md),
-// not from Ghidra's C (which drops a block), by the implementer; the analyst's claim 19 still
-// waits for a verifier [OPEN: work/analysis/m5/s2-briefing.md claim 19].
+// not from Ghidra's C (which drops a block); world.md "Ship rating" holds the verified reading
+// (C055-C060).
 #pragma once
 
 #include <array>

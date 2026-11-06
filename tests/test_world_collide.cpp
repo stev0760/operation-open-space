@@ -30,6 +30,14 @@ public:
     void sound(int id, int pool, int rec, int) override { sounds.push_back({id, pool, rec}); }
     void message(int, int, int, int code) override { messages.push_back(code); }
     void destroy(int pool, int rec) override { destroyed.push_back({pool, rec}); }
+    std::vector<std::string> book;  // the credit bookkeeping's calls
+    void seg8_9028(int k, int code, int pool, int rec) override {
+        book.push_back("9028 " + std::to_string(k) + " " + std::to_string(code) + " " + std::to_string(pool) + " " +
+                       std::to_string(rec));
+    }
+    void seg8_81f8(int pool, int rec) override {
+        book.push_back("81f8 " + std::to_string(pool) + " " + std::to_string(rec));
+    }
 };
 
 // TRANSFORMER's collision divisors: SHP Armor 34 gives design words +0x10 ... +0x16 = 34 / 4,
@@ -358,4 +366,49 @@ TEST_CASE("collide: the rock mover's site through UpdateHost::collide and rock_h
     CHECK(r.w.ships[0].w28 == 72);
     CHECK(f.dg_9454 == 0);
     CHECK(f.dg_943a == kPoolRocks);
+}
+
+TEST_CASE("collide: the credit bookkeeping's goal stamp is dword +0xa4 (M4 s4, C009)") {
+    // core.md Hit dispatcher, Credit bookkeeping 1: the credited ship whose word +0x38 is 1 and
+    // whose goal (+0x32, +0x34) is T gets dword +0xa4 = now [BYTES seg8:0x60fe-0x6106]; byte
+    // +0x147 (`radar_hide`) is not written.
+    Rig r;
+    r.g.now = 0x12345678u;
+    ShipRecord& s = r.w.ships[0];
+    s.w38 = 1;
+    s.w32 = kPoolRocks;
+    s.w34 = 0;
+    dispatch(r.x, kPoolRocks, 0, kPoolShips, 0, 4);
+    CHECK(ship_dword(s, 0xa4) == 0x12345678u);
+    CHECK(ship_dword(s, 0x144) == 0u);
+    CHECK(s.radar_hide == 0);
+}
+
+TEST_CASE("collide: DGROUP:0xb0c = 0 skips the defender block and the hit history (M4 s4, C006)") {
+    // core.md Credit bookkeeping 2: with T an icon, DGROUP:0xb0c != 0 and the player credited,
+    // each defender owned by T gets seg8:0x9028(k, 10, cp, cr) and seg8:0x81f8(T) pushes the
+    // hit; the blast clears DGROUP:0xb0c around its dispatcher call, which skips both [BYTES
+    // seg8:0x6159 seg8:0x616a seg8:0x6259 seg8:0x5b92].
+    Rig r;
+    r.w.pools.set_in_use(0, 1);
+    ObjectRecord& ic = r.w.pools.rec(0, 0);
+    ic.owner_pool = -1;
+    ic.mass = 100;
+    DefenderEntry d;
+    d.owner_pool = 0;
+    d.owner_rec = 0;
+    r.c.defenders.push_back(d);
+    dispatch(r.x, 0, 0, kPoolShips, 0, 4);
+    const auto join = [](const std::vector<std::string>& v) {
+        std::string t;
+        for (const std::string& e : v) t += e + ";";
+        return t;
+    };
+    // The tail seg8:0x99ce's own seg8:0x9028(k, 15, ...) follows on both paths.
+    const std::string tail = "9028 0 15 " + std::to_string(kPoolShips) + " 0;";
+    CHECK(join(r.h.book) == "9028 0 10 " + std::to_string(kPoolShips) + " 0;81f8 0 0;" + tail);
+    r.h.book.clear();
+    r.c.w0b0c = 0;
+    dispatch(r.x, 0, 0, kPoolShips, 0, 4);
+    CHECK(join(r.h.book) == tail);
 }

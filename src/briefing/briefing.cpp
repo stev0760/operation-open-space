@@ -1,5 +1,7 @@
 #include "briefing/briefing.h"
 
+#include "briefing/lang_format.h"
+
 #include <algorithm>
 #include <cstdio>
 
@@ -504,39 +506,12 @@ std::string hundredths_text(long v, int digits) {
 }
 
 namespace {
-// The Formatter's %< %> %S %? as the ship page's strings use them (seg10:0xa332): %< opens a
-// group shown when its argument is non-zero, %S is the string of an id, %? the string of its
-// second id when the flag is set, else the first [ORACLE start-0001] [OPEN: seg10:0xa332's group
-// and %? code is unread].
+// seg10:0xa332 over word arguments: the %< groups with their ", " and " AND" joins, %> , %S with
+// its caret cut, %? and %N, as shell.md Formatter and Other directives give them (C073-C076)
+// (M4 s4 fixer: the port's one formatter, lang_format.h).
 std::string format_ids(Strings& s, const std::string& f, const std::vector<int>& args) {
-    std::string out;
-    std::size_t a = 0;
-    auto next = [&]() { return a < args.size() ? args[a++] : 0; };
-    bool shown = true;
-    for (std::size_t i = 0; i < f.size(); ++i) {
-        if (f[i] == '%' && i + 1 < f.size()) {
-            const char k = f[++i];
-            if (k == '<') {
-                shown = next() != 0;
-            } else if (k == '>') {
-                shown = true;
-            } else if (k == 'S') {
-                const int id = next();
-                if (shown) out += s.lang(id);
-            } else if (k == '?') {
-                const int flag = next(), first = next(), second = next();
-                if (shown) out += s.lang(flag != 0 ? second : first);
-            } else if (k == 'N') {
-                if (shown) out += "\r\n";
-            } else if (shown) {
-                out.push_back('%');
-                out.push_back(k);
-            }
-            continue;
-        }
-        if (shown) out.push_back(f[i]);
-    }
-    return out;
+    const std::vector<FArg> a(args.begin(), args.end());
+    return lang_format(f, a, [&s](int id) { return s.lang(id); });
 }
 }  // namespace
 
@@ -563,34 +538,15 @@ std::vector<std::string> relation_lines(Strings& s, int to_allies, int to_enemie
 
 std::string ship_page_text(Strings& s, int wave, const std::string& directory,
                            const ShipStats& st, int rank) {
-    const std::string f = s.lang(3035);
-    // The arguments in order [BYTES seg17:0x341c-0x347c]: max(wave, 1), the directory, the
-    // score, the two counts with 2515, and seg6:0xf54(credit, 100, 2) and seg6:0x1010(resources,
-    // 100, 2).
-    std::vector<std::string> args = {std::to_string(std::max(wave, 1)), directory,
-                                     std::to_string(st.score),
-                                     count_text(s, st.captured, 2515),
-                                     count_text(s, st.destroyed, 2515),
-                                     hundredths_text(st.credit, 2),
-                                     hundredths_text(st.resources, 2)};
-    std::string out;
-    std::size_t a = 0;
-    for (std::size_t i = 0; i < f.size(); ++i) {
-        if (f[i] == '%' && i + 1 < f.size()) {
-            const char k = f[i + 1];
-            if (k == 'N') {
-                out += "\r\n";
-                ++i;
-                continue;
-            }
-            if (k == 'd' || k == 's' || k == 'l' || k == '#') {
-                if (a < args.size()) out += args[a++];
-                ++i;
-                continue;
-            }
-        }
-        out.push_back(f[i]);
-    }
+    // 3035 through seg10:0xa332 with, in order [BYTES seg17:0x341c-0x347c]: max(wave, 1), the
+    // directory, the score dword, the two counts with 2515, and seg6:0xf54(credit, 100, 2) and
+    // seg6:0x1010(resources, 100, 2) as strings (shell.md Phase 11, Text) (M4 s4 fixer).
+    std::string out = lang_format(s.lang(3035),
+                                  {FArg(std::max(wave, 1)), FArg(directory), FArg(st.score),
+                                   FArg(st.captured), FArg(2515), FArg(st.destroyed), FArg(2515),
+                                   FArg(hundredths_text(st.credit, 2)),
+                                   FArg(hundredths_text(st.resources, 2))},
+                                  [&s](int id) { return s.lang(id); });
     // seg17:0x42ea(1) twice: " " and "  " appended, the last two bytes overwritten by CR LF
     // [BYTES seg17:0x42ea DGROUP:0xbb5 DGROUP:0xbb7], then seg17:0x4068's sentence (lstrcat).
     out += " \r\n \r\n";
@@ -913,12 +869,17 @@ int Briefing::defenders(int init) {
 // ---- phase 11, seg17:0x20fa
 
 namespace {
-// m = 2 when DGROUP:0x90ee < 8, else 3 [BYTES seg17:0x211d-0x212b]: 3 on the port's 8-bit
-// surface.
+// m = 2 when DGROUP:0x90ee < 8, else 3 [BYTES seg17:0x211d-0x212b]: 3, since the port behaves
+// as a 256-colour display [DESIGN ADR 0007 decision 1].
 constexpr int kShipM = 3;
 constexpr int kLastShip = 0;  // DGROUP:0x9316: the port's ships at the briefing are the player's
 }  // namespace
 
+// The slot 0x28 + ship word +0x50, read at each call's entry: the Space call raises the ship
+// index after that read, so the next ship's first growth frame stretches the previous ship's
+// slot with the new ship's cell and gutter (shell.md Phase 11, Slot; C061) [BYTES seg17:0x2109
+// seg17:0x211a seg17:0x228c]. The port's briefing shows the player's ship only (kLastShip), so
+// the latched slot is always the player's; the other ships and their Space path are M5's.
 int Briefing::ship_slot() const { return kSlotShipBase + setup_.player.sheet; }
 
 void Briefing::ship_setup() {
@@ -965,11 +926,14 @@ int Briefing::ship(int init) {
         const long k = f.frames == 0 ? f.cell0 / 100
                                      : (f.cell0 + f.cell_d * f.frame / f.frames) / 100;
         f.cy = static_cast<int>(f.mid + (f.end ? f.dy * pos / f.end : 0));
-        // h = size scale% / 100, w = h width% / 100; the source cell (gap + (gap + cell) k, gap,
-        // cell, cell), row 0 [BYTES seg17:0x24ca-0x24e2 seg17:0x2503-0x2511 seg17:0x2545-0x255d].
-        const int h = static_cast<int>(ps.size * scale / 100);
+        // h = lo16(size·scale%) / 100 and w = lo16(h·width%) / 100, 16-bit `imul` and `idiv`, so
+        // a size above 109 wraps at m = 3 (shell.md Phase 11, Fly-in; C064) (M4 s4 fixer); the
+        // source cell (gap + (gap + cell) k, gap, cell, cell), row 0 [BYTES seg17:0x24ca-0x24e2
+        // seg17:0x2503-0x2511 seg17:0x2521-0x252c seg17:0x2545-0x255d].
+        const auto lo = [](long v) { return static_cast<std::int16_t>(static_cast<std::uint16_t>(v)); };
+        const int h = lo(lo(ps.size) * lo(scale)) / 100;
         f.y = f.cy - h / 2;
-        const int w = static_cast<int>(h * width / 100);
+        const int w = lo(static_cast<long>(h) * lo(width)) / 100;
         f.x = f.cx - w / 2;
         f.h = h;
         const int sx = ps.gap + (ps.gap + ps.cell) * static_cast<int>(k);

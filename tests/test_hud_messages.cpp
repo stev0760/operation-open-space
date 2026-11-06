@@ -34,6 +34,11 @@ const std::map<int, std::string> kStrings = {
     {691, "Right On, "},
     {692, "That Was A Nasty Icon. %R %s!!"},
     {1064, "He Shoots! He Scores! %R %s!!"},
+    // [BYTES ENG_LANG.DLL STRING 89] ids 1409-1412
+    {1409, "Not Bad! Lets Get Every Last Virus!"},
+    {1410, "Right On!!! You're Quite A Pilot!"},
+    {1411, "He's Gone! You Don't Know How Much I Appreciate That!"},
+    {1412, "Thanks For Helping Me With That. It Makes Life Easier."},
     {2213, "NO MESSAGE"},
 };
 
@@ -73,6 +78,8 @@ public:
     void set_end(std::uint32_t t) override { end = t; }
     void sound(int id) override { sounds.push_back(id); }
     void todo(int code) override { todos.push_back(code); }
+    int goal_pool = -1;  // the player's ship word +0x32
+    int ship_goal_pool(int rec) const override { return rec == player_ ? goal_pool : -1; }
 };
 
 }  // namespace
@@ -209,6 +216,29 @@ TEST_CASE("hud messages: the head's filters, the end times and sender -1") {
     CHECK(s.last_code == 82);
     dispatch_message(s, h, 0, 7, 0, 5);  // a case the port does not carry
     CHECK(h.todos == std::vector<int>{5});
+}
+
+TEST_CASE("hud messages: the ship-credited codes 0x75, 0x76, 0x77 (M4 s4, C021)") {
+    // core.md Messages, Ship-credited codes: sound 0x3b, then string 1409 / 1410; 0x77 takes 1411
+    // when the player's goal pool is 14 and 1412 otherwise [BYTES seg3:0x11d0-0x120f].
+    MessageState s;
+    Host h;
+    dispatch_message(s, h, 0, 0xe, 1, 0x75);
+    CHECK(h.sounds == std::vector<int>{0x3b});
+    CHECK(s.text == "Not Bad! Lets Get Every Last Virus!");
+    CHECK(h.end == 17000u);
+    dispatch_message(s, h, 0, 0xe, 1, 0x76);
+    CHECK(s.text == "Right On!!! You're Quite A Pilot!");
+    h.goal_pool = 0xe;
+    dispatch_message(s, h, 0, 0xe, 1, 0x77);
+    CHECK(s.text == "He's Gone! You Don't Know How Much I Appreciate That!");
+    h.goal_pool = 0;
+    dispatch_message(s, h, 0, 0xe, 1, 0x77);
+    CHECK(s.text == "Thanks For Helping Me With That. It Makes Life Easier.");
+    CHECK(h.sounds == std::vector<int>{0x3b, 0x3b, 0x3b, 0x3b});
+    CHECK(h.todos.empty());
+    CHECK(message_code_ported(0x75));
+    CHECK(message_code_ported(0x77));
 }
 
 TEST_CASE("hud target: seg13:0x5c22 draws pool 7 from the logo strip") {

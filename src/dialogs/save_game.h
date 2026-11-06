@@ -60,7 +60,8 @@ struct SaveGlobals {
     bool table_drawn = false;
 };
 SaveGlobals& globals();
-// A new game's values (seg10:0x82a2's new-game path): the granularity back to 32 [DESIGN].
+// A new game's values (seg10:0x82a2's new-game path): the granularity back to 32 [DESIGN ADR
+// 0014 decision 1].
 void new_game(SaveGlobals& g);
 
 // The game-start session's words a saved game holds (dialogs/hooks.h Session, the program's

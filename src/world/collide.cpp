@@ -573,12 +573,15 @@ std::int16_t dispatch(CollideCtx& x, int tp, int tr, int xp, int xr, std::int16_
             cp = xp;
             cr = xr;
         }
-        // 1.2 the credit bookkeeping [BYTES seg8:0x60b7-0x6303] (s1-hit-verify.md: not
-        // verified, "Not covered by any claim") [OPEN]
+        // 1.2 the credit bookkeeping [BYTES seg8:0x60b7-0x6303] (core.md "Hit dispatcher",
+        // Credit bookkeeping, C008-C015); `ships` is DGROUP:0x9324, not the literal 14.
         if (cp == 9 || cp == 2 || cp == ships) {
             if (cp == ships) {
                 ShipRecord& cs = ship_at(w, cr);
-                if (cs.w38 == 1 && cs.w32 == tp && cs.w34 == tr) set_ship_dword(cs, 0x144, g.now);
+                // The goal stamp, dword +0xa4 (DGROUP:0x7134) = now [BYTES seg8:0x60fe seg8:0x6102
+                // seg8:0x6106] (M4 s4 fixer, C009: +0xa4, not +0x144, whose high byte +0x147 is
+                // `radar_hide`).
+                if (cs.w38 == 1 && cs.w32 == tp && cs.w34 == tr) set_ship_dword(cs, 0xa4, g.now);
                 for (int j = 0; j <= w.last_ship; ++j) {
                     if (j == cr) continue;
                     const ShipRecord& js = ship_at(w, j);
@@ -658,9 +661,9 @@ std::int16_t dispatch(CollideCtx& x, int tp, int tr, int xp, int xr, std::int16_
                 }
                 bool done = false;
                 if (cs.w52 >= 2 && cs.w52 <= 4 && cs.w58 != cr && cs.w54 == tp && c.w0b0c != 0) {
-                    // [BYTES seg8:0x6561-0x661d]; the texts of codes 0x75 ... 0x77 (strings
-                    // 1409 ... 1411, sound 0x3b) are the message display's (s1-hit.md claim 38,
-                    // unchecked) [OPEN]
+                    // [BYTES seg8:0x6561-0x661d] (C018); the texts of codes 0x75 ... 0x77 (strings
+                    // 1409 ... 1412, sound 0x3b) are the message display's (core.md Messages,
+                    // Ship-credited codes, C021; src/hud/messages.cpp).
                     done = true;
                     bool said = false;
                     if (tp == 9) {
@@ -712,11 +715,13 @@ std::int16_t dispatch(CollideCtx& x, int tp, int tr, int xp, int xr, std::int16_
                 if (kill == 0) x.h.message(g.player, 7, 0, 0x5b);
             }
             x.h.seg7_2080(tp, tr);  // [BYTES seg8:0x67cc]
-            if (cp == ships && tp == ships) {  // a ship kill [BYTES seg8:0x67d4-0x6835]
+            if (cp == ships && tp == ships) {  // a ship kill [BYTES seg8:0x67d4-0x6835] (C024)
                 if (cr == g.player) w.w9432 = add16(w.w9432, 200);
                 x.h.seg13_2714(tr, cr, -50, -150, 1, -1);
+                // seg13:0x2e60(j, cr, 4) in declaration order [BYTES seg8:0x6827 seg13:0x2f2c]
+                // (M4 s4 fixer, C024).
                 for (int j = 0; j < w.last_ship; ++j)
-                    if (x.h.seg13_2688(j, tr) > 0) x.h.seg13_2e60(4, cr, j);
+                    if (x.h.seg13_2688(j, tr) > 0) x.h.seg13_2e60(j, cr, 4);
             }
             if (tp == ships) x.h.seg4_7636(tr, cp, cr, kill);  // [BYTES seg8:0x684b]
             ship_at(w, g.player).due156.set(g.now - 1u);       // [BYTES seg8:0x6853-0x686a]

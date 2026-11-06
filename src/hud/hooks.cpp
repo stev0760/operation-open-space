@@ -484,7 +484,8 @@ public:
         t960a_.clear();  // seg3:0x150-0x165: DGROUP:0x13be, DGROUP:0x13bf
         t9628_.clear();
         t8718_.clear();
-        if (p == -1) {  // seg3:0x16a-0x1ae: strings 2205 and 2206
+        if (p == -1) {  // seg3:0x16a-0x1ae: strings 2205 and 2206, dead in the original: a pool of
+                        // -1 fails both target checks above (structs.md target_pool; C081)
             t9628_ = lang(0x89d);
             t8718_ = lang(0x89e);
         } else if (p == 0 && r >= 0 && r < world::kIconRecords) {
@@ -1063,6 +1064,14 @@ void install_visit(app::App& app) {
                                                 });
     g_visit_screen->lang = lang_text;
     g_visit_screen->limited = [] { return g.edition.edition == 0; };
+    g_visit_screen->ship_cell = [] {  // the player's first sheet cell (M4 s4 fixer)
+        world::World& w = world::current();
+        VisitGdi::Cell c;
+        if (w.player < 0 || w.player >= world::kShipCount) return c;
+        const world::ObjectRecord& o = w.ship_object(w.player);
+        c.x = o.gap, c.y = o.gap, c.side = o.size;
+        return c;
+    };
     auto& h = app.game.hooks();
     h.frame[shell::kAmbulance] = [](shell::GameState&) {
         world::VisitCtx c = visit_ctx();

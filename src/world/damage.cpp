@@ -26,7 +26,8 @@ std::int16_t roster_byte(const World& w, const ShipRecord& s, int k) {
 
 // The system words +0x26 ... +0x2c. ADR 0014 decision 6: a repaired system can stand at 101;
 // no routine of this file indexes a table with a system word (seg8:0x45e0 subtracts and
-// compares, seg11:0x1d7c adds below 0x52), so none needs the 101 guard [DESIGN] (M4 s3 ROSTER).
+// compares, seg11:0x1d7c adds below 0x52), so none needs the 101 guard [DESIGN ADR 0014
+// decision 6] (M4 s3 ROSTER).
 std::int16_t& sys(ShipRecord& s, int k) { return s.roster_word(k); }
 
 }  // namespace
@@ -305,8 +306,9 @@ std::int16_t rock_damage(CollideCtx& x, int pool, int rec, std::int16_t d) {
             s.max_damage = g.dg_9130 != 0 ? 100 : 300;
             s.damage = 0;
             s.flame = 9;
-            // The offsets 8·(0, -10), 8·(15, 12), 8·(-15, 13) [BYTES seg7:0x5616-0x5632
-            // seg7:0x521b-0x5280]
+            // The offsets 8·(0, -10), 8·(15, 12), 8·(-15, 13) from the parent record as it stands
+            // after the previous small rock, which may have landed in it (core.md Rocks, C079)
+            // [BYTES seg7:0x5616-0x5632 seg7:0x521b-0x5280]
             static constexpr std::int16_t kOff[3][2] = {{0, -10}, {15, 12}, {-15, 13}};
             const int o = n <= 3 ? n - 1 : 2;
             const ObjectRecord& parent = obj(w, pool, rec);

@@ -263,7 +263,8 @@ void UpdateHost::ship_collide(int i) {
         CollideCtx x = collide_ctx(*this, c, *w);
         ObjectRecord& s = obj(*w, ships, i);
         // The response on every hit, before the touch branches (verified claim 5): a touch still
-        // bounces [BYTES seg13:0xb97-0xbd1] (s1-hit.md claim 37, unchecked) [OPEN].
+        // bounces [BYTES seg13:0xb97-0xbd1]; the dispatcher call seg8:0x5df2(DGROUP:0x9324, ...)
+        // drops its return [BYTES seg13:0xc79-0xc95] (core.md Ship against ship, C025).
         const std::int16_t amount = respond(x, s.mass, add16(s.extent, 2), &s.vy, &s.vx, hit);
         const int hp = hit >> 8, hr = hit & 0xff;
         ObjectRecord& H = obj(*w, hp, hr);
@@ -529,8 +530,10 @@ void wave_frame(UpdateCtx& c) {
         if (f.dg_9600 != 0) h.mover(Mover::k12_ae4);
     }
     // seg12:0x3e98(0) returns at once unless the wave is kind 6 [BYTES seg12:0x3ea8-0x3eaf]; its
-    // race body, which calls the tank respawn seg12:0x4f4e at seg12:0x3ee5, is M6 [OPEN]: the
-    // stub stays, so outside a race a taken tank is not respawned, as in the original.
+    // race body, which calls the tank respawn seg12:0x4f4e at seg12:0x3ee5, is M6: the stub
+    // stays. A kind-7 wave's frame calls the duel respawn seg12:0x515e instead [BYTES seg7:0xe71
+    // seg7:0xe78] (core.md "The fuel tank", Respawns; C080), also M6 and not ported; outside both
+    // a taken tank is not respawned, as in the original (M4 s4 fixer).
     h.mover(Mover::k12_3e98);
     // [BYTES seg7:0xd34-0xd78]
     if (passed(f.music_due, g.now) && f.dg_950 == 0 && f.race == 0 && g.demons_gate == 0 &&
