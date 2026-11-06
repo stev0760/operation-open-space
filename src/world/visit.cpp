@@ -213,8 +213,13 @@ void visit_type(VisitCtx& c, int init, int blank) {
     const int L = l.L(), T = l.T();
     const int h = l.W < 700 ? 12 : l.W < 860 ? 13 : 14;  // [BYTES seg16:0x2e4b-0x2e69] (verified claim 11)
     if (init != 0) {
-        // [BYTES seg16:0x2e79-0x2ecb] (verified claim 9)
-        c.scr.flash(idiv16(lo16(l.mon_w), 2) + L + 3, idiv16(lo16(l.mon_h), 2) + T + 3);
+        // [BYTES seg16:0x2e79-0x2ecb] (verified claim 9). The CRT flash seg15:0x84b0(x, y) plays
+        // seg10:0x754a(0x14, x, y, 4) before it draws, outside state 0's step 7 (shell.md "CRT
+        // flash"; the oracle plays 0x14 1.02 s after sound 9 in every visit, amb.md D5) [BYTES
+        // seg15:0x84b0 seg15:0x84d5] [ORACLE core-0003] (M4 s4 fixer B).
+        const int fx = idiv16(lo16(l.mon_w), 2) + L + 3, fy = idiv16(lo16(l.mon_h), 2) + T + 3;
+        c.h.sound_at(0x14, fx, fy, 4);
+        c.scr.flash(fx, fy);
         v.index = 0;
         v.lines = 0;
         v.pen_x = L + 8;

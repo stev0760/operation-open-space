@@ -33,6 +33,10 @@ std::string fragment_label(const std::string& string892) {
     return s;
 }
 
+std::string gate_label(const std::string& string585) {
+    return fragment_label(string585);  // the same cut of the code "^N" [BYTES seg3:0x164c]
+}
+
 FragmentTexts fragment_target_texts(const std::string& icon_name, const std::string& string892) {
     return FragmentTexts{icon_name, fragment_label(string892)};  // [BYTES seg3:0x2de seg3:0x428]
 }
@@ -164,8 +168,13 @@ CellPlan plan_cell(const CellInputs& in, int& glint_counter) {
     }
     if (!draw) return c;
     // seg13:0x5c22.
-    if (in.kind != 0) {  // seg13:0x5dcf-0x5ddc
+    if (in.kind != 0) {  // seg13:0x5dcf-0x5ddc, then seg13:0x5de0-0x5e8f
         c.special = true;
+        c.dx = w16(in.x + 1) >> s;  // [BYTES seg13:0x5de5-0x5dee]
+        c.dy = w16(in.y + 1) >> s;  // [BYTES seg13:0x5df1-0x5df7]
+        c.dw = c.dh = CellPlan::kGateSide >> s;  // [BYTES seg13:0x5e44-0x5e4a]
+        c.sx = c.sy = 0;
+        c.sw = c.sh = CellPlan::kGateSide;  // [BYTES seg13:0x5e52-0x5e5c]
         return c;
     }
     int a = in.obj.extent >> 3;                   // seg13:0x5c40-0x5c47: sar 3

@@ -415,6 +415,22 @@ public:
         }
         return true;
     }
+    // seg13:0x5e05: seg10:0x6c02(500, 0, -1); the original loads and deletes it at each call
+    // [BYTES seg13:0x5e05 seg13:0x5e8a], the port keeps the one image [DESIGN] (M4 s4 fixer B).
+    bool gate_picture() override {
+        if (!g_canvas || !g.gfx) return false;
+        if (!gate_image_ && !gate_failed_) {
+            try {
+                gate_image_ = g.gfx->load_graphic(CellPlan::kGateGraphic, 0, -1);
+            } catch (const std::exception& x) {
+                if (!gate_failed_) app::log(std::string("hud: graphic 500 (seg13:0x5e05): ") + x.what());
+                gate_failed_ = true;
+                return false;
+            }
+        }
+        g_canvas->set_image(Img::kGatePicture, gate_image_);
+        return gate_image_ != nullptr;
+    }
     bool fragment(int k) override {
         if (!g_canvas) return false;
         gfx::ImagePtr im = fragment_image(k);
@@ -513,6 +529,10 @@ public:
             // seg3:0x3c7].
             t8718_ = lang(0x8a3);
             t960a_ = lang(0x8a4);
+        } else if (target_kind(p, r) != 0) {
+            // seg3:0x3fb-0x419: an exit gate (seg13:0x371c != 0), string 585 "Exit Gate"
+            // (hud/target.h gate_label) (M4 s4 fixer B).
+            t8718_ = gate_label(lang(kStringExitGate));
         } else {
             log_once("the target texts of pool " + std::to_string(p) + " (seg3:0x1542)");
         }
@@ -594,6 +614,8 @@ private:
         if (logged_.insert(what).second) app::log_todo(what, "seg3:0xf4");
     }
     std::string t9628_, t8718_, t960a_;  // DGROUP:0x9628, 0x8718, 0x960a (the fallback's)
+    gfx::ImagePtr gate_image_;  // graphic 500, the exit gate's picture (M4 s4 fixer B)
+    bool gate_failed_ = false;
     mutable std::unique_ptr<WeaponTable> table_;  // DGROUP:0x2f54
     mutable int table_edition_ = 0;
     std::set<std::string> logged_;

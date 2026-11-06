@@ -109,13 +109,23 @@ struct RosterPlacement {
 //   - DGROUP:0x91f8 <= 1 (or no roster block, which the original cannot reach [DESIGN]):
 //     DGROUP:0x931c = DGROUP:0x9646 = 0, pick_main_ship, a block of one fresh record,
 //     DGROUP:0x9338 = 0 in a player game outside kinds 6 and 7, the arrays DGROUP:0xa14d /
-//     0xa157 zeroed, seg9:0x5be0 [OPEN], ship 0's +0xd6 = +0x4e = 0, DGROUP:0x1318 = 0;
+//     0xa157 zeroed, seg9:0x5be0 (roster_pilot_name), ship 0's +0xd6 = +0x4e = 0, DGROUP:0x1318 = 0;
 //   - later waves: ship 0's +0x4e = the old player ship's, DGROUP:0x9646 = 0, +0xd6 =
 //     DGROUP:0x931c; the fresh flag clears unless DGROUP:0x92e4 != 0, which also sets +0x4e = 0;
 //   - then s = roster +0x00, set to 0 in the record when not below the SHP count.
 // A DGROUP:0x931c outside the block reads record 0 with a log line [DESIGN].
+// `pilot` is DGROUP:0x380c, the pilot name seg9:0x5be0 copies into the fresh record's +0x65.
 RosterPlacement roster_placement(World& w, const fmt::MasterShp& ships, const fmt::MasterBod& bodies,
-                                 const std::string& main_ship, shell::Rng& rng);
+                                 const std::string& main_ship, shell::Rng& rng,
+                                 const std::string& pilot = std::string());
+
+// seg9:0x5be0(ship, r) for the player's ship (ship = DGROUP:0x9646) or in Demon's Gate
+// (DGROUP:0x92e8 != 0): lstrcpy(roster record r + 0x65, DGROUP:0x380c), the pilot name
+// (formats.md "Names" seg17:0x8e60) [BYTES seg9:0x5bee-0x5bfd seg9:0x5ca6-0x5cbb]. DGROUP:0x380c
+// holds at most 11 characters (INI ThePlayer, 12 bytes, shell.md "Player name"); the port stops
+// at the field's 13th byte [DESIGN]. Another ship's name (seg9:0x5c00-0x5ca4, its team's name
+// cut at " S" plus its index) is M5 (M4 s4 fixer B: save.md DIFFERENT 8).
+void roster_pilot_name(RosterRecord& r, const std::string& pilot);
 
 // seg14:0x1430(i) after its seg14:0x1b84 (the design): the per-placement resets and, for a ship
 // with a roster record, the roster -> ship fill: weapons (remapped, written back), the systems

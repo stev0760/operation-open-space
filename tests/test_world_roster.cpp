@@ -350,3 +350,22 @@ TEST_CASE("roster: the sheet's path seg14:0xd1a -> seg16:0x3784 -> seg16:0x3468 
     w.wave = 1;
     CHECK(purchase_due(w, false));
 }
+
+// seg9:0x5be0 for the player: the fresh record's +0x65 holds the pilot name DGROUP:0x380c, as
+// the oracle's saves and its .ded hold it at roster +0x65 (save.md DIFFERENT 8; core-0004 rover
+// ded.hex) [BYTES seg9:0x5ca6-0x5cbb] (M4 s4 fixer B).
+TEST_CASE("roster: seg9:0x5be0 copies the pilot name into the fresh record's +0x65") {
+    Rig r;
+    const RosterPlacement p = roster_placement(r.w, r.ships, r.bodies, "TRANSFORMER", r.rng, "PILOT");
+    REQUIRE(p.fresh_roster);
+    REQUIRE(r.w.roster.size() == 1u);
+    CHECK(std::string(r.w.roster[0].name.data()) == "PILOT");
+    // The record's bytes: +0x65 starts the name, NUL-terminated within +0x71.
+    const auto* b = reinterpret_cast<const unsigned char*>(&r.w.roster[0]);
+    CHECK(b[0x65] == 'P');
+    CHECK(b[0x6a] == 0);
+    RosterRecord q;
+    roster_pilot_name(q, "ABCDEFGHIJKLMNOP");  // longer than DGROUP:0x380c can hold
+    CHECK(std::string(q.name.data()) == "ABCDEFGHIJKL");
+    CHECK(q.name[12] == 0);
+}

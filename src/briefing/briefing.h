@@ -18,6 +18,10 @@
 #include "shell/game_state.h"
 #include "shell/shared_rules.h"
 
+namespace is::world {
+class World;
+}
+
 namespace is::briefing {
 
 using shell::Tick;
@@ -92,6 +96,13 @@ struct GeneratedPlan {
     int roster = 0;         // the 3037 count, 0 for none
 };
 GeneratedPlan generated_plan(const GeneratedInputs& in);
+// seg9:0x91b0's inputs as the wave set-up left them in the World: DGROUP:0x9320, byte +0x53 of
+// pool 0's record 0 (*DGROUP:0x1df8), the five category counts DGROUP:0x933a … 0x9342,
+// DGROUP:0x4ee0 … 0x4ee6, DGROUP:0x9318 and step 6's count of ships k <= DGROUP:0x9316 with
+// word +0x72 + 2·DGROUP:0x9646 != 0 and signed byte +0xee + DGROUP:0x9646 <= 5 (shell.md
+// "Generated text") [BYTES seg9:0x91b0-0x94b8 seg9:0x9463-0x9491] (M4 s4 fixer B: save.md
+// DIFFERENT 2, the doubled hint of a generated briefing).
+GeneratedInputs generated_inputs(const world::World& w);
 
 // Strings and resources for the texts.
 class Strings {
@@ -367,6 +378,8 @@ struct Setup {
     // The label of each record (the 35-byte record DGROUP:0x57b4 + 0x23k, seg17:0xc2e).
     std::vector<std::string> names;
     WaveFlags flags;
+    // seg9:0x91b0's inputs for a wave without a #5000 text (generated_inputs).
+    GeneratedInputs generated;
     // Phase 11's player ship, and whether the program gave it (else the ShipStats defaults).
     ShipStats player;
     bool ship_known = false;

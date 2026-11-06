@@ -4,6 +4,7 @@
 
 #include "world/purchases.h"
 
+#include <algorithm>
 #include <cstring>
 
 #include "formats/ships.h"
@@ -253,8 +254,14 @@ RosterRecord fresh_record(const World& w, const fmt::ShipRecord& shp, int index)
     return r;
 }
 
+void roster_pilot_name(RosterRecord& r, const std::string& pilot) {
+    r.name.fill(0);
+    const std::size_t n = std::min(pilot.size(), r.name.size() - 1);
+    for (std::size_t i = 0; i < n && pilot[i] != '\0'; ++i) r.name[i] = pilot[i];
+}
+
 RosterPlacement roster_placement(World& w, const fmt::MasterShp& ships, const fmt::MasterBod& bodies,
-                                 const std::string& main_ship, shell::Rng& rng) {
+                                 const std::string& main_ship, shell::Rng& rng, const std::string& pilot) {
     RosterPlacement out;
     ShipRecord& s0 = w.ship(0);
     if (w.wave <= 1 || w.roster.empty()) {
@@ -272,7 +279,7 @@ RosterPlacement roster_placement(World& w, const fmt::MasterShp& ships, const fm
             w.roster[0] = fresh_record(w, ships.records[static_cast<std::size_t>(out.pick.index)], out.pick.index);
         w.ba14d.fill(0);  // [BYTES seg14:0x3fc-0x410]
         w.ba157.fill(0);
-        todo("seg9:0x5be0(DGROUP:0x9646, 0): the roster name +0x65", "seg14:0x418");
+        roster_pilot_name(w.roster[0], pilot);  // seg9:0x5be0(DGROUP:0x9646, 0) [BYTES seg14:0x418] (M4 s4 fixer B)
         out.fresh_ship = true;  // [bp-0x54] for slot 0 [BYTES seg14:0x425]
         s0.roster_index = 0;    // [BYTES seg14:0x42c-0x435]
         s0.design_index = 0;

@@ -121,6 +121,10 @@ endif()
 if(TARGET ishud AND TARGET isworld)
   target_link_libraries(ishud PUBLIC isworld)
 endif()
+# The desk monitor's progress lines of a restored game (briefing/save_text.h desk_progress).
+if(TARGET isdesk AND TARGET isbriefing)
+  target_link_libraries(isdesk PUBLIC isbriefing)
+endif()
 if(TARGET isbriefing AND TARGET isworld)
   target_link_libraries(isbriefing PUBLIC isworld)
   # The world's hooks read the briefing's wave number DGROUP:0x91f8 (briefing::wave); CMake

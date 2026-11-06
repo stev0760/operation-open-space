@@ -40,6 +40,9 @@ enum class Img : int {
     // seg13:0x5f49's source: the icon fragment's bitmap DGROUP:0x4e94[k] of the sub-cell being
     // drawn (Host::fragment loads it).
     kFragment,
+    // seg13:0x5e05's graphic 500, the exit gate's picture of seg13:0x5c22 (Host::gate_picture
+    // loads it) (M4 s4 fixer B).
+    kGatePicture,
     kCount
 };
 

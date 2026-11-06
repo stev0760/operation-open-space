@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "briefing/briefing.h"
+#include "world/world.h"
 #include "doctest.h"
 #include "shell/game_state.h"
 
@@ -252,6 +253,39 @@ TEST_CASE("briefing: the bevel seg11:0x1774") {
     c.ops.clear();
     draw_bevel(c, 2, 0, 0, 100, 50);
     CHECK(c.with("rect ")[0] == "rect 02c0c0c0 0 2 2 99 49");
+}
+
+// seg9:0x91b0's inputs come from the World the wave set-up filled (save.md DIFFERENT 2: the
+// port built every generated briefing from zeros, "CONCENTRATE ON GETTING THE ICONS." twice).
+// core-0003's restored ORACLE03 holds directory bytes +0xa0/+0xa1 = 29 small and 10 big rocks,
+// and the oracle's wave-2 briefing reads "WATCH OUT FOR THE ROCKS IN THIS WAVE."
+// (core-0003 restore/18-r-briefing.png) (M4 s4 fixer B).
+TEST_CASE("briefing: seg9:0x91b0's inputs from the World") {
+    is::world::World w;
+    w.kind = -1;
+    w.categories = {29, 10, 0, 0, 0};
+    w.gates = 1;
+    w.last_ship = 0;
+    w.player = 0;
+    GeneratedInputs in = generated_inputs(w);
+    CHECK(in.kind == -1);
+    CHECK(in.v933a == 29);
+    CHECK(in.v933c == 10);
+    CHECK(in.v9318 == 1);
+    CHECK(in.roster_count == 0);
+    FakeHost h;
+    CHECK(generated_text(h, generated_plan(in), nullptr) == "WATCH OUT FOR THE ROCKS IN THIS WAVE.");
+    // Step 6: word +0x72 + 2·player != 0 and the signed byte +0xee + player <= 5 [BYTES
+    // seg9:0x946e seg9:0x947e seg9:0x9483].
+    is::world::set_word_at(w.ships[0], 0x72, 1);
+    is::world::set_byte_at(w.ships[0], 0xee, 6);
+    CHECK(generated_inputs(w).roster_count == 0);
+    is::world::set_byte_at(w.ships[0], 0xee, -3);
+    CHECK(generated_inputs(w).roster_count == 1);
+    w.last_ship = 1;  // `jle`: ship DGROUP:0x9316 itself counts
+    is::world::set_word_at(w.ships[1], 0x72, 4);
+    is::world::set_byte_at(w.ships[1], 0xee, 5);
+    CHECK(generated_inputs(w).roster_count == 2);
 }
 
 TEST_CASE("briefing: text selection and the generated text") {

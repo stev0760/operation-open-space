@@ -39,6 +39,15 @@ struct FragmentTexts {
 // `icon_name` is the icon's file name, `string892` the loaded string.
 FragmentTexts fragment_target_texts(const std::string& icon_name, const std::string& string892);
 
+// seg3:0xf4's text for a pool-12 target, an exit gate (seg13:0x371c != 0): seg3:0x3fb-0x409
+// sends it to seg3:0x40b, so DGROUP:0x8718 = seg3:0x1542(0, 12, rec, buf, 0) = string 585
+// "Exit Gate^N" less its 2-character code, and DGROUP:0x9628 and DGROUP:0x960a keep the empty
+// texts of seg3:0x150-0x165 (core.md "Target validity", Names; world.md "Target texts") [BYTES
+// seg3:0x3fb seg3:0x3ff seg3:0x409 seg3:0x40b seg3:0x419 seg3:0x428 seg3:0x1747 seg3:0x1772]
+// [ORACLE core-0002] (M4 s4 fixer B: capture.md item 1).
+constexpr int kStringExitGate = 0x249;  // 585 [BYTES ENG_LANG.DLL STRING 37] id 585
+std::string gate_label(const std::string& string585);
+
 // ---- seg13:0x2206
 
 struct NextTargetHost {
@@ -123,8 +132,16 @@ struct CellPlan {
     int slot = 0;
     int dx = 0, dy = 0, dw = 0, dh = 0;
     int sx = 0, sy = 0, sw = 0, sh = 0;
-    // seg13:0x371c != 0: graphic 500 instead (seg13:0x5de0-0x5e8f) [OPEN: not drawn by the port].
+    // seg13:0x371c != 0: the gate centre's picture instead (seg13:0x5de0-0x5e8f): graphic 500
+    // loaded by seg10:0x6c02(500, 0, -1) into a new DC with the game palette DGROUP:0x920e,
+    // StretchBlt SRCCOPY from (0, 0) 41 x 41 to ((x + 1) >> s, (y + 1) >> s), (41 >> s) square,
+    // then the DC and the bitmap deleted (world.md "Object pictures", Gate centres) [BYTES
+    // seg13:0x5de5-0x5df7 seg13:0x5e02 seg13:0x5e05 seg13:0x5e2a seg13:0x5e44-0x5e62
+    // seg13:0x5e82 seg13:0x5e8a] (M4 s4 fixer B: capture.md item 1). dx, dy, dw, dh, sw and sh
+    // hold the call's values.
     bool special = false;
+    static constexpr int kGateGraphic = 500;  // 0x1f4 [BYTES seg13:0x5e02]
+    static constexpr int kGateSide = 41;      // 0x29 [BYTES seg13:0x5e44 seg13:0x5e52]
     // Pool 0 with +0x18 != 0 and DGROUP:0x57c1 != 0: the four sub-cells of seg13:0x5f49-0x6057
     // (a shattered icon's quarters) [BYTES seg13:0x5f2c-0x5f46] (s2-display-verify.md claim 33).
     // Sub-cell i sits at ((dx_i + X) >> s, (dy_i + Y) >> s), (dx, dy) = (0, 0), (22, 0), (0, 22),

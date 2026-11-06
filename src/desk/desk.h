@@ -12,6 +12,7 @@
 #include <array>
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -134,6 +135,12 @@ public:
     virtual Conditions conditions() = 0; // ISPACE.DLL DGROUP:0x22aa, 0x22ab, ...
     virtual Render render(int id, int W, int H) = 0;  // ordinal 32 for IGRAPHIC.DLL #6600 id
     virtual void todo(const std::string& what, const char* address) = 0;
+    // seg15:0x5405's open and seg15:0x54af's read: the first 0x1a9 bytes of LocalPath + Games +
+    // `restore` + ".sav" (fewer for a short file), or nothing when the file does not open
+    // (formats.md "The desk monitor") (M4 s4 fixer B).
+    virtual std::optional<std::vector<std::uint8_t>> saved_header(const std::string& /*restore*/) {
+        return std::nullopt;
+    }
 };
 
 // seg10:0x9672: the INI meal window (shell.md "Open questions"): t = hour × 100 + minute + 1,

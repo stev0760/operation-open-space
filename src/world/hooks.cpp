@@ -176,7 +176,9 @@ void ship_setup_player(World& w) {
         std::string name = "EAGLE";
         if (g.ini) name = g.ini->get_string(settings::kGameSection, "MainShip", "EAGLE", 20);
         const assets::Ships ships = g.store->ships(ship_dir());
-        const RosterPlacement rp = roster_placement(w, ships.ships, ships.bodies, name, shell::game_rng());
+        // DGROUP:0x380c: INI ThePlayer, 12 bytes (shell.md "Player name") [BYTES seg10:0x8c].
+        const std::string pilot = g.ini ? g.ini->get_string(settings::kGameSection, "ThePlayer", "", 12) : std::string();
+        const RosterPlacement rp = roster_placement(w, ships.ships, ships.bodies, name, shell::game_rng(), pilot);
         if (rp.pick.rewrite && g.ini) {
             // seg14:0x2300's `MainShip=TRANSFORMER` [BYTES seg14:0x240a seg14:0x2420].
             g.ini->set(settings::kGameSection, "MainShip", "TRANSFORMER");

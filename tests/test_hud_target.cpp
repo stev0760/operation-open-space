@@ -232,6 +232,27 @@ TEST_CASE("hud target: seg13:0x5a6a's unflagged calls and glint counter") {
     p = plan_cell(in, glint);
     CHECK(p.special);
     CHECK(!p.picture);
+    // seg13:0x5de0-0x5e62: graphic 500's 41 x 41 at ((x + 1) >> s, (y + 1) >> s), (41 >> s)
+    // square, from (0, 0) (world.md "Object pictures", Gate centres) (M4 s4 fixer B)
+    in.x = 2;
+    in.y = 17;
+    p = plan_cell(in, glint);
+    CHECK(p.dx == 3);
+    CHECK(p.dy == 18);
+    CHECK(p.dw == 41);
+    CHECK(p.dh == 41);
+    CHECK(p.sx == 0);
+    CHECK(p.sy == 0);
+    CHECK(p.sw == 41);
+    CHECK(p.sh == 41);
+    in.scale = 1;
+    p = plan_cell(in, glint);
+    CHECK(p.dx == 1);
+    CHECK(p.dy == 9);
+    CHECK(p.dw == 20);
+    CHECK(p.sw == 41);
+    in.scale = 0;
+    in.x = in.y = 0;
     // a dead icon with +0x51 = 0 draws nothing; with DGROUP:0x57c1 the sub-cells
     in.kind = 0;
     in.obj.state = 1;
@@ -255,6 +276,37 @@ struct Rig {
     }
 };
 }  // namespace
+
+// The exit gate as the target (pool 12, the gate's middle record 1): its picture, graphic 500,
+// at mark 0's origin + 1, and its name, string 585 less "^N" (capture.md item 1: the oracle's
+// "Exit Gate" with the EXIT picture, core-0002 shatter/icon-c2610) (M4 s4 fixer B).
+TEST_CASE("hud target: an exit gate target shows graphic 500 and \"Exit Gate\"") {
+    CHECK(gate_label("Exit Gate^N") == "Exit Gate");
+    CHECK(kStringExitGate == 585);
+    Rig r;
+    CellInputs gate;
+    gate.kind = 2;  // seg13:0x371c: 2 for an odd pool-12 record
+    r.h.cells_[{12, 1}] = gate;
+    r.h.gate_ = true;
+    r.info.mark(0).pool = 12;
+    r.info.mark(0).rec = 1;
+    r.info.paint(kInfoTarget);
+    const auto st = r.cv.of(Call::kStretch);
+    REQUIRE(st.size() == 1u);
+    CHECK(st[0].src == Img::kGatePicture);
+    CHECK(st[0].x == 3);  // mark 0's origin (2, 17) + 1
+    CHECK(st[0].y == 18);
+    CHECK(st[0].w == 41);
+    CHECK(st[0].sx == 0);
+    CHECK(st[0].rop == kSrcCopy);
+    // no picture when graphic 500 cannot be loaded
+    Rig q;
+    q.h.cells_[{12, 1}] = gate;
+    q.info.mark(0).pool = 12;
+    q.info.mark(0).rec = 1;
+    q.info.paint(kInfoTarget);
+    CHECK(q.cv.of(Call::kStretch).empty());
+}
 
 TEST_CASE("hud target: seg13:0x58dc on the target display") {
     Rig r;

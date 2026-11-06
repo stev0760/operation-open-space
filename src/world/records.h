@@ -572,7 +572,7 @@ struct RosterRecord {
     std::array<std::int8_t, 4> systems{};   // +0x38 + k the low bytes of ship words +0x26 + 2k [BYTES seg9:0x2baa seg14:0x1786]
     std::array<std::int8_t, 40> relation{}; // +0x3c + k: for roster record k, ship word +0x62 + 2j / 10 [BYTES seg9:0x2b88 seg14:0x1a2c]
     std::int8_t team = 0;        // +0x64 the SHP team byte +0x03 [BYTES seg14:0x3f3]
-    std::array<char, 13> name{}; // +0x65 ... +0x71 the string seg9:0x5be0 writes [OPEN: seg9:0x5be0 unread]
+    std::array<char, 13> name{}; // +0x65 ... +0x71 the string seg9:0x5be0 writes: the pilot name for the player (roster.h roster_pilot_name) [BYTES seg9:0x5cb2]
     std::uint8_t wing0 = 0;      // +0x72 ship byte +0xac [BYTES seg9:0x2cb9 seg14:0x1968]
     std::uint8_t wing1 = 0;      // +0x73 ship byte +0xad [BYTES seg9:0x2cca seg14:0x1970]
     std::int8_t barrels = 0;     // +0x74 the low byte of ship word +0x24 [BYTES seg9:0x2c97 seg14:0x198a]

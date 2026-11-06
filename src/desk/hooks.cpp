@@ -12,6 +12,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <vector>
 
 #include "app/app.h"
 #include "assets/asset_store.h"
@@ -73,6 +74,28 @@ public:
     }
     int ini_int(const char* key, int def) override {
         return g.ini ? g.ini->get_int(settings::kGameSection, key, def) : def;
+    }
+    // LocalPath + Games + Restore + ".sav", Games at most 10 characters with '\' appended
+    // (seg6:0x6d8, as dialogs/save_game.h games_dir) [BYTES seg15:0x53e2-0x5405 seg15:0x54af]
+    // (M4 s4 fixer B).
+    std::optional<std::vector<std::uint8_t>> saved_header(const std::string& restore) override {
+        std::string games = g.ini ? g.ini->get_string(settings::kGameSection, "Games", "", 11) : std::string();
+        if (!games.empty() && games.back() != '\\') games += '\\';
+        const std::string rel = games + restore + ".sav";
+        // cp1252 to UTF-16 (ADR 0003 decisions 1 and 2) [DESIGN].
+        const int n = MultiByteToWideChar(1252, 0, rel.data(), static_cast<int>(rel.size()), nullptr, 0);
+        std::wstring w(static_cast<std::size_t>(n > 0 ? n : 0), L'\0');
+        if (n > 0) MultiByteToWideChar(1252, 0, rel.data(), static_cast<int>(rel.size()), w.data(), n);
+        const std::filesystem::path p = g.local_path / std::filesystem::path(w);
+        HANDLE f = CreateFileW(p.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                               FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (f == INVALID_HANDLE_VALUE) return std::nullopt;
+        std::vector<std::uint8_t> out(0x1a9);
+        DWORD got = 0;
+        if (!ReadFile(f, out.data(), static_cast<DWORD>(out.size()), &got, nullptr)) got = 0;
+        CloseHandle(f);
+        out.resize(got);
+        return out;
     }
     Clock clock() override {
         const std::time_t t = std::time(nullptr);

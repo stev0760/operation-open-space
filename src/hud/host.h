@@ -114,6 +114,9 @@ public:
     // seg13:0x5f49: puts fragment bitmap DGROUP:0x4e94[k] in Img::kFragment; false when the port
     // has none (the shatter's seg7:0x2768 makes them) [OPEN].
     virtual bool fragment(int /*k*/) { return false; }
+    // seg13:0x5e05: puts graphic 500, seg10:0x6c02(500, 0, -1), in Img::kGatePicture; false when
+    // it cannot be loaded (M4 s4 fixer B).
+    virtual bool gate_picture() { return false; }
     // DGROUP:0x9320, the game mode: 6 suppresses the target display's picture [BYTES
     // seg13:0x5902].
     virtual int game_mode() const { return 0; }

@@ -355,6 +355,10 @@ void Info::target_picture(int flag) {
                 c_.pat_blt(Img::kScreen, q.x, q.y, q.side, q.side, kBlackness, Brush::none());
         }
     }
+    // The exit gate's graphic 500 [BYTES seg13:0x5e05 seg13:0x5e62] (M4 s4 fixer B).
+    if (p.special && h_.gate_picture())
+        c_.stretch_blt(Img::kScreen, p.dx, p.dy, p.dw, p.dh, Img::kGatePicture, p.sx, p.sy, p.sw, p.sh,
+                       kSrcCopy);
     // Pool 7's slot 5, the logo strip [BYTES seg13:0x5d3a seg13:0x60cd-0x60e1] (M4 s1 SCREENS).
     if (p.picture && p.slot == 5 && c_.has(Img::kLogoStrip))
         c_.stretch_blt(Img::kScreen, p.dx, p.dy, p.dw, p.dh, Img::kLogoStrip, p.sx, p.sy, p.sw, p.sh,

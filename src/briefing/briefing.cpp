@@ -1,6 +1,7 @@
 #include "briefing/briefing.h"
 
 #include "briefing/lang_format.h"
+#include "world/world.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -136,6 +137,29 @@ GeneratedPlan generated_plan(const GeneratedInputs& in) {
     // Step 6.
     p.roster = in.roster_count;
     return p;
+}
+
+GeneratedInputs generated_inputs(const world::World& w) {
+    GeneratedInputs in;
+    in.kind = w.kind;  // DGROUP:0x9320
+    if (w.pools.records(world::kPoolIcons) > 0) in.byte53 = w.pools.rec(world::kPoolIcons, 0).b53;
+    in.v933a = w.categories[0];
+    in.v933c = w.categories[1];
+    in.v933e = w.categories[2];
+    in.v9340 = w.categories[3];
+    in.v4ee0 = w.w4ee0[0];  // DGROUP:0x4ee0
+    in.v4ee2 = w.w4ee0[1];  // DGROUP:0x4ee2
+    in.v4ee4 = w.w4ee4[0];  // DGROUP:0x4ee4
+    in.v4ee6 = w.w4ee4[1];  // DGROUP:0x4ee6
+    in.v9318 = w.gates;
+    // Step 6 [BYTES seg9:0x9463-0x9491]: `jle` on DGROUP:0x9316, `jg` on the signed byte.
+    const int p = w.player;
+    for (int k = 0; k <= w.last_ship && k < world::kShipCount; ++k) {
+        const world::ShipRecord& s = w.ships[static_cast<std::size_t>(k)];
+        if (p < 0 || p > 7) break;
+        if (world::word_at(s, 0x72 + 2 * p) != 0 && world::sbyte_at(s, 0xee + p) <= 5) ++in.roster_count;
+    }
+    return in;
 }
 
 std::string count_text(Strings& s, int n, int id) {
@@ -562,10 +586,10 @@ int Briefing::enter(shell::GameState& s, const Setup& setup) {
     if (id != 0) {
         text = cut_at_nul(h_.page(id), 0xffff);
     } else {
-        // seg9:0x91b0 reads the wave set-up's counts (M3); the port builds it from zeros.
-        h_.todo("generated briefing: the wave's counts", "seg9:0x91b0");
+        // seg9:0x91b0 reads the wave set-up's counts (Setup::generated, from the World) (M4 s4
+        // fixer B).
         bool todo = false;
-        text = generated_text(h_, generated_plan(GeneratedInputs{}), &todo);
+        text = generated_text(h_, generated_plan(setup.generated), &todo);
         if (todo) h_.todo("generated briefing: %D type 8 ship classes", "seg3:0x1817");
         if (text.size() > 1999) text.resize(1999);  // the 2000-byte block DGROUP:0x93a8
     }

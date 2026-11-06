@@ -51,7 +51,8 @@ struct Screen final : VisitScreen {
     void black(int, int, int, int) override {}
     void block(int, int, int, int, std::uint32_t) override {}
     void scroll_up(int, int, int, int, int) override { ++scrolls; }
-    void flash(int, int) override {}
+    std::vector<std::pair<int, int>> flashes;
+    void flash(int x, int y) override { flashes.push_back({x, y}); }
     void save_monitor(int, int, int, int) override {}
     void left_monitor(const VisitLayout&, bool) override {}
     void black_screen() override {}
@@ -67,7 +68,8 @@ struct Host final : VisitHost {
     void busy_wait(int ms) override { busy.push_back(ms); }
     void pump_wait(int ms) override { pumps.push_back(ms); }
     void sound(int id) override { sounds.push_back(id); }
-    void sound_at(int, int, int, int) override {}
+    std::vector<std::vector<int>> sounds_at;  // (id, a, b, mode)
+    void sound_at(int id, int a, int b, int mode) override { sounds_at.push_back({id, a, b, mode}); }
     std::string lang(int id) override {
         const auto it = kStrings.find(id);
         return it == kStrings.end() ? std::string() : it->second;
@@ -240,6 +242,21 @@ TEST_CASE("seg16:0x2e3c: four characters per 40 ms, then the NUL advances the ph
     visit(r.c, 0);
     CHECK(r.scr.typed == "ABCDEFG");
     CHECK(r.v.phase == 4);  // the NUL in the same call
+}
+
+// The typing reset's CRT flash seg15:0x84b0 plays 0x14 at its point, mode 4, as the oracle's
+// visits do 1.02 s after sound 9 (shell.md "CRT flash"; core.md the reset; amb.md D5) [BYTES
+// seg15:0x84b0 seg16:0x2e79-0x2ecb] [ORACLE core-0003] (M4 s4 fixer B).
+TEST_CASE("seg16:0x2e3c: the reset's CRT flash plays 0x14 at the monitor's middle") {
+    Rig r;
+    r.v.lay = visit_layout(1024, 768);
+    visit_type(r.c, 1, 0);
+    const VisitLayout& l = r.v.lay;
+    const int x = l.mon_w / 2 + l.L() + 3, y = l.mon_h / 2 + l.T() + 3;
+    REQUIRE(r.h.sounds_at.size() == 1u);
+    CHECK(r.h.sounds_at[0] == std::vector<int>{0x14, x, y, 4});
+    REQUIRE(r.scr.flashes.size() == 1u);
+    CHECK(r.scr.flashes[0] == std::make_pair(x, y));
 }
 
 TEST_CASE("phase 11 waits 2500 ms after phase 10, then TRANSFER COMPLETE") {

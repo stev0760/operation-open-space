@@ -61,4 +61,64 @@ TEST_CASE("win16 edit win32: a scoped client-edge edit places its text as a self
     }
     DeleteObject(font);
 }
+
+// A nested scope (the Sell dialog #378 over the Ambulance Options dialog #194, both run by
+// Dialog::run_modal) must not subclass a control twice: with two hooks the second subclass made
+// the edit's saved procedure nccreate_proc itself and the edit's creation overflowed the stack
+// (work/world/m4s4/accept/amb.md D1) (M4 s4 fixer B).
+TEST_CASE("win16 edit win32: nested scopes give each dialog's edits one subclass") {
+    HINSTANCE inst = GetModuleHandleW(nullptr);
+    const DWORD style = WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL;
+    HWND outer = nullptr, inner = nullptr, e_inner = nullptr, e_outer = nullptr;
+    {
+        is::gfx::Win16EditScope a;
+        outer = CreateWindowExW(0, L"STATIC", L"", WS_POPUP, 0, 0, 400, 300, nullptr, nullptr, inst, nullptr);
+        {
+            is::gfx::Win16EditScope b;
+            inner = CreateWindowExW(0, L"STATIC", L"", WS_POPUP, 0, 0, 300, 200, outer, nullptr, inst, nullptr);
+            e_inner = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"", style, 10, 10, 120, 20, inner, nullptr,
+                                      inst, nullptr);
+        }
+        // Back in the outer scope: its own dialog's children change again.
+        e_outer = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"", style, 10, 10, 120, 20, outer, nullptr,
+                                  inst, nullptr);
+    }
+    REQUIRE(e_inner);
+    REQUIRE(e_outer);
+    for (HWND e : {e_inner, e_outer}) {
+        // (the edit takes WS_BORDER off its window style and draws the border itself)
+        CHECK((GetWindowLongPtrW(e, GWL_EXSTYLE) & WS_EX_CLIENTEDGE) == 0);
+        SetWindowTextW(e, L"7.5");  // the edit's own procedure answers, once
+        wchar_t buf[8] = L"";
+        GetWindowTextW(e, buf, 8);
+        CHECK(lstrcmpW(buf, L"7.5") == 0);
+    }
+    DestroyWindow(outer);
+}
+
+// The list boxes of #194 and #378 are LISTBOX with WS_BORDER; the oracle draws them with a
+// 1-pixel border, as the Win16 dialog manager leaves WS_BORDER (amb.md D4) [ORACLE core-0003]
+// [BYTES ENG_LANG.DLL DIALOG 194] (M4 s4 fixer B).
+TEST_CASE("win16 edit win32: a scoped client-edge list box keeps a 1-pixel border") {
+    HINSTANCE inst = GetModuleHandleW(nullptr);
+    HWND parent = nullptr, lb = nullptr;
+    {
+        is::gfx::Win16EditScope scope;
+        parent = CreateWindowExW(0, L"STATIC", L"", WS_POPUP, 0, 0, 400, 300, nullptr, nullptr, inst, nullptr);
+        lb = CreateWindowExW(WS_EX_CLIENTEDGE, L"LISTBOX", L"", WS_CHILD | WS_VISIBLE | WS_BORDER | LBS_NOTIFY,
+                             10, 10, 150, 100, parent, nullptr, inst, nullptr);
+    }
+    REQUIRE(lb);
+    CHECK((GetWindowLongPtrW(lb, GWL_EXSTYLE) & WS_EX_CLIENTEDGE) == 0);
+    CHECK((GetWindowLongPtrW(lb, GWL_STYLE) & WS_BORDER) != 0);
+    RECT w{}, c{};
+    GetWindowRect(lb, &w);
+    GetClientRect(lb, &c);
+    POINT o{0, 0};
+    ClientToScreen(lb, &o);
+    CHECK(o.x - w.left == 1);  // 1 px left border, not the 2 px client edge
+    CHECK(o.y - w.top == 1);
+    CHECK((w.right - w.left) - c.right == 2);
+    DestroyWindow(parent);
+}
 #endif

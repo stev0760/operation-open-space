@@ -9,11 +9,14 @@
 #include <tuple>
 #include <filesystem>
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
 
 #include "desk/desk.h"
+#include "formats/savegame.h"
+#include "briefing/save_text.h"
 #include "desk/scene.h"
 #include "formats/ne.h"
 #include "formats/records.h"
@@ -279,6 +282,13 @@ struct FakeHost final : Host {
         return r;
     }
     void todo(const std::string&, const char*) override {}
+    // The restored game's .sav header (saved_header), or none: the file does not open.
+    std::optional<std::vector<std::uint8_t>> header;
+    std::string header_name;
+    std::optional<std::vector<std::uint8_t>> saved_header(const std::string& restore) override {
+        header_name = restore;
+        return header;
+    }
 };
 
 }  // namespace
@@ -406,6 +416,41 @@ TEST_CASE("desk: ESC jumps to step 9; Space at step 1 skips to the launch; ShowL
         CHECK(std::find(cv.calls.begin(), cv.calls.end(), "meal 70") != cv.calls.end());
         CHECK(d.monitor_text().find("ENJOY YOUR X, PILOT!") != std::string::npos);  // string 648 is "x" here
     }
+}
+
+// After a restore the monitor types the greeting, the progress lines of the saved game's header
+// (strings 3000 and 3031 through desk_progress) and the mission line 3030; with no file it
+// types nothing (formats.md "The desk monitor"; shell.md item 7; save.md DIFFERENT 3: the oracle
+// types "IT'S ... !" and the progress lines, then PREPARE TO LAUNCH / GOOD LUCK) [BYTES
+// seg15:0x53e2-0x5405 seg15:0x54af seg15:0x5601-0x562c] (M4 s4 fixer B).
+TEST_CASE("desk: seg15:0x52e4's progress lines of a restored game") {
+    FakeCanvas cv;
+    FakeHost h;
+    h.strs["Restore"] = "ORACLE03";
+    Desk d(cv, h);
+    d.enter(h.t, 1024, 768, 768);
+    CHECK(d.monitor_text().empty());  // the file does not open
+    CHECK(h.header_name == "ORACLE03");
+    is::fmt::save::Header hd;
+    hd.wave = 1;
+    hd.frames = 4005;  // core-0003's ORACLE03: 1 MIN 51 SEC
+    hd.dir_count = 1;
+    hd.shape = 100;
+    const auto bytes = is::fmt::save::encode_header(hd);
+    h.header = std::vector<std::uint8_t>(bytes.begin(), bytes.end());
+    const std::string t = d.monitor_text();
+    std::string progress =
+        is::briefing::desk_progress(bytes.data(), [&h](int id) { return h.lang(id); });
+    for (char& ch : progress)
+        if (ch >= 'a' && ch <= 'z') ch = static_cast<char>(ch - 'a' + 'A');
+    CHECK(t.rfind("IT'S ", 0) == 0);
+    const std::size_t at = t.find(progress);
+    REQUIRE(at != std::string::npos);
+    CHECK(t.find("PREPARE TO LAUNCH", at + progress.size()) != std::string::npos);
+    CHECK(t.find("GOOD LUCK, PILOT!") != std::string::npos);
+    // A short file: the header's missing bytes read 0 [DESIGN]
+    h.header = std::vector<std::uint8_t>(bytes.begin(), bytes.begin() + 0x30);
+    CHECK_FALSE(d.monitor_text().empty());
 }
 
 TEST_CASE("desk: seg15:0x9e6's frame sizes for s = 33") {

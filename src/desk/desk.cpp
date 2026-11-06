@@ -2,6 +2,9 @@
 
 #include <algorithm>
 
+#include "briefing/save_text.h"
+#include "formats/savegame.h"
+
 namespace is::desk {
 
 // seg10:0x9672 [BYTES seg10:0x9698 seg10:0x96b2 seg10:0x96c7 seg10:0x96df seg10:0x96f4
@@ -130,10 +133,18 @@ std::string Desk::monitor_text() {
     if (restore.find(' ') != std::string::npos) {
         buf += host_.lang_text(5000, 210);  // " NEW GAME" [BYTES seg15:0x53d2 seg15:0x53e5]
     } else {
-        // The restored game's progress lines (strings 3000, 3001, 3031 from its .sav) are not
-        // ported; the original returns here when the file does not open [OPEN seg15:0x5405].
-        host_.todo("desk monitor: progress lines of a restored game", "seg15:0x5405");
-        return {};
+        // The restored game's progress lines: seg15:0x5405 opens LocalPath + Games + Restore +
+        // ".sav" and returns before the mission text when it does not open; seg15:0x54af reads
+        // the header without testing the read, and the lines are strings 3000, 3001 and 3031
+        // (briefing/save_text.h desk_progress; formats.md "The desk monitor"; shell.md item 7)
+        // [BYTES seg15:0x53e2-0x5405 seg15:0x5449 seg15:0x54af seg15:0x54b7 seg15:0x5601-0x562c]
+        // (M4 s4 fixer B: save.md DIFFERENT 3).
+        std::optional<std::vector<std::uint8_t>> header = host_.saved_header(restore);
+        if (!header) return {};
+        // A file shorter than the header leaves the rest of the buffer as it was [OPEN
+        // seg15:0x54af]; the port reads zeros there [DESIGN].
+        header->resize(fmt::save::kHeaderSize, 0);
+        buf += briefing::desk_progress(header->data(), lang);
     }
     const int m = meal_;
     const int food = m == 1 ? 235 : m == 2 ? 236 : 648;

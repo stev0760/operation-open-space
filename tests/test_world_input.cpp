@@ -73,6 +73,25 @@ TEST_CASE("input: the latch's down and pressed bits") {
     CHECK_FALSE(k.down(kVkControl));
 }
 
+// Alt+S: Alt's key-down reaches the main window, its key-up the Save Game dialog. At the resume
+// the keys the keyboard reads up are released, so the arrows turn again instead of spinning
+// (work/world/m4s4/accept/save.md DIFFERENT 1; seg2:0xa06 clears Shift, Ctrl, Alt, Caps Lock and
+// Space [BYTES seg2:0xa1a-0xa66]) (M4 s4 fixer B).
+TEST_CASE("input: the resume releases the keys the keyboard reads up") {
+    KeyLatch k;
+    const std::uint16_t alt = kVkMenu, s = 'S';
+    k.key_down(alt, false);
+    k.key_down(s, false);
+    k.key_up(s);
+    k.key_down(kVkLeft, false);  // still held on the keyboard
+    CHECK(k.down(alt));
+    k.release_unheld([&](std::uint16_t vk) { return vk == kVkLeft; });
+    CHECK_FALSE(k.down(alt));
+    CHECK(k.async(alt) == 0x0001);  // its press stays for the next read
+    CHECK(k.down(kVkLeft));
+    CHECK(k.async(kVkLeft) == 0x8001);
+}
+
 TEST_CASE("input: the key remap of strings 2900 and 2901") {
     const KeyRemap r = KeyRemap::from_strings("YHADTGSCDVPBWGXSIEFSCM", "NQADTGSCDVPBWGXSIEFSCM");
     CHECK(r.map('Q') == 'H');

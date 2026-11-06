@@ -8,18 +8,28 @@ namespace {
 thread_local HWND t_dialog = nullptr;  // the scope's dialog, once created
 thread_local bool t_active = false;    // a scope waits for or holds its dialog
 thread_local WNDPROC t_edit_proc = nullptr;
+// The thread's one CBT hook: the outermost scope installs it and a nested scope (the Sell
+// dialog over the Ambulance Options dialog) only swaps the dialog it watches. A second hook
+// would see the same HCBT_CREATEWND through CallNextHookEx and subclass the control twice,
+// so that t_edit_proc became nccreate_proc itself and the control's WM_NCCREATE recursed
+// until the stack overflowed (work/world/m4s4/accept/amb.md D1) (M4 s4 fixer B) [DESIGN].
+thread_local HHOOK t_hook = nullptr;
 
-bool is_edit(HWND h) {
+// The controls whose WS_BORDER the version-4 dialog manager turns into WS_EX_CLIENTEDGE and the
+// Win16 one leaves: the edits, and the list boxes of #194 and #378 (the Ambulance Options and
+// Sell dialogs), whose 1-pixel border core-0003's Options pictures show (amb.md D4) (M4 s4
+// fixer B) [ORACLE core-0003] [BYTES ENG_LANG.DLL DIALOG 194] [BYTES ENG_LANG.DLL DIALOG 378].
+bool is_bordered_control(HWND h) {
     wchar_t name[16] = L"";
     GetClassNameW(h, name, 16);
-    return lstrcmpiW(name, L"Edit") == 0;
+    return lstrcmpiW(name, L"Edit") == 0 || lstrcmpiW(name, L"ListBox") == 0;
 }
 
-// Sees only the edit's WM_NCCREATE: the CREATESTRUCT the edit reads there and the window's
-// styles lose WS_EX_CLIENTEDGE and keep WS_BORDER; then the edit's own procedure returns.
+// Sees only the control's WM_NCCREATE: the CREATESTRUCT the control reads there and the window's
+// styles lose WS_EX_CLIENTEDGE and keep WS_BORDER; then the control's own procedure returns.
 LRESULT CALLBACK nccreate_proc(HWND h, UINT msg, WPARAM w, LPARAM l) {
-    const WNDPROC edit = t_edit_proc;
-    SetWindowLongPtrW(h, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(edit));
+    const WNDPROC own = t_edit_proc;
+    SetWindowLongPtrW(h, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(own));
     if (msg == WM_NCCREATE) {
         auto* cs = reinterpret_cast<CREATESTRUCTW*>(l);
         cs->dwExStyle &= ~static_cast<DWORD>(WS_EX_CLIENTEDGE);
@@ -28,7 +38,7 @@ LRESULT CALLBACK nccreate_proc(HWND h, UINT msg, WPARAM w, LPARAM l) {
                           GetWindowLongPtrW(h, GWL_EXSTYLE) & ~static_cast<LONG_PTR>(WS_EX_CLIENTEDGE));
         SetWindowLongPtrW(h, GWL_STYLE, GetWindowLongPtrW(h, GWL_STYLE) | WS_BORDER);
     }
-    return CallWindowProcW(edit, h, msg, w, l);
+    return CallWindowProcW(own, h, msg, w, l);
 }
 
 LRESULT CALLBACK cbt_proc(int code, WPARAM w, LPARAM l) {
@@ -37,7 +47,9 @@ LRESULT CALLBACK cbt_proc(int code, WPARAM w, LPARAM l) {
         const HWND h = reinterpret_cast<HWND>(w);
         if (!t_dialog) {
             t_dialog = h;  // the first window the scope sees is the dialog itself
-        } else if (cs->hwndParent == t_dialog && (cs->dwExStyle & WS_EX_CLIENTEDGE) && is_edit(h)) {
+        } else if (cs->hwndParent == t_dialog && (cs->dwExStyle & WS_EX_CLIENTEDGE) &&
+                   is_bordered_control(h) &&
+                   GetWindowLongPtrW(h, GWLP_WNDPROC) != reinterpret_cast<LONG_PTR>(&nccreate_proc)) {
             // The window exists and has had no message yet [REF Win32 SDK CBTProc].
             t_edit_proc = reinterpret_cast<WNDPROC>(
                 SetWindowLongPtrW(h, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&nccreate_proc)));
@@ -51,11 +63,17 @@ LRESULT CALLBACK cbt_proc(int code, WPARAM w, LPARAM l) {
 Win16EditScope::Win16EditScope() : saved_dialog_(t_dialog), saved_active_(t_active) {
     t_dialog = nullptr;
     t_active = true;
-    hook_ = SetWindowsHookExW(WH_CBT, cbt_proc, nullptr, GetCurrentThreadId());
+    if (!t_hook) {
+        hook_ = SetWindowsHookExW(WH_CBT, cbt_proc, nullptr, GetCurrentThreadId());
+        t_hook = hook_;
+    }
 }
 
 Win16EditScope::~Win16EditScope() {
-    if (hook_) UnhookWindowsHookEx(hook_);
+    if (hook_) {
+        UnhookWindowsHookEx(hook_);
+        t_hook = nullptr;
+    }
     t_dialog = saved_dialog_;
     t_active = saved_active_;
 }

@@ -196,6 +196,7 @@ Setup make_setup() {
                           w.pools.rec(world::kPoolIcons, k).state != 0);
         st.names.push_back(w.icons[static_cast<std::size_t>(k)].name);
     }
+    st.generated = generated_inputs(w);  // seg9:0x91b0's inputs (M4 s4 fixer B)
     if (g_canvas) g_canvas->set_icon_cells(icon_cells(st.icons, st.size_level));
     player_stats(st);
     return st;

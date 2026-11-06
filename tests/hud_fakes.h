@@ -211,6 +211,11 @@ public:
         out.obj.extent = 256;
         return true;
     }
+    bool gate_ = false;  // Host::gate_picture's answer (M4 s4 fixer B)
+    bool gate_picture() override {
+        trace.push_back("gate500");
+        return gate_;
+    }
     int game_mode() const override { return game_mode_; }
     void draw_race(Canvas&) override { trace.push_back("race"); }
     int player_target_pool() const override { return target_pool_; }

@@ -110,5 +110,8 @@ ScreenPoint flight_to_screen(std::int16_t x, std::int16_t y);
 // The latch feed (wndproc.cpp): WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN and WM_SYSKEYUP with their
 // wParam and lParam (bit 30: the key was down before) [DESIGN ADR 0013 decision 6].
 void feed_key(std::uint32_t msg, std::uintptr_t wparam, std::intptr_t lparam);
+// The resume seg2:0xa06's counterpart for the latch: the keys GetAsyncKeyState reads up are
+// released (KeyLatch::release_unheld) (M4 s4 fixer B) [DESIGN ADR 0013 decision 6].
+void release_unheld_keys();
 
 }  // namespace is::world

@@ -868,6 +868,10 @@ void feed_key(std::uint32_t msg, std::uintptr_t wparam, std::intptr_t lparam) {
         rt().keys.key_up(vk);
 }
 
+void release_unheld_keys() {
+    rt().keys.release_unheld([](std::uint16_t vk) { return (GetAsyncKeyState(vk) & 0x8000) != 0; });
+}
+
 }  // namespace is::world
 
 namespace is::app {

@@ -70,6 +70,10 @@ void resume_game() {
         for (int vk : {VK_SHIFT, VK_CONTROL, VK_MENU, VK_CAPITAL, VK_SPACE}) ks[vk] &= 0x7f;
         SetKeyboardState(ks);
     }
+    // The wave's key latch stands for GetAsyncKeyState: a key released while a dialog had the
+    // keyboard (the Alt of Alt+S or Alt+X) is released in the latch too (M4 s4 fixer B)
+    // [DESIGN ADR 0013 decision 6].
+    world::release_unheld_keys();
     set_caption(2337);  // "Inner Space"
     g.running = true;   // DGROUP:0x8f68 = 1
 }

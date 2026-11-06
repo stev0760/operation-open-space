@@ -28,7 +28,7 @@ std::string completion_text(std::int16_t completed, std::int16_t dirs, const Lan
 // seg15:0x52e4's lines after the greeting of a restored game: 3000 with the %< flag 0 (mode 0),
 // 3001 as export 13, then 3031 with (+0x164 > 400 signed, 311 + shape) (mode 0). The shape is
 // reduced by 100 when >= 100, as export 13 [BYTES seg15:0x54c0-0x5631]. For the desk's port
-// (src/desk/desk.cpp:133, M8): the caller opens LocalPath + Games + Restore + ".sav" and
+// (src/desk/desk.cpp): the caller opens LocalPath + Games + Restore + ".sav" and
 // passes its first 0x1a9 bytes; seg15:0x54af does not test the read [OPEN: a short file's
 // stale buffer].
 std::string desk_progress(const std::uint8_t* header, const LangLookup& lang);

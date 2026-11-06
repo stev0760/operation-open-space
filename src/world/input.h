@@ -35,6 +35,19 @@ public:
     // briefing does not fire through the port's 0x8001 fire mask, which the original's 0x8000
     // mask would not see [DESIGN ADR 0013 decision 6] (M3 s2 fixer).
     void clear_pressed() { pressed_.fill(false); }
+    // Every key the latch holds down that `held(vk)` reports up is released (its `pressed` bit
+    // kept): the window's activation comes back (seg2:0xa06, resume) after a key-up went to
+    // another window, as the Alt of Alt+S does to the Save Game dialog. The original's
+    // GetAsyncKeyState reads the keyboard, so its Alt reads up there; a latch fed only by the
+    // main window's messages kept Alt down and turned every arrow into Alt+arrow, the spin of
+    // world.md "Turning" (work/world/m4s4/accept/save.md DIFFERENT 1) [DESIGN ADR 0013 decision 6]
+    // (M4 s4 fixer B).
+    template <class Held>
+    void release_unheld(Held held) {
+        for (int vk = 0; vk < kKeys; ++vk)
+            if (down_[static_cast<std::size_t>(vk)] && !held(static_cast<std::uint16_t>(vk)))
+                down_[static_cast<std::size_t>(vk)] = false;
+    }
 
     // The GetAsyncKeyState word of vk: 0x8000 while down, 0x0001 when pressed since the last
     // read, which this read clears.
