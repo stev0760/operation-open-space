@@ -1,6 +1,6 @@
-# Inner Space port: agent instructions
+# Operation: Open Space: agent instructions
 
-Faithful Win32 port of **Operation: Inner Space v1.29.08** (Software Dynamics, Win16 NE, 1994–2000). It targets Windows 10/11 natively and Linux through Wine. The port is a C++17 rewrite guided by decompilation of the original and checked against the original running under Wine (the "oracle"). Original game files are never committed. The port reads them from the user's own copy.
+**Operation: Open Space** is a faithful Win32 port of **Operation: Inner Space v1.29.08** (Software Dynamics, Win16 NE, 1994–2000). It targets Windows 10/11 natively and Linux through Wine. The port is a C++17 rewrite guided by decompilation of the original and checked against the original running under Wine (the "oracle"). Original game files are never committed. The port reads them from the user's own copy.
 
 The active plan is `docs/PLAN.md`. Feature progress is tracked in `docs/spec/checklist.md`.
 

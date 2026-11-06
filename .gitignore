@@ -20,3 +20,6 @@ __pycache__/
 # Oracle bulk output (digests under oracle/digests/ are committed)
 /oracle/runs/
 *.log
+
+# Session transcripts
+/*-this-session-is-being-continued-*.txt
