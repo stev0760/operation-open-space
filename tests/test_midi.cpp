@@ -2,7 +2,7 @@
 // parser and tempo map on a hand-built file [REF Standard MIDI Files 1.0], the seek
 // fast-forward, the play to an end and its single notify, the pause, the volume, the
 // superseded notify, and the mixer's music stream. With IS_ORIGINAL_DIR: the four MIDI files of
-// the ship disk and the twelve track sections of docs/re/sound.md "Music".
+// the game and the twelve track sections of docs/re/sound.md "Music".
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
@@ -128,7 +128,7 @@ const char* env(const char* name) {
     return v && *v ? v : nullptr;
 }
 
-// A file of `dir` by name, ignoring case (the ship disk's names are upper case).
+// A file of `dir` by name, ignoring case (the game's names are upper case).
 fs::path find_ci(const fs::path& dir, const std::string& name) {
     std::error_code ec;
     for (const auto& e : fs::directory_iterator(dir, ec)) {
@@ -389,7 +389,7 @@ TEST_CASE("midi: the mixer adds the music after the effects' volume and clips") 
     CHECK(out[0] == effect);
 }
 
-TEST_CASE("midi: the ship disk's four files and the twelve track sections (IS_ORIGINAL_DIR)") {
+TEST_CASE("midi: the game's four files and the twelve track sections (IS_ORIGINAL_DIR)") {
     const char* dir = env("IS_ORIGINAL_DIR");
     if (!dir) {
         MESSAGE("IS_ORIGINAL_DIR unset; skipped");
@@ -453,7 +453,7 @@ TEST_CASE("midi: the ship disk's four files and the twelve track sections (IS_OR
     CHECK(p->position_ms() == doctest::Approx(files[0].length_ms()).epsilon(0.0002));
 }
 
-// The Player over the port's MIDI player, end to end on the ship disk's files with a fake synth
+// The Player over the port's MIDI player, end to end on the game's files with a fake synth
 // and a simulated message queue (posted notifies delivered between output blocks through
 // accept_notify, as audio.cpp's glue does): the loop of track 1, the notify-driven play of a
 // flag-0 request, the focus pause, the control codes, the 7/8 -> 2 chaining and the stop of

@@ -174,7 +174,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(func=cmd_szdd)
 
     s = sub.add_parser("extract", help="copy a distribution directory, expanding SZDD and restoring names")
-    s.add_argument("src", help="shipdisk or theworks directory")
+    s.add_argument("src", help="game or theworks directory")
     s.add_argument("out", help="output directory")
     s.set_defaults(func=cmd_extract)
 
@@ -203,7 +203,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(func=cmd_addr)
 
     s = sub.add_parser("all", help="regenerate the work directory: extracted, ne, unpacked, rebuilt, assets, asm")
-    s.add_argument("--original", required=True, help="directory holding shipdisk/ and theworks/")
+    s.add_argument("--original", required=True, help="directory holding game/ and theworks/")
     s.add_argument("--work", required=True, help="output work directory")
     s.set_defaults(func=cmd_all)
 

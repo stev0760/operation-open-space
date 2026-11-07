@@ -9,7 +9,7 @@ These are rules for working on this binary. Each one exists because ignoring it 
 - **In a special-base far call (`9a oo oo ss ss`) the relocation site is the segment word.** The offset word holds the real target offset; only the segment words carry chain links. Taking chain heads alone finds 122 of the 553 internal far-call targets. `[BYTES seg4:0x24]`
 - **seg1 of `INSPACE.EXE` is the OptLoader stub** (code, flags `0xd50`, 2,164 bytes). It is not DGROUP. **DGROUP is seg19** (NE autodata). Initialised data ends at `DGROUP:0x17b5`; everything above that is BSS filled at runtime. Tables that live in BSS can't be read from the file. `[BYTES INSPACE.EXE segment table]`
 - **seg5 is the Borland runtime library** and starts with normal Borland startup at `seg5:0x1a` (`xor bp,bp; push bp; call KERNEL.InitTask`). Its assembly routines lack standard prologues, so prologue scans miss them. Disassembling the compressed bytes produces a fake "stub overwrote seg5" story. `[BYTES seg5:0x1a]`
-- **Decode packed code up to minalloc, not the decompressed length.** OptLoader zero-fills the rest, and code can rely on it: the final `retf 0xa` of seg4 in the shipdisk FACTORY.EXE needs the zero-fill byte, and `theworks/FACTORY.EXE` repeats the pattern at seg4:0x634f. `[BYTES FACTORY.EXE seg4:0x5d0f]`
+- **Decode packed code up to minalloc, not the decompressed length.** OptLoader zero-fills the rest, and code can rely on it: the final `retf 0xa` of seg4 in the game's FACTORY.EXE needs the zero-fill byte, and `theworks/FACTORY.EXE` repeats the pattern at seg4:0x634f. `[BYTES FACTORY.EXE seg4:0x5d0f]`
 - **Segment preloading:** segments 9–18 are not PRELOAD (flags `0x1c18`). Don't assume all segments preload. `[BYTES INSPACE.EXE segment table]`
 
 ## Reading code

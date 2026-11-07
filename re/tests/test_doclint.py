@@ -48,14 +48,14 @@ ORIGINAL = REPO_ROOT / "original"
 # Modules whose segment tables resolve [BYTES] addresses: name -> path under original/.
 # An address without a module name belongs to INSPACE.EXE.
 MODULE_FILES = {
-    "INSPACE.EXE": "shipdisk/INSPACE.ex_",
-    "ISPACE.DLL": "shipdisk/ISPACE.dll",
-    "FACTORY.EXE": "shipdisk/FACTORY.ex_",
+    "INSPACE.EXE": "game/INSPACE.ex_",
+    "ISPACE.DLL": "game/ISPACE.dll",
+    "FACTORY.EXE": "game/FACTORY.ex_",
     "THEWORKS/FACTORY.EXE": "theworks/FACTORY.EXE",
-    "INSPACE.SCR": "shipdisk/INSPACE.sc1",
-    "INRUN.AD": "shipdisk/INRUN.A1",
+    "INSPACE.SCR": "game/INSPACE.sc1",
+    "INRUN.AD": "game/INRUN.A1",
 }
-HELP_FILES = ("shipdisk/Eng_help.hl1", "theworks/ENG_HELP.HLP")
+HELP_FILES = ("game/Eng_help.hl1", "theworks/ENG_HELP.HLP")
 
 TAG_KINDS = ("MANUAL", "BYTES", "ORACLE", "REF", "DESIGN", "OPEN")
 BANNED_RE = re.compile(r"\b(superseded|withdrawn|previously|now\s+known)\b", re.I)

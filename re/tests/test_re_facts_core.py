@@ -1848,7 +1848,7 @@ def test_m4s4_ship_hit_sound(ins):
     assert (-0x6900) & 0xFFFF == 0x9700 == 0x96D2 + 0x2E
     from conftest import ORIGINAL, require
     from isre import szdd
-    shp = szdd.expand(require(ORIGINAL / "shipdisk" / "MASTER.SH1").read_bytes())
+    shp = szdd.expand(require(ORIGINAL / "game" / "MASTER.SH1").read_bytes())
     rec = shp[65:130]
     assert rec[10:21] == b"TRANSFORMER" and struct.unpack_from("<H", rec, 0x1F)[0] == 7
 

@@ -35,7 +35,7 @@ std::filesystem::path original_dir() {
     return v;
 }
 
-// work/oracle/<run> beside IS_ORIGINAL_DIR (work/extracted/shipdisk), as test_ship_sheet.cpp
+// work/oracle/<run> beside IS_ORIGINAL_DIR (work/extracted/game), as test_ship_sheet.cpp
 // finds it.
 std::filesystem::path oracle_run(const char* run) {
     const auto o = original_dir();

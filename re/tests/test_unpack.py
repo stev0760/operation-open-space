@@ -79,11 +79,11 @@ def test_relocation_chains(inspace_unpacked):
     assert len(sites[("USER", 91)]) == 141  # GetDlgItem
 
 
-def test_unpack_cli_writes_outputs(shipdisk, tmp_path):
+def test_unpack_cli_writes_outputs(game, tmp_path):
     from isre.cli import main
 
     out = tmp_path / "inspace"
-    assert main(["unpack", str(shipdisk / "INSPACE.ex_"), str(out)]) == 0
+    assert main(["unpack", str(game / "INSPACE.ex_"), str(out)]) == 0
     gold = read_sha256_list(GOLDEN / "inspace.sha256")
     for n in range(1, 20):
         assert sha256((out / f"seg{n:02d}.bin").read_bytes()) == gold[f"unpacked/seg{n:02d}.bin"]
@@ -91,7 +91,7 @@ def test_unpack_cli_writes_outputs(shipdisk, tmp_path):
     manifest = json.loads((out / "unpack.json").read_text())
     assert manifest["invariants_ok"] and manifest["reloc_records"] == 930
     rel = tmp_path / "r.json"
-    assert main(["relocs", str(shipdisk / "INSPACE.ex_"), str(rel)]) == 0
+    assert main(["relocs", str(game / "INSPACE.ex_"), str(rel)]) == 0
     assert rel.read_bytes() == (out / "relocs.json").read_bytes()
 
 
@@ -99,10 +99,10 @@ def test_unpack_cli_writes_outputs(shipdisk, tmp_path):
 
 OTHER_MODULES = [
     # (path under original/, segments, packed segments)
-    ("shipdisk/ISPACE.dll", 11, 10),
-    ("shipdisk/FACTORY.ex_", 6, 5),
+    ("game/ISPACE.dll", 11, 10),
+    ("game/FACTORY.ex_", 6, 5),
     ("theworks/FACTORY.EXE", 6, 5),
-    ("shipdisk/INSTALL.exe", 4, 3),
+    ("game/INSTALL.exe", 4, 3),
     ("theworks/SETUP.EXE", 4, 3),
 ]
 
@@ -125,14 +125,14 @@ def test_other_module_invariants(original_dir, rel, nseg, npacked):
 
 
 def test_ispace_relocation_kinds(original_dir):
-    res = optloader.unpack(NEModule.load(require(original_dir / "shipdisk/ISPACE.dll")))
+    res = optloader.unpack(NEModule.load(require(original_dir / "game/ISPACE.dll")))
     assert Counter(r["kind"] for r in res.records) == {"import_ordinal": 310, "special_base": 33}
     assert Counter(r["target_type"] for r in res.records)["PTR16_A"] == 1
 
 
-def test_unpack_rejects_unpacked_module(shipdisk):
+def test_unpack_rejects_unpacked_module(game):
     from isre import szdd
 
-    mod = NEModule(szdd.expand((shipdisk / "INSPACE.sc1").read_bytes()), "INSPACE.SCR")
+    mod = NEModule(szdd.expand((game / "INSPACE.sc1").read_bytes()), "INSPACE.SCR")
     with pytest.raises(optloader.OptLoaderError):
         optloader.unpack(mod)

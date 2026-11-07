@@ -165,11 +165,11 @@ def test_unsupported_records_are_refused(rec):
 
 MODULES = [
     # (path under original/, segments, OPTLOADER records)
-    ("shipdisk/INSPACE.ex_", 19, 930),
-    ("shipdisk/ISPACE.dll", 11, 343),
-    ("shipdisk/FACTORY.ex_", 6, 238),
+    ("game/INSPACE.ex_", 19, 930),
+    ("game/ISPACE.dll", 11, 343),
+    ("game/FACTORY.ex_", 6, 238),
     ("theworks/FACTORY.EXE", 6, 250),
-    ("shipdisk/INSTALL.exe", 4, 116),
+    ("game/INSTALL.exe", 4, 116),
     ("theworks/SETUP.EXE", 4, 107),
 ]
 _CACHE: dict = {}
@@ -236,7 +236,7 @@ def test_rebuilt_resources_match(original_dir, rel, nseg, nrec):
 
 
 def test_inspace_record_mapping(original_dir):
-    mod, up, rb, new = built(original_dir, "shipdisk/INSPACE.ex_")
+    mod, up, rb, new = built(original_dir, "game/INSPACE.ex_")
     assert rb.record_types == {"FAR_ADDR/IMPORTORDINAL": 722, "OFFSET/IMPORTORDINAL": 3,
                                "SEGMENT/INTERNALREF": 205}
     assert len(rb.data) == 547696
@@ -251,7 +251,7 @@ def test_inspace_record_mapping(original_dir):
 
 
 def test_ispace_additive_record(original_dir):
-    mod, up, rb, new = built(original_dir, "shipdisk/ISPACE.dll")
+    mod, up, rb, new = built(original_dir, "game/ISPACE.dll")
     adds = [(n, r) for n, rs in new.std_relocs.items() for r in rs if r.flags & 4]
     assert len(adds) == 1
     n, r = adds[0]
@@ -262,7 +262,7 @@ def test_ispace_additive_record(original_dir):
 
 
 def test_check_detects_a_wrong_record(original_dir):
-    mod, up, rb, new = built(original_dir, "shipdisk/INSPACE.ex_")
+    mod, up, rb, new = built(original_dir, "game/INSPACE.ex_")
     data = bytearray(rb.data)
     s = new.segment(4)
     p = s.file_off + s.file_len + 2
@@ -279,9 +279,9 @@ def test_rebuild_cli(original_dir, tmp_path, capsys):
     from isre.cli import main
 
     out = tmp_path / "ispace.dll"
-    assert main(["rebuild", str(original_dir / "shipdisk/ISPACE.dll"), str(out)]) == 0
+    assert main(["rebuild", str(original_dir / "game/ISPACE.dll"), str(out)]) == 0
     assert "EQUIVALENT" in capsys.readouterr().out
-    assert out.read_bytes() == built(original_dir, "shipdisk/ISPACE.dll")[2].data
+    assert out.read_bytes() == built(original_dir, "game/ISPACE.dll")[2].data
 
 
 def test_pipeline_writes_rebuilt(original_dir, tmp_path):
@@ -293,6 +293,6 @@ def test_pipeline_writes_rebuilt(original_dir, tmp_path):
     assert names["inspace"].rebuilt == "rebuilt/inspace.exe"
     assert names["ispace"].rebuilt == "rebuilt/ispace.dll"
     assert (tmp_path / "rebuilt/inspace.exe").read_bytes() == \
-        built(original_dir, "shipdisk/INSPACE.ex_")[2].data
+        built(original_dir, "game/INSPACE.ex_")[2].data
     for f in ("factory-1998a.exe", "factory-1998b.exe"):
         assert NEModule.load(tmp_path / "rebuilt" / f).std_relocs

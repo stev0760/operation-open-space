@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-23
 - **Host:** Rocky 9.8, Wine 11.0 (Kron4ek `amd64-wow64`, new WoW64), Xvfb 1024×768×24
-- **Prefix:** `~/.local/share/wineprefixes/innerspace`, laid out by `oracle/install_layout.py` from `original/shipdisk`
+- **Prefix:** `~/.local/share/wineprefixes/innerspace`, laid out by `oracle/install_layout.py` from `original/game`
 - **Bulk output (gitignored):** `work/oracle/smoke/` (screenshots 01–07, `relay.log`, 85 MB)
 
 ## Observations

@@ -1,4 +1,4 @@
-// SZDD ("Microsoft Compress", COMPRESS.EXE) expansion. The shipdisk stores 14 of its files
+// SZDD ("Microsoft Compress", COMPRESS.EXE) expansion. The game stores 14 of its files
 // this way (MASTER.BO1, ENG_LANG.dl1, ...). Header and LZSS scheme: re/isre/szdd.py, the
 // reference this reader matches byte for byte.
 //
@@ -29,7 +29,7 @@ struct SzddHeader {
 
 struct SzddFile {
     std::vector<std::uint8_t> data;  // the expanded bytes
-    char last_char = 0;              // as in SzddHeader. Every shipdisk file stores 0: the
+    char last_char = 0;              // as in SzddHeader. Every game file stores 0: the
                                      // distribution renames by extension (.BO1 for .BOD)
 };
 

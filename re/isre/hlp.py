@@ -6,7 +6,7 @@ Usage::
     isre hlp FILE.HLP OUT_DIR                  # through the isre CLI
     isre hlp FILE.HLP                          # summary only
 
-``FILE`` may be SZDD-compressed (the shipdisk's ``Eng_help.hl1``); it is
+``FILE`` may be SZDD-compressed (the game's ``Eng_help.hl1``); it is
 expanded in memory first. ``OUT_DIR`` receives ``index.md`` (|SYSTEM data,
 topic list with context ids and help map ids, keyword index, bitmaps), one
 ``NN-slug.md`` per topic and every ``|bmN`` picture as ``bmN.bmp``.

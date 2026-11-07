@@ -1,7 +1,7 @@
 // The opl3 synth's General MIDI voice driver (src/audio/opl3_driver.*, ADR 0011 decision 3).
 // Portable. The register cases drive the driver into a recording sink with a bank built here;
 // the sound cases drive it into the Nuked OPL3 chip with the Fat Man bank; the full-mix case
-// reads the ship disk's MIDI files through IS_ORIGINAL_DIR and skips without them. Built with
+// reads the game's MIDI files through IS_ORIGINAL_DIR and skips without them. Built with
 // the opl3 synth only (IS_OPL3=1).
 #include "audio/music_opl3.h"
 
@@ -91,7 +91,7 @@ const char* env(const char* name) {
 
 std::vector<std::uint8_t> ship_midi(const fs::path& dir, const std::string& name) {
     for (const fs::path& p :
-         {dir / (name + ".MID"), dir / (name + ".MI1"), dir / "shipdisk" / (name + ".MI1")}) {
+         {dir / (name + ".MID"), dir / (name + ".MI1"), dir / "game" / (name + ".MI1")}) {
         std::ifstream in(p, std::ios::binary);
         if (!in) continue;
         std::vector<std::uint8_t> b((std::istreambuf_iterator<char>(in)), {});
@@ -467,7 +467,7 @@ TEST_CASE("opl3 driver: the Fat Man bank on the Nuked chip sounds and stops") {
 
 // The gain: each of the four ship-disk files played end to end through the player stays below
 // full scale (no sample at the chip's clip). Reports the peak and RMS in dBFS.
-TEST_CASE("opl3 driver: the ship disk's music does not clip at the gain") {
+TEST_CASE("opl3 driver: the game's music does not clip at the gain") {
     const char* orig = env("IS_ORIGINAL_DIR");
     if (!orig) {
         MESSAGE("skipped: needs IS_ORIGINAL_DIR");

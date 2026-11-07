@@ -320,7 +320,7 @@ TEST_CASE("INSPACE.EXE: the GAME icon group, 32x32 and 16x16 at 4 bpp") {
     CHECK(ico == read_file(assets / "inspace.exe" / "GROUP_ICON" / "GAME.ico"));
 }
 
-TEST_CASE("shipdisk: every GROUP_ICON decodes and builds the .ico isre wrote") {
+TEST_CASE("game: every GROUP_ICON decodes and builds the .ico isre wrote") {
     const fs::path dir = env_dir("IS_ORIGINAL_DIR");
     const fs::path assets = env_dir("IS_ASSETS_DIR");
     if (dir.empty()) {
@@ -336,7 +336,7 @@ TEST_CASE("shipdisk: every GROUP_ICON decodes and builds the .ico isre wrote") {
     for (const char* f : modules) groups += check_groups(dir, f, assets, lower(f));
     CHECK(groups == 8);  // ISPACE.DLL 3, five other modules 1 each
 
-    // THEWORKS, when it sits next to the shipdisk directory as in work/extracted
+    // THEWORKS, when it sits next to the game directory as in work/extracted
     const fs::path base = dir.has_filename() ? dir : dir.parent_path();  // drop a trailing separator
     const fs::path works = base.parent_path() / "theworks";
     if (find_ci(works, "FACTORY.EXE").empty()) {

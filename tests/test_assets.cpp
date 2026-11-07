@@ -1,10 +1,10 @@
 // The asset store: name restoration, GameFiles over synthetic installed and distribution
 // directories, discovery, the known-file table and identify(), and AssetStore's typed
 // accessors. The golden tests open the installed copy (IS_ORIGINAL_DIR, work/extracted/
-// shipdisk) and the distribution (original/shipdisk), plus the THEWORKS trees next to them,
+// game) and the distribution (original/game), plus the THEWORKS trees next to them,
 // and check the generated table against original.sha256. ctest passes IS_ORIGINAL_DIR and
 // IS_ASSETS_DIR only; the distribution is IS_DIST_DIR when that is set, else original/
-// shipdisk of the repository above IS_ASSETS_DIR or IS_ORIGINAL_DIR (original_root()).
+// game of the repository above IS_ASSETS_DIR or IS_ORIGINAL_DIR (original_root()).
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
@@ -286,9 +286,9 @@ fs::path env_dir(const char* name) {
     return p;
 }
 
-// The repository that holds original.sha256 and original/shipdisk: the grandparent of
+// The repository that holds original.sha256 and original/game: the grandparent of
 // IS_DIST_DIR when that is set, else the nearest of the three directories above IS_ASSETS_DIR
-// or IS_ORIGINAL_DIR (work/assets, work/extracted/shipdisk) that holds both. Empty when none.
+// or IS_ORIGINAL_DIR (work/assets, work/extracted/game) that holds both. Empty when none.
 fs::path original_root() {
     const fs::path dist = env_dir("IS_DIST_DIR");
     if (!dist.empty()) return dist.parent_path().parent_path();
@@ -297,28 +297,28 @@ fs::path original_root() {
         for (int up = 0; up < 3 && !p.empty() && p.has_relative_path(); ++up) {
             p = p.parent_path();
             if (fs::is_regular_file(p / "original.sha256") &&
-                fs::is_directory(p / "original" / "shipdisk"))
+                fs::is_directory(p / "original" / "game"))
                 return p;
         }
     }
     return {};
 }
 
-// The distribution as shipped: IS_DIST_DIR, else original/shipdisk under original_root().
+// The distribution as shipped: IS_DIST_DIR, else original/game under original_root().
 fs::path dist_dir() {
     if (fs::path d = env_dir("IS_DIST_DIR"); !d.empty()) return d;
     const fs::path root = original_root();
-    return root.empty() ? fs::path() : root / "original" / "shipdisk";
+    return root.empty() ? fs::path() : root / "original" / "game";
 }
 
-// THEWORKS next to a shipdisk tree (work/extracted/theworks, original/theworks).
-fs::path theworks_beside(const fs::path& shipdisk) {
-    if (shipdisk.empty()) return {};
-    const fs::path p = shipdisk.parent_path() / "theworks";
+// THEWORKS next to a game tree (work/extracted/theworks, original/theworks).
+fs::path theworks_beside(const fs::path& game) {
+    if (game.empty()) return {};
+    const fs::path p = game.parent_path() / "theworks";
     return fs::is_directory(p) ? p : fs::path();
 }
 
-void check_shipdisk_store(const AssetStore& a) {
+void check_game_store(const AssetStore& a) {
     CHECK(a.string(2338) == "Limited Inner Space");
     CHECK_FALSE(a.find_string(2336));  // an empty slot of block 147
     CHECK_THROWS_AS(a.string(2336), NotFound);
@@ -391,7 +391,7 @@ void check_shipdisk_store(const AssetStore& a) {
     }
     CHECK_THROWS_AS(a.group_icon(kGameDll, 108), NotFound);
 
-    // the shipdisk keeps its sound modules in the game directory, the default sound directory
+    // the game keeps its sound modules in the game directory, the default sound directory
     CHECK(&a.sound_files() == &a.files());
     const auto waves = a.sound_module(kSoundDll).all(kWavResourceType);
     CHECK(waves.size() == 46);
@@ -416,15 +416,15 @@ void check_shipdisk_store(const AssetStore& a) {
     CHECK_THROWS_AS(a.version("ENG_LANG.DLL"), NotFound);
 }
 
-void check_shipdisk_identified(const GameFiles& g, bool distribution) {
+void check_game_identified(const GameFiles& g, bool distribution) {
     const Identification id = identify(g);
     CHECK(id.form == (distribution ? DirForm::kDistribution : DirForm::kInstalled));
     CHECK(id.files.size() == 25);
     CHECK(id.all_known());
-    CHECK(id.packages == std::vector<Package>{Package::kShipdisk});
+    CHECK(id.packages == std::vector<Package>{Package::kGame});
     for (const FileReport& f : id.files) {
         REQUIRE_MESSAGE(f.known, f.path.u8string() << ": " << f.error);
-        CHECK(f.known->package == Package::kShipdisk);
+        CHECK(f.known->package == Package::kGame);
         CHECK(f.name_known);
         CHECK(f.error.empty());
         // the file on disk carries the table's distribution or installed name exactly
@@ -627,7 +627,7 @@ TEST_CASE("assets: identify() reports unknown files and still serves them") {
         CHECK(f.error.empty());
         CHECK(f.sha256.size() == 64);
         const std::string n = f.name.u8string();
-        // the shipdisk has these names, with other content; FOO.BAR and FRA_LANG.DLL it has not
+        // the game has these names, with other content; FOO.BAR and FRA_LANG.DLL it has not
         const bool shipped = n != "FOO.BAR" && n != "FRA_LANG.DLL";
         CHECK_MESSAGE(f.name_known == shipped, n);
     }
@@ -925,12 +925,12 @@ TEST_CASE("assets: malformed modules and records throw FormatError") {
 TEST_CASE("assets: the known-file table is consistent") {
     const KnownFiles table = known_files();
     CHECK(table.size() == 166);
-    std::size_t shipdisk = 0, theworks = 0;
+    std::size_t game = 0, theworks = 0;
     std::set<std::pair<int, fs::path::string_type>> seen;
     const KnownFile* prev = nullptr;
     for (const KnownFile& k : table) {
         CAPTURE(k.name);
-        (k.package == Package::kShipdisk ? shipdisk : theworks) += 1;
+        (k.package == Package::kGame ? game : theworks) += 1;
         CHECK(std::string(k.sha256).size() == 64);
         CHECK(std::string(k.dist_sha256).size() == 64);
         CHECK(std::string(k.sha256).find_first_not_of("0123456789abcdef") == std::string::npos);
@@ -945,18 +945,18 @@ TEST_CASE("assets: the known-file table is consistent") {
         prev = &k;
         CHECK(find_known(path_from_cp1252(k.name), k.size, k.sha256) == &k);
     }
-    CHECK(shipdisk == 25);
+    CHECK(game == 25);
     CHECK(theworks == 141);
     CHECK(known_name("eng_lang.dll"));
     CHECK_FALSE(known_name("FRA_LANG.DLL"));
     const KnownFile* inspace = find_known("inspace.exe", 310112,
         "fcc51839146d312209ba4123043d8a874dd2418344401ceed2afbdc888fbb66f");
     REQUIRE(inspace);
-    CHECK(inspace->package == Package::kShipdisk);
+    CHECK(inspace->package == Package::kGame);
     CHECK(std::string(inspace->dist_name) == "INSPACE.ex_");
     CHECK(find_known("INSPACE.EXE", 310111,
                      "fcc51839146d312209ba4123043d8a874dd2418344401ceed2afbdc888fbb66f") == nullptr);
-    CHECK(std::string(package_label(Package::kShipdisk)) == "shipdisk v1.29.08");
+    CHECK(std::string(package_label(Package::kGame)) == "game v1.29.08");
     CHECK(std::string(package_label(Package::kTheWorks)) == "theworks");
 }
 
@@ -964,7 +964,7 @@ TEST_CASE("assets golden: the generated table equals original.sha256 and origina
     const fs::path repo = original_root();
     const fs::path manifest = repo.empty() ? fs::path() : repo / "original.sha256";
     if (manifest.empty() || !fs::is_regular_file(manifest)) {
-        MESSAGE("skipped: original.sha256 and original/shipdisk not found from IS_DIST_DIR, "
+        MESSAGE("skipped: original.sha256 and original/game not found from IS_DIST_DIR, "
                 "IS_ASSETS_DIR or IS_ORIGINAL_DIR");
         return;
     }
@@ -989,8 +989,8 @@ TEST_CASE("assets golden: the generated table equals original.sha256 and origina
             ++archives;
             continue;
         }
-        REQUIRE_MESSAGE((folder == "original/shipdisk" || folder == "original/theworks"), rel);
-        const Package pkg = folder == "original/shipdisk" ? Package::kShipdisk : Package::kTheWorks;
+        REQUIRE_MESSAGE((folder == "original/game" || folder == "original/theworks"), rel);
+        const Package pkg = folder == "original/game" ? Package::kGame : Package::kTheWorks;
         const Bytes raw = read_file(repo / path_from_cp1252(rel));
         REQUIRE_MESSAGE(sha256_hex(raw.data(), raw.size()) == digest, rel);
         Bytes data = raw;
@@ -1003,7 +1003,7 @@ TEST_CASE("assets golden: the generated table equals original.sha256 and origina
                      static_cast<std::uint32_t>(data.size()), sha256_hex(data.data(), data.size()),
                      name, static_cast<std::uint32_t>(raw.size()), digest});
     }
-    CHECK(archives == 2);
+    CHECK(archives == 0);  // the manifest lists files, not archives
     CHECK(want.size() == 166);
     for (const Row& r : want)
         CHECK_MESSAGE(have.count(r), "missing or stale row: " << std::get<1>(r)
@@ -1016,25 +1016,25 @@ TEST_CASE("assets golden: the installed copy and the distribution give the same 
     const fs::path installed = env_dir("IS_ORIGINAL_DIR");
     const fs::path dist = dist_dir();
     if (installed.empty() && dist.empty()) {
-        MESSAGE("skipped: neither IS_ORIGINAL_DIR nor original/shipdisk available");
+        MESSAGE("skipped: neither IS_ORIGINAL_DIR nor original/game available");
         return;
     }
     if (installed.empty()) MESSAGE("installed part skipped: IS_ORIGINAL_DIR unset");
-    if (dist.empty()) MESSAGE("distribution part skipped: original/shipdisk not found");
+    if (dist.empty()) MESSAGE("distribution part skipped: original/game not found");
     std::optional<AssetStore> si, sd;
     if (!installed.empty()) {
         si.emplace(installed);
         CHECK(si->files().form() == DirForm::kInstalled);
-        check_shipdisk_store(*si);
-        check_shipdisk_identified(si->files(), false);
+        check_game_store(*si);
+        check_game_identified(si->files(), false);
         CHECK(holds_game(installed));
     }
     if (!dist.empty()) {
         sd.emplace(dist);
         CHECK(sd->files().form() == DirForm::kDistribution);
         CHECK(sd->files().shadowed().empty());
-        check_shipdisk_store(*sd);
-        check_shipdisk_identified(sd->files(), true);
+        check_game_store(*sd);
+        check_game_identified(sd->files(), true);
         CHECK(holds_game(dist));
     }
     if (si && sd) {
@@ -1059,8 +1059,8 @@ TEST_CASE("assets golden: THEWORKS files are known and are not a game directory"
     const fs::path installed = env_dir("IS_ORIGINAL_DIR");
     const fs::path dist = dist_dir();
     std::size_t checked = 0;
-    for (const fs::path& shipdisk : {installed, dist}) {
-        const fs::path tw = theworks_beside(shipdisk);
+    for (const fs::path& game : {installed, dist}) {
+        const fs::path tw = theworks_beside(game);
         if (tw.empty()) continue;
         CAPTURE(tw.u8string());
         ++checked;
@@ -1073,49 +1073,49 @@ TEST_CASE("assets golden: THEWORKS files are known and are not a game directory"
         for (const FileReport& f : id.files)
             CHECK_MESSAGE((f.known && f.known->package == Package::kTheWorks), f.path.u8string());
         CHECK_FALSE(holds_game(tw));
-        CHECK(discover({tw, shipdisk}) == shipdisk);
+        CHECK(discover({tw, game}) == game);
     }
     if (checked == 0)
-        MESSAGE("skipped: no theworks directory beside IS_ORIGINAL_DIR or original/shipdisk");
+        MESSAGE("skipped: no theworks directory beside IS_ORIGINAL_DIR or original/game");
     if (checked == 1) MESSAGE("one theworks directory checked of two");
 }
 
 TEST_CASE("assets golden: identify() over a directory that mixes both packages") {
-    const fs::path shipdisk = env_dir("IS_ORIGINAL_DIR");
-    const fs::path tw = theworks_beside(shipdisk);
+    const fs::path game = env_dir("IS_ORIGINAL_DIR");
+    const fs::path tw = theworks_beside(game);
     if (tw.empty()) {
         MESSAGE("skipped: IS_ORIGINAL_DIR or the theworks directory beside it not available");
         return;
     }
     TempDir t;
     const fs::path dir = t.sub("mixed");
-    // ATTACK.WAV (theworks) sorts before WAVEMIX.INI (shipdisk), so the packages are found in
-    // the order theworks, shipdisk and must come back in enum order. FACTORY.EXE is a name
+    // ATTACK.WAV (theworks) sorts before WAVEMIX.INI (game), so the packages are found in
+    // the order theworks, game and must come back in enum order. FACTORY.EXE is a name
     // of both packages, with other content in each.
     fs::copy_file(tw / "ATTACK.WAV", dir / "ATTACK.WAV");
     fs::copy_file(tw / "FACTORY.EXE", dir / "FACTORY.EXE");
-    fs::copy_file(shipdisk / "WAVEMIX.INI", dir / "WAVEMIX.INI");
+    fs::copy_file(game / "WAVEMIX.INI", dir / "WAVEMIX.INI");
     write(dir / "ZZZ.TXT", bytes_of("not shipped"));
     const Identification id = identify(GameFiles(dir));
-    CHECK(id.packages == std::vector<Package>{Package::kShipdisk, Package::kTheWorks});
+    CHECK(id.packages == std::vector<Package>{Package::kGame, Package::kTheWorks});
     REQUIRE(id.files.size() == 4);
-    const Package want[] = {Package::kTheWorks, Package::kTheWorks, Package::kShipdisk};
+    const Package want[] = {Package::kTheWorks, Package::kTheWorks, Package::kGame};
     for (std::size_t i = 0; i < 3; ++i) {
         CAPTURE(id.files[i].name.u8string());
         REQUIRE(id.files[i].known);
         CHECK(id.files[i].known->package == want[i]);
     }
-    CHECK(id.files[1].known->size == 43488);  // theworks/FACTORY.EXE, not the shipdisk's 39536
+    CHECK(id.files[1].known->size == 43488);  // theworks/FACTORY.EXE, not the game's 39536
     CHECK(id.files[3].known == nullptr);
     CHECK_FALSE(id.files[3].name_known);
     CHECK(id.unknown_count() == 1);
     CHECK(id.shadowed.empty());
 
-    fs::copy_file(shipdisk / "FACTORY.EXE", dir / "FACTORY.EXE",
+    fs::copy_file(game / "FACTORY.EXE", dir / "FACTORY.EXE",
                   fs::copy_options::overwrite_existing);
     const Identification again = identify(GameFiles(dir));
     REQUIRE(again.files.size() == 4);
     REQUIRE(again.files[1].known);
-    CHECK(again.files[1].known->package == Package::kShipdisk);
+    CHECK(again.files[1].known->package == Package::kGame);
     CHECK(again.files[1].known->size == 39536);
 }

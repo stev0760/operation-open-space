@@ -4,7 +4,7 @@ Usage:
 
     isre res FILE                      list FILE's resources and what each decodes to
     isre res FILE -o DIR               write FILE's resources to DIR
-    isre res --extracted E --out O     every NE module in E/shipdisk and E/theworks
+    isre res --extracted E --out O     every NE module in E/game and E/theworks
                                        to O/<module>/ (``generate()``, for ``isre all``)
 
 Layout of one module directory:
@@ -39,7 +39,7 @@ from isre import res_rc as RC
 from isre.ne import NEModule, Resource, is_ne
 from isre.util import sha256, write_if_changed
 
-SOURCES = ["shipdisk", "theworks"]
+SOURCES = ["game", "theworks"]
 
 RT_CURSOR, RT_BITMAP, RT_ICON, RT_MENU, RT_DIALOG, RT_STRING = 1, 2, 3, 4, 5, 6
 RT_ACCELERATOR, RT_GROUP_CURSOR, RT_GROUP_ICON, RT_VERSION = 9, 12, 14, 16
@@ -51,7 +51,7 @@ def jbytes(obj: Any) -> bytes:
 
 def module_key(source: str, filename: str) -> str:
     key = filename.lower()
-    return key if source == "shipdisk" else f"{source}-{key}"
+    return key if source == "game" else f"{source}-{key}"
 
 
 def _safe(s: str) -> str:
@@ -290,7 +290,7 @@ def write_module(dump: ModuleDump, out_dir: Path) -> ModuleDump:
 
 
 def ne_modules(extracted_dir: Path) -> list[tuple[str, str, Path]]:
-    """(module key, source-relative name, path) for every NE file under shipdisk/ and theworks/."""
+    """(module key, source-relative name, path) for every NE file under game/ and theworks/."""
     out = []
     for src in SOURCES:
         d = Path(extracted_dir) / src
@@ -351,7 +351,7 @@ def annotate_same_as(dump: ModuleDump, loose: dict[str, list[str]]) -> int:
 
 
 def generate(extracted_dir: Path, out_dir: Path, log: Callable[[str], None] = print) -> ResResult:
-    """Dump every NE module in ``extracted_dir``/{shipdisk,theworks} to ``out_dir``/<module>/.
+    """Dump every NE module in ``extracted_dir``/{game,theworks} to ``out_dir``/<module>/.
 
     Entries whose WAV samples or bitmap file equal a loose file of the
     distribution get ``same_as`` naming that file.
@@ -396,7 +396,7 @@ def main(argv: list[str]) -> int:
     p = argparse.ArgumentParser(prog="isre res", description="Dump Win16 NE resources.")
     p.add_argument("files", nargs="*", help="NE files (SZDD-compressed input is expanded first)")
     p.add_argument("-o", "--out", help="output directory (one file: the module directory itself)")
-    p.add_argument("--extracted", help="extracted tree holding shipdisk/ and theworks/")
+    p.add_argument("--extracted", help="extracted tree holding game/ and theworks/")
     p.add_argument("--json", action="store_true", help="print index.json instead of a listing")
     a = p.parse_args(argv)
     try:

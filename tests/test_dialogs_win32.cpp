@@ -396,7 +396,7 @@ TEST_CASE("dialogs win32: Order's serial, day text and disabled Register") {
     if (!r.ok()) return;
     r.env.x4 = 12087;
     r.env.x5 = 12341;
-    // the shipdisk's IGRAPHIC.DLL #5500 110 is all zero, so seg10:0x492 draws a serial from
+    // the game's IGRAPHIC.DLL #5500 110 is all zero, so seg10:0x492 draws a serial from
     // GetCurrentTime's low word and the date number; the port keeps it in [Registration]
     r.ini.remove(is::settings::kRegistrationSection, kSerialKey);
     r.ini.remove(is::settings::kRegistrationSection, kSerialCountKey);

@@ -24,7 +24,7 @@ from isre.util import write_if_changed
 SZDD_MAGIC = b"SZDD\x88\xf0\x27\x33"
 HEADER_SIZE = 14
 
-# Distribution names -> installed names. The shipdisk stores most files with
+# Distribution names -> installed names. The game stores most files with
 # the last extension character replaced by '1' (and two executables as
 # '.ex_', which are *not* SZDD-compressed). INSTALL.INI on the same disk
 # lists the installed names, e.g. MAIN.MID, ENG_HELP.HLP, INSPACE.SCR and

@@ -1,7 +1,7 @@
 # start-0001: the shell path from the title to the wave and out, both editions
 
 - **Date:** 2026-10-25. **Host:** Arch Linux, Wine 11.0 old WoW64 with the ExtractIcon patch (`~/opt/wine-11.0-oldwow-patched`, the `oracle/env.sh` default), Xvfb 1024×768×24.
-- **Unregistered:** prefix `innerspace4` (`ORACLE_ID=4`, display `:114`), made fresh for each run by `scenario_prefix`: shipdisk layout in `C:\INSPACE`, its INSPACE.INI, fixture `basic` as `D:`, `SoundSystem=0`.
+- **Unregistered:** prefix `innerspace4` (`ORACLE_ID=4`, display `:114`), made fresh for each run by `scenario_prefix`: game layout in `C:\INSPACE`, its INSPACE.INI, fixture `basic` as `D:`, `SoundSystem=0`.
 - **Registered:** the existing install in prefix `innerspace9` (`ORACLE_ID=9`, display `:119`), started from `C:\SPACE` after `oracle_trace_config`. The scenario does not run `scenario_prefix` or `install_layout.py` there. For each run it maps fixture `basic` as `E:`, because that prefix's `D:` is a CD device. Its INSPACE.INI has `SoundSystem=3`, `MainShip=SKY TALON` and the player name in `ThePlayer`. The scenario backs that INI up and restores it after each run. At the end it unmaps `E:` and clears the relay filter. The INI after the scenario is byte-identical to the INI before it.
 - **Trace:** the default relay profile (`oracle/trace.sh`), unchanged excludes.
 - **Reproduce:** `EDITION=unreg oracle/scenarios/start.sh` and `EDITION=reg oracle/scenarios/start.sh`. Each takes about 9 minutes. Both editions can run in parallel.

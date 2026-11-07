@@ -4,7 +4,7 @@
 // it with index.json; main.cpp includes it, shows the modules and writes the summary.
 //
 // The keys that both carry hold the same values: module (the lower-case installed name, as
-// isre's module key for a shipdisk file), module_name, description, resource_align_shift,
+// isre's module key for a game file), module_name, description, resource_align_shift,
 // counts (in the order the types first appear), strings, and per resource type, type_id, id,
 // size, file_offset and flags. A named type or id is a string in type_id or id, as in
 // index.json. isview adds file, stored_as, installed_size, resource_count, and error for a

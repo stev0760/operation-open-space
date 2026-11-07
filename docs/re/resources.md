@@ -35,7 +35,7 @@ These differ from the Win32 PE layouts. [REF Wine 11.0 dlls/user.exe16, dlls/ver
 | `inspace.exe` (INSPACE) | 2 ICON, 1 GROUP_ICON, #5000, #5500, VERSION, 4 STRING blocks | main program: `GAME` icon (32×32 and 16×16, 4 bpp), FileVersion 1.29.08 |
 | `snd_fx.dll` (ISND_FX) | 46 #100 | sound-effect WAVs |
 | `eng_fx.dll` (VOICE_FX) | 32 #100 | English voice WAVs |
-| `factory.exe` (IFACTORY) | ICON, GROUP_ICON, VERSION, 4 STRING blocks | Ship Factory 1.29.02 (shipdisk). It has no dialogs or menus of its own |
+| `factory.exe` (IFACTORY) | ICON, GROUP_ICON, VERSION, 4 STRING blocks | Ship Factory 1.29.02 (game). It has no dialogs or menus of its own |
 | `theworks-factory.exe` (IFACTORY) | ICON, GROUP_ICON, RCDATA, DIALOG, MENU, VERSION, 5 STRING blocks | Enhanced Ship Factory 1.49.00 |
 | `inspace.scr` (RUNINSPACE) | ICON, GROUP_ICON, RCDATA, 4 DIALOG, 2 STRING blocks | screen saver |
 | `inrun.ad` (SDI_IS_AD) | ICON, GROUP_ICON, 4 #1000, 3 #2000 | "Inner Space (tm) Starter by Bill Stewart" screen-saver module |

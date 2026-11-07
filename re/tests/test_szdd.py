@@ -59,7 +59,7 @@ def test_restored_names():
 # ---------------------------------------------------------------- original files
 
 def _szdd_files(original_dir):
-    return [p for sub in ("shipdisk", "theworks") for p in sorted((original_dir / sub).iterdir())
+    return [p for sub in ("game", "theworks") for p in sorted((original_dir / sub).iterdir())
             if p.is_file() and szdd.is_szdd(p.read_bytes()[:8])]
 
 
@@ -72,9 +72,9 @@ def test_every_szdd_file_expands_to_declared_size(original_dir):
         assert len(szdd.expand(data)) == hdr.size, p.name
 
 
-def test_expanded_content_matches_restored_type(shipdisk):
+def test_expanded_content_matches_restored_type(game):
     seen = set()
-    for p in _szdd_files(shipdisk.parent):
+    for p in _szdd_files(game.parent):
         out = szdd.expand(p.read_bytes())
         ext = szdd.restored_name(p.name).rsplit(".", 1)[1]
         seen.add(ext)
@@ -94,24 +94,24 @@ def test_expanded_content_matches_restored_type(shipdisk):
     assert seen == {"MID", "DLL", "SCR", "AD", "HLP", "INI", "BOD", "SHP"}
 
 
-def test_restored_names_are_listed_in_install_ini(shipdisk):
-    ini = (shipdisk / "INSTALL.INI").read_text("latin-1")
+def test_restored_names_are_listed_in_install_ini(game):
+    ini = (game / "INSTALL.INI").read_text("latin-1")
     listed = {line.split("=", 1)[0].strip().upper() for line in ini.splitlines() if "=" in line}
-    renamed = [p.name for p in sorted(shipdisk.iterdir()) if szdd.restored_name(p.name) != p.name]
+    renamed = [p.name for p in sorted(game.iterdir()) if szdd.restored_name(p.name) != p.name]
     assert len(renamed) == 16  # 14 SZDD files + INSPACE.ex_ + FACTORY.ex_
     for name in renamed:
         assert szdd.restored_name(name).upper() in listed, name
 
 
-def test_extract_dir(shipdisk, tmp_path):
-    files = szdd.extract_dir(shipdisk, tmp_path)
-    src_names = sorted(p.name for p in shipdisk.iterdir() if p.is_file())
+def test_extract_dir(game, tmp_path):
+    files = szdd.extract_dir(game, tmp_path)
+    src_names = sorted(p.name for p in game.iterdir() if p.is_file())
     assert sorted(f.source for f in files) == src_names
     assert sum(f.szdd for f in files) == 14
-    assert (tmp_path / "INSPACE.EXE").read_bytes() == (shipdisk / "INSPACE.ex_").read_bytes()
-    assert (tmp_path / "FACTORY.EXE").read_bytes() == (shipdisk / "FACTORY.ex_").read_bytes()
+    assert (tmp_path / "INSPACE.EXE").read_bytes() == (game / "INSPACE.ex_").read_bytes()
+    assert (tmp_path / "FACTORY.EXE").read_bytes() == (game / "FACTORY.ex_").read_bytes()
     for out_name, src_name in (("Eng_help.HLP", "Eng_help.hl1"), ("WAVEMIX.INI", "WAVEMIX.IN1")):
-        src = (shipdisk / src_name).read_bytes()
+        src = (game / src_name).read_bytes()
         assert (tmp_path / out_name).read_bytes() == szdd.expand(src)
-    again = szdd.extract_dir(shipdisk, tmp_path)
+    again = szdd.extract_dir(game, tmp_path)
     assert not any(f.written for f in again)

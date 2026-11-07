@@ -136,17 +136,17 @@ def test_tsv_escapes_text():
 # ---------------------------------------------------------------- original files
 
 @pytest.fixture(scope="module")
-def shipped(shipdisk):
-    return (ships.load(require(shipdisk / "MASTER.BO1")),
-            ships.load(require(shipdisk / "MASTER.SH1")))
+def shipped(game):
+    return (ships.load(require(game / "MASTER.BO1")),
+            ships.load(require(game / "MASTER.SH1")))
 
 
-def test_shipped_counts_and_round_trip(shipped, shipdisk):
+def test_shipped_counts_and_round_trip(shipped, game):
     bod, shp = shipped
     assert (len(bod.records), bod.tail) == (52, bytes(16))
     assert (len(shp.records), shp.tail) == (118, bytes(10))
-    assert ships.write(bod) == szdd.expand((shipdisk / "MASTER.BO1").read_bytes())
-    assert ships.write(shp) == szdd.expand((shipdisk / "MASTER.SH1").read_bytes())
+    assert ships.write(bod) == szdd.expand((game / "MASTER.BO1").read_bytes())
+    assert ships.write(shp) == szdd.expand((game / "MASTER.SH1").read_bytes())
     assert not any(any(r.stale) for r in bod.records + shp.records)
 
 
@@ -198,10 +198,10 @@ def test_shipped_field_sums(shipped):
         assert sums == FIELD_SUMS[f.kind], f.kind
 
 
-def test_shipped_bitmap_ids_are_igraphic_sprites(shipped, shipdisk):
+def test_shipped_bitmap_ids_are_igraphic_sprites(shipped, game):
     from isre.ne import NEModule
 
-    ig = NEModule.load(require(shipdisk / "IGRAPHIC.DL1"))
+    ig = NEModule.load(require(game / "IGRAPHIC.DL1"))
     sprites = {r.id for r in ig.resources if r.type_id == 4000}
     ids = {r.values["bitmap_id"] for r in shipped[0].records} - {0xFFFF}
     assert len(ids) == 51 and ids <= sprites

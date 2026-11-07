@@ -36,7 +36,7 @@ std::filesystem::path original_dir() {
     return v;
 }
 
-// work/oracle/core-0002/picture beside IS_ORIGINAL_DIR (work/extracted/shipdisk).
+// work/oracle/core-0002/picture beside IS_ORIGINAL_DIR (work/extracted/game).
 std::filesystem::path picture_dir() {
     std::filesystem::path base = original_dir();
     if (base.empty()) return {};

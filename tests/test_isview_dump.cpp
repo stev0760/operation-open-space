@@ -1,7 +1,7 @@
 // isview's Win32-free parts (tools/isview/text.h, dump_json.h and wave_columns.h): the text
 // conversions, the waveform's bounds, and the --dump JSON. The golden test builds the JSON
 // of every NE module of the installed copy (IS_ORIGINAL_DIR), the distribution beside it
-// (original/shipdisk, found from IS_ASSETS_DIR) and the THEWORKS directories, and compares it
+// (original/game, found from IS_ASSETS_DIR) and the THEWORKS directories, and compares it
 // with isre's work/assets/<module>/index.json (IS_ASSETS_DIR). It skips like the other golden
 // tests when the directories are not available.
 #include <cstdint>
@@ -224,22 +224,22 @@ fs::path env_dir(const char* name) {
     return p;
 }
 
-// The distribution as shipped: IS_DIST_DIR, else original/shipdisk in one of the three
+// The distribution as shipped: IS_DIST_DIR, else original/game in one of the three
 // directories above IS_ASSETS_DIR (work/assets). Empty when there is none.
 fs::path dist_dir() {
     if (fs::path d = env_dir("IS_DIST_DIR"); !d.empty()) return d;
     fs::path p = env_dir("IS_ASSETS_DIR");
     for (int up = 0; up < 3 && !p.empty() && p.has_relative_path(); ++up) {
         p = p.parent_path();
-        if (fs::is_directory(p / "original" / "shipdisk")) return p / "original" / "shipdisk";
+        if (fs::is_directory(p / "original" / "game")) return p / "original" / "game";
     }
     return {};
 }
 
-// THEWORKS next to a shipdisk tree (work/extracted/theworks, original/theworks).
-fs::path theworks_beside(const fs::path& shipdisk) {
-    if (shipdisk.empty()) return {};
-    const fs::path p = shipdisk.parent_path() / "theworks";
+// THEWORKS next to a game tree (work/extracted/theworks, original/theworks).
+fs::path theworks_beside(const fs::path& game) {
+    if (game.empty()) return {};
+    const fs::path p = game.parent_path() / "theworks";
     return fs::is_directory(p) ? p : fs::path();
 }
 
@@ -579,7 +579,7 @@ TEST_CASE("isview --dump golden: every NE module equals isre's index.json") {
         MESSAGE("skipped: IS_ORIGINAL_DIR / IS_ASSETS_DIR not available");
         return;
     }
-    // isre's modules: key -> package ("shipdisk/ENG_LANG.DLL" -> "shipdisk")
+    // isre's modules: key -> package ("game/ENG_LANG.DLL" -> "game")
     const Json listed = read_json(assets / "modules.json");
     REQUIRE(listed.kind == Json::Arr);
     std::set<std::pair<std::string, std::string>> isre;  // (package, key)
@@ -593,9 +593,9 @@ TEST_CASE("isview --dump golden: every NE module equals isre's index.json") {
         std::string package;
     };
     const fs::path dist = dist_dir();
-    std::vector<Tree> trees = {{installed, "shipdisk"}};
-    if (!dist.empty()) trees.push_back({dist, "shipdisk"});
-    else MESSAGE("original/shipdisk not found above IS_ASSETS_DIR; the distribution is not compared");
+    std::vector<Tree> trees = {{installed, "game"}};
+    if (!dist.empty()) trees.push_back({dist, "game"});
+    else MESSAGE("original/game not found above IS_ASSETS_DIR; the distribution is not compared");
     for (const fs::path& sd : {installed, dist}) {
         const fs::path tw = theworks_beside(sd);
         if (!tw.empty()) trees.push_back({tw, "theworks"});
@@ -609,7 +609,7 @@ TEST_CASE("isview --dump golden: every NE module equals isre's index.json") {
         std::set<std::string> found, expected;
         for (const auto& [package, key] : isre)
             if (package == t.package) expected.insert(key);
-        const std::string prefix = t.package == "shipdisk" ? "" : t.package + "-";  // re/isre/res.py module_key
+        const std::string prefix = t.package == "game" ? "" : t.package + "-";  // re/isre/res.py module_key
         for (const ModuleInfo& m : mods) {
             REQUIRE_MESSAGE(m.ne, m.error);
             const Json got = parse_json(module_json(m));

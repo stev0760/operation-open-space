@@ -26,7 +26,7 @@ constexpr int kGroupCount = 8;  // sections [0] ... [7]
 struct InstallIni {
     std::string v;             // [Vers] V as GetPrivateProfileString(..., 10) reads it
     std::int16_t version = 0;  // version_number(v); 0 makes the installer exit
-    // [Dirs] key names in file order (SHIPS, SOUNDS, GAMES, RETIRED on the ship disk); code n
+    // [Dirs] key names in file order (SHIPS, SOUNDS, GAMES, RETIRED on the game); code n
     // in 1-7 names dirs[n - 1].
     std::vector<std::string> dirs;
     // Sections [0] ... [7], keys in file order (GetPrivateProfileString(section, NULL),

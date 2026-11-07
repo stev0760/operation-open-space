@@ -121,7 +121,7 @@ TEST_CASE("INI location: LocalPath defaults to the INI's directory, and regenera
     CHECK(ini_directory(ini_path) == t.path() / "Inner Space");
     CHECK(ini_directory(fs::path("INSPACE.INI")) == fs::path("."));
 
-    // the shipdisk's file has no Path: the first launch regenerates (smoke-0001)
+    // the game's file has no Path: the first launch regenerates (smoke-0001)
     write_text(ini_path, "[Inner Space]\r\nMainShip=SKY TALON\r\nThePlayer=Your Name\r\n");
     IniFile ini(ini_path);
     const fs::path assets = t.path() / "game";

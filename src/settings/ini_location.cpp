@@ -23,7 +23,7 @@ IniLocation resolve_ini_location(const std::optional<fs::path>& override_path,
     // Not in the asset directory: that INSPACE.INI is the game's own file [DESIGN].
     const bool in_assets = !asset_dir.empty() && fs::equivalent(exe_dir, asset_dir, ec) && !ec;
     ec.clear();
-    // Nor in an install set (a directory holding INSTALL.INI): the ship disk carries its own
+    // Nor in an install set (a directory holding INSTALL.INI): the game carries its own
     // INSPACE.INI, which is the user's file and the install step's source (ADR 0002 decision
     // 5, ADR 0008 decision 1) [DESIGN].
     const bool in_set = !exe_dir.empty() && fs::is_regular_file(exe_dir / "INSTALL.INI", ec);

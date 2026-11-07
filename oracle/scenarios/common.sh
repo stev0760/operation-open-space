@@ -66,7 +66,7 @@ scenario_prefix() {
     oracle_game_stop
     oracle_xvfb "$DEPTH"
     if [ ! -d "$WINEPREFIX/drive_c/windows" ]; then wineboot -i; wineserver -w; fi
-    "$PY" -I "$ORACLE_DIR/install_layout.py" "$REPO/original/shipdisk" "$WINEPREFIX" --with-ini >/dev/null || exit 1
+    "$PY" -I "$ORACLE_DIR/install_layout.py" "$REPO/original/game" "$WINEPREFIX" --with-ini >/dev/null || exit 1
     cd "$WINEPREFIX/drive_c" || exit 1   # a Windows-visible cwd for wine reg
     if [ -n "$INI_SET" ]; then
         # shellcheck disable=SC2086  # INI_SET is a list of KEY=VALUE words

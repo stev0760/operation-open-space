@@ -35,7 +35,7 @@ std::filesystem::path original_dir() {
     return v;
 }
 
-// work/oracle/wave-0001 beside IS_ORIGINAL_DIR (work/extracted/shipdisk).
+// work/oracle/wave-0001 beside IS_ORIGINAL_DIR (work/extracted/game).
 std::filesystem::path oracle_dir() {
     const auto o = original_dir();
     if (o.empty()) return {};

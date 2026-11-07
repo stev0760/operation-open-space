@@ -15,7 +15,7 @@ import sys
 import os
 
 PROJ = '/home/cabal/Git/repos/innerspace-rea'
-EXE = os.path.join(PROJ, 'extracted/shipdisk/INSPACE.exe')
+EXE = os.path.join(PROJ, 'extracted/game/INSPACE.exe')
 
 
 def unquik(src, max_out, polarity_one_is_literal):

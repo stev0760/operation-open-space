@@ -170,12 +170,12 @@ def _module_asm(original_dir, rel, name, specs):
 
 @pytest.fixture(scope="module")
 def ispace_asm(original_dir, specs):
-    return _module_asm(original_dir, "shipdisk/ISPACE.dll", "ispace", specs)
+    return _module_asm(original_dir, "game/ISPACE.dll", "ispace", specs)
 
 
 @pytest.fixture(scope="module")
 def factory_asm(original_dir, specs):
-    return _module_asm(original_dir, "shipdisk/FACTORY.ex_", "factory-1998a", specs)
+    return _module_asm(original_dir, "game/FACTORY.ex_", "factory-1998a", specs)
 
 
 @pytest.fixture(scope="module")
@@ -369,7 +369,7 @@ def test_function_listing_has_tails_and_unreachable_code(inspace_outputs):
 
 
 def test_cli_output_is_deterministic(original_dir, tmp_path):
-    ne = require(original_dir / "shipdisk" / "ISPACE.dll")
+    ne = require(original_dir / "game" / "ISPACE.dll")
     outs = []
     for seed in ("1", "2"):
         out = tmp_path / f"run{seed}"
@@ -384,7 +384,7 @@ def test_cli_output_is_deterministic(original_dir, tmp_path):
 
 
 def test_show_prints_function(original_dir, tmp_path):
-    ne = require(original_dir / "shipdisk" / "ISPACE.dll")
+    ne = require(original_dir / "game" / "ISPACE.dll")
     from isre.asm import main, show
 
     assert main(["--ne", str(ne), "--out", str(tmp_path)]) == 0

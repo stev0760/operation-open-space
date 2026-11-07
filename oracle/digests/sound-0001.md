@@ -1,7 +1,7 @@
 # sound-0001: the original's sound and music calls on the shell path, one channel and WaveMix
 
 - **Date:** 2026-10-26. **Host:** Arch Linux, Wine 11.0 old WoW64 with the ExtractIcon patch (`~/opt/wine-11.0-oldwow-patched`, the `oracle/env.sh` default), Xvfb 1024×768×24, PulseAudio.
-- **Prefix:** `work/wine/oracle-35` (`ORACLE_ID=35`, display `:145`), made fresh for each run by `scenario_prefix`: shipdisk layout in `C:\INSPACE`, `WAVEMIX.DLL` and `WAVEMIX.INI` in `C:\windows` (INSTALL.INI destination 8), the MIDI files and both FX DLLs in `C:\INSPACE\SOUNDS`, `SndPath=C:\INSPACE\SOUNDS\`, fixture `basic` as `D:`, no `Z:`. Unregistered. The registered prefix took no part.
+- **Prefix:** `work/wine/oracle-35` (`ORACLE_ID=35`, display `:145`), made fresh for each run by `scenario_prefix`: game layout in `C:\INSPACE`, `WAVEMIX.DLL` and `WAVEMIX.INI` in `C:\windows` (INSTALL.INI destination 8), the MIDI files and both FX DLLs in `C:\INSPACE\SOUNDS`, `SndPath=C:\INSPACE\SOUNDS\`, fixture `basic` as `D:`, no `Z:`. Unregistered. The registered prefix took no part.
 - **Audio device:** Wine's PulseAudio driver with `PULSE_SINK` set to a null sink, so nothing was heard. `waveOutGetNumDevs` returns 4. There is one MIDI output, which plays to the ALSA "Midi Through" port. [ORACLE sound-0001]
 - **Trace:** the default relay profile (`oracle/trace.sh`). The `sound-idle2` run also adds `+mci,+mcimidi`.
 - **Runs:**

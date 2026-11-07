@@ -2,7 +2,7 @@
 // a port of the reference's MarkdownWriter renders each topic and the index from the C++
 // reader, and every file must equal the one in work/manual/2000 (Eng_help.hl1, the manual
 // v1.29.08 opens) and work/manual/1998 (theworks ENG_HELP.HLP), the pictures included.
-// The help files come from IS_ORIGINAL_DIR (the shipdisk) and its sibling theworks/, read
+// The help files come from IS_ORIGINAL_DIR (the game) and its sibling theworks/, read
 // through is::assets::GameFiles as the port reads them; the manual directory is
 // IS_MANUAL_DIR or, by default, the sibling manual/ of IS_ASSETS_DIR. Each test skips when
 // a file is missing.

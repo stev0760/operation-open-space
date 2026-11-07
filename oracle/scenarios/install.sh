@@ -8,7 +8,7 @@
 #   (the game to its title), INSPACE.INI and system.ini as the installer left them,
 #   files.txt (the installed tree under C:\SPACE).
 # Environment (all optional; ORACLE_WINE and ORACLE_ID as in oracle/env.sh):
-#   SRC=work/registered/zip   the install files; original/shipdisk when that is absent
+#   SRC=work/registered/zip   the install files; original/game when that is absent
 #   NAME=Pilot ORG=Home       the personalization dialog's fields
 #   FRESH=1                   0 keeps the prefix (an "installed before" question appears)
 #   TRACE=1                   0 runs the installer untraced
@@ -23,7 +23,7 @@ OUT_DEFAULT=install
 # shellcheck source=common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh" "$@"
 SRC="${SRC:-$REPO/work/registered/zip}"
-[ -d "$SRC" ] || SRC="$REPO/original/shipdisk"
+[ -d "$SRC" ] || SRC="$REPO/original/game"
 NAME="${NAME:-Pilot}"; ORG="${ORG:-Home}"; FRESH="${FRESH:-1}"; WAIT_TITLE="${WAIT_TITLE:-18}"
 
 # wait_windows NAME COUNT [SECS]: until COUNT visible windows are named exactly NAME.

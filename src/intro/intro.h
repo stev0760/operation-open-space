@@ -155,7 +155,7 @@ public:
     // seg10:0x885e(0), the edition check (src/shell/edition.h). The program keeps the state
     // between calls and runs the check with the user's INSPACE.EXE records and INI values. The
     // default runs it for a copy without an install record and with V = S = P = 0 on
-    // local_day(), which is the unregistered shipdisk.
+    // local_day(), which is the unregistered game.
     virtual shell::Edition edition_check();
     // Resources, cp1252: an ENG_LANG.DLL string, an INSPACE.EXE string (DGROUP:0x8e66) and a
     // raw ENG_LANG.DLL resource; empty when missing.

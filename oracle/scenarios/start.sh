@@ -12,7 +12,7 @@
 #   and its time since launch; the key and click lines align the trace (WM_KEYDOWN and
 #   WM_LBUTTONDOWN in the CallTo16 lines) with the screenshots.
 # Editions:
-#   unreg  a fresh prefix from scenario_prefix (common.sh): the shipdisk layout in
+#   unreg  a fresh prefix from scenario_prefix (common.sh): the game layout in
 #          C:\INSPACE, its INSPACE.INI, fixture tree `basic` as D:. Unregistered.
 #   reg    the registered install in the existing prefix innerspace9, started from
 #          C:\SPACE (as install.sh does). This scenario never runs scenario_prefix or

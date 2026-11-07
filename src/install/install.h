@@ -1,4 +1,4 @@
-// The port's install step (ADR 0008 decision 1): what INSTALL.EXE of the v1.29.08 ship disk
+// The port's install step (ADR 0008 decision 1): what INSTALL.EXE of the v1.29.08 game
 // does, run from the install set the user names. docs/re/install.md is the specification;
 // formats.md "Resources rewritten in place" gives the records and ispace.md ordinal 24 the
 // ISPACE.DLL calls the installer makes. Portable: no Win32 calls. The Win32 dialogs and the

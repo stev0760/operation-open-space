@@ -185,7 +185,7 @@ TEST_CASE("every DIALOG and MENU template reads back as its Win16 resource") {
     const TemplateCounts s = walk_templates(ship);
     CHECK(s.dialogs == 35u);
     CHECK(s.menus == 4u);
-    // THEWORKS beside the shipdisk tree (work/extracted/theworks)
+    // THEWORKS beside the game tree (work/extracted/theworks)
     fs::path base = ship.lexically_normal();
     if (base.filename().empty()) base = base.parent_path();
     const fs::path works = base.parent_path() / "theworks";

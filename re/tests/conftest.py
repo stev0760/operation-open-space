@@ -35,14 +35,14 @@ def repo_root() -> Path:
 
 @pytest.fixture(scope="session")
 def original_dir() -> Path:
-    require(ORIGINAL / "shipdisk")
+    require(ORIGINAL / "game")
     require(ORIGINAL / "theworks")
     return ORIGINAL
 
 
 @pytest.fixture(scope="session")
-def shipdisk(original_dir) -> Path:
-    return original_dir / "shipdisk"
+def game(original_dir) -> Path:
+    return original_dir / "game"
 
 
 @pytest.fixture(scope="session")
@@ -51,10 +51,10 @@ def theworks(original_dir) -> Path:
 
 
 @pytest.fixture(scope="session")
-def inspace(shipdisk):
+def inspace(game):
     from isre.ne import NEModule
 
-    return NEModule.load(require(shipdisk / "INSPACE.ex_"))
+    return NEModule.load(require(game / "INSPACE.ex_"))
 
 
 @pytest.fixture(scope="session")

@@ -1,7 +1,7 @@
 # sound-0002: Audio Options at capability 3, the capability gate, and Wine's sequencer after a seek
 
 - **Date:** 2026-10-27. **Host:** Arch Linux, Wine 11.0 old WoW64 with the ExtractIcon patch (`~/opt/wine-11.0-oldwow-patched`, the `oracle/env.sh` default), Xvfb 1024×768×24, PulseAudio.
-- **Prefix:** `work/wine/oracle-58` (`ORACLE_ID=58`, display `:168`), made fresh for each game run by `scenario_prefix` as in [sound-0001](sound-0001.md): shipdisk layout in `C:\INSPACE`, `WAVEMIX.DLL` and `WAVEMIX.INI` in `C:\windows`, the MIDI files and both FX DLLs in `C:\INSPACE\SOUNDS`, fixture `basic` as `D:`, no `Z:`. Unregistered. The registered prefix took no part.
+- **Prefix:** `work/wine/oracle-58` (`ORACLE_ID=58`, display `:168`), made fresh for each game run by `scenario_prefix` as in [sound-0001](sound-0001.md): game layout in `C:\INSPACE`, `WAVEMIX.DLL` and `WAVEMIX.INI` in `C:\windows`, the MIDI files and both FX DLLs in `C:\INSPACE\SOUNDS`, fixture `basic` as `D:`, no `Z:`. Unregistered. The registered prefix took no part.
 - **Audio device:** Wine's PulseAudio driver with `PULSE_SINK` set to a null sink. `waveOutGetNumDevs` returns 4. The MIDI mapper plays to the ALSA "Midi Through" port. [ORACLE sound-0002]
 - **Trace:** the default relay profile (`oracle/trace.sh`) for the game runs. The sequencer runs use `+mci,+mcimidi,+winmm,+timestamp` (t4 also `+midi`).
 - **Control state:** a scratch Win32 tool, `ctldump.exe`, runs in the same prefix and wineserver and lists the child controls of the named dialog: id, class, text, enabled, `BM_GETCHECK`, the combo items with `CB_GETCURSEL`, and `SBM_GETPOS` with the scroll range. Its listings sit beside the screenshots as `NN-name.ctl.txt`. [DESIGN]

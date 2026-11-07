@@ -19,7 +19,7 @@ In Inner Space your hard disk is the game world. Each directory is a wave you fl
 | `work/` | Regenerated outputs. Not committed |
 
 ## Original files
-The port ships no original assets. To work on it, place the original distribution archives in `original/archives/` (`Shipdisk.zip`, `THEWORKS.zip`) and extract them to `original/shipdisk/` and `original/theworks/`. Then check them with `sha256sum -c original.sha256`.
+The port ships no original assets. To work on it you need your own copy of the game: the 25-file install set of v1.29.08 (`INSTALL.INI` says `V=12908`), which Software Dynamics sells as the download `thegame.zip`, and, for the Ship Factory work, The Works! add-on (the Ship Builder's Kit, Sound Effects and Voice Effects, with their own `SETUP.EXE`). Extract the game to `original/game/` and The Works to `original/theworks/`, then check them with `sha256sum -c original.sha256`. The manifest lists the files, not the archives: the archives are packaging, and the port identifies a copy by each file's hash (ADR 0002). An older packaging of the same game files, `Shipdisk.zip`, differs only in `README.TXT`'s copyright year (2006 for 2010).
 
 ## License
 The port's own code and documents are MIT licensed (`LICENSE`).

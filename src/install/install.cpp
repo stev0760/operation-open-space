@@ -299,7 +299,7 @@ OpenResult open_source(const fs::path& given_in, const fs::path& work_root, cons
             const std::vector<std::uint8_t> b = read_file(*exe);
             const std::string h = fmt::sha256_hex(b.data(), b.size());
             const assets::KnownFile* k = assets::find_known(fs::path("INSTALL.EXE"), b.size(), h);
-            if (k && k->package == assets::Package::kShipdisk) {
+            if (k && k->package == assets::Package::kGame) {
                 s.rule = Rule::kRegister;
                 s.rule_why = std::string("INSTALL.EXE of ") + assets::package_label(k->package) +
                              ": registers";

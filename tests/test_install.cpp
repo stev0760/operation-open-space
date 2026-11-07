@@ -1,7 +1,7 @@
 // The install step (src/install, ADR 0008 decision 1) against docs/re/install.md: the INSTALL.INI
-// parser on the ship disk's file, the [Vers] V rule, the record writers and a full install of
-// IS_ORIGINAL_DIR's ship disk (original/shipdisk next to work/extracted/shipdisk) into a temp
-// directory, compared byte for byte with work/extracted/shipdisk and read back by the edition
+// parser on the game's file, the [Vers] V rule, the record writers and a full install of
+// IS_ORIGINAL_DIR's game (original/game next to work/extracted/game) into a temp
+// directory, compared byte for byte with work/extracted/game and read back by the edition
 // check. The random values are generated at test time and never printed; the name is made up.
 #include <cstdlib>
 #include <filesystem>
@@ -33,12 +33,12 @@ fs::path env_dir(const char* name) {
     return fs::is_directory(p, ec) ? p : fs::path();
 }
 
-// The extracted ship disk (IS_ORIGINAL_DIR) and original/shipdisk beside the repository's work/.
+// The extracted game (IS_ORIGINAL_DIR) and original/game beside the repository's work/.
 fs::path extracted_dir() { return env_dir("IS_ORIGINAL_DIR"); }
-fs::path shipdisk_dir() {
+fs::path game_dir() {
     const fs::path ex = extracted_dir();
     if (ex.empty()) return {};
-    const fs::path p = ex.parent_path().parent_path().parent_path() / "original" / "shipdisk";
+    const fs::path p = ex.parent_path().parent_path().parent_path() / "original" / "game";
     std::error_code ec;
     return fs::is_directory(p, ec) ? p : fs::path();
 }
@@ -136,8 +136,8 @@ TEST_CASE("install: record writers (formats.md Resources rewritten in place)") {
     CHECK(fresh.pdev - fresh.vidsp == (100 ^ 0xff));
 }
 
-TEST_CASE("install: INSTALL.INI of the ship disk") {
-    const fs::path sd = shipdisk_dir();
+TEST_CASE("install: INSTALL.INI of the game") {
+    const fs::path sd = game_dir();
     if (sd.empty()) return;
     const InstallIni ini = load_install_ini(sd / "INSTALL.INI");
     CHECK(ini.version == 12908);
@@ -156,8 +156,8 @@ TEST_CASE("install: INSTALL.INI of the ship disk") {
     CHECK(ini.groups[7][0].name == "INSPACE.INI");
 }
 
-TEST_CASE("install: a full install of the ship disk registers") {
-    const fs::path sd = shipdisk_dir();
+TEST_CASE("install: a full install of the game registers") {
+    const fs::path sd = game_dir();
     const fs::path ex = extracted_dir();
     if (sd.empty() || ex.empty()) return;
     TempDir tmp;
@@ -206,7 +206,7 @@ TEST_CASE("install: a full install of the ship disk registers") {
     CHECK(asked[1] == kMsgScreenSaver);
     CHECK(percents.back() == 100);
 
-    // Every produced file equals work/extracted/shipdisk, except the two records of INSPACE.EXE
+    // Every produced file equals work/extracted/game, except the two records of INSPACE.EXE
     // and INSTALL.EXE's copy BACKUP.EXE.
     std::set<std::string> want = {
         "MASTER.BOD", "MASTER.SHP", "WAVEMIX.DLL", "WAVEMIX.INI", "CTL3D.DLL",  "ISPACE.DLL",
@@ -281,7 +281,7 @@ TEST_CASE("install: a full install of the ship disk registers") {
 }
 
 TEST_CASE("install: an unrecognised installer starts a trial") {
-    const fs::path sd = shipdisk_dir();
+    const fs::path sd = game_dir();
     if (sd.empty()) return;
     TempDir tmp;
     // A copy of the set whose INSTALL.EXE differs in one byte past its resources.
@@ -345,7 +345,7 @@ TEST_CASE("install: an unrecognised installer starts a trial") {
 }
 
 namespace {
-// A copy of the ship disk whose INSTALL.EXE is not recognised (a trial installer).
+// A copy of the game whose INSTALL.EXE is not recognised (a trial installer).
 fs::path trial_set(const fs::path& sd, const fs::path& to) {
     fs::create_directories(to);
     for (const auto& e : fs::directory_iterator(sd)) fs::copy_file(e.path(), to / e.path().filename());
@@ -377,7 +377,7 @@ is::shell::Edition edition_of(const fs::path& game, const fs::path& ini_path, in
 }  // namespace
 
 TEST_CASE("install: a reinstall keeps the trial day; a foreign game directory is refused") {
-    const fs::path sd = shipdisk_dir();
+    const fs::path sd = game_dir();
     if (sd.empty()) return;
     TempDir tmp;
     const OpenResult o = open_source(trial_set(sd, tmp.path / "set"), tmp.path / "work", {});

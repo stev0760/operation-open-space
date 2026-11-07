@@ -90,7 +90,7 @@ def test_ghidra_selector():
 
 def _ne_files(original_dir):
     out = []
-    for sub in ("shipdisk", "theworks"):
+    for sub in ("game", "theworks"):
         for p in sorted((original_dir / sub).iterdir()):
             if not p.is_file():
                 continue
@@ -190,15 +190,15 @@ def test_optloader_detection(original_dir):
     mods = {name: NEModule(data, name) for name, data in _ne_files(original_dir)}
     packed = {n: m.optloader() for n, m in mods.items() if m.optloader()["packed"]}
     assert sorted(packed) == [
-        "shipdisk/FACTORY.ex_", "shipdisk/INSPACE.ex_", "shipdisk/INSTALL.exe",
-        "shipdisk/ISPACE.dll", "theworks/FACTORY.EXE", "theworks/SETUP.EXE",
+        "game/FACTORY.ex_", "game/INSPACE.ex_", "game/INSTALL.exe",
+        "game/ISPACE.dll", "theworks/FACTORY.EXE", "theworks/SETUP.EXE",
     ]
-    assert packed["shipdisk/INSPACE.ex_"]["packed_segments"] == list(range(2, 20))
+    assert packed["game/INSPACE.ex_"]["packed_segments"] == list(range(2, 20))
     stubs = {mods[n].segment_file_bytes(1) for n in packed}
     assert len(stubs) == 1 and len(stubs.pop()) == 2164
-    isp = mods["shipdisk/ISPACE.dll"]
+    isp = mods["game/ISPACE.dll"]
     assert isp.flags == 0x8B09 and isp.is_library
-    assert len(isp.segments) == 11 and len(packed["shipdisk/ISPACE.dll"]["packed_segments"]) == 10
-    for n in ("shipdisk/FACTORY.ex_", "theworks/FACTORY.EXE"):
+    assert len(isp.segments) == 11 and len(packed["game/ISPACE.dll"]["packed_segments"]) == 10
+    for n in ("game/FACTORY.ex_", "theworks/FACTORY.EXE"):
         assert len(mods[n].segments) == 6 and len(packed[n]["packed_segments"]) == 5
-    assert not mods["shipdisk/INSPACE.sc1"].optloader()["packed"]
+    assert not mods["game/INSPACE.sc1"].optloader()["packed"]

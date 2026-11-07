@@ -1,6 +1,6 @@
 // The fixture drive of oracle/fixtures/make_fixtures.py (tree "basic"), for golden tests.
 // IS_FIXTURE_DIR names it; otherwise it is looked for at work/fixtures/basic next to
-// IS_ORIGINAL_DIR (work/extracted/shipdisk). Empty when neither exists: the tests skip.
+// IS_ORIGINAL_DIR (work/extracted/game). Empty when neither exists: the tests skip.
 #pragma once
 
 #include <cstdlib>

@@ -1,6 +1,6 @@
 # Win16 translation
 
-This page maps each Win16 construct that INSPACE.EXE, ISPACE.DLL and the shipdisk FACTORY.EXE use to C++17 Win32 code built with MinGW-w64 for 32-bit and 64-bit Windows. Each topic gives what the original does and where, the trap, and the port's translation. A translation marked **needs an ADR** is a modernisation that waits for a record in `docs/decisions/`. [DESIGN]
+This page maps each Win16 construct that INSPACE.EXE, ISPACE.DLL and the game's FACTORY.EXE use to C++17 Win32 code built with MinGW-w64 for 32-bit and 64-bit Windows. Each topic gives what the original does and where, the trap, and the port's translation. A translation marked **needs an ADR** is a modernisation that waits for a record in `docs/decisions/`. [DESIGN]
 
 Sites and counts come from the `isre asm` listings and their `xrefs.json` (`work/asm/<module>/`). A count of call sites counts call instructions. Addresses without a module name are INSPACE.EXE. Reading traps that are not about translation are in [pitfalls.md](pitfalls.md), the ISPACE.DLL interface is in [ispace.md](ispace.md), and the port's timing design is [ADR 0001](../decisions/0001-timestep.md). [DESIGN]
 

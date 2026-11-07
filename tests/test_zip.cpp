@@ -1,6 +1,6 @@
 // src/formats/zip: the inflater on stored, fixed-code and dynamic-code streams, the archive
 // reader on zips built in memory, the CRC and unsafe-name checks, and (when original/ is
-// present) every entry of original/archives/Shipdisk.zip against original/shipdisk.
+// present) every entry of original/archives/thegame.zip against original/game.
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -183,12 +183,12 @@ TEST_CASE("zip: the output bound, ranges and header agreement") {
     CHECK_THROWS_AS(ss.extract(ss.entries()[0]), FormatError);
 }
 
-TEST_CASE("zip: golden, original/archives/Shipdisk.zip against original/shipdisk") {
+TEST_CASE("zip: golden, original/archives/thegame.zip against original/game") {
     const char* v = std::getenv("IS_ORIGINAL_DIR");
     if (!v || !*v) return;
     const fs::path root = fs::path(v).parent_path().parent_path().parent_path();
-    const fs::path zip = root / "original" / "archives" / "Shipdisk.zip";
-    const fs::path dir = root / "original" / "shipdisk";
+    const fs::path zip = root / "original" / "archives" / "thegame.zip";
+    const fs::path dir = root / "original" / "game";
     std::error_code ec;
     if (!fs::is_regular_file(zip, ec) || !fs::is_directory(dir, ec)) return;
     const is::fmt::ZipArchive a = is::fmt::ZipArchive::load(zip);
@@ -204,5 +204,5 @@ TEST_CASE("zip: golden, original/archives/Shipdisk.zip against original/shipdisk
         }
     }
     CHECK(compared > 0);
-    MESSAGE("Shipdisk.zip entries matched in original/shipdisk: " << compared);
+    MESSAGE("thegame.zip entries matched in original/game: " << compared);
 }

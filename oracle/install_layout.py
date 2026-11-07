@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Lay out the original Shipdisk files in a Wine prefix without INSTALL.EXE (the
+"""Lay out the original Game files in a Wine prefix without INSTALL.EXE (the
 unregistered game; oracle/scenarios/install.sh runs the installer for the registered one).
 
-Usage: install_layout.py <shipdisk-dir> <wineprefix> [--game-dir INSPACE]
+Usage: install_layout.py <game-dir> <wineprefix> [--game-dir INSPACE]
                          [--with-ini] [--calibrate N]
 
 Directory codes follow the [0]..[7] sections of INSTALL.INI, as INSTALL.EXE
@@ -105,7 +105,7 @@ def set_ini_keys(text: str, section: str, keys: dict[str, str]) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("shipdisk", type=pathlib.Path)
+    ap.add_argument("game", type=pathlib.Path)
     ap.add_argument("prefix", type=pathlib.Path)
     ap.add_argument("--game-dir", default="INSPACE")
     ap.add_argument("--with-ini", action="store_true",
@@ -120,7 +120,7 @@ def main() -> int:
             "8": c / "windows", "9": None}
     ini = configparser.ConfigParser(strict=False)
     ini.optionxform = str
-    ini.read(a.shipdisk / "INSTALL.INI")
+    ini.read(a.game / "INSTALL.INI")
 
     for sec in [s for s in ini.sections() if s.isdigit()]:
         for name, code in ini[sec].items():
@@ -128,7 +128,7 @@ def main() -> int:
             if target is None:
                 print(f"skip  {name} (code {code})")
                 continue
-            src = find_source(a.shipdisk, name)
+            src = find_source(a.game, name)
             if src is None:
                 print(f"miss  {name} (code {code})")
                 continue

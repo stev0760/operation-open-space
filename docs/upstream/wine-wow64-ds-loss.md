@@ -39,7 +39,7 @@ A related symptom: in about 1 run in 5, the game exits silently. The resume leav
 
 ## What to bring to the other machine
 - **This repo:** `git bundle create innerspace.bundle --all` here, then `git clone innerspace.bundle innerspace-port` there.
-- **The original files:** `original/archives/Shipdisk.zip` (sha256 `3e560aa7…`, full value in `original.sha256`). Extract it to `original/shipdisk/` and check it with `sha256sum -c --ignore-missing original.sha256`. THEWORKS is not needed for this bug.
+- **The original files:** `original/archives/thegame.zip` (sha256 `5a3061f557cd1aad147300c00bef89f47a4d22d6f0bf9c0a8ce569dc4abab23b`). Extract it to `original/game/` and check it with `sha256sum -c --ignore-missing original.sha256`. THEWORKS is not needed for this bug.
 - **Python 3.9+ venv:** `python3 -m venv re/.venv && re/.venv/bin/pip install pytest capstone && re/.venv/bin/pip install -e re`. The layout script needs `isre` for the SZDD-compressed files.
 - **Wine builds:** `oracle/wine/install_kron4ek.sh amd64-wow64 /opt/wine-11.0` (affected) and `oracle/wine/install_kron4ek.sh amd64 /opt/wine-11.0-oldwow` (control). Both check the release sha256. Old WoW64 needs the host's 32-bit X11, font and sound libraries; the script header lists the RHEL 9 package names.
 - **Headless runs only:** Xvfb, xdotool, ImageMagick, and `i686-w64-mingw32-gcc` (the fixture drive's test programs).
@@ -48,7 +48,7 @@ A related symptom: in about 1 run in 5, the game exits silently. The resume leav
 ```
 export WINEPREFIX=$HOME/.wine-inspace-bug WINEDLLOVERRIDES=ctl3d=n
 /opt/wine-11.0/bin/wineboot -i
-re/.venv/bin/python -I oracle/install_layout.py original/shipdisk "$WINEPREFIX" --with-ini
+re/.venv/bin/python -I oracle/install_layout.py original/game "$WINEPREFIX" --with-ini
 cd "$WINEPREFIX/drive_c/INSPACE"
 WINEDEBUG=+thunk /opt/wine-11.0/bin/wine INSPACE.EXE 2>&1 | tee ~/inspace-bug.log
 ```

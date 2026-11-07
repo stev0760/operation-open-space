@@ -20,7 +20,7 @@ from isre import hlp
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ORIGINAL = REPO_ROOT / "original"
 HLP_1998 = ORIGINAL / "theworks" / "ENG_HELP.HLP"
-HLP_2000 = ORIGINAL / "shipdisk" / "Eng_help.hl1"
+HLP_2000 = ORIGINAL / "game" / "Eng_help.hl1"
 HELPDECO = REPO_ROOT / "work" / "tools" / "helpdeco" / "gcc" / "helpdeco"
 
 

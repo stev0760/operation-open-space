@@ -15,7 +15,7 @@ option(IS_WERROR "Treat warnings as errors" ON)
 # stage 2 OFF picks it up on its next preset configure; -DIS_OPL3=OFF on the command line wins
 # (M7 s2b fixer).
 option(IS_OPL3 "Build the opl3 music synth (Nuked OPL3 + the Fat Man bank)" ON)
-set(IS_ORIGINAL_DIR "${CMAKE_SOURCE_DIR}/work/extracted/shipdisk" CACHE PATH
+set(IS_ORIGINAL_DIR "${CMAKE_SOURCE_DIR}/work/extracted/game" CACHE PATH
     "Expanded original game files, read by the golden tests (skipped when absent)")
 set(IS_ASSETS_DIR "${CMAKE_SOURCE_DIR}/work/assets" CACHE PATH
     "isre res output, the reference for the golden tests (skipped when absent)")

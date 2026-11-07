@@ -24,7 +24,7 @@ const std::multimap<fs::path::string_type, const KnownFile*>& rows_by_name() {
 
 const char* package_label(Package p) {
     switch (p) {
-    case Package::kShipdisk: return "shipdisk v1.29.08";
+    case Package::kGame: return "game v1.29.08";
     case Package::kTheWorks: return "theworks";
     }
     return "?";

@@ -2,7 +2,7 @@
 
 Layout written under ``<work>``:
 
-    extracted/shipdisk/   every shipdisk file, SZDD expanded, names restored
+    extracted/game/   every game file, SZDD expanded, names restored
     extracted/theworks/   every THEWORKS file
     ne/<name>.json        ``isre ne --json`` output per OPTLOADER module
     unpacked/<name>/      segNN.bin, relocs.json, unpack.json per module
@@ -27,12 +27,12 @@ from isre.util import find_file, json_bytes, write_if_changed
 
 # (output name, extracted subdirectory, installed file name)
 MODULES = [
-    ("inspace", "shipdisk", "INSPACE.EXE"),
-    ("ispace", "shipdisk", "ISPACE.DLL"),
-    ("factory-1998a", "shipdisk", "FACTORY.EXE"),
+    ("inspace", "game", "INSPACE.EXE"),
+    ("ispace", "game", "ISPACE.DLL"),
+    ("factory-1998a", "game", "FACTORY.EXE"),
     ("factory-1998b", "theworks", "FACTORY.EXE"),
 ]
-SOURCES = ["shipdisk", "theworks"]
+SOURCES = ["game", "theworks"]
 
 
 @dataclass

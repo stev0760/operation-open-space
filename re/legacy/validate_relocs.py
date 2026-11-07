@@ -17,7 +17,7 @@ import sys
 from collections import Counter, defaultdict
 
 PROJ = '/home/cabal/Git/repos/innerspace-rea'
-EXE = os.path.join(PROJ, 'extracted/shipdisk/INSPACE.exe')
+EXE = os.path.join(PROJ, 'extracted/game/INSPACE.exe')
 
 
 def main():

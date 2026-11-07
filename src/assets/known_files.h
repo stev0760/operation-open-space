@@ -16,12 +16,12 @@
 namespace is::assets {
 
 enum class Package : std::uint8_t {
-    kShipdisk,  // the distribution disk of v1.29.08 (original/shipdisk)
+    kGame,      // the game's 25-file install set, v1.29.08 (original/game)
     kTheWorks,  // the THEWORKS add-on: the Enhanced Ship Factory, its DIBs and WAVs
                 // (original/theworks)
 };
 
-// "shipdisk v1.29.08" or "theworks". 1.29.08 is INSPACE.EXE's FileVersion string
+// "game v1.29.08" or "theworks". 1.29.08 is INSPACE.EXE's FileVersion string
 // [BYTES INSPACE.EXE VERSION 1].
 const char* package_label(Package p);
 

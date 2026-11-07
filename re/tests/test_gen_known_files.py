@@ -23,7 +23,7 @@ def load_generator():
 
 def test_committed_table_is_current(tmp_path: Path):
     manifest = require(REPO_ROOT / "original.sha256")
-    require(REPO_ROOT / "original" / "shipdisk")
+    require(REPO_ROOT / "original" / "game")
     require(REPO_ROOT / "original" / "theworks")
     gen = load_generator()
     out = tmp_path / "known_files_table.cpp"
@@ -47,14 +47,14 @@ def test_rows_sorted_archives_skipped_and_deterministic(tmp_path: Path):
     gen = load_generator()
     manifest = write_manifest(tmp_path, {
         "original/theworks/B.DIB": b"b",
-        "original/shipdisk/README.TXT": b"readme",
-        "original/shipdisk/a.dll": b"a",
+        "original/game/README.TXT": b"readme",
+        "original/game/a.dll": b"a",
         "original/archives/X.ZIP": b"zip",
     })
     rows = gen.build_rows(manifest)
     assert [(r["package"], r["name"]) for r in rows] == [
-        ("original/shipdisk", "a.dll"),
-        ("original/shipdisk", "README.TXT"),
+        ("original/game", "a.dll"),
+        ("original/game", "README.TXT"),
         ("original/theworks", "B.DIB"),
     ]
     first = gen.render(rows, manifest.name)
@@ -67,8 +67,8 @@ def test_unknown_directory_and_hash_mismatch_are_errors(tmp_path: Path):
     manifest = write_manifest(tmp_path, {"original/other/A.TXT": b"a"})
     with pytest.raises(gen.GenError, match="no package"):
         gen.build_rows(manifest)
-    manifest = write_manifest(tmp_path, {"original/shipdisk/A.TXT": b"a"})
-    (tmp_path / "original" / "shipdisk" / "A.TXT").write_bytes(b"changed")
+    manifest = write_manifest(tmp_path, {"original/game/A.TXT": b"a"})
+    (tmp_path / "original" / "game" / "A.TXT").write_bytes(b"changed")
     with pytest.raises(gen.GenError, match="does not match"):
         gen.build_rows(manifest)
 
@@ -76,8 +76,8 @@ def test_unknown_directory_and_hash_mismatch_are_errors(tmp_path: Path):
 def test_names_restoring_to_one_installed_name_are_an_error(tmp_path: Path):
     gen = load_generator()
     manifest = write_manifest(tmp_path, {
-        "original/shipdisk/A.BOD": b"plain",
-        "original/shipdisk/A.BO1": b"renamed",
+        "original/game/A.BOD": b"plain",
+        "original/game/A.BO1": b"renamed",
     })
     with pytest.raises(gen.GenError, match="both restore to"):
         gen.build_rows(manifest)

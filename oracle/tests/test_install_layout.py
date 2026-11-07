@@ -1,4 +1,4 @@
-"""install_layout.py: INI key editing and the shipdisk layout, on synthetic input."""
+"""install_layout.py: INI key editing and the game layout, on synthetic input."""
 from __future__ import annotations
 
 import install_layout as il
@@ -53,8 +53,8 @@ def test_regenerated_keys():
     assert keys["Calibrate"] == "713"
 
 
-def test_layout_from_synthetic_shipdisk(tmp_path, monkeypatch):
-    ship = tmp_path / "shipdisk"
+def test_layout_from_synthetic_game(tmp_path, monkeypatch):
+    ship = tmp_path / "game"
     ship.mkdir()
     (ship / "INSTALL.INI").write_text("[0]\nINSPACE.EXE=0\nINSPACE.INI=0\n[1]\nMASTER.SHP=1\n"
                                       "[2]\nBOOM.WAV=2\n[3]\nCTL3D.DLL=8\nSAVER.AD=9\n")

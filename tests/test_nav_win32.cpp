@@ -336,7 +336,7 @@ TEST_CASE("nav win32: a demo opens on the root row") {
     DestroyWindow(main);
 }
 TEST_CASE("nav win32: the glyphs and icons from the user's files (golden)") {
-    // IS_ORIGINAL_DIR names the distribution (CMake default work/extracted/shipdisk); with
+    // IS_ORIGINAL_DIR names the distribution (CMake default work/extracted/game); with
     // IS_NAV_SHOW=<ms> the window stays up that long after each step, for screenshots.
     const char* orig = std::getenv("IS_ORIGINAL_DIR");
     std::unique_ptr<is::assets::AssetStore> store;

@@ -1,6 +1,6 @@
 // The INI layer: IniFile's profile semantics over synthetic files, GameSettings' keys and
 // defaults (checked against docs/re/formats.md's tables), the seg6:0x6d8 regeneration, and a
-// golden read of the shipped INSPACE.INI (IS_ORIGINAL_DIR, work/extracted/shipdisk).
+// golden read of the shipped INSPACE.INI (IS_ORIGINAL_DIR, work/extracted/game).
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>

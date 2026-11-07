@@ -323,7 +323,7 @@ def test_sniff():
 
 def test_build_module_synthetic(tmp_path):
     mod = NEModule(make_ne(synthetic_resources()), "TEST.DLL")
-    dump = res.build_module(mod, "test.dll", "shipdisk/TEST.DLL")
+    dump = res.build_module(mod, "test.dll", "game/TEST.DLL")
     assert dump.errors == []
     idx = dump.index
     assert idx["strings"] == 4
@@ -378,7 +378,7 @@ def test_cli_listing_and_dump(tmp_path, capsys):
 
 
 def test_module_key():
-    assert res.module_key("shipdisk", "ENG_LANG.DLL") == "eng_lang.dll"
+    assert res.module_key("game", "ENG_LANG.DLL") == "eng_lang.dll"
     assert res.module_key("theworks", "FACTORY.EXE") == "theworks-factory.exe"
 
 
@@ -442,11 +442,11 @@ DEMO_MESSAGE = ("With Limited Inner Space, you can only use the Transformer ship
 
 @pytest.fixture(scope="module")
 def assets(tmp_path_factory):
-    for src in ("shipdisk", "theworks"):
+    for src in ("game", "theworks"):
         if not (ORIGINAL / src).is_dir():
             pytest.skip("original/ is absent (original game files are local only)")
     root = tmp_path_factory.mktemp("res")
-    for src in ("shipdisk", "theworks"):
+    for src in ("game", "theworks"):
         szdd.extract_dir(ORIGINAL / src, root / "extracted" / src)
     result = res.generate(root / "extracted", root / "assets", log=lambda s: None)
     return root, result

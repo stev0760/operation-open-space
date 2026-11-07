@@ -1,5 +1,5 @@
 // SZDD expansion: synthetic streams, then every compressed file of the distribution against
-// the tree that `isre extract` writes (work/extracted/shipdisk, IS_ORIGINAL_DIR).
+// the tree that `isre extract` writes (work/extracted/game, IS_ORIGINAL_DIR).
 #include <cctype>
 #include <cstdlib>
 #include <filesystem>
@@ -42,14 +42,14 @@ fs::path env_dir(const char* name) {
     return fs::path(v);
 }
 
-// The distribution disk: IS_DIST_DIR, else original/shipdisk in a directory above
-// IS_ORIGINAL_DIR (the repository layout: work/extracted/shipdisk next to original/).
+// The distribution disk: IS_DIST_DIR, else original/game in a directory above
+// IS_ORIGINAL_DIR (the repository layout: work/extracted/game next to original/).
 fs::path dist_dir(const fs::path& extracted) {
     if (fs::path d = env_dir("IS_DIST_DIR"); !d.empty()) return d;
     fs::path p = extracted.lexically_normal();
     if (p.filename().empty()) p = p.parent_path();
     for (; p.has_relative_path(); p = p.parent_path())
-        if (fs::is_directory(p / "original" / "shipdisk")) return p / "original" / "shipdisk";
+        if (fs::is_directory(p / "original" / "game")) return p / "original" / "game";
     return {};
 }
 
@@ -165,11 +165,11 @@ TEST_CASE("SZDD: the golden test restores names as isre's restored_name does") {
     CHECK(restored_name("README.TXT", 'T') == "README.TXT");
 }
 
-TEST_CASE("SZDD golden: the distribution expands to work/extracted/shipdisk") {
+TEST_CASE("SZDD golden: the distribution expands to work/extracted/game") {
     const fs::path extracted = env_dir("IS_ORIGINAL_DIR");
     const fs::path dist = extracted.empty() ? fs::path() : dist_dir(extracted);
     if (extracted.empty() || dist.empty()) {
-        MESSAGE("skipped: IS_ORIGINAL_DIR or original/shipdisk (IS_DIST_DIR) not available");
+        MESSAGE("skipped: IS_ORIGINAL_DIR or original/game (IS_DIST_DIR) not available");
         return;
     }
     std::size_t files = 0, compressed = 0;

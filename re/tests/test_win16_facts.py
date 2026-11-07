@@ -4,7 +4,7 @@ CLAUDE.md asks for a test behind every count, site list and tally in docs/.
 These tests read the ``isre asm`` listings and indexes (``work/asm/<module>/``),
 the unpacked segments and relocations (``work/unpacked/<module>/``), the NE
 summaries (``work/ne/``) and the ``isre res`` dialogs (``work/assets/``), and
-skip when those are absent. FACTORY.EXE is the shipdisk copy
+skip when those are absent. FACTORY.EXE is the game copy
 (``factory-1998a``).
 
 Conventions of this file:

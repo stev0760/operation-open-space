@@ -1014,7 +1014,7 @@ def test_ispace_dispatch_tables(isp):
 
 
 def test_factory_requests_21_ordinals(fac):
-    """ispace.md: shipdisk FACTORY.EXE requests ordinals 1-10, 12-20, 29 and 36."""
+    """ispace.md: the game's FACTORY.EXE requests ordinals 1-10, 12-20, 29 and 36."""
     by_ordinal, ords = [], []
     for s in fac.xj["imports"]["KERNEL.50 GetProcAddress"]:
         call = fac.at(s)
@@ -1065,9 +1065,9 @@ def _imports(name: str, ne_file: Path) -> set[tuple[str, int]]:
 
 def test_palette_dib_and_mmsystem_imports():
     """ispace.md What ISPACE.DLL owns, Imports."""
-    mods = {"inspace": ORIGINAL / "shipdisk" / "INSPACE.ex_",
-            "ispace": ORIGINAL / "shipdisk" / "ISPACE.dll",
-            "factory-1998a": ORIGINAL / "shipdisk" / "FACTORY.ex_",
+    mods = {"inspace": ORIGINAL / "game" / "INSPACE.ex_",
+            "ispace": ORIGINAL / "game" / "ISPACE.dll",
+            "factory-1998a": ORIGINAL / "game" / "FACTORY.ex_",
             "factory-1998b": ORIGINAL / "theworks" / "FACTORY.EXE"}
     imports = {n: _imports(n, p) for n, p in mods.items()}
     for o in (360, 367, 375, 441, 442):
@@ -1109,7 +1109,7 @@ def test_wavemix_name_table(isp):
 def master():
     from isre import szdd
 
-    d = require(ORIGINAL / "shipdisk")
+    d = require(ORIGINAL / "game")
     return (szdd.expand(require(d / "MASTER.BO1").read_bytes()),
             szdd.expand(require(d / "MASTER.SH1").read_bytes()))
 
@@ -1329,7 +1329,7 @@ def test_palette_imports_and_ordinal_14_callers(ins, isp):
 def _ne(name: str):
     from isre.ne import NEModule
 
-    return NEModule.load(require(ORIGINAL / "shipdisk" / name))
+    return NEModule.load(require(ORIGINAL / "game" / name))
 
 
 def _resource(name: str, rtype, rid) -> bytes:
@@ -1685,8 +1685,8 @@ def test_registration_record_constants(isp):
     assert isp.call_sites("seg10:0x4dba") and isp.call_sites("seg10:0x5b24")
 
 
-def test_registration_resources_on_the_shipdisk():
-    """formats.md: the shipdisk's #5500 110 is all zero and #5000 143 holds the clear text."""
+def test_registration_resources_on_the_game():
+    """formats.md: the game's #5500 110 is all zero and #5000 143 holds the clear text."""
     m = _ne("INSPACE.ex_")
     rec = {(r.type_id, r.id): r for r in m.resources}
     r110, r143 = rec[(5500, 110)], rec[(5000, 143)]
@@ -1904,13 +1904,13 @@ def test_install_dialog_controls():
     assert d300[131]["x"] > d300[0xFFFF]["x"]
 
 
-def test_install_ini_on_the_shipdisk():
+def test_install_ini_on_the_game():
     """install.md INSTALL.INI: [Vers], [Dirs] and the groups with their destination codes."""
     import configparser
 
     cp = configparser.ConfigParser(delimiters=("=",))
     cp.optionxform = str
-    cp.read_string(require(ORIGINAL / "shipdisk" / "INSTALL.INI").read_text("latin-1"))
+    cp.read_string(require(ORIGINAL / "game" / "INSTALL.INI").read_text("latin-1"))
     assert dict(cp["Vers"]) == {"V": "12908", "Def": "1"}
     assert list(cp["Dirs"]) == ["SHIPS", "SOUNDS", "GAMES", "RETIRED"]
     groups = {g: {k: int(v) for k, v in cp[str(g)].items()} for g in range(8)}
@@ -1923,7 +1923,7 @@ def test_install_ini_on_the_shipdisk():
         6: {"INSPACE.SCR": 8, "INRUN.AD": 9}, 7: {"INSPACE.INI": 0}}
     assert list(cp) == ["DEFAULT", "Vers", "Dirs"] + [str(g) for g in range(8)] + ["Temp"]
     # the '_' sources are plain MZ files, the '1' sources SZDD
-    sd = ORIGINAL / "shipdisk"
+    sd = ORIGINAL / "game"
     assert (sd / "INSPACE.ex_").read_bytes()[:2] == b"MZ" == (sd / "FACTORY.ex_").read_bytes()[:2]
     assert (sd / "MASTER.BO1").read_bytes()[:4] == b"SZDD"
 
@@ -2903,7 +2903,7 @@ def test_midi_files():
     """sound.md Music: sizes, SMF format, division and track counts of the four MIDI files."""
     from isre import szdd
 
-    d = require(ORIGINAL / "shipdisk")
+    d = require(ORIGINAL / "game")
     got = {}
     for name in ("MAIN", "RACE", "ANTHEM", "DEMON"):
         data = szdd.expand(require(d / f"{name}.MI1").read_bytes())
@@ -2919,7 +2919,7 @@ def test_wavemix_ini_rate():
 
     from isre import szdd
 
-    text = szdd.expand(require(ORIGINAL / "shipdisk" / "WAVEMIX.IN1").read_bytes()).decode("latin-1")
+    text = szdd.expand(require(ORIGINAL / "game" / "WAVEMIX.IN1").read_bytes()).decode("latin-1")
     cp = configparser.ConfigParser(strict=False, inline_comment_prefixes=(";",))
     cp.optionxform = str
     cp.read_string(text)
@@ -3033,7 +3033,7 @@ def test_midi_microsoft_meta():
     """sound.md Music: each MIDI file carries FF 7F 03 00 00 41 once, in track 0 at offset 23."""
     from isre import szdd
 
-    d = require(ORIGINAL / "shipdisk")
+    d = require(ORIGINAL / "game")
     for name in ("MAIN", "RACE", "ANTHEM", "DEMON"):
         data = szdd.expand(require(d / f"{name}.MI1").read_bytes())
         meta = bytes.fromhex("ff7f0300 0041")

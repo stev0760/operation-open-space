@@ -1,5 +1,5 @@
 // The install step on a .zip install set (ADR 0008 decision 1: a zip is unpacked into a
-// directory of its own first). A zip built from original/shipdisk (stored and deflated
+// directory of its own first). A zip built from original/game (stored and deflated
 // entries, the set inside one folder) opens and installs exactly as the directory set does:
 // the same set, the same game directory byte for byte, the same INI. Skips without original/.
 #include <cstdlib>
@@ -20,10 +20,10 @@ using namespace is::install;
 
 namespace {
 
-fs::path shipdisk() {
+fs::path game() {
     const char* v = std::getenv("IS_ORIGINAL_DIR");
     if (!v || !*v) return {};
-    const fs::path p = fs::path(v).parent_path().parent_path().parent_path() / "original" / "shipdisk";
+    const fs::path p = fs::path(v).parent_path().parent_path().parent_path() / "original" / "game";
     std::error_code ec;
     return fs::is_directory(p, ec) ? p : fs::path();
 }
@@ -83,19 +83,19 @@ std::map<std::string, std::vector<std::uint8_t>> tree(const fs::path& root) {
 }  // namespace
 
 TEST_CASE("install: a zipped install set installs as the directory set does") {
-    const fs::path sd = shipdisk();
+    const fs::path sd = game();
     if (sd.empty()) return;
     Tmp tmp;
-    // The zip: the set's files in a folder SHIPDISK/, small ones deflated, large ones stored.
+    // The zip: the set's files in a folder GAME/, small ones deflated, large ones stored.
     std::vector<is_test::ZipItem> items;
-    items.push_back({"SHIPDISK/", {}, false});
+    items.push_back({"GAME/", {}, false});
     for (const auto& e : fs::directory_iterator(sd)) {
         if (!e.is_regular_file()) continue;
         std::vector<std::uint8_t> b = is::fmt::read_file(e.path());
         const bool small = b.size() < 50000;
-        items.push_back({"SHIPDISK/" + e.path().filename().string(), std::move(b), small});
+        items.push_back({"GAME/" + e.path().filename().string(), std::move(b), small});
     }
-    const fs::path zip = tmp.path / "Shipdisk.zip";
+    const fs::path zip = tmp.path / "thegame.zip";
     write_bytes(zip, is_test::build_zip(items));
 
     std::vector<std::string> logs;
@@ -105,7 +105,7 @@ TEST_CASE("install: a zipped install set installs as the directory set does") {
     REQUIRE(od.set.has_value());
     const SourceSet& z = *oz.set;
     const SourceSet& d = *od.set;
-    CHECK(z.dir == tmp.path / "INSTALL" / "Shipdisk" / "SHIPDISK");
+    CHECK(z.dir == tmp.path / "INSTALL" / "thegame" / "GAME");
     CHECK(z.label == d.label);
     CHECK(z.rule == d.rule);
     CHECK(z.rule == Rule::kRegister);

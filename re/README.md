@@ -18,7 +18,7 @@ A second run writes nothing. Outputs:
 
 | Directory | Content | Command |
 |---|---|---|
-| `work/extracted/shipdisk/`, `theworks/` | distribution files, SZDD expanded, names restored | `isre extract` |
+| `work/extracted/game/`, `theworks/` | distribution files, SZDD expanded, names restored | `isre extract` |
 | `work/ne/<m>.json` | NE header and tables | `isre ne` |
 | `work/unpacked/<m>/` | `segNN.bin`, `relocs.json` per OPTLOADER module | `isre unpack` |
 | `work/rebuilt/<m>.exe` / `.dll` | unpacked NE with standard relocation records, checked by the symbolic loader | `isre rebuild` |

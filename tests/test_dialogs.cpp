@@ -1,7 +1,7 @@
 // The portable rules of the ordinal-10 dialogs (src/dialogs/rules.h) against docs/re/shell.md
 // "Game-start dialogs" and "Exit": the list fills from synthetic file lists, the availability
 // rule, the OK writes in their order, the drive-letter and zoom arithmetic and the result
-// mapping. A golden case checks the shipdisk's MASTER.SHP against the oracle's New Game list.
+// mapping. A golden case checks the game's MASTER.SHP against the oracle's New Game list.
 #include <cstdlib>
 #include <filesystem>
 #include <string>
@@ -348,7 +348,7 @@ TEST_CASE("dialogs: centring, fonts and resource text") {
     CHECK(team_key(7) == "Team8");
 }
 
-TEST_CASE("dialogs: golden: the limited New Game list of the shipdisk") {
+TEST_CASE("dialogs: golden: the limited New Game list of the game") {
     const auto dir = original_dir();
     if (dir.empty()) return;  // skips without the original files
     is::assets::AssetStore store(dir);

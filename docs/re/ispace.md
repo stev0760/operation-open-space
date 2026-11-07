@@ -384,5 +384,5 @@ The ordinal-to-slot pairs come from the lookups at seg10:0x67e7–0x6ad3. The en
 
 [BYTES ISPACE.DLL seg9:0x15a8] [BYTES ISPACE.DLL seg10:0x4266] [BYTES ISPACE.DLL seg9:0x2a76] [BYTES ISPACE.DLL seg2:0x26] [BYTES ISPACE.DLL seg3:0xbc2]
 
-- FACTORY.EXE from the shipdisk requests 21 ordinals from ISPACE.DLL: 1–10, 12–20, 29 and 36. [BYTES FACTORY.EXE seg4:0x30eb] [BYTES FACTORY.EXE seg4:0x3393]
+- FACTORY.EXE from the game requests 21 ordinals from ISPACE.DLL: 1–10, 12–20, 29 and 36. [BYTES FACTORY.EXE seg4:0x30eb] [BYTES FACTORY.EXE seg4:0x3393]
 - INSPACE.SCR contains the string `ISPACE.DLL`. Whether the screen saver loads it, and which ordinals it uses, is [OPEN].

@@ -129,7 +129,7 @@ TEST_CASE("edition: the name record's scramble and command 10") {
     CHECK(name.empty());
 }
 
-TEST_CASE("edition: the unregistered shipdisk (all zero, V = P = 0)") {
+TEST_CASE("edition: the unregistered game (all zero, V = P = 0)") {
     EditionInputs in = inputs(0, 0, 0);
     in.install_record = std::vector<std::uint8_t>(10, 0);
     const std::string clear = "Unregistered Copy   ILLEGAL";
@@ -351,7 +351,7 @@ TEST_CASE("edition: the 'isn't valid' title and the 35-day line") {
     CHECK_FALSE(contains(t, "Press 'R'"));
 }
 
-TEST_CASE("edition: the default host check is the unregistered shipdisk") {
+TEST_CASE("edition: the default host check is the unregistered game") {
     intro_test::FakeHost h;  // 2026-10-25
     const Edition e = h.is::intro::Host::edition_check();
     CHECK(e.edition == 0);
@@ -361,7 +361,7 @@ TEST_CASE("edition: the default host check is the unregistered shipdisk") {
 
 // ---- golden: the user's INSPACE.EXE
 
-TEST_CASE("golden: the shipdisk's INSPACE.EXE gives the Limited edition") {
+TEST_CASE("golden: the game's INSPACE.EXE gives the Limited edition") {
     const fs::path dir = env_dir("IS_ORIGINAL_DIR");
     if (dir.empty() || !fs::is_regular_file(dir / "INSPACE.EXE")) {
         MESSAGE("skipped: IS_ORIGINAL_DIR not available");

@@ -1,7 +1,7 @@
 // The soundfont synth (src/audio/music_soundfont.*, ADR 0011 decision 3). Portable. The core
 // cases build a tiny SoundFont in the test; the GM cases use GeneralUser GS under work/sf2 (or
 // the .sf2 that IS_SF2 names) and skip without it; the full-mix peak case also reads the
-// ship disk's MIDI files through IS_ORIGINAL_DIR.
+// game's MIDI files through IS_ORIGINAL_DIR.
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -222,7 +222,7 @@ std::unique_ptr<m::Synth> open_tiny(const TinySf2& sf, std::uint32_t rate = 2205
 }
 
 // The GM SoundFont of the GM cases: IS_SF2, else work/sf2/GeneralUser-GS.sf2 of the
-// repository that holds IS_ORIGINAL_DIR (original/ or work/extracted/shipdisk) or this file.
+// repository that holds IS_ORIGINAL_DIR (original/ or work/extracted/game) or this file.
 fs::path gm_sf2() {
     if (const char* p = env("IS_SF2")) return p;
     std::vector<fs::path> roots;
@@ -237,12 +237,12 @@ fs::path gm_sf2() {
     return {};
 }
 
-// One of the four MIDI files: <dir>/<NAME>.MID as isre extracts it, or the ship disk's
-// SZDD-packed <NAME>.MI1 in <dir> (IS_ORIGINAL_DIR=original/shipdisk) or <dir>/shipdisk
+// One of the four MIDI files: <dir>/<NAME>.MID as isre extracts it, or the game's
+// SZDD-packed <NAME>.MI1 in <dir> (IS_ORIGINAL_DIR=original/game) or <dir>/game
 // (IS_ORIGINAL_DIR=original) (M7 s2 fixer). Empty when none is there.
 std::vector<std::uint8_t> ship_midi(const fs::path& dir, const std::string& name) {
     for (const fs::path& p :
-         {dir / (name + ".MID"), dir / (name + ".MI1"), dir / "shipdisk" / (name + ".MI1")}) {
+         {dir / (name + ".MID"), dir / (name + ".MI1"), dir / "game" / (name + ".MI1")}) {
         std::ifstream in(p, std::ios::binary);
         if (!in) continue;
         std::vector<std::uint8_t> b((std::istreambuf_iterator<char>(in)), {});
@@ -446,7 +446,7 @@ TEST_CASE("soundfont synth: a General MIDI SoundFont (GeneralUser GS)") {
 
 // The gain: each of the four ship-disk files played end to end through GeneralUser GS stays
 // below full scale. Reports the peak and RMS in dBFS.
-TEST_CASE("soundfont synth: the ship disk's music does not clip at the gain") {
+TEST_CASE("soundfont synth: the game's music does not clip at the gain") {
     const fs::path sf2 = gm_sf2();
     const char* orig = env("IS_ORIGINAL_DIR");
     if (sf2.empty() || !orig) {

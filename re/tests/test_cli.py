@@ -59,14 +59,14 @@ def test_missing_input_is_an_error(tmp_path, capsys):
     assert "missing.exe" in capsys.readouterr().err
 
 
-def test_szdd_command(shipdisk, tmp_path):
+def test_szdd_command(game, tmp_path):
     out = tmp_path / "WAVEMIX.INI"
-    assert main(["szdd", str(shipdisk / "WAVEMIX.IN1"), str(out)]) == 0
+    assert main(["szdd", str(game / "WAVEMIX.IN1"), str(out)]) == 0
     assert out.read_bytes().lstrip()[:1] == b"["
 
 
-def test_ne_json(shipdisk, capsys):
-    assert main(["ne", str(shipdisk / "INSPACE.ex_"), "--json"]) == 0
+def test_ne_json(game, capsys):
+    assert main(["ne", str(game / "INSPACE.ex_"), "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert d["modules"] == ["KERNEL", "USER", "GDI", "MMSYSTEM", "SHELL"]
     assert d["segments"][18]["kind"] == "DATA" and d["segments"][0]["kind"] == "CODE"
@@ -84,7 +84,7 @@ def test_all_pipeline_is_idempotent(original_dir, tmp_path, capsys):
     for name in ("inspace", "ispace", "factory-1998a", "factory-1998b"):
         assert json.loads((work / "unpacked" / name / "unpack.json").read_text())["invariants_ok"], name
         assert (work / "ne" / f"{name}.json").is_file()
-    ship = work / "extracted" / "shipdisk"
+    ship = work / "extracted" / "game"
     for f in ("INSPACE.EXE", "FACTORY.EXE", "Eng_help.HLP", "WAVEMIX.INI", "MASTER.BOD", "MASTER.SHP"):
         assert (ship / f).is_file(), f
     assert len(list((work / "extracted" / "theworks").iterdir())) == len(
