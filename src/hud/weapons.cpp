@@ -208,6 +208,63 @@ void compose_weapon_picture(Canvas& c, const WeaponPicture& p) {
     if (g) c.bit_blt(Img::kWeapon, side, yg, gw, gh, Img::kWeaponOverlay, 0, 0, kSrcCopy);
 }
 
+bool fill_weapon_words(int edition, world::WeaponWords& words, std::optional<int>& filled_for) {
+    if (filled_for && *filled_for == edition) return false;
+    filled_for = edition;
+    const WeaponTable t(edition);
+    for (int k = 0; k < world::kWeaponTableBlocks && k < kWeaponBlocks; ++k) words.block(k) = t.block(k);
+    return true;
+}
+
+Anim4Sheet anim4_sheet_plan(int h, int n) {
+    Anim4Sheet p;
+    const std::int16_t H = w16(h), N = w16(n);
+    // GetObject's bmHeight `test al, 1`: 5 for odd, 6 for even [BYTES seg10:0x4445-0x4453]
+    p.gap = (H & 1) != 0 ? 5 : 6;
+    const std::int16_t G = w16(p.gap);
+    // Two 16-bit `imul`s and a 16-bit add [BYTES seg10:0x4483-0x44a1]
+    p.width = world::add16(world::mul16(H, N), world::mul16(G, world::add16(N, 1)));
+    p.height = world::add16(world::mul16(2, G), H);  // [BYTES seg10:0x44b9-0x44c7]
+    p.stretch = N != 1;                              // [BYTES seg10:0x4540-0x4544]
+    if (!p.stretch) {
+        p.frames.push_back({p.gap, p.gap, h});  // BitBlt(DC[k], gap, gap, h, h, ...) [BYTES seg10:0x4546-0x4568]
+        return p;
+    }
+    // for i = 0; i < n (signed): s = h + 2(i - n) at x, x += gap + h [BYTES seg10:0x458e-0x45f5]
+    std::int16_t x = G;
+    for (std::int16_t i = 0; i < N; ++i) {
+        const std::int16_t side = world::add16(world::mul16(2, world::sub16(i, N)), H);  // [BYTES seg10:0x45aa-0x45b1]
+        p.frames.push_back({x, p.gap, side});
+        x = world::add16(x, world::add16(G, H));  // [BYTES seg10:0x45e6-0x45e9]
+    }
+    return p;
+}
+
+world::DcId render_anim4_sheet(world::Blitter& out, world::DcId graphic, const Anim4Sheet& plan) {
+    // CreateCompatibleDC + CreateCompatibleBitmap(DGROUP:0x13dc, width, 2 gap + h) + SelectObject
+    // [BYTES seg10:0x44aa-0x44e2]; the palette selections of seg10:0x44e6-0x450d are the
+    // Blitter's (ADR 0007).
+    const world::DcId k = out.create_image(plan.width, plan.height);
+    if (k == world::kDcNone) return k;
+    out.pat_blt(k, 0, 0, plan.width, plan.height, world::kBlackness);  // rop 0x42 [BYTES seg10:0x453b]
+    if (graphic == world::kDcNone) return k;
+    if (!plan.stretch) {
+        for (const Anim4Frame& f : plan.frames)  // [BYTES seg10:0x4568]
+            out.bit_blt(k, f.dx, f.dy, f.side, f.side, graphic, 0, 0, world::kSrcCopy);
+        return k;
+    }
+    out.set_stretch_mode(k, world::kColorOnColor);  // SetStretchBltMode(DC[k], 3) [BYTES seg10:0x457b]
+    const int h = plan.height - 2 * plan.gap;
+    for (const Anim4Frame& f : plan.frames)  // seg10:0x9962(0, DC[k], x, gap, s, s, dcS, 0, 0, h, h, SRCCOPY) [BYTES seg10:0x45d8]
+        out.stretch_blt(k, f.dx, f.dy, f.side, f.side, graphic, 0, 0, h, h, world::kSrcCopy);
+    return k;
+}
+
+void anim4_gap_record(world::Pools& pools, int pool, int gap) {
+    if (pool < 0 || pool >= world::kPoolCount || pools.records(pool) < 1) return;
+    pools.rec(pool, 0).gap = w16(gap);  // [BYTES seg10:0x4453 seg10:0x4465]
+}
+
 TabSelection tab_select(int slot, int slots, const std::function<int(int)>& weapon_byte, int play_mode) {
     TabSelection r;
     const std::int16_t old = w16(slot);

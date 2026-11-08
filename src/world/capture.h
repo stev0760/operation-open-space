@@ -23,6 +23,7 @@
 
 #include "world/collide.h"
 #include "world/flight.h"
+#include "world/weapon_load.h"
 #include "world/world.h"
 
 namespace is::world {
@@ -61,10 +62,14 @@ public:
     // seg12:0xe5c(rec): the fuel tank's own dissolve step; its draw cases and the pool-4 mover
     // that continues it are M4 stage 3 [OPEN] (s2-capture.md 4a, verified claim 32).
     virtual void seg12_e5c(int rec) { (void)rec; }
-    // seg12:0x129e(pool, rec): the pod's and the pool-6 record's dissolve [OPEN: not read].
+    // seg12:0x129e(pool, rec): the pod's and the pool-6 record's dissolve, ported by pods.h
+    // pod_dissolve [BYTES seg12:0x129e-0x1774]; the program's host (update.h CaptureForward)
+    // reaches it through UpdateHost::pod_dissolve, the default does nothing.
     virtual void seg12_129e(int pool, int rec) { (void)pool, (void)rec; }
-    // seg12:0x6d64(ship, weapon): a pod's weapon into a new slot [OPEN: not read] (M5).
-    virtual void seg12_6d64(int ship, int weapon) { (void)ship, (void)weapon; }
+    // seg12:0x6d64(ship, weapon): a pod's weapon into a new slot, weapon_load.h load_weapon on
+    // the program's weapon words and seg10:0x533a hook (weapon_load.h load_weapon_program)
+    // [BYTES seg13:0x1e4e seg12:0x6d64-0x6de9] (M4 s5 WEAPONS).
+    virtual void seg12_6d64(World& w, int ship, int weapon) { load_weapon_program(w, ship, weapon); }
 };
 
 // What the touch routine touches: the caller's collision context (the World, the wave words,

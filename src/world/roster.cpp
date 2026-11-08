@@ -10,6 +10,7 @@
 #include "formats/ships.h"
 #include "shell/rng.h"
 #include "world/collide.h"
+#include "world/player_sheet.h"
 
 namespace is::world {
 
@@ -57,6 +58,43 @@ std::int16_t design_special(const World& w, int i) {
 bool ship_ok(const World&, int i) { return i >= 0 && i < kShipCount; }
 bool object_ok(const World& w, int i) { return ship_ok(w, i) && i < w.pools.records(w.roles.ships); }
 
+// seg16:0x3468(i, 3)'s path seg16:0x35db (DGROUP:0x9563 = 0), as purchases.cpp repair_system
+// runs it (work/analysis/m4/s5-sheet.md 5.2, s5-sheet-verify.md claims 37, 38) [BYTES
+// seg16:0x35db-0x3696]: ship words +0x20 = object size - 2 and +0x22 = 1, byte +0xac = 0 so
+// seg14:0x11a8 renders the sheet again with its wings (player_sheet.h build_sheet_program),
+// object +0x3a = the sheet DC, the wing bytes back in a restored game, the roster bytes +0x72 /
+// +0x73. Object +0x44 = design +0x32 [BYTES seg16:0x3601-0x360b]: the ship set-up stored the
+// same value just before this fallback (hooks.cpp apply_flight_design), so it stays [DESIGN].
+// The early return for k = 3 [BYTES seg16:0x3477-0x34a9]: a design without wings (row 3 = -1)
+// whose sheet DC exists keeps its sheet (verified claim 37). The new-body path seg16:0x3547 is
+// the visit's [OPEN here].
+void wing_rebuild(World& w, int i) {
+    if (shop().new_body != 0) {
+        todo("seg16:0x3468(i, 3)'s new body in the placement's fallback", "seg16:0x3547");
+        return;
+    }
+    if (design_special(w, i) == -1 && sheet_dc_program(i)) return;  // [BYTES seg16:0x3477-0x34a9]
+    if (!object_ok(w, i)) return;
+    ShipRecord& S = w.ship(i);
+    ObjectRecord& o = w.ship_object(i);
+    S.w20 = sub16(o.size, 2);  // [BYTES seg16:0x35ec-0x35f7]
+    S.w22 = 1;                 // [BYTES seg16:0x35fb]
+    const std::int8_t ac = static_cast<std::int8_t>(sbyte_at(S, 0xac));  // [BYTES seg16:0x3611-0x3619]
+    const std::int8_t ad = static_cast<std::int8_t>(sbyte_at(S, 0xad));
+    set_byte_at(S, 0xac, 0);          // [BYTES seg16:0x3621]
+    build_sheet_program(w, i);        // seg14:0x11a8 [BYTES seg16:0x362b]
+    o.w3a = sheet_dc_word_program(i);  // [BYTES seg16:0x3631-0x3645]
+    if (w.restored != 0) {            // DGROUP:0x92e4 [BYTES seg16:0x3649-0x365a]
+        set_byte_at(S, 0xac, ac);
+        set_byte_at(S, 0xad, ad);
+    }
+    if (S.roster_index >= 0 && static_cast<std::size_t>(S.roster_index) < w.roster.size()) {  // [BYTES seg16:0x365e-0x3692]
+        RosterRecord& r = w.roster[static_cast<std::size_t>(S.roster_index)];
+        r.wing0 = static_cast<std::uint8_t>(sbyte_at(S, 0xac));
+        r.wing1 = static_cast<std::uint8_t>(sbyte_at(S, 0xad));
+    }
+}
+
 // seg16:0x3468(i, k) past its early return (claims 13, 14) [BYTES seg16:0x34b7-0x3723].
 void repair_fallback(World& w, int i, int k) {
     ShipRecord& S = w.ship(i);
@@ -69,7 +107,7 @@ void repair_fallback(World& w, int i, int k) {
     if (w.restored == 0) S.roster_word(k) = 100;  // [BYTES seg16:0x34f8 seg16:0x34ff]
     S.bec = 1;                                    // [BYTES seg16:0x350a]
     if (k == 1) S.d8c.set(2);                     // [BYTES seg16:0x3520]
-    if (k == 3) todo("seg16:0x3468(i, 3)'s wing rebuild through seg14:0x11a8", "seg16:0x35db");
+    if (k == 3) wing_rebuild(w, i);               // [BYTES seg16:0x354c seg16:0x35db]
     // [BYTES seg16:0x3529-0x353f seg16:0x3699-0x370b]
     S.w24 = S.w0a;
     const bool wings = design_special(w, i) == 3;
@@ -404,8 +442,9 @@ void ship_from_roster(World& w, int i, const fmt::ShipRecord& shp) {
         S.weapon[kk] = r->weapon[kk];
         S.weapon_count[kk] = r->count[kk];
     }
-    // DGROUP:0x104e != 0: seg12:0x6d64(i, 13) [OPEN] [BYTES seg14:0x1758-0x1764]; the port keeps
-    // no DGROUP:0x104e (the restore clears it, formats.md "Reading" step 9).
+    // DGROUP:0x104e != 0: seg12:0x6d64(i, 13) (world/weapon_load.h) [BYTES seg14:0x1758-0x1764];
+    // the port keeps no DGROUP:0x104e (the restore clears it, formats.md "Reading" step 9), so the
+    // call never runs here [OPEN: DGROUP:0x104e's other writers].
     // The systems, sign-extended (claim 3) [BYTES seg14:0x1775-0x179b].
     for (int k = 0; k < 4; ++k) S.roster_word(k) = r->systems[static_cast<std::size_t>(k)];
     // The relation tables: cleared for k = 0 ... DGROUP:0x9316, then filled from +0x08/+0x12/

@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <array>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 
@@ -20,8 +21,10 @@
 #include "gfx/gfx.h"
 #include "gfx/palette.h"
 #include "gfx/ship_flame.h"
+#include "gfx/ship_quick.h"
 #include "gfx/ship_sheet.h"
 #include "hud/gdi_canvas.h"
+#include "hud/icon_images.h"
 #include "hud/icon_column.h"
 #include "hud/program.h"
 #include "hud/radar.h"
@@ -31,6 +34,7 @@
 #include "shell/rng.h"
 #include "world/ambulance.h"
 #include "world/draw.h"
+#include "world/effects.h"
 #include "settings/settings.h"
 #include "world/entry_effect.h"
 #include "world/flight_hooks.h"
@@ -47,6 +51,7 @@
 #include "world/sprite.h"
 #include "world/tank.h"
 #include "world/visibility.h"
+#include "world/weapon_load.h"
 #include "world/world.h"
 
 namespace is::hud {
@@ -103,8 +108,8 @@ world::Point16 to_screen(std::int16_t x, std::int16_t y) {
 
 // The icon strip DGROUP:0x3a02 the briefing entry built, as a DC id; DGROUP:0x3a02 is slot 13 of
 // the table DGROUP:0x39e8 (icon_mover.h kIconStripSlot), which the icon mover draws from
-// [BYTES seg7:0x3282] (M4 s2 fixer). The per-icon slots 14 + i (DGROUP:0x3a04 + 2i) have no
-// writer in the port [OPEN: their builder]; an icon with DGROUP:0x57aa != 0 draws from none.
+// [BYTES seg7:0x3282] (M4 s2 fixer). The per-icon slots 14 + i (DGROUP:0x3a04 + 2i) are
+// hud/icon_images.h's.
 world::DcId strip_dc() {
     gfx::ImagePtr s = world::icon_strip();
     if (s != g_strip) {
@@ -190,7 +195,11 @@ void draw_sprite(std::int16_t pr, int kind, int slot, int masked) {
 void player_sprite() {
     if (!ready()) return;
     world::DrawContext c = draw_context();
+    // seg7:0x1208 clears DGROUP:0x58a on its drawing path only [BYTES seg7:0x13a2]: the frame's
+    // copy (flight_hooks.h FrameGlobals::dg_58a, which seg7:0x5e04 sets) with it (M4 s5 EFFECTS).
+    const bool drawn = world::player_sprite_drawn(c);
     world::draw_player_sprite(c);
+    if (drawn) world::frame_globals().dg_58a = 0;
     // DGROUP:0x1e5c is one word set: the drawing's copy is the stars' exclusion box
     // [BYTES seg7:0x12e4 seg8:0x17a0] (M3 s4 fixer, draw request 3; inert until the player's
     // sprite draws, M5).
@@ -254,7 +263,10 @@ public:
         world::EntryContext c = entry_context();
         world::entry_start(c, static_cast<std::uint8_t>(mode), pool, ship);  // seg7:0x13b2
     }
-    void shield_render(int) override { todo_once("the shield's sprite render", "seg10:0x7328"); }
+    // seg10:0x7328, ordinal 17 into column 16 of the sheet (world/player_sheet.h) (M4 s5 SHEET).
+    void shield_render(int i) override {
+        if (ready()) world::shield_render_program(w(), i);
+    }
     void flame(int on, int ship) override { world::briefing_flame(w(), on, ship); }
     void sound(int id, int pool, int rec, int mode) override { is::sound::play_at(id, pool, rec, mode); }
     std::string lang(int id) override {
@@ -371,18 +383,74 @@ bool render_sheet(const world::SheetRequest& req, world::SheetPixels& px) {
     }
 }
 
+// seg10:0x7328's ordinal 17 (gfx/ship_quick.h quick_cells_for) on the game palette DGROUP:0x920e,
+// for world/player_sheet.h shield_render (M4 s5 SHEET). A body from a .DIB file is [OPEN].
+bool render_quick(const world::QuickRequest& q, gfx::QuickCells& cells) {
+    if (!g.store || !g.gfx) return false;
+    if (q.graphic_id == fmt::kBodyBitmapFromFile) {
+        todo_once("the shield's quick cells from a .DIB file " + q.file, "seg10:0x7328");
+        return false;
+    }
+    try {
+        const fmt::Dib dib = g.store->sprite(static_cast<std::uint16_t>(q.graphic_id));
+        cells = gfx::quick_cells_for(dib, q.graphic_id, g.gfx->palettes(), g.gfx->palette(), q.colour_a,
+                                     q.colour_b, q.heading, q.gap_word);
+        return cells.ok();
+    } catch (const std::exception& x) {
+        app::log(std::string("hud: quick cells: ") + x.what());
+        return false;
+    }
+}
+
 // The weapon words DGROUP:0x2f54 the wave reads and writes (world/missile.h MissileState::words):
-// seg10:0x1fb2's table for the edition DGROUP:0x920c (hud/weapons.h WeaponTable), copied in
-// whole when the edition changes, so seg10:0x533a's run-time W(w)-4 stays between the sheet
-// builds [DESIGN: one mutable copy, M4 s2 fixer].
+// seg10:0x1fb2's table for the edition DGROUP:0x920c (hud/weapons.h fill_weapon_words), copied
+// in whole when the edition changes, so seg10:0x533a's run-time W(w)-4 stays between the sheet
+// builds [DESIGN: one mutable copy, M4 s2 fixer]. The cache starts empty: the registered
+// edition is -1 (M4 s5, triage S3-10).
+std::optional<int> g_words_edition;
 void fill_weapon_words(const world::World& wd) {
-    static int edition = -1;
-    if (edition == wd.w920c) return;
-    edition = wd.w920c;
-    const WeaponTable t(edition);
-    world::WeaponWords& words = world::missile_state().words;
-    for (int k = 0; k < world::kWeaponTableBlocks; ++k) words.block(k) = t.block(k);
-    app::log("hud: seg10:0x1fb2 weapon words for edition " + std::to_string(edition));
+    if (!hud::fill_weapon_words(wd.w920c, world::missile_state().words, g_words_edition)) return;
+    app::log("hud: seg10:0x1fb2 weapon words for edition " + std::to_string(wd.w920c));
+}
+
+// seg10:0x4412(k, pool, id, n), the animation-4 sheet of a weapon whose W(w)+0x06 = 4 (weapons
+// 10, 16, 17; hud/weapons.h anim4_sheet_plan, render_anim4_sheet) [BYTES seg10:0x4412-0x4648]:
+// the graphic through seg10:0x6c02(id, 3, -1) [BYTES seg10:0x4421-0x4429], its bmHeight
+// (GetObject, seg10:0x443a), the gap into the pool's record 0 +0x24, the sheet into
+// DGROUP:0x39e8[k], then DeleteDC / DeleteObject of the graphic [BYTES seg10:0x45fd-0x4626]. The
+// original overwrites DGROUP:0x39e8[k]; the port frees the image it held [DESIGN]. seg10:0x6308(k,
+// -1, -1, -1) returns at once at `Size` 1 and is [OPEN] at the other sizes [BYTES seg10:0x463a].
+// player_sheet.h load_weapon_sheet calls it as its Anim4Renderer (M4 s5 WEAPONS).
+world::DcId anim4_sheet(int k, int pool, int id, int n) {
+    if (!ready() || k < 0 || k >= world::kImageSlots) return world::kDcNone;
+    const world::DcId graphic = g_blit->load_graphic(id, 3, -1);
+    int h = 0;
+    if (graphic != world::kDcNone)
+        if (const std::shared_ptr<gfx::Surface> im = g_blit->image(graphic)) h = im->height();
+    const Anim4Sheet plan = anim4_sheet_plan(h, n);
+    anim4_gap_record(w().pools, pool, plan.gap);
+    world::DcId& slot = g_images[static_cast<std::size_t>(k)];
+    if (slot != world::kDcNone) g_blit->delete_image(slot);
+    slot = render_anim4_sheet(*g_blit, graphic, plan);
+    if (graphic != world::kDcNone) g_blit->delete_image(graphic);
+    if (w().size != 1) todo_once("seg10:0x6308 on the animation-4 sheet", "seg10:0x6308");
+    app::log("hud: seg10:0x4412 sheet " + std::to_string(k) + " of graphic " + std::to_string(id) + ": h " +
+             std::to_string(h) + ", n " + std::to_string(n) + ", " + std::to_string(plan.width) + " x " +
+             std::to_string(plan.height) + ", gap " + std::to_string(plan.gap));
+    return slot;
+}
+
+// seg10:0x533a(w) for seg12:0x6d64 (world/weapon_load.h): player_sheet.h load_weapon_sheet, the
+// sheet build's one-weapon load, on the program's image table [BYTES seg12:0x6ddc
+// seg10:0x533a-0x5464].
+void weapon_image(int wpn) {
+    if (!ready()) return;
+    const int quick = g.ini ? g.ini->get_int(settings::kGameSection, "Quick", 0) : 0;  // DGROUP:0x931e
+    const bool loaded = world::load_weapon_sheet(*g_blit, g_images, w().pools, world::missile_state().words, wpn,
+                                                 world::weapon_sheet_sel(quick, g.game.state(), w().frames),
+                                                 w().size, render_sheet, anim4_sheet);
+    app::log("hud: seg10:0x533a for weapon " + std::to_string(wpn) + ": " + (loaded ? "loaded" : "no new sheet") +
+             ", W-4 = " + std::to_string(world::missile_state().words.word(wpn, -4)));
 }
 
 // seg16:0x3468(player, 3)'s sheet: seg14:0x11a8 into slot 0x28 + player, object +0x3a, and
@@ -437,6 +505,9 @@ void build_player_sheet(world::World& wd) {
         last = b;
     } else {
         b = last;
+        // The sheet as drawn, its flame pastes and wing cuts included (world/player_sheet.h
+        // sheet_copy), for seg14:0x0's flame strip (M4 s5 SHEET) [DESIGN].
+        if (const world::SheetPixels* c = world::sheet_copy(i)) b.pixels = *c;
         o.w3a = static_cast<std::int16_t>(g_images[static_cast<std::size_t>(req.slot)]);  // the slot's DC
         app::log("hud: seg16:0x3468 keeps ship " + std::to_string(i) + "'s sheet (wave " + std::to_string(wd.wave) + ")");
     }
@@ -448,7 +519,7 @@ void build_player_sheet(world::World& wd) {
     fill_weapon_words(wd);
     const int wsheets = world::build_weapon_sheets(*g_blit, g_images, wd.pools, world::missile_state().words, s,
                                                    world::weapon_sheet_sel(quick, g.game.state(), wd.frames),
-                                                   wd.size, render_sheet);
+                                                   wd.size, render_sheet, anim4_sheet);
     app::log("hud: seg10:0x533a weapon sheets: " + std::to_string(wsheets) + ", W(8)-4 = " +
              std::to_string(world::missile_state().words.word(world::kWeaponRadarMissiles, -4)));
     if (b.rendered) {
@@ -670,8 +741,16 @@ void install_wave(app::App& app) {
     l.pictures = [] { pictures_tick(); };  // seg13:0x675e's HUD part at the ship mover's head
     world::CollideLinks& cl = world::collide_links();
     cl.icon_crack = icon_crack;
+    // The icon effects' images: slots 14 + i and 32 of g_images (hud/icon_images.h) (M4 s5 ICONS).
+    install_icon_images(*g_blit, g_images, [] { return strip_dc(); }, icon_crack, [] { return ready(); },
+                        [](const std::string& what, const char* address) { todo_once(what, address); });
     cl.fragment_bitmap = fragment_bitmap;
     cl.fragment_pictures = fragment_pictures;
+    // DGROUP:0x4e94 + 2r for seg7:0x2e02's break-up source (world/effects.h EffectLinks) (M4 s5 EFFECTS).
+    world::effect_links().fragment_dc = [](int r) {
+        return r >= 0 && r < static_cast<int>(g_fragment_dc.size()) ? g_fragment_dc[static_cast<std::size_t>(r)]
+                                                                     : world::kDcNone;
+    };
     set_fragment_images([](int k) -> gfx::ImagePtr {
         if (!g_blit || k < 0 || k >= static_cast<int>(g_fragment_dc.size())) return nullptr;
         const world::DcId d = g_fragment_dc[static_cast<std::size_t>(k)];
@@ -679,6 +758,8 @@ void install_wave(app::App& app) {
     });
     // The launcher's PostMessage(DGROUP:0xa7e, WM_PAINT) [BYTES seg11:0x7e9a-0x7ea6].
     world::missile_links().paint_weapons = [] { weapon_panel_repaint(); };
+    // seg12:0x6d64's seg10:0x533a (world/weapon_load.h) (M4 s5 WEAPONS).
+    world::set_weapon_image(weapon_image);
     Links& k = links();
     // seg11:0xac86 on the program's World (Z / Enter, hooks.cpp weapon_keys): the flight role's
     // globals with the clock of the key's message.
@@ -756,6 +837,14 @@ void install_wave(app::App& app) {
         after_draw(c.g.sprite);
     };
     world::SpriteLinks& sl = world::sprite_links();
+    // The program's sheet side (world/player_sheet.h): the image table, ordinal 2, ordinal 17,
+    // seg10:0x4412 and the todo log, for the rebuild after a visit, the shield's quick cells and
+    // the restore re-cut (M4 s5 SHEET).
+    sl.images = []() -> world::ImageSlotTable* { return &g_images; };
+    sl.render = render_sheet;
+    sl.quick = render_quick;
+    sl.anim4 = anim4_sheet;
+    sl.todo = [](const std::string& what, const char* address) { todo_once(what, address); };
     sl.ship_entered = [](int ship) {
         if (!ready()) return;
         world::EntryContext c = entry_context();

@@ -254,6 +254,11 @@ struct FlightDesign {
     std::uint8_t has_flame = 1;  // DGROUP:0x9718: 0 for a Body Thrust body, 1 otherwise [BYTES seg14:0x1f41-0x1f5a]
     std::uint8_t cloak = 0;   // DGROUP:0x971c: SHP +9 bit 0x08 [BYTES seg14:0x1fd6 seg14:0x1fe2 seg14:0x1fef]
     std::uint8_t shield = 0;  // DGROUP:0x9779: BOD +0x20 bit 0x02 [BYTES seg14:0x1f9f seg14:0x1fab seg14:0x1fc8]
+    // Ship byte +0xe3, the gun shots' colour row: the low byte of design word +0x44 (DGROUP:0x9716,
+    // 0 when SHP +9 bit 0x01 is set, else 1, OR 0x20 for bit 0x20) AND 1 [BYTES seg14:0x1ed6-0x1eef
+    // seg14:0x1f09 seg14:0x21d0-0x21d6]: 0 for the TRANSFORMER (SHP flags 0x15, yellow shots
+    // [ORACLE core-0002]), 1 for the SKY TALON (0x1c, cyan shots [ORACLE core-0006]) (M4 s5 fixer).
+    std::uint8_t shot_row = 1;
 };
 // SHP bytes +1 (Thruster) and +2 (Armor), body bytes +0x1b, +0x1c, +0x1d and the flags +0x20,
 // and the SHP flags +9.
@@ -261,8 +266,9 @@ FlightDesign flight_design(std::uint8_t shp_thruster, std::uint8_t shp_armor,
                            std::int8_t body_strength, std::int8_t body_1c, std::int8_t body_1d,
                            std::uint8_t body_flags, std::uint8_t shp_flags = 0);
 // seg14:0x21a0-0x22f2's flight fields of ship record `s` and the object's mass (seg14:0x20bc):
-// +0xec = 1, +0x0c, +0x0e, +0x36 = 0, +0x1c = 1, the lock-out +0x84 = now, +0xe4, the animation
-// step 1 and frame 0, +0xe7 (cloak) and +0xe9 (shield) [BYTES seg14:0x21ea-0x21f6], the turn word (3/4 of it for the player while DGROUP:0x95bc != 0).
+// +0xec = 1, +0x0c, +0x0e, +0x36 = 0, +0x1c = 1, the lock-out +0x84 = now, +0xe3 (the shot row)
+// [BYTES seg14:0x21d6], +0xe4, the animation step 1 and frame 0, +0xe7 (cloak) and +0xe9 (shield)
+// [BYTES seg14:0x21ea-0x21f6], the turn word (3/4 of it for the player while DGROUP:0x95bc != 0).
 // `roster_byte` is the signed roster byte +0x33 when +0xd6 != -1.
 void apply_flight_design(ShipRecord& s, ObjectRecord& o, const FlightDesign& d,
                          bool player_game_player, std::uint32_t now, std::int16_t roster_byte);

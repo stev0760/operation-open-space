@@ -43,13 +43,22 @@ struct BodyRecord {
     std::string name;              // +0x00 cp1252, 21 bytes; empty marks a free record
     std::uint16_t word_15 = 0;     // +0x15 [OPEN]; every shipped record holds 1
     std::uint16_t word_17 = 0;     // +0x17 [OPEN]; read like +0x15
-    std::int8_t byte_19 = 0;       // +0x19 [OPEN]; import: bitmap measure - 8
-    std::int8_t byte_1a = 0;       // +0x1a [OPEN]; import: 10
+    // +0x19 the flame anchor radius, negated into design word +0x04; import: bitmap measure - 8
+    // [BYTES seg14:0x1c7f-0x1c88] (formats.md MASTER.BOD)
+    std::int8_t byte_19 = 0;
+    // +0x1a the wing band: design word +0x3c, the fuselage half-width ordinal 15 keeps; import: 10
+    // [BYTES seg14:0x2070-0x208b seg8:0x2d6f-0x2d8d] (formats.md MASTER.BOD)
+    std::int8_t byte_1a = 0;
     std::int8_t strength_base = 0; // +0x1b strength base
     std::int8_t byte_1c = 0;       // +0x1c [OPEN]; reaches ship-record word +0x0e
     std::int8_t byte_1d = 0;       // +0x1d [OPEN] name; feeds ship-record word +0x14
-    std::uint8_t byte_1e = 0;      // +0x1e [OPEN]; import: 0, no INSPACE reader found
-    std::uint8_t byte_1f = 0;      // +0x1f [OPEN]; import: bitmap measure - 10
+    // +0x1e and +0x1f, the gun barrels' x and y offsets (design words +0x68 ... +0x6e); import: 0
+    // and bitmap measure - 10. Signed: seg14:0x11a8 reads both with `cbw`, and the port's
+    // readers cast them to int8_t (world/hooks.cpp set_design_body); the bytes stay unsigned here
+    // as the file dump and its golden sums hold them [BYTES seg14:0x13a2 seg14:0x13a6
+    // seg14:0x13c3 seg14:0x13c7] (formats.md MASTER.BOD).
+    std::uint8_t byte_1e = 0;
+    std::uint8_t byte_1f = 0;
     std::uint8_t flags = 0;        // +0x20 kBody*
     std::uint16_t bitmap_id = 0;   // +0x21 IGRAPHIC.DLL #4000 id, or kBodyBitmapFromFile
     std::string bitmap_file;       // +0x23 cp1252, 9 bytes: bitmap base name, ".DIB" stripped

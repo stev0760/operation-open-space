@@ -78,7 +78,11 @@ void vanish_end(GateExitCtx& c, int pool, int rec);
 // time window fails ends the search; the first k whose pool and record match wins. Returns the
 // entry index, or -1. The window is 0 <= DGROUP:0x1e68 / 10 - sx(word DGROUP:0x937a + 2k) < 20,
 // 32-bit (high word 0, low word below 20 unsigned) [BYTES seg7:0x190a seg7:0x191d seg7:0x1923
-// seg7:0x1928] (correction 15: at most one award).
+// seg7:0x1928] (correction 15: at most one award). With d frames between the push and the
+// vanish's end, an entry counts always for d <= 190 and never for d >= 200 (191 ... 199: when
+// the push frame mod 10 <= 199 - d); pool and record compare after `cbw` of the stored bytes, so
+// a record >= 128 never matches, and from frame 327,680 on (F / 10 >= 0x8000) no entry does
+// (s5-weapons.md 9.2, s5-weapons-verify.md claim 24 as corrected; tests/test_world_award_window.cpp).
 int award_entry(const World& w, int pool, int rec);
 
 // seg8:0x81f8(pool, rec): the history shifted down, entry 0 = (DGROUP:0x1e68 / 10, pool, rec)

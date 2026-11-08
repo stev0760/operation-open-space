@@ -69,7 +69,7 @@ void GameState::enter_game_over() {
 
 void GameState::enter_high_scores(bool from_ending) {
     from_ending_ = from_ending;  // DGROUP:0x94cc
-    deadlines_.scores_due = 0;   // seg7:0x1d8
+    scores_due() = 0;            // seg7:0x1d8
     state_ = kHighScores;        // seg6:0x5dbd
     deadlines_.scores_end = now_ + kHighScoresMs;  // seg6:0x5f6b
     run(hooks_.enter[kHighScores]);
@@ -107,7 +107,7 @@ bool GameState::pass(Tick now) {
     if (abort_) {  // seg7:0xd6-0xf4: the pass goes on into the state's case
         request(kIntro);
         abort_ = false;
-        deadlines_.scores_due = 0;
+        scores_due() = 0;
         enter_game_over();  // with DGROUP:0x13de = 1: no state 4
     }
 
@@ -165,7 +165,7 @@ bool GameState::pass(Tick now) {
         break;
     case kEnding:  // seg7:0x1bf: no input handler
         resizable_ = false;
-        if (armed_and_passed(now, deadlines_.scores_due)) {  // seg7:0x1d6
+        if (armed_and_passed(now, scores_due())) {  // seg7:0x1d6
             enter_high_scores(true);                          // seg7:0x1e1
             return false;                                     // seg7:0x1e6
         }

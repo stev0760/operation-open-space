@@ -3,6 +3,7 @@
 
 #include "world/capture.h"
 #include "world/damage.h"
+#include "world/icon_effects.h"
 
 namespace is::world {
 
@@ -52,7 +53,7 @@ void move_icons(UpdateCtx& c, World& w) {
         IconRecord& ic = icon_rec(w, i);
         int reset = 0;  // [bp-0x1c]
         if (ic.w00 != 0) {  // DGROUP:0x57a8 [BYTES seg7:0x322d-0x324b]
-            h.seg7_4d86(i);
+            icon_melt_step(c, w, i);  // seg7:0x4d86(i) [BYTES seg7:0x323a]
             if (ic.w00 < 7) {
                 ic.w00 = 0;
                 reset = 1;
@@ -86,14 +87,17 @@ void move_icons(UpdateCtx& c, World& w) {
         if (imod16(c.f.dg_9142, 30) == 0 && static_cast<std::int8_t>(o.flame) < 0) {
             o.flame = static_cast<std::uint8_t>(o.flame + 1);
             if (o.flame == 0) o.b53 = 1;
-            if (o.flame == 0xfe) h.seg7_5660(i);
+            if (o.flame == 0xfe) {  // seg7:0x5660(i) [BYTES seg7:0x31cd-0x31d8]
+                CollideCtx x = frame_collide_ctx(c, w);
+                icon_restore(x, i);
+            }
         }
         // DGROUP:0x57aa counts 2 ... 11 while not 0 [BYTES seg7:0x31dc-0x31f8]
         if (ic.w02 != 0) {
             if (ic.w02 > 10) ic.w02 = 1;
             ic.w02 = add16(ic.w02, 1);
         }
-        if (reset != 0) h.seg7_4ffe(i);  // [BYTES seg7:0x31fc-0x3206]
+        if (reset != 0) icon_burnt_out(c, w, i);  // seg7:0x4ffe(i) [BYTES seg7:0x31fc-0x3206]
     }
 }
 
@@ -113,7 +117,7 @@ void icon_hit(UpdateCtx& c, World& w, int P, int R, int icon) {
             touched = true;
         }
     }
-    if (!touched && P == g.pool5) h.icon_pool5_hit(R, icon);  // [BYTES seg7:0x4a8a-0x4c4f] [OPEN]
+    if (!touched && P == g.pool5) icon_pool5_hit(c, w, R, icon);  // [BYTES seg7:0x4a8a-0x4c4f]
     // The tail seg7:0x4c54 (verified claim 3): the response and the dispatch with the icon as T,
     // after a touch too, unless a pool-5 FIREBALL (mass 0x78) met it [BYTES seg7:0x4c54-0x4cbd].
     if (!(P == g.pool5 && obj(w, P, R).mass == 0x78)) {
@@ -130,7 +134,7 @@ void icon_hit(UpdateCtx& c, World& w, int P, int R, int icon) {
     if (icon_rec(w, icon).w02 > 0) {
         if (P == 0) {
             icon_rec(w, R).w02 = 2;
-            h.seg7_477e(R);
+            icon_ignite(c, w, R);  // seg7:0x477e(R) [BYTES seg7:0x4d45-0x4d4f]
         } else if (P == 3) {
             ObjectRecord& r = obj(w, 3, R);
             std::int16_t t = add16(static_cast<std::int8_t>(r.flame), 2);

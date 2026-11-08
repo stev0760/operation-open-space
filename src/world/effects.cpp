@@ -6,6 +6,7 @@
 
 #include "world/collide.h"
 #include "world/death.h"
+#include "world/shots.h"
 
 namespace is::world {
 
@@ -40,6 +41,26 @@ EffectState& effect_state() {
     static EffectState s;
     return s;
 }
+
+void release_piece_sources(EffectState& st) {
+    for (int e = 0; e < kPieceEntries; ++e) {  // [BYTES seg10:0x2cb seg10:0x2fd-0x301]
+        if (st.piece_src[ix(e)] == kDcNone) continue;  // [BYTES seg10:0x2d5-0x2da]
+        if (st.piece_src_owned[ix(e)] && effect_links().release) effect_links().release(st.piece_src[ix(e)]);  // [BYTES seg10:0x2e6 seg10:0x2ef]
+        st.piece_src[ix(e)] = kDcNone;  // [BYTES seg10:0x2f4]
+        st.piece_src_owned[ix(e)] = false;
+    }
+}
+
+EffectLinks& effect_links() {
+    static EffectLinks l;
+    return l;
+}
+
+// [BYTES seg10:0x4c0b-0x4d16] (verified claim 31)
+const std::array<std::uint32_t, kEffectBrushes> kEffectBrushColours = {
+    0x808080u, 0xa0a0a0u, 0xc0c0c0u, 0xe0e0e0u, 0xffffffu, 0xc0c0c0u, 0xa0dfa0u,
+    0x60e060u, 0x40ff40u, 0x00ff00u, 0x800000u, 0x8a2800u, 0xa05000u, 0xc4a000u,
+    0xffc400u, 0x0000a0u, 0x0000c4u, 0x0020dfu, 0x0060ffu, 0x0080ffu};
 
 // seg10:0x5102 [BYTES seg10:0x5110-0x51f6]
 void build_effect_images(Blitter& out, ImageSlotTable& images, std::int16_t enhance) {
@@ -83,12 +104,14 @@ void effect_frame(EffectCtx& c, int k) {
             }
         }
         if (e.type > 5) {
-            c.host.pieces(k);  // seg8:0x4256-0x452a [OPEN]
+            // seg8:0x4256-0x452a [BYTES seg8:0x4043 seg8:0x404a]; entries >= 4 never hold such a
+            // type (s5-effects.md 1.2): the port skips the branch there [DESIGN].
+            if (k < kPieceEntries) piece_frame(c, k);
         } else {
             // 2. The explosion bitmap [BYTES seg8:0x404d-0x4067].
             const std::int16_t cnt = static_cast<std::int16_t>(e.frame);
             const std::int16_t f = sub16(cnt, 1);
-            const std::int16_t side = sar16(shl16(add16(mul16(f, 6), 10), size & 15), 1);
+            const std::int16_t side = sar16(shl16(add16(mul16(f, 6), 10), size & 0x1f), 1);
             const EffectPoint cen = c.st.sides.centre[ix(k)];
             if (sub16(e.end, 1) > cnt) {
                 // Not the last frame [BYTES seg8:0x41b8-0x422b].
@@ -98,7 +121,7 @@ void effect_frame(EffectCtx& c, int k) {
                     // write 1): the port draws nothing then [DESIGN].
                     if (f >= 0) {
                         const std::int16_t sx =
-                            sar16(shl16(kExplosionX[ix(f > 7 ? 7 : f)], size & 15), 1);
+                            sar16(shl16(kExplosionX[ix(f > 7 ? 7 : f)], size & 0x1f), 1);
                         c.out->bit_blt(kDcWindow, sub16(cen.x, half), sub16(cen.y, half), side, side,
                                        slot_dc(c, kSlotExplosion), sx, 0, kSrcCopy);
                     }
@@ -107,8 +130,8 @@ void effect_frame(EffectCtx& c, int k) {
                 if (imod16(cnt, 6) == 0 && e.type != 1) blast(c, k);
             } else if (e.type != kEffectTypeFF06) {
                 // The last frame [BYTES seg8:0x407b-0x4187].
-                const std::int16_t q = sar16(shl16(0x1a, size & 15), 1);
-                const std::int16_t s52 = sar16(shl16(0x34, size & 15), 1);
+                const std::int16_t q = sar16(shl16(0x1a, size & 0x1f), 1);
+                const std::int16_t s52 = sar16(shl16(0x34, size & 0x1f), 1);
                 if (c.out) c.out->pat_blt(kDcWindow, sub16(cen.x, q), sub16(cen.y, q), s52, s52, kBlackness);
                 // seg7:0x1208 when the player is in play, DGROUP:0x951a = 0 and its byte
                 // DGROUP:0x717c (+0xec) != 0 (verified claim 11, extra) [BYTES seg8:0x40b9-0x40e4].
@@ -150,7 +173,232 @@ void effect_frame(EffectCtx& c, int k) {
     w.w9430 = n;
     if (w.w9130 != 0)  // [BYTES seg8:0x4571-0x4586]
         c.host.seg18_5350(c.st.sides.centre[ix(k)].x, c.st.sides.centre[ix(k)].y);
-    if (k < 4 && e.type == 6) c.host.piece_free(k);  // [BYTES seg8:0x458e-0x45cd] [OPEN]
+    // The type-6 source [BYTES seg8:0x458e-0x45cd] (verified claim 15): SelectObject(5e98[k],
+    // 5ea0[k]) and DeleteDC for pool 1, then DGROUP:0x5e98[k] = 0 for any pool.
+    if (k < kPieceEntries && e.type == 6 && c.st.piece_src[ix(k)] != kDcNone) {
+        if (e.pool == 1 && c.st.piece_src_owned[ix(k)] && c.out) c.out->delete_image(c.st.piece_src[ix(k)]);
+        c.st.piece_src[ix(k)] = kDcNone;
+        c.st.piece_src_owned[ix(k)] = false;
+    }
+}
+
+// ---- the piece branch (M4 s5 EFFECTS)
+
+int piece_index(int e, int i, int j) {
+    if (e < 0 || e >= kPieceEntries || i < 0 || i >= kPieceGrid || j < 0 || j >= kPieceGrid) return -1;
+    return (e * 5 + i) * 5 + j;  // `imul e, 5; add i; imul 5; add j` [BYTES seg8:0x430e-0x431b]
+}
+
+// [BYTES seg7:0x3460-0x3671] (the same bodies at seg8:0x96e1-0x98f2)
+PieceAccel piece_accel(int i0, int j0, int c) {
+    const std::int16_t i = static_cast<std::int16_t>(i0), j = static_cast<std::int16_t>(j0);
+    const std::int16_t im2 = sub16(i, 2), jm2 = sub16(j, 2);
+    const std::int16_t twoi = sub16(2, i), twoj = sub16(2, j);
+    PieceAccel a;
+    switch (c) {
+    case 0:  // [BYTES seg7:0x3460-0x348f]
+        a.ax = sub16(shl16(add16(i, 5), 1), mul16(j, 7));
+        a.ay = add16(shl16(sub16(-1, j), 2), mul16(i, 6));
+        break;
+    case 1:  // [BYTES seg7:0x3492-0x34d2]
+        a.ax = add16(mul16(twoj, 7), shl16(mul16(twoi, im2), 1));
+        a.ay = add16(shl16(mul16(twoj, jm2), 2), mul16(im2, 6));
+        break;
+    case 2:  // [BYTES seg7:0x34d5-0x3515]
+        a.ax = add16(mul16(twoj, 7), shl16(mul16(twoi, im2), 1));
+        a.ay = add16(shl16(mul16(jm2, jm2), 2), mul16(twoi, 6));
+        break;
+    case 3:  // [BYTES seg7:0x3518-0x3564]
+        a.ax = add16(shl16(im2, 1), mul16(mul16(twoj, sub16(5, i)), 7));
+        a.ay = add16(mul16(mul16(im2, sub16(j, 5)), 6), shl16(jm2, 2));
+        break;
+    case 4:  // [BYTES seg7:0x3566-0x35a1 seg7:0x3636-0x3638]
+        a.ax = mul16(twoj, im2);
+        a.ay = add16(mul16(mul16(jm2, im2), 7), shl16(mul16(twoj, twoi), 1));
+        break;
+    case 5:  // [BYTES seg7:0x35a4-0x35e2]
+        a.ax = mul16(sub16(add16(mul16(mul16(twoi, twoi), im2), j), 2), 6);
+        a.ay = add16(shl16(mul16(twoj, jm2), 1), mul16(im2, 5));
+        break;
+    case 6:  // [BYTES seg7:0x35e7-0x3638]
+        a.ax = mul16(add16(mul16(mul16(im2, im2), twoi), mul16(mul16(jm2, jm2), jm2)), 6);
+        a.ay = add16(shl16(mul16(twoj, jm2), 1), mul16(mul16(mul16(im2, im2), i), 7));
+        break;
+    case 7:  // [BYTES seg7:0x363e-0x366d]
+        a.ax = sub16(sub16(mul16(j, 7), mul16(i, 3)), 8);
+        a.ay = mul16(mul16(mul16(im2, im2), im2), 6);
+        break;
+    default: break;  // `ja` past 7: no write [BYTES seg7:0x3673-0x3676]
+    }
+    return a;
+}
+
+// seg7:0x342e [BYTES seg7:0x343d-0x3759]
+void pieces_setup_break(EffectCtx& c, int e, int pool, int rec) {
+    if (e < 0 || e >= kPieceEntries) return;  // [DESIGN]
+    const bool ok = record_ok(c.w.pools, pool, rec);  // [DESIGN] bounds: a missing record reads 0
+    const ObjectRecord zero{};
+    const ObjectRecord& o = ok ? c.w.pools.rec(pool, rec) : zero;
+    const std::int16_t s = idiv16(o.size, 5);  // [BYTES seg7:0x344b-0x3455]
+    for (int i = 0; i < kPieceGrid; ++i) {      // [bp-4] [BYTES seg7:0x3740-0x3747]
+        for (int j = 0; j < kPieceGrid; ++j) {  // [bp-6] [BYTES seg7:0x3690-0x3697]
+            EffectPiece& p = c.st.pieces[ix(piece_index(e, i, j))];
+            const std::int16_t i16 = static_cast<std::int16_t>(i), j16 = static_cast<std::int16_t>(j);
+            p.wx = add16(shl16(mul16(s, j16), 3), o.x);  // [BYTES seg7:0x369b-0x36c8]
+            p.wy = add16(shl16(mul16(s, i16), 3), o.y);  // [BYTES seg7:0x36cc-0x36d9]
+            p.vx = add16(idiv16(o.vx, 10), shl16(sub16(j16, 2), 3));  // [BYTES seg7:0x36dd-0x36f1]
+            p.vy = add16(idiv16(o.vy, 10), mul16(sub16(2, i16), 7));  // [BYTES seg7:0x36f5-0x3707]
+            const PieceAccel a0 = piece_accel(i, j, 0);  // [BYTES seg7:0x370b-0x372c]
+            p.ax = a0.ax;
+            p.ay = a0.ay;
+            const int r = imod16(static_cast<std::int16_t>(c.rng.rand()), 8);  // seg5:0xdc [BYTES seg7:0x3730-0x373b]
+            if (r >= 0 && r <= 7) {  // `cmp 7; ja` [BYTES seg7:0x3673]
+                const PieceAccel a = piece_accel(i, j, r);
+                p.ax = a.ax;
+                p.ay = a.ay;
+            }
+        }
+    }
+}
+
+// seg8:0x9694 [BYTES seg8:0x96a3-0x99cc]
+void pieces_setup_burst(EffectCtx& c, int e, int pool, int rec) {
+    if (e < 0 || e >= kPieceEntries) return;  // [DESIGN]
+    std::int16_t vx = 0, vy = 0;  // [bp-0xa], [bp-8]
+    if (pool == kPieceShotPool) {  // [BYTES seg8:0x96a3-0x96b9]
+        const ShotState& sh = c.shots ? *c.shots : shot_state();
+        vx = sh.word(rec, shot::kVx);  // DGROUP:0x6108 + 0x94·rec
+        vy = sh.word(rec, shot::kVy);  // DGROUP:0x610a
+    } else if (record_ok(c.w.pools, pool, rec)) {  // [BYTES seg8:0x96bb-0x96d6]
+        vx = c.w.pools.rec(pool, rec).vx;
+        vy = c.w.pools.rec(pool, rec).vy;
+    }
+    const EffectPoint pt = c.st.sides.point[ix(e)];  // DGROUP:0x5224 + 4e
+    for (int i = 0; i < kPieceGrid; ++i) {
+        for (int j = 0; j < kPieceGrid; ++j) {
+            EffectPiece& p = c.st.pieces[ix(piece_index(e, i, j))];
+            const std::int16_t i16 = static_cast<std::int16_t>(i), j16 = static_cast<std::int16_t>(j);
+            p.wx = add16(add16(shl16(j16, 4), pt.x), 8);  // [BYTES seg8:0x991c-0x993f]
+            p.wy = add16(add16(shl16(i16, 4), pt.y), 8);  // [BYTES seg8:0x9943-0x9950]
+            p.vx = add16(shl16(sub16(j16, 2), 3), vx);    // [BYTES seg8:0x9954-0x995f]
+            p.vy = add16(mul16(sub16(2, i16), 7), vy);    // [BYTES seg8:0x9963-0x996f]
+            const PieceAccel a0 = piece_accel(i, j, 0);   // [BYTES seg8:0x9973-0x9994]
+            p.ax = a0.ax;
+            p.ay = a0.ay;
+            // (rand() % 32) % 8; the % 32 value goes to [bp+8], never read again [BYTES
+            // seg8:0x9998-0x99ae].
+            const std::int16_t r32 = imod16(static_cast<std::int16_t>(c.rng.rand()), 0x20);
+            const int r = imod16(r32, 8);
+            if (r >= 0 && r <= 7) {  // [BYTES seg8:0x98f4]
+                const PieceAccel a = piece_accel(i, j, r);
+                p.ax = a.ax;
+                p.ay = a.ay;
+            }
+        }
+    }
+}
+
+// seg8:0x7d2 [BYTES seg8:0x7f0-0x82f]
+void piece_screen(EffectCtx& c, int e, int i, int j) {
+    const int n = piece_index(e, i, j);
+    if (n < 0) return;  // [DESIGN]
+    EffectPiece& p = c.st.pieces[ix(n)];
+    const Point16 pt = screen_of(c, p.wx, p.wy);  // seg8:0x29ea(dword +0x18) [BYTES seg8:0x7fc]
+    p.sx = pt.x;          // [BYTES seg8:0x808 seg8:0x80f]
+    p.sy = pt.y;
+    p.old_x = p.prev_x;   // [BYTES seg8:0x813-0x81f]
+    p.old_y = p.prev_y;
+    p.prev_x = p.sx;      // [BYTES seg8:0x823-0x82f]
+    p.prev_y = p.sy;
+}
+
+namespace {
+
+// The motion of one coordinate [BYTES seg8:0x439f-0x4406 seg8:0x440a-0x4471]: cx = lo16(end·end);
+// lo16(lo16(lo16(a·f)·f)·9), `cwd; idiv cx`; + v added to w; w > limit (signed `jle`) -> 0, then
+// w < 0 (`jge`) -> limit.
+std::int16_t piece_move(std::int16_t w, std::int16_t a, std::int16_t v, std::int16_t f,
+                        std::int16_t end, std::int16_t limit) {
+    const std::int16_t cx = mul16(end, end);
+    const std::int16_t t = mul16(mul16(mul16(a, f), f), 9);
+    const std::int16_t d = cx != 0 ? idiv16(t, cx) : std::int16_t{0};  // [DESIGN] the divide trap
+    w = add16(w, add16(d, v));
+    if (w > limit) w = 0;
+    if (w < 0) w = limit;
+    return w;
+}
+
+}  // namespace
+
+// seg8:0x4256-0x4538
+void piece_frame(EffectCtx& c, int k) {
+    if (k < 0 || k >= kPieceEntries) return;  // [DESIGN]
+    World& w = c.w;
+    EffectEntry& e = w.effects[ix(k)];
+    const std::int16_t f = static_cast<std::int16_t>(e.frame);
+    if (f == 1) {  // [BYTES seg8:0x425a-0x425f]
+        if (e.type == 6)
+            pieces_setup_break(c, k, e.pool, e.rec);  // [BYTES seg8:0x4261-0x4278]
+        else
+            pieces_setup_burst(c, k, e.pool, e.rec);  // [BYTES seg8:0x427a-0x4289]
+        // The source's square for a pool not above DGROUP:0x9324 (signed `jg`): never the gun's 0x1e
+        // [BYTES seg8:0x4291-0x42c7].
+        if (!(e.pool > w.roles.ships) && record_ok(w.pools, e.pool, e.rec) && c.out) {
+            const ObjectRecord& o = w.pools.rec(e.pool, e.rec);
+            c.out->pat_blt(kDcWindow, o.scr_x, o.scr_y, o.size, o.size, kBlackness);
+        }
+    }
+    if (f == 5 && e.type == 6) blast(c, k);  // seg8:0x5ab0 [BYTES seg8:0x42cc-0x42e2]
+    const std::int16_t limit_x = shl16(static_cast<std::int16_t>(kWorldCells), 3);  // DGROUP:0x5a0 << 3 [BYTES seg8:0x43d7-0x43da]
+    const std::int16_t limit_y = shl16(static_cast<std::int16_t>(kWorldCells), 3);  // DGROUP:0x5a2 << 3 [BYTES seg8:0x4442-0x4445]
+    std::int16_t gap = 0;  // [bp-0x16], read only for type 6
+    for (std::int16_t i = 0; i < kPieceGrid;) {  // [BYTES seg8:0x42e5 seg8:0x452a]
+        for (std::int16_t j = 0; j < kPieceGrid;) {  // [BYTES seg8:0x4533 seg8:0x4480]
+            piece_screen(c, k, i, j);  // [BYTES seg8:0x4492]
+            EffectPiece& p = c.st.pieces[ix(piece_index(k, i, j))];
+            const std::int16_t side = e.side;  // +0x0c
+            if (e.type == 6) {
+                // The object's +0x24 read again on every piece [BYTES seg8:0x449b-0x44be].
+                gap = record_ok(w.pools, e.pool, e.rec) ? w.pools.rec(e.pool, e.rec).gap : std::int16_t{0};
+                if (c.out)  // [BYTES seg8:0x44cf-0x4517]: source x takes i, y takes j
+                    c.out->bit_blt(kDcWindow, p.sx, p.sy, side, side, c.st.piece_src[ix(k)],
+                                   add16(mul16(side, i), gap), add16(mul16(side, j), gap), kSrcCopy);
+            } else if (c.out) {
+                // SelectObject(DGROUP:0x13dc, DGROUP:0x576c[+0x0e + DGROUP:0xb6a]), not restored;
+                // an index outside the table selects nothing [DESIGN] [BYTES seg8:0x42ed-0x4305].
+                const int b = add16(e.brush, c.st.dg_b6a);
+                if (b >= 0 && b < kEffectBrushes) c.out->select_brush(kDcWindow, c.st.brushes[ix(b)]);
+                c.out->pat_blt(kDcWindow, p.sx, p.sy, side, side, kPatCopy);  // [BYTES seg8:0x430a-0x4333]
+            }
+            // The old point after the draw [BYTES seg8:0x4338-0x4366].
+            if (c.out) c.out->pat_blt(kDcWindow, p.old_x, p.old_y, side, side, kBlackness);
+            if (sub16(sub16(e.end, f), 1) == 0) {  // the last frame [BYTES seg8:0x436b-0x4374]
+                if (c.out) c.out->pat_blt(kDcWindow, p.sx, p.sy, side, side, kBlackness);  // [BYTES seg8:0x4376-0x438e]
+                if (c.in.autopilot == 0) c.host.player_sprite();  // seg7:0x1208 [BYTES seg8:0x4393-0x439a]
+            }
+            p.wx = piece_move(p.wx, p.ax, p.vx, f, e.end, limit_x);  // [BYTES seg8:0x439f-0x4406]
+            p.wy = piece_move(p.wy, p.ay, p.vy, f, e.end, limit_y);  // [BYTES seg8:0x440a-0x4471]
+            if (e.step <= 0) return;  // [DESIGN] no creator writes one
+            j = add16(j, e.step);  // re-read [BYTES seg8:0x4479-0x447d]
+        }
+        if (e.step <= 0) return;  // [DESIGN]
+        i = add16(i, e.step);  // [BYTES seg8:0x4523-0x4527]
+    }
+}
+
+// seg8:0x82c6-0x82f4
+void effect_colour_cycle(EffectState& st, std::uint32_t now) {
+    if (!(now - 0x3cu > st.dg_579c)) return;  // `sub eax, 0x3c; cmp; jbe` [BYTES seg8:0x82c6-0x82d5]
+    st.dg_579c = now;                         // [BYTES seg8:0x82db]
+    st.dg_b6a = add16(st.dg_b6a, st.dg_b6c);  // [BYTES seg8:0x82e2]
+    if (st.dg_b6a > 3 || st.dg_b6a < 1) st.dg_b6c = sub16(0, st.dg_b6c);  // [BYTES seg8:0x82e6-0x82f4]
+}
+
+// seg10:0x4c0b-0x4d16
+void create_effect_brushes(Blitter& out, EffectState& st) {
+    if (st.brushes_made) return;  // [DESIGN] once per program Blitter
+    st.brushes_made = true;
+    for (int n = 0; n < kEffectBrushes; ++n) st.brushes[ix(n)] = out.create_solid_brush(kEffectBrushColours[ix(n)]);
 }
 
 // seg8:0x5ab0 [BYTES seg8:0x5ab0-0x5de6] (core.md "Death and the explosion", The blast,
@@ -182,9 +430,9 @@ void blast(EffectCtx& c, int k) {
             // (2v) sar Size for d, dx, dy [BYTES seg8:0x5d28 seg8:0x5d2c seg8:0x5d2e seg8:0x5d38
             // seg8:0x5d42] (C003); the seg18 doubling (DGROUP:0x9130 != 0, DGROUP:0x90f4 = 6)
             // [BYTES seg8:0x5d47 seg8:0x5d55] is M6's.
-            d = sar16(shl16(d, 1), w.size & 15);
-            dx = sar16(shl16(dx, 1), w.size & 15);
-            dy = sar16(shl16(dy, 1), w.size & 15);
+            d = sar16(shl16(d, 1), w.size & 0x1f);
+            dx = sar16(shl16(dx, 1), w.size & 0x1f);
+            dy = sar16(shl16(dy, 1), w.size & 0x1f);
             if (d < 100) d = 100;  // [BYTES seg8:0x5d5e-0x5d64]
             const std::int16_t b = pools.rec(sp, sr).blast_size;  // +0x48 [BYTES seg8:0x5d77]
             const std::int16_t bc = b > 7 ? std::int16_t{7} : b;
@@ -405,9 +653,21 @@ void pickup_destroyed(CollideCtx& x, int pool, int rec) {
             if (E.frame == kEffectFree || !(E.type > 5)) break;
         }
         if (e < 4) {
-            // DGROUP:0x5e98 + 2e / 0x5ea0 + 2e: the entry's source DC (released, then the
-            // fragment's bitmap, DGROUP:0x39f0, a pool-8 or a weapon image) [BYTES
-            // seg7:0x3015-0x306a] [OPEN: only the type-6 branch of seg8:0x3fbe reads it].
+            EffectState& st = effect_state();
+            // DGROUP:0x5e98 + 2e: the old source released for any pool, then 0 [BYTES
+            // seg7:0x3015-0x3039] (verified claim 30); the port releases only its own [DESIGN].
+            if (st.piece_src[ix(e)] != kDcNone) {
+                if (st.piece_src_owned[ix(e)] && effect_links().release) effect_links().release(st.piece_src[ix(e)]);
+                st.piece_src[ix(e)] = kDcNone;
+                st.piece_src_owned[ix(e)] = false;
+            }
+            // The new source by pool [BYTES seg7:0x303f-0x306e seg7:0x2e5c-0x2ec2]; latched, as
+            // the fragment's record may be reused before the break-up ends.
+            if (effect_links().break_source) {
+                const BreakSource src = effect_links().break_source(pool, rec);
+                st.piece_src[ix(e)] = src.dc;
+                st.piece_src_owned[ix(e)] = src.owned;
+            }
             int id = 0;
             if (pool == 1 || pool == 8) {
                 id = 0x1a;  // FLANGE [BYTES seg7:0x303f-0x3076 seg7:0x2e5c-0x2e79]
@@ -418,7 +678,6 @@ void pickup_destroyed(CollideCtx& x, int pool, int rec) {
                 id = 0x1f;  // SHATTER [BYTES seg7:0x2ea8-0x2ec2]
             }
             if (id != 0) x.h.sound(id, pool, rec, 1);  // seg10:0x754a(id, pool, rec, 1)
-            EffectState& st = effect_state();
             EffectEntry& E = w.effects[ix(e)];
             // An entry in use moves to the first free entry of 4 ... 44 (`jle` on -1: signed)
             // [BYTES seg7:0x2eca-0x2f5e].

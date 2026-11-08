@@ -1,6 +1,8 @@
 // Damage (damage.h). Every site cites the listing it ports.
 #include "world/damage.h"
 
+#include "world/design_words.h"
+
 namespace is::world {
 
 namespace {
@@ -206,20 +208,34 @@ std::int16_t ship_damage(CollideCtx& x, int pool, int ship, std::int16_t d) {
 
 // ---- seg8:0x2cd8
 
+int wing_tear_head(ShipRecord& S, int side, std::uint32_t now, std::int16_t dg_95a6, int size_level) {
+    S.due156.set(now - 10000u);  // [BYTES seg8:0x2cee-0x2d05]
+    // [bp-4], ordinal 15's side: 1 when wing +0xac goes (s5-sheet-verify.md claim 1) [BYTES
+    // seg8:0x2cea seg8:0x2d09-0x2d1e].
+    int cut = 0;
+    if (side == 0) {
+        set_byte_at(S, 0xac, 0);     // [BYTES seg8:0x2d0e]
+        cut = 1;                     // [BYTES seg8:0x2d12]
+    } else {
+        set_byte_at(S, 0xad, 0);     // [BYTES seg8:0x2d1e]
+    }
+    // The design recompute while the MASTER.SHP block DGROUP:0x95a6 is not loaded (always in a
+    // wave): D again from the body byte, the value seg14:0x1b84 stored outside seg18 mode
+    // (s5-sheet-verify.md claims 4, 5) [BYTES seg8:0x2d23-0x2d91].
+    if (dg_95a6 == 0) design_band_recompute(S.design_index, size_level);
+    return cut;
+}
+
 void tear_wing(CollideCtx& x, int ship, int side) {
     World& w = x.w;
     ShipRecord& S = ship_at(w, ship);
-    S.due156.set(x.g.now - 10000u);  // [BYTES seg8:0x2cee-0x2d05]
-    if (side == 0)
-        set_byte_at(S, 0xac, 0);     // [BYTES seg8:0x2d0e]
-    else
-        set_byte_at(S, 0xad, 0);     // [BYTES seg8:0x2d1e]
-    if (x.c.w95a6 == 0) x.h.wing_design(ship);  // seg14:0x3eda, seg14:0x4074 [BYTES seg8:0x2d23-0x2d91] [OPEN]
-    if (w.restored == 0) {  // DGROUP:0x92e4 [BYTES seg8:0x2d96]
-        x.h.wing_taunts(ship, side);  // [BYTES seg8:0x2da6-0x2e57] (M5) [OPEN]
-        // The debris entry and its sound [BYTES seg8:0x33c2 seg8:0x33cd]
-        if (x.h.wing_debris(ship, side)) x.h.sound(0x6a, x.g.ship_pool, ship, 1);
-    }
+    const int cut = wing_tear_head(S, side, x.g.now, x.c.w95a6, x.g.size);
+    const bool make_debris = w.restored == 0;  // DGROUP:0x92e4 [BYTES seg8:0x2d96]
+    if (make_debris) x.h.wing_taunts(ship, side);  // [BYTES seg8:0x2da6-0x2e57] (M5) [OPEN]
+    // The picture: the debris entry with ordinal 15's flag set, or the cut alone; sound 0x6a
+    // only after a debris entry [BYTES seg8:0x2e5d seg8:0x33c2 seg8:0x33cd seg8:0x343d-0x3482]
+    // (s5-sheet-verify.md claims 2, 10).
+    if (x.h.wing_picture(ship, cut, make_debris)) x.h.sound(0x6a, x.g.ship_pool, ship, 1);
 }
 
 // ---- seg7:0x5090

@@ -98,7 +98,7 @@ public:
     virtual void fire(int ship);
     virtual void seg8_9464() {}                        // [OPEN]
     virtual void seg8_9564() {}                        // [OPEN]
-    virtual void seg7_2128() {}                        // [OPEN]
+    virtual void seg7_2128() {}  // seg7:0x2128, the violence decay (aggression.h; the program's host runs it)
     // seg8:0x3aec(j, i), slot j's sub-step i: the default runs shots.h shot_update on the frame
     // World, 0 without one (M4 s2 fixer).
     virtual std::int16_t beam(int i, int j);
@@ -222,13 +222,6 @@ public:
         return off == 0x24 ? collide_host().weapon_kind(w) : ::is::world::weapon_word(w, off);
     }
 
-    // ---- the icon mover seg7:0x309c's helpers that are not read (s2-capture.md 1b) [OPEN]
-    virtual void seg7_4d86(int icon) { (void)icon; }   // DGROUP:0x57a8 != 0 [BYTES seg7:0x323a]
-    virtual void seg7_4ffe(int icon) { (void)icon; }   // after the 0x57a8 reset [BYTES seg7:0x3206]
-    virtual void seg7_5660(int icon) { (void)icon; }   // heat -2 [BYTES seg7:0x31d8]
-    virtual void seg7_477e(int icon) { (void)icon; }   // an icon met by an icon [BYTES seg7:0x4d4f]
-    // seg7:0x4a8a-0x4c4f: an icon met by a pool-5 FIREBALL (mass 120) or SNOWBALL (mass 200).
-    virtual void icon_pool5_hit(int rec, int icon) { (void)rec, (void)icon; }
     // The collision routines' calls out; the default forwards sound(), seg12_274a() (the
     // destroy), the flame-off (flight.h ship_touched) and the erase (blitter()) and leaves the
     // rest to CollideHost's defaults.

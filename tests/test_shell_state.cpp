@@ -217,6 +217,29 @@ TEST_CASE("state 9: DGROUP:0x1e84 leads to state 5; states 6, 8, 9 pin the windo
     }
 }
 
+TEST_CASE("state 9: DGROUP:0x1e84 is one word with the wave's (bind_scores_due, triage D-24)") {
+    // seg7:0x1c5 (state 9) and seg7:0x6ac (the wave) read the same DGROUP:0x1e84: bound to the
+    // World's word (world/hooks.cpp), a write on either side is the other's read (M4 s5 fixer).
+    Tick word = 0;
+    GameState g;
+    g.bind_scores_due(&word);
+    g.set(kEnding);
+    word = 300;  // the wave's death path arms it (seg12:0x2ac1)
+    CHECK(g.scores_due() == 300);
+    CHECK(g.deadlines().scores_due == 0);  // the unbound store is not used
+    g.pass(299);
+    CHECK(g.state() == kEnding);
+    g.pass(300);
+    CHECK(g.state() == kHighScores);
+    CHECK(word == 0);  // seg7:0x1d8 cleared the bound word
+    // Unbound (null) again: the GameState's own deadline.
+    g.bind_scores_due(nullptr);
+    g.deadlines().scores_due = 77;
+    CHECK(g.scores_due() == 77);
+    word = 5;
+    CHECK(g.scores_due() == 77);
+}
+
 TEST_CASE("state 1: a pass that routes pending input does nothing else") {
     GameState g;
     g.set(kWave);

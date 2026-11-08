@@ -6,12 +6,42 @@
 
 #include <algorithm>
 
+#include "world/damage.h"
+#include "world/design_words.h"
+#include "world/missile.h"
+#include "world/roster.h"
+#include "world/shots.h"
 #include "world/world.h"
 
 #include "gfx/ship_flame.h"
+#include "gfx/ship_quick.h"
 #include "gfx/ship_sheet.h"
+#include "gfx/wing_cut.h"
 
 namespace is::world {
+
+namespace {
+
+// The port's copies of the ships' sheets and their last requests (sheet_copy, sheet_request)
+// [DESIGN].
+struct ShipSheets {
+    std::array<SheetPixels, kShipCount> px{};
+    std::array<bool, kShipCount> has{};
+    std::array<SheetRequest, kShipCount> req{};
+    std::array<bool, kShipCount> has_req{};
+};
+ShipSheets& ship_sheets() {
+    static ShipSheets s;
+    return s;
+}
+bool ship_ok(int i) { return i >= 0 && i < kShipCount; }
+
+// DGROUP:0x95a6 inside the placement's seg14:0x3eda / seg14:0x4074 bracket: the MASTER.SHP block's
+// handle, non-zero [BYTES seg9:0x6883 seg9:0x6890 seg14:0x3fa1] (globals.md DGROUP:0x95a6). The
+// port holds no handle; any non-zero word stands for it [DESIGN].
+constexpr std::int16_t kShpBlockLoaded = 1;
+
+}  // namespace
 
 gfx::SheetArgs sheet_args(const SheetRequest& req) {
     gfx::SheetArgs a;
@@ -111,6 +141,11 @@ SheetBuild build_ship_sheet(Blitter& out, ImageSlotTable& images, ShipRecord& sh
                             const SheetRequest& req, const SheetRenderer& render) {
     SheetBuild b;
     if (req.slot < 0 || req.slot >= kImageSlots) return b;  // [DESIGN] storage bound
+    const bool own = ship_ok(i) && req.slot == kShipImageSlotBase + i;  // ship i's own sheet DGROUP:0x3a38[i]
+    if (own) {
+        ship_sheets().req[static_cast<std::size_t>(i)] = req;  // sheet_request [DESIGN]
+        ship_sheets().has_req[static_cast<std::size_t>(i)] = true;
+    }
     std::uint16_t& slot = images[static_cast<std::size_t>(req.slot)];
     const auto byte = [](const ShipRecord& s, int off) {
         return static_cast<std::uint8_t>(sbyte_at(s, off));
@@ -146,6 +181,17 @@ SheetBuild build_ship_sheet(Blitter& out, ImageSlotTable& images, ShipRecord& sh
     // the roster bytes +0x7a / +0x7b [BYTES seg14:0x12f5 seg14:0x130c seg14:0x131c seg14:0x1322
     // seg14:0x1337 seg14:0x134d].
     b.to_object = ship.roster_index == -1 && was_empty;
+    if (b.rendered && own) set_sheet_copy(i, b.pixels);  // the port's copy [DESIGN]
+    // The design tail +0x68 ... +0x6e while DGROUP:0x95a6 != 0 [BYTES seg14:0x1380-0x13e0]
+    // (s5-weapons-verify.md claim 42), from ordinal 5's side [bp-0xa] [BYTES seg14:0x12dd].
+    if (b.rendered && req.shp_loaded) {
+        const DesignBody& bd = design_body(ship.design_index);
+        if (bd.known) {
+            DesignWordSet dw = design_words(ship.design_index);
+            design_barrels(dw, bd.b1e, bd.b1f, b.side, req.size_level);
+            set_design_words(ship.design_index, dw);
+        }
+    }
     // [BYTES seg14:0x13eb seg14:0x13ef]
     set_byte_at(ship, 0xad, 1);
     set_byte_at(ship, 0xac, 1);
@@ -157,43 +203,55 @@ std::int16_t weapon_sheet_sel(int quick, int state, std::uint32_t frames) {
     return quick == 2 ? 1 : 0;                                              // [BYTES seg10:0x53d7-0x53de]
 }
 
+bool load_weapon_sheet(Blitter& out, ImageSlotTable& images, Pools& pools, WeaponWords& words, int w, int sel,
+                       int size_level, const SheetRenderer& render, const Anim4Renderer& anim4) {
+    const WeaponSlotChoice ch = weapon_image_slot(words, images, pools, w);  // [BYTES seg10:0x533a-0x5445]
+    if (!ch.load || ch.slot < 0 || ch.slot >= kImageSlots) return false;
+    std::uint16_t& slot = images[static_cast<std::size_t>(ch.slot)];
+    if (words.word(w, 0x06) == 4) {
+        // seg10:0x4412(k, 6, W(w)-2, W(w)+0x26) into the empty slot [BYTES seg10:0x5449-0x5461]
+        if (!anim4) {
+            sheet_todo("the animation-4 weapon sheet of weapon " + std::to_string(w), "seg10:0x4412");
+            return false;
+        }
+        slot = anim4(ch.slot, kPoolMissiles, words.word(w, -2), words.word(w, 0x26));
+        return slot != kDcNone;
+    }
+    SheetRequest req;
+    req.slot = ch.slot;
+    req.graphic_id = words.word(w, -2);
+    req.file.clear();     // far DGROUP:0x76d, the empty string
+    req.w1 = 2;
+    req.gap_word = kSheetGapAuto;  // 0x63
+    req.recolour_a = words.word(w, 0x1a);
+    req.recolour_b = words.word(w, 0x1c);
+    req.w5 = 1;
+    req.scale = sheet_scale_flag(size_level, 0, sel);
+    req.colour_a = 12;
+    req.colour_b = 12;
+    req.mode = 0;
+    req.sel = sel;
+    req.size_level = size_level;
+    if (slot != 0) {  // seg10:0x552(slot, 0) [BYTES seg10:0x6ee6]
+        out.delete_image(slot);
+        slot = 0;
+    }
+    SheetPixels px;
+    if (render && render(req, px) && px.w > 0 && px.h > 0)
+        slot = out.create_image_from(px.w, px.h, px.index);  // [BYTES seg10:0x6f7f seg10:0x6f89]
+    return slot != 0;
+}
+
 int build_weapon_sheets(Blitter& out, ImageSlotTable& images, Pools& pools, WeaponWords& words,
                         const ShipRecord& ship, int sel, int size_level,
-                        const SheetRenderer& render) {
+                        const SheetRenderer& render, const Anim4Renderer& anim4) {
     int filled = 0;
     // l = 0 ... (int8) byte +0xcb - 1 [BYTES seg14:0x13f3-0x1425]
     const int n = static_cast<std::int8_t>(sbyte_at(ship, 0xcb));
     for (int l = 0; l < n; ++l) {
         const int w = sbyte_at(ship, 0xb8 + l);
         if (words.word(w, 0x0a) == 0) continue;  // [BYTES seg14:0x1407]
-        const WeaponSlotChoice ch = weapon_image_slot(words, images, pools, w);  // seg10:0x533a
-        if (!ch.load) continue;
-        if (words.word(w, 0x06) == 4) continue;  // seg10:0x4412(k, 6, W-2, W+0x26) [OPEN]
-        SheetRequest req;
-        req.slot = ch.slot;
-        req.graphic_id = words.word(w, -2);
-        req.file.clear();     // far DGROUP:0x76d, the empty string
-        req.w1 = 2;
-        req.gap_word = kSheetGapAuto;  // 0x63
-        req.recolour_a = words.word(w, 0x1a);
-        req.recolour_b = words.word(w, 0x1c);
-        req.w5 = 1;
-        req.scale = sheet_scale_flag(size_level, 0, sel);
-        req.colour_a = 12;
-        req.colour_b = 12;
-        req.mode = 0;
-        req.sel = sel;
-        req.size_level = size_level;
-        std::uint16_t& slot = images[static_cast<std::size_t>(ch.slot)];
-        if (slot != 0) {  // seg10:0x552(slot, 0) [BYTES seg10:0x6ee6]
-            out.delete_image(slot);
-            slot = 0;
-        }
-        SheetPixels px;
-        if (render && render(req, px) && px.w > 0 && px.h > 0) {
-            slot = out.create_image_from(px.w, px.h, px.index);  // [BYTES seg10:0x6f7f seg10:0x6f89]
-            if (slot != 0) ++filled;
-        }
+        if (load_weapon_sheet(out, images, pools, words, w, sel, size_level, render, anim4)) ++filled;  // seg10:0x533a
     }
     return filled;
 }
@@ -482,11 +540,213 @@ void ship_flame_tail(Blitter& out, const ImageSlotTable& images, int i, int on,
     const auto p = flame_pastes(st.f, st.anchors[static_cast<std::size_t>(i)], i, on, ship.type,
                                 obj.frame, obj.size, obj.gap, ship.has_flame);
     paste_flame(out, images, st, i, p);
+    if (SheetPixels* c = sheet_copy(i)) apply_flame_pastes(*c, st, p);  // the copy in step [DESIGN]
 }
 
 SpriteLinks& sprite_links() {
     static SpriteLinks l;
     return l;
+}
+
+// ---- the port's copy of each ship's sheet, the wing cut and the shield (M4 s5 SHEET)
+
+SheetPixels* sheet_copy(int i) {
+    if (!ship_ok(i) || !ship_sheets().has[static_cast<std::size_t>(i)]) return nullptr;
+    return &ship_sheets().px[static_cast<std::size_t>(i)];
+}
+
+void set_sheet_copy(int i, const SheetPixels& px) {
+    if (!ship_ok(i)) return;
+    ship_sheets().px[static_cast<std::size_t>(i)] = px;
+    ship_sheets().has[static_cast<std::size_t>(i)] = px.w > 0 && px.h > 0;
+}
+
+void clear_sheet_copies() { ship_sheets() = ShipSheets{}; }
+
+const SheetRequest* sheet_request(int i) {
+    if (!ship_ok(i) || !ship_sheets().has_req[static_cast<std::size_t>(i)]) return nullptr;
+    return &ship_sheets().req[static_cast<std::size_t>(i)];
+}
+
+void upload_sheet_rect(Blitter& out, DcId dc, const SheetPixels& px, int x, int y, int w, int h) {
+    if (dc == kDcNone || px.w <= 0 || px.h <= 0 || w <= 0 || h <= 0) return;
+    const DcId tmp = out.create_image_from(px.w, px.h, px.index);
+    if (tmp == kDcNone) return;
+    out.bit_blt(dc, x, y, w, h, tmp, x, y, kSrcCopy);
+    out.delete_image(tmp);
+}
+
+std::vector<std::uint8_t> wing_cut_ship(Blitter* out, const ImageSlotTable* images, int i, bool cut, int s, int D,
+                                        int g, int f, bool flag) {
+    std::vector<std::uint8_t> cell;
+    SheetPixels* c = sheet_copy(i);
+    if (!c) {
+        sheet_todo("the wing cut on a ship without a sheet copy", "ISPACE.DLL seg5:0x11a4");
+        return cell;
+    }
+    // The flag's copy first [BYTES ISPACE.DLL seg5:0x11f6-0x1276], then the cut of row 0
+    // [BYTES ISPACE.DLL seg5:0x1494-0x1521 seg5:0x16dc-0x1780] (s5-sheet-verify.md claims 15-19).
+    if (flag) cell = gfx::wing_debris_cell(c->index, c->w, c->h, s, g, D, f, cut);
+    gfx::wing_cut_sheet(c->index, c->w, c->h, s, g, D, cut);
+    if (out && images) {
+        const int slot = kShipImageSlotBase + i;  // DGROUP:0x3a38[i] [BYTES seg8:0x30cb-0x30d0 seg8:0x3470-0x3475]
+        const DcId dc = slot < kImageSlots ? (*images)[static_cast<std::size_t>(slot)] : kDcNone;
+        upload_sheet_rect(*out, dc, *c, 0, g, 16 * (s + g), s);
+    }
+    return cell;
+}
+
+void shield_render(Blitter& out, const ImageSlotTable& images, World& w, int i, const QuickRenderer& render) {
+    if (!ship_ok(i) || i >= w.pools.records(w.roles.ships)) return;  // [DESIGN] bounds
+    const SheetRequest* rq = sheet_request(i);
+    if (!rq || !render) {
+        sheet_todo("the shield's quick cells without a sheet request or renderer", "seg10:0x7328");
+        return;
+    }
+    // The 11 words of seg11:0x4be4-0x4c37 (s5-sheet-verify.md claims 22, 23).
+    QuickRequest q;
+    q.graphic_id = rq->graphic_id;  // design +0x36
+    q.file = rq->file;              // design +0x84
+    q.colour_a = rq->colour_a;      // design byte +0x18
+    q.colour_b = rq->colour_b;      // design byte +0x1a
+    q.heading = w.ship_object(i).frame;  // object +0x28 [BYTES seg11:0x4c04]
+    q.gap_word = kSheetGapAuto;     // 0x63 [BYTES seg11:0x4be4]
+    q.size_level = w.size;          // byte DGROUP:0x9156 [BYTES seg10:0x7360]
+    gfx::QuickCells cells;
+    if (!render(q, cells) || !cells.ok()) return;
+    // Ordinal 17 sets ISPACE.DLL DGROUP:0x15a = 1, so its seg5:0x26a2 also copies the graphic's
+    // colour table into scheme row 12 of DGROUP:0x117c / 0x1cdc; no ramp the port allocates
+    // reads row 12, and the copy is not ported [BYTES ISPACE.DLL seg6:0x55e8 seg5:0x2810-0x288a]
+    // (s5-sheet.md 4; review L15) [OPEN].
+    sheet_todo("ordinal 17's colour-table copy into scheme row 12 (ISPACE.DLL DGROUP:0x15a)",
+               "ISPACE.DLL seg5:0x2810");
+    const int slot = kShipImageSlotBase + i;  // DGROUP:0x3a38[i] [BYTES seg11:0x4bed]
+    const DcId dc = images[static_cast<std::size_t>(slot)];
+    SheetPixels* copy = sheet_copy(i);
+    for (int it = 0; it < 2; ++it) {
+        const gfx::QuickBlit b = gfx::quick_blit(cells.h, cells.gap, it, q.size_level);
+        if (dc != kDcNone) {
+            const DcId tmp = out.create_image_from(cells.side, cells.side, cells.buf[static_cast<std::size_t>(it)]);
+            if (tmp != kDcNone) {
+                if (b.stretch)
+                    out.stretch_blt(dc, b.x, b.y, b.w, b.h, tmp, b.sx, b.sy, b.sw, b.sh, kSrcCopy);  // [BYTES ISPACE.DLL seg6:0x5d38]
+                else
+                    out.bit_blt(dc, b.x, b.y, b.w, b.h, tmp, b.sx, b.sy, kSrcCopy);  // [BYTES ISPACE.DLL seg6:0x5ce6]
+                out.delete_image(tmp);
+            }
+        }
+        if (copy && b.w > 0 && b.h > 0)  // nearest-neighbour for a stretch [DESIGN]
+            for (int y = 0; y < b.h; ++y)
+                for (int x = 0; x < b.w; ++x) {
+                    const int tx = b.x + x, ty = b.y + y;
+                    if (tx < 0 || ty < 0 || tx >= copy->w || ty >= copy->h) continue;
+                    copy->index[static_cast<std::size_t>(ty) * copy->w + tx] =
+                        cells.at(it, b.sx + x * b.sw / b.w, b.sy + y * b.sh / b.h);
+                }
+    }
+}
+
+// ---- the program's sheet side (M4 s5 SHEET)
+
+namespace {
+
+ImageSlotTable* program_images() { return sprite_links().images ? sprite_links().images() : nullptr; }
+
+}  // namespace
+
+void sheet_todo(const std::string& what, const char* address) {
+    if (sprite_links().todo) sprite_links().todo(what, address);
+}
+
+bool sheet_dc_program(int i) { return sheet_dc_word_program(i) != 0; }
+
+std::int16_t sheet_dc_word_program(int i) {
+    const ImageSlotTable* im = program_images();
+    const int slot = kShipImageSlotBase + i;
+    if (!im || !ship_ok(i) || slot >= kImageSlots) return 0;
+    return static_cast<std::int16_t>((*im)[static_cast<std::size_t>(slot)]);  // DGROUP:0x3a38 + 2i
+}
+
+void build_sheet_program(World& w, int i) {
+    Blitter* out = wave_blitter();
+    ImageSlotTable* im = program_images();
+    const SheetRequest* rq = sheet_request(i);
+    if (!out || !im || !rq || !sprite_links().render || !ship_ok(i) || i >= w.pools.records(w.roles.ships)) {
+        // The wave set-up's seg16:0x3784(i, 1) reaches it before the placement's first build
+        // (src/hud/wave_win32.cpp build_player_sheet stands for seg14:0x0's build) [DESIGN].
+        sheet_todo("seg16:0x3468(i, 3)'s seg14:0x11a8 before the first build or without the drawing side",
+                   "seg14:0x11a8");
+        return;
+    }
+    SheetRequest req = *rq;
+    req.shp_loaded = false;  // DGROUP:0x95a6 = 0 in the visit [ORACLE core-0006]
+    ShipRecord& S = w.ship(i);
+    const SheetBuild b = build_ship_sheet(*out, *im, S, i, req, sprite_links().render);
+    if (b.rendered) {
+        // [BYTES seg14:0x12f5-0x134d]
+        if (b.to_object) {
+            ObjectRecord& o = w.ship_object(i);
+            o.size = b.side;
+            o.gap = b.gap;
+        } else if (S.roster_index >= 0 && static_cast<std::size_t>(S.roster_index) < w.roster.size()) {
+            RosterRecord& r = w.roster[static_cast<std::size_t>(S.roster_index)];
+            r.size = static_cast<std::uint8_t>(b.side);
+            r.gap = static_cast<std::uint8_t>(b.gap);
+        }
+    }
+    // seg10:0x533a for the ship's weapons [BYTES seg14:0x13f3-0x1425]; the visit's screen state
+    // is not 1, so `sel` is INI `Quick` = 2 only (weapon_sheet_sel) and the kept request's `sel`
+    // stands for it [DESIGN].
+    build_weapon_sheets(*out, *im, w.pools, missile_state().words, S, req.sel, req.size_level,
+                        sprite_links().render, sprite_links().anim4);
+}
+
+void shield_render_program(World& w, int i) {
+    Blitter* out = wave_blitter();
+    ImageSlotTable* im = program_images();
+    if (!out || !im) {
+        sheet_todo("the shield's quick cells without the drawing side", "seg10:0x7328");
+        return;
+    }
+    shield_render(*out, *im, w, i, sprite_links().quick);
+}
+
+void recut_lost_wings(World& w, int i) {
+    if (w.restored == 0) return;  // DGROUP:0x92e4 [BYTES seg14:0xc84-0xc89]
+    if (!ship_ok(i) || i >= w.pools.records(w.roles.ships)) return;  // [DESIGN] bounds
+    ShipRecord& S = w.ship(i);
+    if (S.has_flame == 0) return;  // byte +0xe4 [BYTES seg14:0xc90-0xc95]
+    const int n = S.design_index;
+    if (n < 0 || n >= kShipCount || w.design_ratings[static_cast<std::size_t>(n)].special != 3) return;  // design +0x28 [BYTES seg14:0xc97-0xca2]
+    for (int side = 0; side < 2; ++side) {
+        if (sbyte_at(S, side == 0 ? 0xac : 0xad) != 0) continue;  // [BYTES seg14:0xca4 seg14:0xcbd]
+        // seg8:0x2cd8(i, side) with DGROUP:0x92e4 != 0 [BYTES seg14:0xcb0 seg14:0xcc9]: its head
+        // (damage.h wing_tear_head) inside the placement's seg14:0x3eda / seg14:0x4074 bracket,
+        // where DGROUP:0x95a6 != 0, so the design recompute does not run [BYTES seg9:0x6883
+        // seg9:0x6890 seg8:0x2d23-0x2d27] (M4 s5 fixer, review L13).
+        const int cut = wing_tear_head(S, side, w.clock, kShpBlockLoaded, w.size);
+        const ObjectRecord& o = w.ship_object(i);
+        wing_cut_ship(wave_blitter(), program_images(), i, cut != 0, o.size, design_words(n).w3c, o.gap, o.frame,
+                      false);  // ordinal 15, flag 0 [BYTES seg8:0x343d-0x3482]
+    }
+}
+
+void placement_tail(World& w, int i, std::int16_t raw_side, ShotState& shots) {
+    if (!ship_ok(i)) return;  // [DESIGN] bounds
+    ShipRecord& s = w.ship(i);
+    const int dn = s.design_index >= 0 && s.design_index < kShipCount ? s.design_index : 0;
+    DesignWordSet dw = design_words(dn);
+    const RosterRecord* rr = roster_at(w, s.roster_index);
+    dw.w2a = rr ? static_cast<std::int16_t>(static_cast<std::int8_t>(rr->size)) : raw_side;  // cbw [BYTES seg14:0xd8a seg14:0xba9]
+    dw.w00 = design_half_side(dw.w2a, w.size);  // [BYTES seg14:0xc50]
+    dw.w02 = dw.w00;                            // [BYTES seg14:0xc54]
+    set_design_words(dn, dw);
+    if (w.restored != 0 && rr && s.has_flame != 0) {
+        set_byte_at(s, 0xac, rr->wing0);
+        set_byte_at(s, 0xad, rr->wing1);
+    }
+    recut_lost_wings(w, i);
+    fill_muzzles(shots, dn, design_words_from_world(w, dn));
 }
 
 }  // namespace is::world

@@ -383,10 +383,10 @@ private:
 void visit_purchases(VisitCtx& c) {
     VisitAmbulanceHost h(c);
     AmbulanceCtx a{c.w, ambulance_state(), c.h.now(), h};
-    ambulance_repairs_done(a);  // seg16:0x3784(DGROUP:0x952e, 0), seg3:0x6ec(..., 0x54) [BYTES seg16:0x87e-0x893]
-    // seg16:0x3784's end writes the dword DGROUP:0x9e5b = 1 (DGROUP:0x9e5d = 0); the port keeps
-    // that word in both Shop and AmbulanceState and writes both [DESIGN] [BYTES seg16:0x3b07].
-    ambulance_state().set_served_alive_dword(1);
+    // seg16:0x3784(DGROUP:0x952e, 0), seg3:0x6ec(..., 0x54) [BYTES seg16:0x87e-0x893]; the
+    // purchases' end writes the dword DGROUP:0x9e5b = 1 (DGROUP:0x9e5d = 0) into the Shop, the
+    // one store the ambulance's words refer to (ambulance.h) [BYTES seg16:0x3b07].
+    ambulance_repairs_done(a);
 }
 
 // ---- phase 64's free spot ------------------------------------------------------------------------

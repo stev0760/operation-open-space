@@ -112,6 +112,9 @@ struct IconRecord {
     // DGROUP:0x57c3 + k, bytes +0x1b ... +0x1e: the pool-1 record of fragment k after the shatter
     // seg7:0x2768 [BYTES seg7:0x2c84-0x2cb4] (M4 s2 GUN).
     std::array<std::uint8_t, 4> fragment{};
+    // DGROUP:0x57a4 + 0x23s (bytes +0x1f ... +0x22 of record s - 1): now + 4000 at a FIREBALL
+    // ignition; no reader (s5-icons-verify.md claim 29) [BYTES seg7:0x4b49 seg7:0x45e5] (M4 s5 ICONS).
+    std::uint32_t burn_until = 0;
 };
 constexpr int kIconRecords = 8;  // pool 0 holds 8 records [BYTES seg9:0x24b5]
 
@@ -158,6 +161,24 @@ struct Pool8Entry {
     // +0x32 (DGROUP:0x3d82) special-place index.
 };
 constexpr int kPool8Max = 80;  // the pool-8 cap [BYTES seg9:0x2563]
+
+// ---- the smoke table DGROUP:0x58bc + 0x14·k, k < 20 (work/analysis/m4/s5-effects.md 2.1,
+// verified claims 35, 36; M4 s5 EFFECTS). seg7:0x5e04 and seg8:0x124a index it from
+// DGROUP:0x58bc with `imul bx, k, 0x14`; seg7:0x5b68 and seg7:0x5d6a fill +0x08 ... +0x10 of the
+// same records [BYTES seg8:0x125c-0x1280 seg7:0x5e94-0x5ea8 seg7:0x5c8c-0x5c93 seg7:0x5dcc-0x5df9].
+// The routines are src/world/smoke.h. Nothing resets +0x00 ... +0x06 or +0x12 between uses.
+struct SmokeRecord {
+    std::int16_t sx = 0, sy = 0;          // +0x00/+0x02 DGROUP:0x58bc: this draw's screen point (seg8:0x124a)
+    std::int16_t old_x = 0, old_y = 0;    // +0x04/+0x06 DGROUP:0x58c0: the previous draw's, blacked
+    std::int16_t x = 0, y = 0;            // +0x08/+0x0a DGROUP:0x58c4: world point
+    std::int16_t vx = 0, vy = 0;          // +0x0c/+0x0e DGROUP:0x58c8: velocity per mover call
+    std::int16_t counter = -1;            // +0x10 DGROUP:0x58cc: -1 free, 0 at the start, freed at 55
+    std::int16_t drawn = 0;               // +0x12 DGROUP:0x58ce: 1 when the last call drew the puff
+};
+static_assert(sizeof(SmokeRecord) == 0x14, "smoke record 0x14");
+constexpr int kSmokeRecords = 20;  // `cmp 0x14` in seg7:0x5b68, 0x5d6a, 0x5e04, seg9:0x6747 [BYTES seg7:0x5c80 seg9:0x675d]
+constexpr std::uint16_t kDgSmokeTable = 0x58bc;
+using SmokeRecords = std::array<SmokeRecord, kSmokeRecords>;
 
 // ---- special places DGROUP:0x4f2c + 0x10·k, k < 10, DGROUP:0x9344 of them in use; what they
 // are is [OPEN] (seg9:0x4896 makes them, the hazards keep their distance) [BYTES seg9:0x3202
@@ -402,8 +423,8 @@ public:
     // DGROUP:0x1e84, the death deadline of the wave case (seg7:0x6ac): = now at seg7:0x6f7,
     // now + 1500 at seg12:0x2ac1 (the player destroyed in a player game), now + 8000 at
     // seg16:0xacd; due → the history MessageBox and seg6:0x5d58 (shell.md "Wave deadlines").
-    // The same DGROUP word serves state 9 (seg7:0x1c5), which the port keeps in
-    // shell::Deadlines::scores_due; the world's writers use this one [DESIGN].
+    // The one store of DGROUP:0x1e84; the shell's state-9 case (seg7:0x1c5) reads it through
+    // GameState::bind_scores_due (world/hooks.cpp install_world_hooks) (M4 s5, D-24).
     std::uint32_t w1e84 = 0;
     // DGROUP:0x93a4 = 1: the wave ends into the Hall of Justice (seg12:0x2472, seg12:0x24b1);
     // cleared at seg9:0x6111 [BYTES seg12:0x2472 seg12:0x24b1 seg9:0x6111].
@@ -514,7 +535,10 @@ public:
     std::int16_t w9130 = 0;        // DGROUP:0x9130 seg18 mode
     std::int16_t w913a = 0;        // DGROUP:0x913a
     std::int16_t w913c = 0;        // DGROUP:0x913c
-    std::array<std::int16_t, 20> w58cc{};  // DGROUP:0x58cc + 0x14 k, -1 at the placement
+    // The smoke table DGROUP:0x58bc (smoke.h), the one store of the counters DGROUP:0x58cc +
+    // 0x14·k; the placement writes -1 to every counter (smoke.h smoke_place) [BYTES
+    // seg9:0x6747-0x675d] (M4 s5 EFFECTS).
+    SmokeRecords smoke{};
     std::array<std::int16_t, 4> w226c{};   // DGROUP:0x226c + 0x5a k, -1 at the placement
     std::array<std::int16_t, 4> w8e34{};   // DGROUP:0x8e34 + 2 k, -1 at the briefing entry
     std::array<std::int16_t, 8> w8680{};   // DGROUP:0x8680 + 2 k, -1 at the briefing entry

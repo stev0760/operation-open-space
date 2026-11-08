@@ -189,7 +189,12 @@ void retarget(MissileCtx& c, std::int16_t range, int m);
 // seg12:0x7c0(m), the steer [BYTES seg12:0x7c0-0xa23] (claims 57-61): the aim from the
 // missile's centre to the target's, two rand() draws (x then y) on every call, the cloak
 // jitter, the turn (W+0x06 = 2 turns `frame`), the proximity fuse (blast_size doubled,
-// seg12:0x274a and seg7:0x2080, then on), the thrust and the clamp seg8:0x1cbe.
+// seg12:0x274a and seg7:0x2080, then on), the thrust and the clamp seg8:0x1cbe. The fuse
+// measures from the missile's centre to the locked target's corner + `size` / 2 (in world
+// units), and the rock and icon movers run before seg12:0x0 in a frame, so a weapon-8 missile
+// closing on its rock from the left or above fuses (0x45 alone) while one from the right or
+// below touches first (0x06, 0x45, 0x08) (s5-weapons-verify.md claims 1-6, 12 as corrected;
+// tests/test_world_missile_end.cpp) [ORACLE core-0002] [ORACLE core-0006].
 void steer(MissileCtx& c, int m);
 
 // seg12:0x0, the pool-6 mover, once per wave frame at seg7:0xcfb [BYTES seg12:0x0-0x57c]

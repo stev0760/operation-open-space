@@ -262,7 +262,7 @@ struct ShipRecord {
     std::int16_t laps;            // +0xda [BYTES seg4:0x8bb7]
     std::int16_t wdc, wde, we0;   // +0xdc..+0xe1 [OPEN]
     std::uint8_t be2;             // +0xe2 `tumbling`: seg16:0x8e4 sets 1, the mover steps the heading while set; skips action-mode flight [BYTES seg16:0x9ff seg13:0xdc seg13:0x224 seg11:0x600d]
-    std::uint8_t be3;             // +0xe3 [OPEN]
+    std::uint8_t be3;             // +0xe3 the gun shots' colour row, design +0x44 AND 1 [BYTES seg14:0x21d6 seg8:0x3c99]
     std::uint8_t has_flame;       // +0xe4 0 for a body-thrust ship [BYTES seg14:0x1f41 seg11:0xb122]
     std::uint8_t be5;             // +0xe5 [OPEN]
     std::uint8_t anim_wrap;       // +0xe6 not 0 wraps, 0 bounces [BYTES seg13:0x25a]

@@ -2,7 +2,11 @@
 // m4/s1-death.md sections 1-3 with s1-death-verify.md): the frame routine seg8:0x3fbe that
 // animates the explosions, the blast seg8:0x5ab0, a ship's death seg16:0x8e4 (its `on_destroy`),
 // the generic destroy handler seg12:0x274a (the fragments), and the explosion images of
-// seg10:0x5102. M4 stage 1, track DEATH.
+// seg10:0x5102. M4 stage 1, track DEATH. M4 stage 5, track EFFECTS (work/analysis/m4/
+// s5-effects.md section 1 with s5-effects-verify.md): the 5 x 5 pieces of effect types 6 (the
+// break-up seg7:0x2e02) and 7 (the gun's spark seg8:0x804a, the defender burst seg8:0x92a0), the
+// piece table DGROUP:0x2414, their source DCs DGROUP:0x5e98, the 20 brushes DGROUP:0x576c and
+// their colour offset DGROUP:0xb6a.
 //
 // The routines work on the wave's World (world.h): its pools, ship records, the effect table
 // DGROUP:0x1e90 and the words DGROUP:0x9430 (World::w9430), DGROUP:0x9434 (World::w9434),
@@ -15,6 +19,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 
 #include "shell/rng.h"
 #include "world/records.h"
@@ -69,6 +74,42 @@ static_assert(sizeof(PodRecord) == 0x34, "pod record 0x34");
 // DGROUP:0x9302, which the set-up sets [OPEN].
 constexpr int kPodRecords = 16;
 
+// ---- the pieces of types 6 and 7 (s5-effects.md 1.4)
+
+// Piece P(e, i, j) at DGROUP:0x2414 + 0x1c·((5e + i)·5 + j), e < 4 (the index of every user)
+// [BYTES seg8:0x430e-0x431b seg8:0x7e0-0x7ed seg7:0x346e-0x347b seg8:0x96ef-0x96fc] (verified
+// claim 6). Only seg7:0x342e, seg8:0x9694, seg8:0x7d2 and seg8:0x3fbe touch the table, and
+// nothing resets it at the placement or the load (verified claim 23).
+struct EffectPiece {
+    std::int16_t sx = 0, sy = 0;          // +0x00/+0x02 DGROUP:0x2414: this frame's screen point (seg8:0x7d2)
+    std::int16_t old_x = 0, old_y = 0;    // +0x04/+0x06 DGROUP:0x2418: the previous frame's, blacked after the draw
+    std::int16_t prev_x = 0, prev_y = 0;  // +0x08/+0x0a DGROUP:0x241c: the copy of +0x00/+0x02, the next old
+    std::int16_t vx = 0, vy = 0;          // +0x0c/+0x0e DGROUP:0x2420: velocity per frame
+    std::int16_t ax = 0, ay = 0;          // +0x10/+0x12 DGROUP:0x2424: the acceleration coefficients
+    std::int16_t w14 = 0, w16 = 0;        // +0x14/+0x16 DGROUP:0x2428: no reference (verified claim 23)
+    std::int16_t wx = 0, wy = 0;          // +0x18/+0x1a DGROUP:0x242c: world point
+};
+static_assert(sizeof(EffectPiece) == 0x1c, "piece record 0x1c");
+constexpr int kPieceEntries = 4;   // types >= 6 live in entries 0 ... 3 (s5-effects.md 1.2)
+constexpr int kPieceGrid = 5;      // the 5 x 5 loops [BYTES seg8:0x452a seg8:0x4480]
+constexpr int kPieceCount = kPieceEntries * kPieceGrid * kPieceGrid;  // 100: DGROUP:0x2414 ... 0x2f03
+constexpr std::uint16_t kDgPieceTable = 0x2414;
+constexpr int kEffectBrushes = 20;  // DGROUP:0x576c + 2n, n = 0 ... 19 [BYTES seg10:0x4c0b-0x4d16]
+// The pool word of the gun's spark: shot slot `rec` (seg8:0x804a) [BYTES seg8:0x96a3 seg8:0x8187].
+constexpr std::int16_t kPieceShotPool = 0x1e;
+// The 20 COLORREFs seg10:0x4b2e passes to CreateSolidBrush for DGROUP:0x576c (plain RGB
+// 0x00bbggrr, not PALETTERGB) [BYTES seg10:0x4c0b-0x4d16] (verified claim 31): greys 0 ... 5,
+// greens 6 ... 9, blues 10 ... 14 (the player's spark), reds to orange 15 ... 19 (other shots').
+extern const std::array<std::uint32_t, kEffectBrushes> kEffectBrushColours;
+
+// The break-up's source DC for DGROUP:0x5e98 + 2e: `owned` when the port made it for this entry
+// (the pool-1 case, whose DC seg7:0x2e02 creates and seg8:0x3fbe deletes) [BYTES seg7:0x303f-0x306e
+// seg8:0x45ab-0x45c3].
+struct BreakSource {
+    DcId dc = kDcNone;
+    bool owned = false;
+};
+
 struct EffectState {
     EffectSides sides;              // DGROUP:0x5170, DGROUP:0x5224
     std::int16_t dg_5144 = 0;       // DGROUP:0x5144/0x5146: the point a mode-3 sound (KABOOM) plays at
@@ -78,6 +119,19 @@ struct EffectState {
     std::int16_t dg_95a8 = 0;       // DGROUP:0x95a8 = 1 at the demo player's death [BYTES seg16:0xaea]
     // DGROUP:0x698c (now + 10000 when a pool-4 record is destroyed) is World::w698c [BYTES seg12:0x279a].
     std::array<PodRecord, kPodRecords> pods{};  // DGROUP:0x8560
+    // ---- M4 s5 EFFECTS
+    std::array<EffectPiece, kPieceCount> pieces{};  // DGROUP:0x2414
+    // DGROUP:0x5e98 + 2e, e < 4: the type-6 entry's source DC; DGROUP:0x5ea0 + 2e (the bitmap
+    // the pool-1 DC replaced) is the port's `owned` flag [BYTES seg7:0x3015-0x306e].
+    std::array<DcId, kPieceEntries> piece_src{};
+    std::array<bool, kPieceEntries> piece_src_owned{};
+    std::array<BrushId, kEffectBrushes> brushes{};  // DGROUP:0x576c (create_effect_brushes)
+    bool brushes_made = false;                     // create_effect_brushes ran [DESIGN]
+    // The colour offset DGROUP:0xb6a, its step DGROUP:0xb6c (0 and 1 in the image, no other
+    // writer: verified claim 33) and the cycle's last time DGROUP:0x579c [BYTES DGROUP:0xb6a].
+    std::int16_t dg_b6a = 0;
+    std::int16_t dg_b6c = 1;
+    std::uint32_t dg_579c = 0;
 };
 // The program's one EffectState (DGROUP lives once).
 EffectState& effect_state();
@@ -102,11 +156,6 @@ public:
     virtual void hit(int pool, int rec, int src_pool, int src_rec, std::int16_t amount) {
         (void)pool, (void)rec, (void)src_pool, (void)src_rec, (void)amount;
     }
-    // seg8:0x4256-0x452a: the 5 x 5 piece effects of types >= 6 (seg7:0x342e, seg8:0x9694,
-    // DGROUP:0x2414) [OPEN: not ported, not a death effect].
-    virtual void pieces(int k) { (void)k; }
-    // seg8:0x458e-0x45cd: entry k < 4 of type 6 freed: its DC DGROUP:0x5e98 + 2k [OPEN].
-    virtual void piece_free(int k) { (void)k; }
     // seg18:0x5350(x, y) after an entry ends in the seg18 mode [OPEN M6].
     virtual void seg18_5350(std::int16_t x, std::int16_t y) { (void)x, (void)y; }
     // seg11:0xaece at the demo player's death with DGROUP:0x951a = 0 [OPEN].
@@ -125,6 +174,8 @@ public:
 };
 
 // Everything the routines touch.
+struct ShotState;
+
 struct EffectCtx {
     World& w;
     EffectState& st;
@@ -145,7 +196,32 @@ struct EffectCtx {
     // seg8:0x5b99 seg8:0x5bb8 seg8:0x616a seg8:0x6589] (M4 s4 fixer, C006, C084). Null writes
     // nothing.
     std::int16_t* dg_b0c = nullptr;
+    // The shot slots DGROUP:0x6098 whose per-sub-step velocity +0x70/+0x72 seg8:0x9694 reads for
+    // the gun's spark (shots.h); null reads the program's shot_state() (M4 s5 EFFECTS).
+    ShotState* shots = nullptr;
 };
+
+// The program's calls of seg7:0x2e02 for the break-up's source (src/world/flight_hooks.cpp sets
+// them; empty ones give no source and release nothing) (M4 s5 EFFECTS):
+//  - break_source(pool, rec): seg7:0x303f-0x306e and seg7:0x2e5c-0x2ec2: pool 1 a new DC with the
+//    fragment's bitmap DGROUP:0x4e94 + 2·rec (owned), pool 8 image slot DGROUP:0x39e8[word
+//    DGROUP:0x3d6e + 0x34·rec], pool 6 slot [W(w)-4] (DGROUP:0x2f50 + 0x50·w, w = DGROUP:0x66e4 +
+//    0x1c·rec), pool 4 slot 4 (DGROUP:0x39f0), any other pool none;
+//  - release(dc): SelectObject back and DeleteDC of an owned source [BYTES seg7:0x3015-0x3039];
+//  - fragment_dc(r): the DC of pool-1 record r's bitmap DGROUP:0x4e94 + 2r (the HUD's
+//    g_fragment_dc, src/hud/wave_win32.cpp), kDcNone for none.
+struct EffectLinks {
+    std::function<BreakSource(int pool, int rec)> break_source;
+    std::function<void(DcId dc)> release;
+    std::function<DcId(int r)> fragment_dc;
+};
+EffectLinks& effect_links();
+// The wave teardown seg10:0x22e's release of the break-up sources [BYTES seg10:0x2cb-0x301]: for
+// e = 0 ... 3 with DGROUP:0x5e98 + 2e != 0, SelectObject(DC, DGROUP:0x5ea0 + 2e), DeleteDC, then 0.
+// The original deletes the source of any pool; the port deletes only the DCs it made (`owned`,
+// the pool-1 case, through EffectLinks::release) and leaves another pool's slot DC to the image
+// table, as seg7:0x2e02's release does [DESIGN] (M4 s5 fixer, review L17).
+void release_piece_sources(EffectState& st);
 
 // seg8:0x3fbe(k) [BYTES seg8:0x3fbe-0x45db] (verified claims 1, 4-13):
 //  - entry k with +0x00 < 0 or +0x02 < +0x00 goes to the end test without a frame;
@@ -157,7 +233,9 @@ struct EffectCtx {
 //    the last frame (+0x00 >= +0x02 - 1, type != 0xff06) they black a (52 << Size) >> 1 square,
 //    redraw the player (seg7:0x1208) while it is in play, DGROUP:0x951a = 0 and alive, and for
 //    type != 1 play 0x6a on a ship source in play and black the source's square;
-//  - types >= 6 go to EffectHost::pieces;
+//  - types >= 6 run the piece branch seg8:0x4256-0x452a (piece_frame) for entries 0 ... 3
+//    (the only ones a creator gives such a type; another index skips it [DESIGN]), and at the
+//    end of a type-6 entry < 4 its source DGROUP:0x5e98 is released (pool 1) and cleared;
 //  - +0x00 += 1; at +0x02 the entry is freed, DGROUP:0x9434 becomes the highest busy index
 //    (0 when none) and DGROUP:0x9430 drops by 1, floor 0.
 void effect_frame(EffectCtx& c, int k);
@@ -194,11 +272,71 @@ struct CollideCtx;
 // +0x02 = 20, type 6, side = size / 5, step 2 when the entry's index is above `Detail` else 1,
 // pool, rec, the screen centre (+0x00, +0x02) and the world point (+0x04, +0x06), DGROUP:0x9430 +
 // 1 (DGROUP:0x9434 is not touched). No entry of 0 ... 3 qualifying does nothing more. Pool 1
-// always ends with seg7:0x65aa(0, DGROUP:0x6038 + 2·rec), the icon's column row. The source DCs
-// DGROUP:0x5e98 / 0x5ea0 of the entry (the fragment's bitmap, DGROUP:0x39f0, a pool-8 or weapon
-// image) serve only the type-6 branch of seg8:0x3fbe, which is not ported [OPEN]: the port keeps
-// none, so the break-up shows as the blacked square for 20 frames.
+// always ends with seg7:0x65aa(0, DGROUP:0x6038 + 2·rec), the icon's column row. Once e is
+// chosen the entry's old source DGROUP:0x5e98 + 2e, when not 0, is released and cleared (the
+// original's SelectObject + DeleteDC for any pool; the port releases only a source it owns, as a
+// shared slot DC must survive [DESIGN]), then the new source is latched from
+// effect_links().break_source (the fragment's record may be reused while the 19 frames run)
+// [BYTES seg7:0x3015-0x306e seg7:0x2e5c-0x2ec2] (verified claim 30) (M4 s5 EFFECTS).
 void pickup_destroyed(CollideCtx& x, int pool, int rec);
+
+// ---- the piece branch of seg8:0x3fbe (M4 s5 EFFECTS; s5-effects.md 1.3-1.7)
+
+// The piece record of entry e, row i, column j: (5e + i)·5 + j, 16-bit [BYTES seg8:0x430e-0x431b];
+// -1 outside entries 0 ... 3 [DESIGN].
+int piece_index(int e, int i, int j);
+
+// The eight acceleration cases (ax, ay) of seg7:0x342e and seg8:0x9694, whose switch bodies are
+// the same instruction sequences [BYTES seg7:0x3460-0x3671 seg8:0x96e1-0x98f2] (verified claims
+// 18-20; the other five read from the listing, M4 s5 EFFECTS): 0 (2(i + 5) - 7j, -4(j + 1) + 6i),
+// 1 (7(2 - j) - 2(i - 2)², -4(j - 2)² + 6(i - 2)), 2 (7(2 - j) - 2(i - 2)², 4(j - 2)² + 6(2 - i)),
+// 3 (2(i - 2) + 7(2 - j)(5 - i), 6(i - 2)(j - 5) + 4(j - 2)), 4 ((2 - j)(i - 2), 9(i - 2)(j - 2)),
+// 5 (6((i - 2)³ + j - 2), 5(i - 2) - 2(j - 2)²), 6 (6((j - 2)³ - (i - 2)³), 7i(i - 2)² -
+// 2(j - 2)²), 7 (7j - 3i - 8, 6(i - 2)³). A case above 7 writes nothing (`ja`).
+struct PieceAccel {
+    std::int16_t ax = 0, ay = 0;
+};
+PieceAccel piece_accel(int i, int j, int c);
+
+// seg7:0x342e(e, pool, rec), cdecl [BYTES seg7:0x343d-0x3759] (verified claims 9, 16-18): s =
+// object `size` / 5; for i = 0 ... 4 (outer), j = 0 ... 4: world point (lo16(s·j) << 3 + x,
+// lo16(s·i) << 3 + y), velocity (vx / 10 + (j - 2)·8, vy / 10 + (2 - i)·7), case 0's
+// accelerations, then one rand() % 8 picks the case. Exactly 25 rand().
+void pieces_setup_break(EffectCtx& c, int e, int pool, int rec);
+// seg8:0x9694(e, pool, rec), cdecl [BYTES seg8:0x96a3-0x99cc] (verified claims 17, 21, 22): V =
+// shot slot rec's words +0x70/+0x72 (DGROUP:0x6108/0x610a) for pool 0x1e, else the object's
+// velocity; world point ((j << 4) + DGROUP:0x5224[e].x + 8, (i << 4) + .y + 8), velocity
+// ((j - 2)·8 + V.x, (2 - i)·7 + V.y), case 0, then (rand() % 32) % 8 picks the case (the % 32
+// value lands in the pool argument's slot, never read again). Exactly 25 rand().
+void pieces_setup_burst(EffectCtx& c, int e, int pool, int rec);
+// seg8:0x7d2(e, i, j), Pascal `retf 6` [BYTES seg8:0x7f0-0x82f] (verified claim 7): +0x00/+0x02
+// = seg8:0x29ea(+0x18, +0x1a), +0x04/+0x06 = +0x08/+0x0a, +0x08/+0x0a = +0x00/+0x02.
+void piece_screen(EffectCtx& c, int e, int i, int j);
+// seg8:0x4256-0x452a(k) [BYTES seg8:0x4256-0x4538] (verified claims 2-14): at frame 1 the set-up
+// (type 6 seg7:0x342e, else seg8:0x9694) and, for a pool not above DGROUP:0x9324 (signed), the
+// source object's square blacked; at frame 5 of type 6 the blast seg8:0x5ab0; then for i, j = 0,
+// step, ... < 5 (the step +0x04 re-read on each pass): seg8:0x7d2, the draw (type 6: BitBlt
+// SRCCOPY side x side from DGROUP:0x5e98[k] at (side·i + gap, side·j + gap), gap = the object's
+// +0x24 read again, so the first frame shows the picture transposed; type 7: SelectObject of
+// brush DGROUP:0x576c[+0x0e + DGROUP:0xb6a], not restored, and PatBlt PATCOPY), PatBlt BLACKNESS
+// at the old point after the draw, on the last frame (+0x02 - +0x00 - 1 = 0) PatBlt BLACKNESS at
+// the new point and seg7:0x1208 while DGROUP:0x951a = 0, and the motion: w += lo16(lo16(lo16(a·f)·f)
+// ·9) / lo16(end·end) + v (16-bit, f the frame before its increment), x above DGROUP:0x5a0 << 3
+// becomes 0 and below 0 becomes DGROUP:0x5a0 << 3, y likewise. A step <= 0 (no creator writes
+// one) ends the loops [DESIGN]; so does a zero divisor [DESIGN].
+void piece_frame(EffectCtx& c, int k);
+
+// seg8:0x82c6-0x82f4, the part of the pool-2 mover seg8:0x8256 that runs on every wave frame
+// before any test of pool 2 (verified claims 32-34): once now - 60 is above DGROUP:0x579c (32-bit
+// unsigned) DGROUP:0x579c = now, DGROUP:0xb6a += DGROUP:0xb6c, and DGROUP:0xb6c is negated when
+// DGROUP:0xb6a > 3 or < 1 (signed): from (0, 1) the offset runs 1, 2, 3, 4, 3, 2, 1, 0, 1, ...
+void effect_colour_cycle(EffectState& st, std::uint32_t now);
+
+// seg10:0x4c0b-0x4d16: the 20 CreateSolidBrush calls of seg10:0x4b2e into DGROUP:0x576c
+// (kEffectBrushColours); colours reach the 8-bit surface through ADR 0007. The original deletes
+// and recreates them on each seg10:0x4b2e (seg10:0x4be5-0x4c09); the port makes them once for
+// the program's Blitter, at the wave's load beside build_effect_images [DESIGN].
+void create_effect_brushes(Blitter& out, EffectState& st);
 
 // seg12:0x274a(pool, rec), the generic destroy handler [BYTES seg12:0x274a-0x2b1d] (verified
 // claims 24-26; core.md "Fragments"): the index test, DGROUP:0x698c for pool 4, the square

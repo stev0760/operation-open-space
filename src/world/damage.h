@@ -19,9 +19,18 @@ namespace is::world {
 // seg8:0x45e0(pool, ship, d): the ship's on_damage, 1 when the ship died, else 0
 // [BYTES seg8:0x45e0-0x4d5d].
 std::int16_t ship_damage(CollideCtx& x, int pool, int ship, std::int16_t d);
-// seg8:0x2cd8(ship, side): a wing torn off (side 1: byte +0xad, side 0: +0xac), the head the
-// port runs and the debris through CollideHost [BYTES seg8:0x2cd8-0x2d23 seg8:0x2d96 seg8:0x33cd].
+// seg8:0x2cd8(ship, side): a wing torn off (side 1: byte +0xad, side 0: +0xac): dword +0x156 =
+// now - 10000, the byte cleared, ordinal 15's side [bp-4] = 1 for side 0, design +0x3c recomputed
+// (design_words.h design_band_recompute), the taunts while DGROUP:0x92e4 = 0, then one
+// CollideHost::wing_picture (the debris entry with ordinal 15's flag, or the cut alone) and
+// sound 0x6a after a debris entry [BYTES seg8:0x2cd8-0x2d96 seg8:0x2e5d seg8:0x33c2-0x33cd
+// seg8:0x343d-0x3482] (work/analysis/m4/s5-sheet.md 1.1-1.2, verified claims 1, 2, 4).
 void tear_wing(CollideCtx& x, int ship, int side);
+// seg8:0x2cd8's head, shared by tear_wing and the restore re-cut (player_sheet.h
+// recut_lost_wings): dword +0x156 = now - 10000 (DGROUP:0x1e50), the wing byte cleared (+0xac for
+// side 0, +0xad for side 1) and, while DGROUP:0x95a6 = 0, design +0x3c recomputed. Returns
+// ordinal 15's cut flag [bp-4]: 1 for side 0 [BYTES seg8:0x2cea-0x2d27] (M4 s5 fixer, review L13).
+int wing_tear_head(ShipRecord& S, int side, std::uint32_t now, std::int16_t dg_95a6, int size_level);
 // seg7:0x5090(pool, rec, d): the rock's and the gate post's on_damage, 1 when a rock was
 // destroyed or split [BYTES seg7:0x5090-0x565d].
 std::int16_t rock_damage(CollideCtx& x, int pool, int rec, std::int16_t d);

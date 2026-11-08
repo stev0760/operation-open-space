@@ -161,6 +161,20 @@ public:
     // DGROUP:0x1f3c: palettes created and not deleted (the ALPHABET reference count).
     int alphabet_refs() const { return alphabet_refs_; }
 
+    // ISPACE.DLL seg5:0x64f8(slot, r, g, b, s1, s2), cdecl: 0 in palette mode 2 (`xor al, al`
+    // at seg5:0x6512; the callers clear AH); otherwise the scheme ids s1 then s2, each looked
+    // up in DGROUP:0x1dea[mode 25 + s] with -1 skipped, are scanned over their ramp records'
+    // entries (DGROUP:0x1398, first ... last inclusive) of the working palette DGROUP:0x1168
+    // with distance |dr| + |dg| + |db| and a best of 1000 at first: a strictly smaller distance
+    // becomes the best and goes to DGROUP:0x1a6, and the scan returns DGROUP:0x1a6 >> 2 at the
+    // first distance below 14 or at its end. With no entry scanned DGROUP:0x1a6 keeps its last
+    // value, which `last` carries in and out (as entries, the port's divided records) [BYTES
+    // ISPACE.DLL seg5:0x64f8 seg5:0x6512 seg5:0x6517-0x655a seg5:0x655d-0x66df] (docs/re/
+    // ispace.md "Nearest colour"; gfx/ship_flame.h nearest_flame_entry is the one-scheme case).
+    // A scheme id without a record reads DGROUP:0x1398 + 4 (19 mode - 1) in the original
+    // [OPEN]; the port skips it [DESIGN].
+    int nearest_scheme_entry(PalHandle pal, Rgb c, int s1, int s2, int& last) const;
+
 private:
     struct Slot {
         PalHandle handle = 0;
@@ -190,5 +204,33 @@ private:
     PublishFn on_publish_;
     AlphabetFn on_alphabet_;
 };
+
+// ---- ISPACE.DLL ordinal 17's colour map (work/analysis/m4/s5-sheet.md 4.4, verified claims 26,
+// 27 and 31 CORRECTED)
+
+// The word table DGROUP:0x1484[0 ... 14]: the palette index ordinal 17 writes for source nibble
+// v is the low byte of entry v (DGROUP:0x1484 + 2v) [BYTES ISPACE.DLL seg6:0x58c4-0x58cc
+// seg6:0x5a99-0x5aa3]; nibble 15 is transparent.
+using QuickColourMap = std::array<std::uint8_t, 15>;
+
+// The DGROUP:0x15c pass of seg5:0x26a2, which runs only inside ordinal 17's load (seg5:0x1b8e
+// clears DGROUP:0x15c after it [BYTES ISPACE.DLL seg5:0x1c04]): for k = 0 ... 14, with (r, g, b)
+// colour-table entry k after the recolour (`table`, 0x00RRGGBB: bytes +0x2a, +0x29, +0x28 of the
+// BITMAPINFO entry) [BYTES ISPACE.DLL seg5:0x2a69-0x2bb7]:
+//  - (k < 10 and b1 != 12) or (k >= 10 and b2 != 12): seg5:0x64f8(slot, r, g, b, id_a, id_b),
+//    id_a and id_b ordinal 17's DGROUP:0x147c and DGROUP:0x1480 (seg5:0x6f58 of b1 and b2, set
+//    only for a scheme other than 12, else left from the last call) [BYTES ISPACE.DLL
+//    seg5:0x2a80-0x2ac5];
+//  - else id = seg5:0x66ea(r, g, b) (colour_ramp_id, gfx/ship_sheet.h), seg5:0x61b2(slot, id)
+//    when no earlier entry of this case had the same id, then seg5:0x64f8(slot, r, g, b, id, -1)
+//    [BYTES ISPACE.DLL seg5:0x2ac8-0x2b65]. The earlier ids are stack bytes [bp - 0x5c + j]
+//    written only by this case; an entry of the first case leaves its byte as the stack held it
+//    [OPEN]; the port counts only this case's ids [DESIGN];
+//  - the result's low byte (`sub ah, ah`) [BYTES ISPACE.DLL seg5:0x2b61 seg5:0x2b90].
+// The path ported is DGROUP:0x1e9a >= 8 with palette kind 0 (the port's 8-bpp device and the
+// game palette): below 8 bpp (seg5:0x4b40) and kind 1 (seg5:0x4e96) are not [DESIGN], and the
+// map stays 0 there. `dg_1a6` is DGROUP:0x1a6 (seg5:0x64f8's last entry).
+QuickColourMap quick_colour_map(PaletteManager& pm, PalHandle pal, const std::vector<std::uint32_t>& table,
+                                int b1, int b2, int id_a, int id_b, int& dg_1a6);
 
 }  // namespace is::gfx

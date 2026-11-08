@@ -134,6 +134,16 @@ void paint_slot_window(HWND h) {
     ReleaseDC(h, d);
 }
 
+// The tail of ISPACE.DLL seg10:0x2aac on every path: seg10:0x2c68(slot), the slot paint through
+// GetDC, never an InvalidateRect of the LevClass window, so its frame is drawn only at its own
+// WM_PAINT [BYTES ISPACE.DLL seg10:0x2b2c seg10:0x2be3 seg10:0x2c38 seg10:0x2c57 seg10:0x2c5b].
+// Repainting the whole window put the frame back over the description edit 330's text where the
+// two overlap (dialog x 97..99), which the oracle leaves to the edit's last paint (M4 s5, triage
+// M-4; work/world/m4s4/accept/save.md item 7) [ORACLE core-0003].
+void repaint_slot(HWND dialog) {
+    if (HWND p = GetDlgItem(dialog, kPreviewId)) paint_slot_window(p);
+}
+
 // ISPACE.DLL seg10:0x2f4, the Order logo (shell.md "Game-start dialogs", Logo).
 void paint_logo_window(HWND h) {
     if (!g_logo && !g_logo_tried) {  // the first paint, while DGROUP:0x1584 is 0
@@ -550,7 +560,7 @@ void RestoreGame::fill(int index) {  // ISPACE.DLL seg10:0x1a80
         set_text(330, lang(1149));  // "NEW GAME, STARTING AT WAVE 1."
         ship_ = -1;
         build_preview(env_, ships_, bodies_, -1, 0);  // seg10:0x1b0a
-        InvalidateRect(GetDlgItem(hwnd_, kPreviewId), nullptr, TRUE);
+        repaint_slot(hwnd_);
         return;
     }
     const std::string name = selected_text(332);
@@ -582,7 +592,7 @@ void RestoreGame::fill(int index) {  // ISPACE.DLL seg10:0x1a80
                                                     false));
     else
         set_text(330, "");
-    InvalidateRect(GetDlgItem(hwnd_, kPreviewId), nullptr, TRUE);
+    repaint_slot(hwnd_);
 }
 
 void RestoreGame::command(int id, int code) {  // ISPACE.DLL seg10:0xec2
@@ -697,7 +707,7 @@ void NewGame::show_ship(const std::string& name) {
             team = env_.ini->get_string(lang(2279) + "s", team_key(ships_.records[i].team), "", 20);
         set_text(326, team);
         build_preview(env_, ships_, bodies_, static_cast<int>(i), 0);
-        InvalidateRect(GetDlgItem(hwnd_, kPreviewId), nullptr, TRUE);
+        repaint_slot(hwnd_);
         return;
     }
 }

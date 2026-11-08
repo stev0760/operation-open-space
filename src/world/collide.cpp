@@ -5,6 +5,7 @@
 
 #include "world/bounce.h"
 #include "world/damage.h"
+#include "world/design_words.h"
 #include "world/effects.h"
 #include "world/missile.h"
 #include "world/pods.h"
@@ -90,10 +91,14 @@ DamageDesign design_from_world(const World& w, int n) {
     d.lamp_row = {0, 1, 2, r.special};
     d.captures = r.captures;
     d.repair = r.repair;
-    // Design word +0x2a: the second wing of core-0001 sets ship word +0x20 = +0x2a - 14 = 19 for
-    // TRANSFORMER, whose SHP tank byte is 33 = design +0x1e / 40 [ORACLE core-0001]; the
-    // writer of +0x2a is [OPEN].
-    d.w2a = idiv16(r.tank, 40);
+    // Design words +0x2a (the body's unscaled cell side) and +0x3c (D) as the sheet build and the
+    // ship set-up wrote them (design_words.h) [BYTES seg14:0xba9 seg14:0xd94 seg14:0x2070-0x208b]:
+    // the second wing of core-0001 sets ship word +0x20 = +0x2a - 14 = 33 - 14 = 19 for the
+    // TRANSFORMER [ORACLE core-0001], and core-0006 the same 19 for the SKY TALON [ORACLE
+    // core-0006] (s5-sheet-verify.md claims 40, 41).
+    const DesignWordSet& dw = design_words(n);
+    d.w2a = dw.w2a;
+    d.w3c = dw.w3c;
     return d;
 }
 

@@ -14,6 +14,7 @@
 #include "shell/rng.h"
 #include "world/collide.h"
 #include "world/damage.h"
+#include "world/design_words.h"
 #include "world/rating.h"
 
 using namespace is::world;
@@ -27,12 +28,16 @@ public:
     std::vector<std::pair<int, int>> destroyed, ships_down, wings, in_use;
     std::vector<int> flames;
     bool debris_free = true;
+    std::vector<int> cuts, debris_asked;
     void sound(int id, int, int, int) override { sounds.push_back(id); }
     void destroy(int pool, int rec) override { destroyed.push_back({pool, rec}); }
     void ship_destroyed(int pool, int ship) override { ships_down.push_back({pool, ship}); }
-    bool wing_debris(int ship, int side) override {
-        wings.push_back({ship, side});
-        return debris_free;
+    // seg8:0x2cd8's picture part: `wings` keeps (ship, side) with side = 1 - cut (M4 s5 SHEET).
+    bool wing_picture(int ship, int cut, bool make_debris) override {
+        wings.push_back({ship, cut != 0 ? 0 : 1});
+        cuts.push_back(cut);
+        debris_asked.push_back(make_debris ? 1 : 0);
+        return make_debris && debris_free;
     }
     void flame_off(int ship) override { flames.push_back(ship); }
     void seg7_2080(int pool, int rec) override { in_use.push_back({pool, rec}); }
@@ -60,6 +65,13 @@ struct Rig {
         d.special = 3;  // body Pull-off Wings (MASTER.BOD flags 0x06) [BYTES seg14:0x1d8c]
         d.repair = 1;
         d.tank = 40 * 33;
+        // Design words +0x2a (the raw side 33) and +0x3c (D 5) as the sheet build and the set-up
+        // write them (design_words.h) [ORACLE core-0001].
+        reset_design_words();
+        DesignWordSet dw;
+        dw.w2a = 33;
+        dw.w3c = 5;
+        set_design_words(0, dw);
         w.roster.assign(1, RosterRecord{});
         g.now = 100000;
         g.size = 1;
@@ -349,6 +361,12 @@ TEST_CASE("damage golden: the shipped TRANSFORMER's divisors are 8, 6, 8, 6") {
     CHECK(t->fuel_tank == 33);
     World w;
     w.design_ratings[0] = design_rating(*t, bod.records[t->body]);
+    // design +0x3c from BOD +0x1a (10) at Size 1 [BYTES seg14:0x2070-0x208b]; +0x2a is the sheet
+    // build's (tests/test_world_sheet.cpp checks the body heights).
+    reset_design_words();
+    DesignWordSet dw;
+    dw.w3c = design_band(bod.records[t->body].byte_1a, 1);
+    set_design_words(0, dw);
     const DamageDesign d = design_from_world(w, 0);
     CHECK(d.hit_div[0] == 8);
     CHECK(d.hit_div[1] == 6);
@@ -356,5 +374,56 @@ TEST_CASE("damage golden: the shipped TRANSFORMER's divisors are 8, 6, 8, 6") {
     CHECK(d.hit_div[3] == 6);
     CHECK(d.lamp_row[3] == 3);  // Pull-off Wings: BOD flags 0x06 [BYTES seg14:0x1d8c]
     CHECK(d.repair == 1);
-    CHECK(d.w2a == 33);
+    CHECK(bod.records[t->body].byte_1a == 10);
+    CHECK(d.w3c == 5);
+    reset_design_words();
+}
+
+TEST_CASE("damage: seg8:0x2cd8 runs the picture once, 0x6a only after a debris entry (M4 s5 SHEET)") {
+    // work/analysis/m4/s5-sheet.md 1.1-1.2 (verified claims 1, 2, 4): side 0 tears +0xac with
+    // ordinal 15's [bp-4] = 1, the recompute of design +0x3c while DGROUP:0x95a6 = 0, one picture
+    // call, and 0x6a only when it set up a debris entry.
+    Rig r;
+    set_design_body(0, 10, 4, 6);
+    DesignWordSet d = design_words(0);
+    d.w3c = 0;
+    set_design_words(0, d);
+    set_byte_at(r.ship(), 0xac, 1);
+    set_byte_at(r.ship(), 0xad, 1);
+    tear_wing(r.x, 0, 0);
+    CHECK(sbyte_at(r.ship(), 0xac) == 0);
+    CHECK(sbyte_at(r.ship(), 0xad) == 1);
+    REQUIRE(r.h.cuts.size() == 1);
+    CHECK(r.h.cuts[0] == 1);
+    CHECK(r.h.debris_asked[0] == 1);
+    CHECK(design_words(0).w3c == 5);
+    REQUIRE(r.h.sounds.size() == 1);
+    CHECK(r.h.sounds[0] == 0x6a);
+    tear_wing(r.x, 0, 1);
+    REQUIRE(r.h.cuts.size() == 2);
+    CHECK(r.h.cuts[1] == 0);
+    CHECK(sbyte_at(r.ship(), 0xad) == 0);
+    // No free entry: the cut alone, no sound.
+    Rig f;
+    f.h.debris_free = false;
+    tear_wing(f.x, 0, 1);
+    CHECK(f.h.cuts.size() == 1);
+    CHECK(f.h.sounds.empty());
+    // A restored game (DGROUP:0x92e4 != 0): no debris asked, no sound.
+    Rig g;
+    g.w.restored = 1;
+    tear_wing(g.x, 0, 0);
+    REQUIRE(g.h.debris_asked.size() == 1);
+    CHECK(g.h.debris_asked[0] == 0);
+    CHECK(g.h.sounds.empty());
+    // With the MASTER.SHP block loaded the recompute does not run.
+    Rig h;
+    h.c.w95a6 = 1;
+    set_design_body(0, 10, 4, 6);
+    d = design_words(0);
+    d.w3c = 9;
+    set_design_words(0, d);
+    tear_wing(h.x, 0, 0);
+    CHECK(design_words(0).w3c == 9);
+    reset_design_words();
 }

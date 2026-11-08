@@ -1,5 +1,8 @@
 #include "hud/info.h"
 
+#include "world/icon_mover.h"
+#include "world/world.h"
+
 #include <string>
 
 namespace is::hud {
@@ -340,11 +343,14 @@ void Info::target_picture(int flag) {
     const CellPlan p = plan_cell(in, k.glint);
     if (p.clear) c_.pat_blt(Img::kScreen, p.clear_x, p.clear_y, p.clear_size, p.clear_size, kBlackness,
                             Brush::none());
-    // The glint (seg13:0x5460, seg13:0x54da) and the pictures other than the icon strip's are
-    // not drawn [OPEN]; with flag 1 the glint never runs (seg13:0x5af3).
+    // The glint (seg13:0x5460, seg13:0x54da) is not drawn [OPEN]; with flag 1 it never runs
+    // (seg13:0x5af3).
     if (p.picture && p.slot == 0xd)
         c_.stretch_blt(Img::kScreen, p.dx, p.dy, p.dw, p.dh, Img::kIconStrip, p.sx, p.sy, p.sw, p.sh,
                        kSrcCopy);
+    // A burning icon's own image, slot 14 + r [BYTES seg13:0x5d5b-0x5d9b] (M4 s5 ICONS).
+    if (p.picture && p.slot >= world::kIconOwnSlot && p.slot < world::kIconOwnSlot + world::kIconRecords)
+        c_.stretch_blt(Img::kScreen, p.dx, p.dy, p.dw, p.dh, Img::kIconOwn, p.sx, p.sy, p.sw, p.sh, kSrcCopy);
     // A shattered icon's four quarters [BYTES seg13:0x5f49-0x6057] (M4 s2 DISPLAY).
     if (p.sub_cells) {
         for (const CellPlan::SubCell& q : p.subs) {

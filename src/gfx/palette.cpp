@@ -1,5 +1,7 @@
 #include "gfx/palette.h"
 
+#include "gfx/ship_sheet.h"
+
 #include <algorithm>
 #include <cstdlib>
 
@@ -527,6 +529,65 @@ void PaletteManager::recolour_graphic(PalHandle pal, int id, std::vector<std::ui
     }
     table.resize(std::max<std::size_t>(n, 1));
     if (d == 0 || d == 2) animate(pal);  // seg5:0x1b8e [BYTES seg5:0x1bff]
+}
+
+// ---- ISPACE.DLL seg5:0x64f8 and ordinal 17's colour map (M4 s5 SHEET)
+
+int PaletteManager::nearest_scheme_entry(PalHandle pal, Rgb c, int s1, int s2, int& last) const {
+    const int s = slot_of(pal);
+    if (s < 0) return last;  // [DESIGN] no slot: nothing scanned
+    const Slot& sl = slots_[s];
+    if (sl.mode == 2) return 0;  // xor al, al [BYTES ISPACE.DLL seg5:0x6512]
+    if (sl.mode < 0 || sl.mode >= kModes) return last;
+    int best = 1000;  // [BYTES ISPACE.DLL seg5:0x6562]
+    for (const int sc : {s1, s2}) {
+        if (sc == -1) continue;  // [BYTES ISPACE.DLL seg5:0x6517-0x655a]
+        if (sc < 0 || sc >= kSchemeIds) continue;  // [DESIGN] storage bound
+        const int rec = scheme_record_[sl.mode][sc];
+        if (rec < 0 || rec >= kRecords) continue;  // [OPEN] no record; the port skips it [DESIGN]
+        const Ramp r = records_[sl.mode][rec];
+        for (int e = r.first; e <= r.last; ++e) {
+            if (e < 0 || e > 255) continue;  // [DESIGN] storage bound
+            const PalEntry& p = sl.working[static_cast<std::size_t>(e)];
+            // |dr| + |dg| + |db| [BYTES ISPACE.DLL seg5:0x6573-0x664d]
+            const int dist = std::abs(c.r - p.r) + std::abs(c.g - p.g) + std::abs(c.b - p.b);
+            if (dist < best) {  // strictly smaller [BYTES ISPACE.DLL seg5:0x6650-0x665e]
+                best = dist;
+                last = e;
+            }
+            if (dist < 14) return last;  // [BYTES ISPACE.DLL seg5:0x6661-0x666f]
+        }
+    }
+    return last;
+}
+
+QuickColourMap quick_colour_map(PaletteManager& pm, PalHandle pal, const std::vector<std::uint32_t>& table,
+                                int b1, int b2, int id_a, int id_b, int& dg_1a6) {
+    QuickColourMap map{};
+    // DGROUP:0x1e9a >= 8 and DGROUP:0x1e92[slot] != 1 [BYTES ISPACE.DLL seg5:0x2ba4-0x2bb5]:
+    // the port's device is 8 bpp; kind 1 (seg5:0x4e96) is not ported [DESIGN].
+    if (pm.kind(pal) != 0) return map;
+    std::array<int, 15> ids{};  // [bp - 0x5c + k]
+    std::array<bool, 15> has{};
+    for (int k = 0; k < 15; ++k) {  // [BYTES ISPACE.DLL seg5:0x2a73-0x2ba2]
+        const Rgb c = Rgb::of(k < static_cast<int>(table.size()) ? table[static_cast<std::size_t>(k)] : 0);
+        const auto sa = static_cast<std::int8_t>(b1), sb = static_cast<std::int8_t>(b2);
+        int v;
+        if ((k < 10 && sa != 12) || (k >= 10 && sb != 12)) {
+            v = pm.nearest_scheme_entry(pal, c, id_a, id_b, dg_1a6);  // [BYTES ISPACE.DLL seg5:0x2a98-0x2ac5]
+        } else {
+            const int id = colour_ramp_id(c) & 0xff;  // seg5:0x66ea, al [BYTES ISPACE.DLL seg5:0x2af3-0x2afc]
+            ids[static_cast<std::size_t>(k)] = id;
+            has[static_cast<std::size_t>(k)] = true;
+            bool fresh = true;  // [BYTES ISPACE.DLL seg5:0x2aff-0x2b28]
+            for (int j = 0; j < k; ++j)
+                if (has[static_cast<std::size_t>(j)] && ids[static_cast<std::size_t>(j)] == id) fresh = false;
+            if (fresh) pm.allocate_ramp(pal, id);  // seg5:0x61b2 [BYTES ISPACE.DLL seg5:0x2b3a]
+            v = pm.nearest_scheme_entry(pal, c, id, -1, dg_1a6);  // [BYTES ISPACE.DLL seg5:0x2b40-0x2b5e]
+        }
+        map[static_cast<std::size_t>(k)] = static_cast<std::uint8_t>(v & 0xff);  // sub ah, ah [BYTES ISPACE.DLL seg5:0x2b61 seg5:0x2b90]
+    }
+    return map;
 }
 
 }  // namespace is::gfx

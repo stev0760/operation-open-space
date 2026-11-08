@@ -1,6 +1,6 @@
 # ADR 0007: Palette
 
-- **Status:** Accepted. [DESIGN]
+- **Status:** Accepted; the last two Consequences lines, on the nearest palette entry and on text placement, are Proposed. [DESIGN]
 - **Scope:** how the port reproduces the original's 256-colour palette, its animation and fades, on displays that have no hardware palette. [DESIGN]
 
 ## Context
@@ -28,3 +28,5 @@
 - **The presenter is one isolated step** (index surface + palette + window in, pixels on screen out), implemented with GDI (a 32-bit DIB section and `StretchBlt`). A Direct3D or OpenGL presenter can be added later for vsync or borderless full screen without touching the palette or the surface code. GDI stays the only renderer until a need is measured. [DESIGN]
 - The sprite readers of M1 (`src/formats/dib`) already give 8-bit pixels and the 256-colour tables the lookup needs. [DESIGN]
 - Checklist rows SYS-24, SYS-25, WIN-04 and WIN-55 describe the behaviour this ADR replaces or ports. [DESIGN]
+- **Proposed: solid colours and own-colour-table graphics land on the nearest palette entry.** A solid colour (a brush, a pen or a text colour) and a 4-bpp graphic that ordinal 1 loads with its own colour table (d = 3 with a = b = 12 writes no palette entry and the bitmap is built with DIB_RGB_COLORS, [ispace.md](../re/ispace.md#ordinal-notes)) show the nearest entry of the realised wave palette on the port's 256-colour display, as on a 256-colour Windows display, where the 24-bpp oracle shows the exact RGB. So the fuel can (IGRAPHIC #4000 270) shows #CD3300 for #D31919, #AF2B00 for #B51414, #9B2600 for #9E2203, #872100 for #8D1305, #642828 for #761B1B and #FF0000 for #ED0C0C; the EXIT picture (#4000 500) #FF5600 for #FF5A00 and #AF2B00 for #BE0000; and the damage lamps (#FFC400 and #FF6100 for #FFC000 and #FF6000), the score digits, the shot dots and the gate beam likewise. These are the port's design under decisions 1 and 2, not a wrong colour table, and the oracle comparison of such pixels takes the nearest entry of the scheme's palette, not the oracle's RGB. [BYTES IGRAPHIC.DLL 4000 270] [BYTES IGRAPHIC.DLL 4000 500] [BYTES ISPACE.DLL 5500 100] [BYTES ISPACE.DLL seg5:0x2bec-0x2bff seg5:0x34b1] [DESIGN]
+- **Proposed: text on the 8-bit surface is drawn with `ExtTextOut` and the advances of its extent** (`GetTextExtentExPoint`), so the glyphs sit where a true-colour GDI places them. Wine steps monochrome glyphs by their hinted cells, which made the debriefing title's ink 150 px wide on the 8-bit surface where the oracle's is 158 px; on Windows GDI keeps the two in step and nothing changes. The glyphs are not smoothed, as on a 256-colour display. [DESIGN]

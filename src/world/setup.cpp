@@ -4,8 +4,12 @@
 #include "world/setup.h"
 
 #include "world/ambulance.h"
+#include "world/collide.h"
+#include "world/damage.h"
+#include "world/icon_effects.h"
 #include "world/purchases.h"
 #include "world/roster.h"
+#include "world/smoke.h"
 
 #include "world/shots.h"
 
@@ -1692,7 +1696,7 @@ void place(World& w, SetupHost& h) {
     // The nine shot slots DGROUP:0x6098: +0x74 = 50, +0x76 = -1 (shots.h) [BYTES seg9:0x6624].
     place_shot_slots(shot_state());
     clear_effects(w.effects);
-    w.w58cc.fill(-1);
+    smoke_place(w.smoke);  // the smoke counters DGROUP:0x58cc + 0x14·k = -1 [BYTES seg9:0x6747-0x675d]
     for (int i = 0; i < p.allocated(w.roles.pool5); ++i) p.rec(w.roles.pool5, i).state = 1;
     for (World::Particle& q : w.particles) {
         q.w08 = 0;
@@ -1752,6 +1756,37 @@ void state1_load(World& w, SetupHost& h) {
     load(w, h);
 }
 
+namespace {
+
+// The collision context of the briefing's icon calls seg7:0x233c(0, k, 0) and seg7:0x2512 (M4 s5
+// ICONS): their pictures go to icon_effects.h's plans (deferred until the strip's pixels exist,
+// icon_effects.h defer_icon_plans); seg7:0x65aa(0, k) draws nothing here, because the IS_ICON
+// column DGROUP:0x9458 and the HUD windows are closed at the debriefing entry (seg9:0x6cc4 steps
+// 2 and 7, core.md) and not made before wave 1, so seg7:0x64ac returns at once [BYTES
+// seg7:0x64be] [DESIGN].
+class BriefingIconHost final : public CollideHost {
+public:
+    void icon_crack(const CrackPlan& p) override { icon_draw(p); }
+    void column_row(int pool, int rec) override { (void)pool, (void)rec; }
+};
+
+struct BriefingIcons {
+    BriefingIconHost host;
+    WaveGlobals g;
+    CollideGlobals c;
+    ViewState view;
+    std::int16_t dg_943a = 0, dg_943c = 0, dg_9454 = 0;
+    CollideCtx x;
+    BriefingIcons(World& w, shell::Rng& rng)
+        : x{w, g, c, host, view, nullptr, rng, dg_943a, dg_943c, dg_9454} {
+        g.size = w.size;  // DGROUP:0x9156
+    }
+    BriefingIcons(const BriefingIcons&) = delete;
+    BriefingIcons& operator=(const BriefingIcons&) = delete;
+};
+
+}  // namespace
+
 void enter_briefing(World& w, SetupHost& h) {
     // seg9:0x5cca [BYTES seg9:0x5cca]
     w.placed = 0;  // DGROUP:0x93b0 = 0 [BYTES seg9:0x5d24]
@@ -1763,20 +1798,31 @@ void enter_briefing(World& w, SetupHost& h) {
     // seg10:0x5b30: the strip for N = the pool-0 in-use count, blacked [BYTES seg10:0x5b3d].
     w.strip_slots = w.pools.in_use(kPoolIcons);
     for (StripCell& c : w.strip) c = StripCell{};
+    // The strip's pictures from here to seg9:0x94ba wait for its pixels (icon_effects.h): a list
+    // a missing flush left behind is dropped [DESIGN].
+    clear_icon_plans();
+    defer_icon_plans(true);
     fill_icons(w, h);  // seg9:0xb2a [BYTES seg9:0x5d66]
-    // seg10:0x506c and seg7:0x233c(0, k, 0) for k < 8 are the drawing's and M4's [OPEN].
-    w.w8e34.fill(-1);
-    // seg10:0x6308(0xd, -1, -1, -1) [OPEN]; seg9:0x94ba [BYTES seg9:0x94ba]:
+    icon_backup_all(w);  // seg10:0x506c, the bare icons into slot 32 [BYTES seg9:0x5d6b]
+    BriefingIcons bi(w, h.rng);
+    // seg7:0x233c(0, k, 0) for k < 8 (s5-icons.md 4.3, verified claims 50, 51): each record's
+    // `damage` into directory word +0x1d2 + 2k (the -1 of the directory's first seg9:0xb2a stays
+    // in the records it did not activate), and the cracks of a damaged icon at the unscaled 32 / 6
+    // [BYTES seg9:0x5d70-0x5d8b].
+    for (int k = 0; k < kIconRecords; ++k) icon_damage(bi.x, 0, k, 0);
+    w.w8e34.fill(-1);  // [BYTES seg9:0x5d8d-0x5da4]
+    // seg10:0x6308(0xd, -1, -1, -1) [OPEN] [BYTES seg9:0x5da6-0x5db3]; seg9:0x94ba [BYTES seg9:0x94ba]
+    // (verified claims 21, 22):
     for (int k = 0; k < kIconRecords; ++k) {
-        DirView d = dv(w);
-        // seg7:0x2512(k, byte - 1) for a marked slot is M4 [OPEN].
-        if (d.b[static_cast<std::size_t>(0x1c8 + k)] == 2 && k < w.pools.records(kPoolIcons))
-            w.pools.rec(kPoolIcons, k).flame = 0x9c;
-        if (w.kind == 2 && w.score_level != 0) {
-            const int r = h.rng.rand();
-            (void)r;  // seg7:0x2512(k, 0) when r % 3 == 0 [OPEN]
-        }
+        const std::int8_t mark = w.dir().sbyte(static_cast<std::size_t>(0x1c8 + k));  // `cbw` [BYTES seg9:0x94cd-0x94eb]
+        if (mark != 0) icon_overlay(bi.x, k, mark - 1);  // seg7:0x2512(k, byte - 1) [BYTES seg9:0x94ef]
+        if (w.dir().byte(static_cast<std::size_t>(0x1c8 + k)) == 2 && k < w.pools.records(kPoolIcons))
+            w.pools.rec(kPoolIcons, k).flame = 0x9c;  // [BYTES seg9:0x94f7-0x9519]
+        // A kind-2 wave virus-marks the icons: all without rand() at DGROUP:0x9334 = 0, else one in
+        // three [BYTES seg9:0x951e-0x9545].
+        if (w.kind == 2 && (w.score_level == 0 || rmod(h.rng.rand(), 3) == 0)) icon_overlay(bi.x, k, 0);
     }
+    defer_icon_plans(false);
     w.w9130 = 0;
     w.w913a = 0;
     w.w913c = 0;

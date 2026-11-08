@@ -68,8 +68,10 @@ DeadlineResult wave_deadlines(WaveEndCtx& c) {
         // waits in it, and DGROUP:0x1e50 keeps the value sampled before it [BYTES seg7:0x6bf
         // seg7:0x6c4 seg7:0x6d2].
         if (w.w920c == 0) c.host.history_box();
-        w.w1e84 = 0;                     // [BYTES seg7:0x1d8]
-        s.deadlines().scores_due = 0;    // the same DGROUP word in the shell's copy [DESIGN]
+        // seg7:0x1d8 clears DGROUP:0x1e84 [BYTES seg7:0x1d8]. enter_high_scores below runs the
+        // same clear on GameState::scores_due, which the program binds to World::w1e84 (D-24);
+        // this clear keeps the word cleared where the GameState is not bound (the tests).
+        w.w1e84 = 0;
         // seg6:0x5d58 [BYTES seg7:0x1e1]: state 5 with DGROUP:0x1e7c = DGROUP:0x1e50 + 34000 at
         // its end. That DGROUP:0x1e50 was sampled before the MessageBox, so when the player
         // keeps the box up longer than 34 s the next pass finds DGROUP:0x1e7c passed and goes to

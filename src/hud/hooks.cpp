@@ -36,6 +36,7 @@
 #include "world/flight.h"
 #include "world/flight_hooks.h"
 #include "world/hooks.h"
+#include "world/icon_mover.h"
 #include "world/player_sheet.h"
 #include "world/missile.h"
 #include "world/purchases.h"
@@ -405,6 +406,9 @@ public:
         if (p == 7 && w().pools.records(7) > 0) out.pool7_w10 = world::word_at(w().pools.rec(7, 0), 0x10);
         if (g_canvas) {
             g_canvas->set_image(Img::kIconStrip, world::icon_strip());
+            // Slot 14 + r, the icon's own image (hud/icon_images.h) (M4 s5 ICONS).
+            if (p == 0 && r < world::kIconRecords)
+                g_canvas->set_image(Img::kIconOwn, world::slot_image(world::kIconOwnSlot + r));
             // The wave's slot 5 when the world holds one, else the renderer's seg10:0x39a8 strip
             // (650 x 52, 14 logo cells), as the briefing's canvas takes it [DESIGN].
             if (p == 7) {
@@ -685,8 +689,9 @@ namespace {
 // (s2-display-verify.md claims 14-16) [BYTES seg10:0x53e3-0x5409 seg10:0x5426-0x5461]
 // [OPEN: a stop-gap that duplicates seg10:0x533a; links().weapon_sheet_slot is bound to the
 // world's W(w)-4 (wave_win32.cpp), so it runs only for a weapon the sheet build skipped]. W(w)+0x06 = 4's
-// loader seg10:0x4412 and the quick renderer (sel = 1) are [OPEN]; so is seg10:0x6308's rescale
-// at Size 0.
+// loader seg10:0x4412 is wave_win32.cpp anim4_sheet (M4 s5 WEAPONS): this stop-gap reaches it only
+// for a weapon the world gave no slot. The quick renderer (sel = 1) is [OPEN]; so is
+// seg10:0x6308's rescale at Size 0.
 gfx::ImagePtr weapon_sheet(const WeaponTable& t, int wpn, const WeaponPicture& p, int size_level) {
     if (wpn == 0x18) return world::slot_image(p.sheet_slot);  // the player's own sheet
     if (links().weapon_sheet_slot) {
@@ -697,7 +702,7 @@ gfx::ImagePtr weapon_sheet(const WeaponTable& t, int wpn, const WeaponPicture& p
     if (!g.store || !g.gfx) return nullptr;
     const int id = t.word(wpn, -2);
     if (t.word(wpn, 0x06) == 4) {
-        app::log_todo("the weapon sheet loader of W+0x06 = 4", "seg10:0x4412");
+        app::log_todo("the animation-4 sheet of a weapon the world gave no slot", "seg10:0x4412");
         return nullptr;
     }
     // Rendered at each seg11:0x2f8c on the palette in force, as seg10:0x533a renders at each
@@ -931,6 +936,10 @@ public:
         on_design_name = [](int) {
             return g.ini ? g.ini->get_string(settings::kGameSection, "MainShip", "EAGLE", 20) : std::string();
         };
+        // seg16:0x3468(i, 3)'s seg14:0x11a8 and DGROUP:0x3a38 + 2i on the program's sheet side
+        // (world/player_sheet.h) (M4 s5 SHEET).
+        on_build_sheet = [](int ship) { world::build_sheet_program(world::current(), ship); };
+        on_sheet_dc = [](int ship) { return world::sheet_dc_program(ship); };
         // PostMessage(DGROUP:0xa7e / 0xa7c, WM_PAINT): the IS_INFO panels due (ADR 0013 decision 4).
         on_post_info_paint = [] {
             if (Hud* h = hud()) {
@@ -1116,10 +1125,8 @@ void install_visit(app::App& app) {
     };
     world::VisitLinks& l = world::visit_links();
     l.enter = [] {  // seg7:0x5fa-0x608
-        // DGROUP:0x9e5b / 0x9e5d: the pickup (seg16:0x441) wrote them in AmbulanceState; the visit
-        // and the Options dialog read the Shop's copy of the same words [DESIGN] (M4 s3 fixer).
-        world::shop().alive = world::ambulance_state().served_alive;
-        world::shop().sold_total = world::ambulance_state().sold;
+        // DGROUP:0x9e5b / 0x9e5d live in the Shop, which AmbulanceState refers to (world/ambulance.h)
+        // (M4 s5, D-25).
         g.game.set(shell::kAmbulance);
         world::VisitCtx c = visit_ctx();
         world::visit_begin(c);
@@ -1128,7 +1135,6 @@ void install_visit(app::App& app) {
         world::World& w = world::current();
         world::wave_setup_purchases(w, purchase_host(), world::missile_state().words, ship, w.player_game != 0,
                                     w.restored, static_cast<std::int16_t>(g.edition.plus));
-        world::ambulance_state().set_served_alive_dword(1);  // seg16:0x3784's end [BYTES seg16:0x3b07]
     };
     // seg14:0xd32's seg16:0x3784(i, 1) for the placement (roster.h purchase_pass), the one port
     // of seg16:0x3784 (world/purchases.h) (M4 s3 fixer, review M1).
@@ -1137,7 +1143,6 @@ void install_visit(app::App& app) {
         world::PurchaseCtx p{w, world::shop(), world::missile_state().words, purchase_host(), w.player_game != 0,
                              w.restored, static_cast<std::int16_t>(g.edition.plus)};
         world::apply_purchases(p, ship, mode);
-        world::ambulance_state().set_served_alive_dword(1);
     });
     // The ambulance's calls out (world/ambulance.h AmbulanceLinks) that the HUD answers: the
     // purchases of seg16:0x872 (seg16:0x3784(DGROUP:0x952e, 0)), seg3:0x6ec, seg11:0x2f8c, the
@@ -1148,7 +1153,6 @@ void install_visit(app::App& app) {
         world::PurchaseCtx p{w, world::shop(), world::missile_state().words, purchase_host(), w.player_game != 0,
                              w.restored, static_cast<std::int16_t>(g.edition.plus)};
         world::apply_purchases(p, ship, mode);
-        world::ambulance_state().set_served_alive_dword(1);  // [BYTES seg16:0x3b07]
     };
     al.message = [](int recipient, int pool, int rec, int code) { post_message(recipient, pool, rec, code); };
     al.weapon_picture = [] { weapon_picture_refresh(); };

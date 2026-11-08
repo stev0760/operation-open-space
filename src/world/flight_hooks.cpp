@@ -25,10 +25,13 @@
 #include "world/gate_exit.h"
 #include "world/hooks.h"
 #include "world/player_sheet.h"
+#include "world/aggression.h"
 #include "world/ambulance.h"
 #include "world/capture.h"
 #include "world/missile.h"
 #include "world/shots.h"
+#include "world/smoke.h"
+#include "world/tank.h"
 #include "world/visibility.h"
 #include "world/world.h"
 
@@ -87,10 +90,12 @@ public:
     void seg13_675e() override {
         if (g_links.pictures) g_links.pictures();
     }
-    void player_sprite() override {
-        if (g_links.player_sprite) return g_links.player_sprite();
-        todo_once("the player's sprite", "seg7:0x1208");
-    }
+    // seg7:0x1208 through the HUD's link; the link clears the frame's DGROUP:0x58a
+    // (FrameGlobals::dg_58a, which seg7:0x5e04 sets) when the sprite is drawn [BYTES seg7:0x13a2]
+    // (src/hud/wave_win32.cpp player_sprite) (M4 s5 EFFECTS).
+    void player_sprite() override;
+    // seg7:0x5b68(pool, rec, arg) on the program's World (smoke.h smoke_puff) (M4 s5 EFFECTS).
+    void puff(int pool, int rec, int arg) override;
     void visibility() override {
         if (g_links.visibility) return g_links.visibility();
         todo_once("visibility pass", "seg8:0x4e14");
@@ -146,11 +151,8 @@ public:
     }
     void seg18_551a(int, int) override { todo_once("weapons 0x18/0x1a", "seg18:0x551a"); }
     void seg18_59ec(int, int) override { todo_once("weapons 0x19/0x1a", "seg18:0x59ec"); }
-    void seg7_4d86(int) override { todo_once("icon word DGROUP:0x57a8", "seg7:0x4d86"); }
-    void seg7_4ffe(int) override { todo_once("icon after DGROUP:0x57a8", "seg7:0x4ffe"); }
-    void seg7_5660(int) override { todo_once("icon heat -2", "seg7:0x5660"); }
-    void seg7_477e(int) override { todo_once("icon meets icon", "seg7:0x477e"); }
-    void icon_pool5_hit(int, int) override { todo_once("icon meets pool 5", "seg7:0x4a8a"); }
+    // seg7:0x2128, the 10-second violence decay, on the program's World (aggression.h) (M4 s5 ICONS).
+    void seg7_2128() override;
     CollideHost& collide_host() override;
     CollideGlobals& collide_globals() override;
     // ---- M4 s1 fixer: the stage's calls on the program's World
@@ -184,10 +186,9 @@ public:
     // seg12:0x274a and seg16:0x8e4 on the program's World (effects.h) (M4 s1 fixer).
     void destroy(int pool, int rec) override;
     void ship_destroyed(int pool, int ship) override;
-    // seg8:0x2cd8's debris: the free entry of DGROUP:0x915c (debris.h debris_start). The wing's
-    // strip image seg10:0x7370 and its mask are not read: the entry has no picture, so only its
-    // erase squares show [OPEN seg10:0x7370].
-    bool wing_debris(int ship, int side) override;
+    // seg8:0x2cd8's picture part: the debris entry over the torn wing with ordinal 15's strip, or
+    // the cut alone (debris.h wing_picture) (M4 s5 SHEET).
+    bool wing_picture(int ship, int cut, bool make_debris) override;
     // seg8:0x81f8(pool, rec): the hit history DGROUP:0x937a the 800 award searches (gate_exit.h
     // push_hit) [BYTES seg8:0x820f seg8:0x8240 seg8:0x8246 seg8:0x824c]; seg8:0x81f8's other
     // work, if any, is [OPEN].
@@ -203,7 +204,6 @@ public:
     }
     void seg13_b6f2(int, int) override { todo_once("pilot goal", "seg13:0xb6f2"); }
     void seg11_947a(int, int, int) override { todo_once("tether end", "seg11:0x947a"); }
-    void wing_design(int) override { todo_once("wing design words", "seg14:0x3eda"); }
     void wing_taunts(int, int) override { todo_once("wing taunts", "seg8:0x2da6"); }
     // ---- M4 s2 fixer: the icon's on_damage seg7:0x233c and its shatter (damage.h)
     // seg7:0x5ae8(rec, arg) on the program's World (capture.h icon_counted).
@@ -225,6 +225,10 @@ public:
         if (g_collide_links.fragment_pictures) return g_collide_links.fragment_pictures(p);
         todo_once("the icon fragments' pictures", "seg7:0x2a20");
     }
+    // seg7:0x5b68 from the pod's expiry (pods.h, collide.cpp) through the frame host (M4 s5 EFFECTS).
+    void puff(int pool, int rec, int arg) override { u->puff(pool, rec, arg); }
+    // seg7:0x2e02's source DC of a break-up, by pool (effects.h EffectLinks::break_source).
+    BreakSource break_source(int pool, int rec);
     // The far call through +0x66 from seg7:0x2652 (call_on_destroy).
     void on_destroy(int pool, int rec) override;
     std::int16_t other_damage(std::uint32_t id, int pool, int, std::int16_t) override {
@@ -293,10 +297,9 @@ struct Runtime {
     ProgramCollideHost collide_host;
     CollideGlobals collide;
     RepairState repair;
-    // The wing debris DGROUP:0x915c and the smoke table DGROUP:0x58c4 (debris.h); the placement
-    // seg9:0x6624 frees them at the wave start (wave_started) [BYTES seg9:0x6624].
+    // The wing debris DGROUP:0x915c (debris.h), reset at the wave start [DESIGN] (wave_started).
+    // The smoke table is the World's (World::smoke, smoke.h).
     DebrisTable debris{};
-    SmokeTable smoke{};
     UpdateHost* host = nullptr;
     bool settings_read = false;
     std::function<std::int32_t()> zoom;  // DGROUP:0xa6c's owner (M3 s2 fixer)
@@ -445,7 +448,106 @@ void with_effects(F f) {
                 effect_to_screen, &r.f.dg_943a,
                 &r.f.dg_943c};
     c.dg_b0c = &r.h().collide_globals().w0b0c;  // DGROUP:0xb0c, one word (M4 s4 fixer, C006)
+    c.shots = &r.h().shots();                    // DGROUP:0x6098 for seg8:0x9694 (M4 s5 EFFECTS)
     f(c);
+}
+
+// The smoke's context on the program's World (smoke.h; M4 s5 EFFECTS): DGROUP:0x58bc, 0x9456,
+// the pools, the ship records and the muzzle tables, rand(), Detail, Size, DGROUP:0x9324,
+// 0x9646, 0x9130, the window Blitter, slot 12, seg8:0x29ea, the visibility list and the frame's
+// DGROUP:0x58a.
+SmokeCtx program_smoke_ctx(Runtime& r) {
+    World& w = *r.world;
+    SmokeCtx c{w.smoke, w.w9456, w.pools, shell::game_rng()};
+    c.ships = &w.ships;
+    c.shots = &r.h().shots();
+    c.detail = r.g.detail;
+    c.size = r.g.size;
+    c.ship_pool = r.g.ship_pool;
+    c.player = r.g.player;
+    c.dg_9130 = r.g.dg_9130;
+    c.out = wave_blitter();
+    c.images = g_links.images ? g_links.images() : nullptr;
+    c.to_screen = effect_to_screen;
+    c.visible = last_visibility();
+    c.dg_58a = &r.f.dg_58a;
+    c.sound = [](int id, int pool, int rec, int mode) { rt().h().sound(id, pool, rec, mode); };
+    c.unported = [](const char* address) { todo_once("smoke in the seg18 mode", address); };
+    return c;
+}
+
+void DefaultHost::puff(int pool, int rec, int arg) {
+    Runtime& r = rt();
+    if (!r.world) return;
+    SmokeCtx c = program_smoke_ctx(r);
+    smoke_puff(c, pool, rec, arg);
+}
+
+void DefaultHost::seg7_2128() {
+    Runtime& r = rt();
+    if (r.world) decay_violence(*r.world, r.g.now);  // [BYTES seg7:0x91d-0x922]
+}
+
+void DefaultHost::player_sprite() {
+    if (g_links.player_sprite) {
+        g_links.player_sprite();
+    } else {
+        todo_once("the player's sprite", "seg7:0x1208");
+    }
+}
+
+// seg7:0x303f-0x306e and seg7:0x2e5c-0x2ec2 [BYTES seg7:0x303f-0x306e seg7:0x2e5c-0x2ec2]
+// (s5-effects.md 1.7, verified claim 30).
+BreakSource ProgramCollideHost::break_source(int pool, int rec) {
+    World* w = rt_world();
+    if (!w) return {};
+    const ImageSlotTable* im = g_links.images ? g_links.images() : nullptr;
+    auto slot = [im](int s) -> DcId {
+        return im && s >= 0 && s < kImageSlots ? (*im)[static_cast<std::size_t>(s)] : kDcNone;
+    };
+    switch (pool) {
+    case 1: {
+        // CreateCompatibleDC(DGROUP:0x13dc) and SelectObject of the fragment's bitmap
+        // DGROUP:0x4e94 + 2·rec [BYTES seg7:0x3046-0x306a]: the port binds the fragment's image to a
+        // DC id of its own, which keeps that picture while a new shatter remakes the record's
+        // (seg7:0x2768), and which the end deletes as the original deletes its DC [DESIGN ADR 0013].
+        const DcId f = effect_links().fragment_dc ? effect_links().fragment_dc(rec) : kDcNone;
+        if (f == kDcNone) {
+            todo_once("the fragment's DC for the break-up", "seg7:0x3046");
+            return {};
+        }
+        if (auto* gb = dynamic_cast<GdiBlitter*>(wave_blitter())) {
+            if (std::shared_ptr<gfx::Surface> img = gb->image(f)) return BreakSource{gb->bind(img), true};
+        }
+        return BreakSource{f, false};
+    }
+    case 8:  // DGROUP:0x39e8[word DGROUP:0x3d6e + 0x34·rec] [BYTES seg7:0x2e5c-0x2e79]
+        return rec >= 0 && rec < kPool8Max ? BreakSource{slot(w->pool8[static_cast<std::size_t>(rec)].at(0x1e)), false}
+                                           : BreakSource{};
+    case 6: {  // DGROUP:0x39e8[word DGROUP:0x2f50 + 0x50·w], w = DGROUP:0x66e4 + 0x1c·rec [BYTES seg7:0x2e7c-0x2e9e]
+        if (rec < 0 || rec >= w->pools.records(6)) return {};
+        const std::int16_t wpn = w->pools.missile(rec).weapon;
+        return BreakSource{slot(missile_state().words.word(wpn, -4)), false};
+    }
+    case 4:  // DGROUP:0x39f0, slot 4 (the tank) [BYTES seg7:0x2ea8-0x2ec2]
+        return BreakSource{slot(kSlotTank), false};
+    default:  // no DC (seg7:0x2ea8 `jne seg7:0x2eca`) (A4)
+        return {};
+    }
+}
+
+// The break-up's links (effects.h EffectLinks); EffectLinks::fragment_dc is the HUD's
+// (src/hud/wave_win32.cpp, g_fragment_dc).
+void bind_effect_links() {
+    EffectLinks& l = effect_links();
+    l.break_source = [](int pool, int rec) {
+        Runtime& r = rt();
+        r.collide_host.u = &r.h();
+        return r.collide_host.break_source(pool, rec);
+    };
+    l.release = [](DcId dc) {  // SelectObject back + DeleteDC [BYTES seg7:0x301f-0x3039 seg8:0x45b2-0x45c3]
+        if (Blitter* b = wave_blitter()) b->delete_image(dc);
+    };
 }
 
 void ProgramEffectHost::destroy(int pool, int rec) {
@@ -461,7 +563,9 @@ void DefaultHost::seg13_447a() {
     if (!r.world) return;
     World& w = *r.world;
     // W, H: DGROUP:0x90ea, 0x90ec
-    DebrisCtx c{r.debris,       r.smoke,         w.w9456,           w.pools,
+    // The debris's puffs seg7:0x5d6a go to the World's smoke table DGROUP:0x58bc (smoke.h
+    // smoke_start) (M4 s5 EFFECTS).
+    DebrisCtx c{r.debris,       w.smoke,         w.w9456,           w.pools,
                 shell::game_rng(), r.g.size,     r.g.dg_9130,       w.W,
                 w.H,            r.g.detail,      wave_blitter(),    effect_to_screen,
                 last_visibility(), [] { rt().h().player_sprite(); }};
@@ -503,11 +607,11 @@ void ProgramCollideHost::ship_destroyed(int pool, int ship) {
     with_effects([&](EffectCtx& c) { ::is::world::ship_destroyed(c, pool, ship); });  // seg16:0x8e4
 }
 
-bool ProgramCollideHost::wing_debris(int ship, int side) {
-    (void)side;  // the side picks the strip's offsets of seg8:0x2cd8 [OPEN]
+bool ProgramCollideHost::wing_picture(int ship, int cut, bool make_debris) {
     Runtime& r = rt();
     if (!r.world) return false;
-    return debris_start(r.debris, obj(*r.world, r.g.ship_pool, ship)) >= 0;
+    return ::is::world::wing_picture(*r.world, r.debris, wave_blitter(), g_links.images ? g_links.images() : nullptr,
+                                     ship, cut, make_debris);
 }
 
 void ProgramCollideHost::seg8_81f8(int pool, int rec) {
@@ -668,9 +772,21 @@ void DefaultActions::ambulance(bool ctrl, bool alt) {
 }
 
 void DefaultHost::mover(Mover m) {
+    Runtime& r = rt();
     // seg12:0x3e98 returns at once outside a kind-6 wave [BYTES seg12:0x3ea8-0x3eaf]: only a race
     // wave misses its body (M4 s3 fixer, review L2).
-    if (m == Mover::k12_3e98 && rt().g.wave_kind != 6) return;
+    if (m == Mover::k12_3e98 && r.g.wave_kind != 6) return;
+    // seg7:0x5e04, the smoke (smoke.h move_smoke); update.cpp calls it while DGROUP:0x9456 > 0
+    // [BYTES seg7:0xd0a-0xd11] (M4 s5 EFFECTS).
+    if (m == Mover::k7_5e04) {
+        if (!r.world) return;
+        SmokeCtx c = program_smoke_ctx(r);
+        return move_smoke(c);
+    }
+    // seg8:0x8256's colour cycle seg8:0x82c6-0x82f4 runs before its first test of pool 2 (the
+    // sparks' DGROUP:0xb6a, effects.h effect_colour_cycle); its head (DGROUP:0x9452, 0x186c,
+    // 0x1874) and the defenders stay unported [BYTES seg8:0x8265-0x82c6] (M4 s5 EFFECTS).
+    if (m == Mover::k8_8256) effect_colour_cycle(effect_state(), r.g.now);
     todo_once("wave mover", mover_address(m));
 }
 
@@ -817,9 +933,8 @@ void wave_started() {
     r.keys.clear_pressed();
     reset_collide_wave(r.collide);  // [DESIGN ADR 0015] decision 1
     r.repair.due = 0;               // [BYTES seg9:0x668d], the port at the wave start [DESIGN]
-    // The placement seg9:0x6624 frees the smoke entries (DGROUP:0x58cc = -1) [BYTES seg9:0x6624];
-    // the debris table's reset at the wave start is the port's [DESIGN].
-    r.smoke = SmokeTable{};
+    // The debris table's reset at the wave start is the port's [DESIGN]; the smoke counters are
+    // the placement's (setup.cpp smoke_place) [BYTES seg9:0x6747-0x675d].
     r.debris = DebrisTable{};
 }
 CollideLinks& collide_links() { return g_collide_links; }
@@ -882,6 +997,7 @@ void install_flight_hooks(App& app) {
     Runtime& r = rt();
     r.default_host.prev_frame = h.frame[shell::kWave];
     bind_missile_links();
+    bind_effect_links();
     h.frame[shell::kWave] = [](shell::GameState& s) {
         rt().default_host.state = &s;
         wave_hook(s);

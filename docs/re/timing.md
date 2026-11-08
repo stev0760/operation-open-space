@@ -148,7 +148,7 @@ seg7:0x2206 runs before each frame of states 0 (once DGROUP:0x1212 is set), 2, 3
   | seg7:0xdd7 | now + 1500 ms into the player's record, DGROUP:0x71e6 + 0x15a · DGROUP:0x9646 | [OPEN] |
   | seg7:0x8a3 | DGROUP:0x1e6c = now + 10 000 ms | [OPEN] |
   | seg7:0x8fb | DGROUP:0x5a4 = now + 50 ms | [OPEN] |
-  | seg7:0x914 | DGROUP:0x5b8 = now + 10 000 ms, then seg7:0x2128 | [OPEN] |
+  | seg7:0x914 | DGROUP:0x5b8 = now + 10 000 ms, then seg7:0x2128 | The decay of the violence score DGROUP:0x9432 ([globals.md](globals.md#global-table)) |
   | seg7:0xb4d | DGROUP:0x2388 = now + 50 ms | Joystick poll, when INI `JoyStick` (DGROUP:0x8ff4) is set |
   | seg7:0xc2b | DGROUP:0x17b8 = now + 280 ms | Targeting display refresh |
   | seg10:0x7524 | DGROUP:0x2384 = now + 9000 ms on a music change | Checked at seg7:0xd38 |

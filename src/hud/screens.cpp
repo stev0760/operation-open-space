@@ -48,7 +48,11 @@ std::vector<TableText> champion_texts(int W, int H, int client_h, const std::str
     }
     // LoadString(925, 40 bytes) [BYTES seg6:0x6322-0x634d]
     out.push_back({0, 6, 0x000000FFu, w2, h2 + dy - 175, title.substr(0, std::min<std::size_t>(title.size(), 39))});
-    int y = h2 + dy - 130;  // [bp-8] before any row [DESIGN: the loop always sets it first]
+    // [bp-8] before any row: the loop stores it at seg6:0x6463-0x6477 after its test at
+    // seg6:0x645e, so with n >= 1 (a client 47 px or taller) the last row's value is what the read
+    // after the loop sees and this initial value is an equivalence (triage D-9); with n = 0 the
+    // original reads an unset [bp-8] (the class of ADR 0016) [OPEN] [BYTES seg6:0x645b-0x6477].
+    int y = h2 + dy - 130;
     for (int i = 0; i < n; ++i) {
         y = 30 * i + h2 + dy - 130;  // [BYTES seg6:0x6463-0x6477]
         if (static_cast<std::size_t>(i) >= rows.size() || rows[static_cast<std::size_t>(i)].text.empty())

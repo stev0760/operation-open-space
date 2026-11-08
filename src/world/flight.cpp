@@ -718,6 +718,7 @@ FlightDesign flight_design(std::uint8_t shp_thruster, std::uint8_t shp_armor,
     d.has_flame = (body_flags & 0x01) != 0 ? 0 : 1;
     d.cloak = (shp_flags & 0x08) != 0 ? 1 : 0;   // SHP Cloak [BYTES seg14:0x1fd6]
     d.shield = (body_flags & 0x02) != 0 ? 1 : 0;  // BOD Shield [BYTES seg14:0x1f9f]
+    d.shot_row = (shp_flags & 0x01) != 0 ? 0 : 1;  // design +0x44 AND 1 [BYTES seg14:0x1ed6-0x1eef seg14:0x21d4]
     return d;
 }
 
@@ -730,6 +731,7 @@ void apply_flight_design(ShipRecord& s, ObjectRecord& o, const FlightDesign& d,
     s.w36 = 0;
     s.thrust_mult = 1;
     s.lockout.set(now);
+    s.be3 = d.shot_row;  // [BYTES seg14:0x21d0-0x21d6] (M4 s5 fixer)
     s.has_flame = d.has_flame;
     s.be7 = d.cloak;   // [BYTES seg14:0x21ea seg14:0x21ee]
     s.be9 = d.shield;  // [BYTES seg14:0x21f2 seg14:0x21f6]

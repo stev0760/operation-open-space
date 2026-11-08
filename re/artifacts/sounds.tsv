@@ -25,12 +25,12 @@ id	module	resource	flag	same_as	ms	transcript	hold	meaning	call_sites
 0x17	SND_FX.DLL	123	2	BUBBLE.WAV	1285			BUBBLE; seg8:0x9564; slot of id 0x6f	P:seg8:0x95ad in seg8:0x9564(0,[bp - 4],1)
 0x18	SND_FX.DLL	124	2	NEW_DEF.WAV	180			NEW_DEF; seg8:0x9464	P:seg8:0x94b3 in seg8:0x9464(0,[bp - 4],1)
 0x19	SND_FX.DLL	125	2	FIRE1.WAV	439			FIRE1; seg12:0x2db6	P:seg12:0x3111 in seg12:0x2db6([0x9328],[bp - 8],1)
-0x1a	SND_FX.DLL	126	2	FLANGE.WAV	712			FLANGE; sequence 0x72 (twice, 200 ms apart)	
+0x1a	SND_FX.DLL	126	2	FLANGE.WAV	712			FLANGE; sequence 0x72 (twice, 200 ms apart); seg7:0x2e02 for pools 1 and 8 and pool-6 records of end kind 6 (pushed at seg7:0x3074, call at seg7:0x2ec2)	P:seg7:0x2ec2 in seg7:0x2e02(lo([bp + 6]),hi([bp + 6]),1)
 0x1b	SND_FX.DLL	127	2	FIREBALL.WAV	1223			FIREBALL; seg6:0x84fc when rand()%3 = 0 (else 0x4e); seg13:0x1318	P:seg13:0x1676 in seg13:0x1318(5,[bp - 4],1)
 0x1c	SND_FX.DLL	128	2	MISSILE.WAV	1305			MISSILE; desk scene seg15:0x0, seg15:0x3caa, seg13:0x3748, seg18:0x66e0; with one channel ordinal 9 then sets ISPACE.DLL DGROUP:0xcf6 = now + 1200	P:seg13:0x3b77 in seg13:0x3748(7,0,1) C:seg15:0x185 in seg15:0x0 C:seg15:0x3cf9 in seg15:0x3caa P:seg18:0x6c56 in seg18:0x66e0([0x934a],[bp - 0xc],ax)
 0x1d	SND_FX.DLL	129	2	SLING.WAV	304			SLING; seg11:0x947a	P:seg11:0x95a3 in seg11:0x947a(lo([bp + 6]),hi([bp + 6]),1)
 0x1e	SND_FX.DLL	130	2	FUEL.WAV	581			FUEL; mode 1 in seg8:0x6f3c, a gun hit on a pool-4 record or a pool-8 record of kind 2 with type 4 or 5 (push at seg8:0x7539)	P:seg8:0x7546 in seg8:0x6f3c([bp + 0xc],[bp + 0xa],1)
-0x1f	SND_FX.DLL	131	2	SHATTER.WAV	722			SHATTER; seg7:0x26c4, seg7:0x2e02, race place routine seg11:0x41bc	P:seg7:0x2705 in seg7:0x26c4(0,[bp + 8],1) P:seg7:0x2ec2 in seg7:0x2e02(lo([bp + 6]),hi([bp + 6]),1) C:seg11:0x4778 in seg11:0x41bc
+0x1f	SND_FX.DLL	131	2	SHATTER.WAV	722			SHATTER; seg7:0x26c4, seg7:0x2e02 for pool 4 and the other pool-6 records, race place routine seg11:0x41bc	P:seg7:0x2705 in seg7:0x26c4(0,[bp + 8],1) P:seg7:0x2ec2 in seg7:0x2e02(lo([bp + 6]),hi([bp + 6]),1) C:seg11:0x4778 in seg11:0x41bc
 0x20	SND_FX.DLL	132	2	IGNITE.WAV	901			IGNITE; desk scene seg15:0x0 and seg15:0x374c; seg11:0x72e0; first of sequence 0x6a	P:seg11:0x730b in seg11:0x72e0([0x9324],[0x9646],1) C:seg15:0x58 in seg15:0x0 C:seg15:0x399a in seg15:0x374c
 0x21	SND_FX.DLL	133	2	SIZZLE.WAV	2137			SIZZLE; second of sequence 0x6a (1000 ms after 0x20)	
 0x22	SND_FX.DLL	134	2	BOLT.WAV	919			BOLT; intro logo seg15:0x7cda, seg11:0xa234, seg11:0xa9ea, seg16:0xcfe, seg18:0x0	P:seg11:0xa286 in seg11:0xa234([0x951e],[0x9520],1) P:seg11:0xaa39 in seg11:0xa9ea([0x951e],[0x9520],1) P:seg15:0x7eee in seg15:0x7cda(lo([0x3b98]),hi([0x3b98]),4) P:seg15:0x800d in seg15:0x7cda(lo([0x3b98]),hi([0x3b98]),4) C:seg16:0x188e in seg16:0xcfe C:seg18:0x38 in seg18:0x0

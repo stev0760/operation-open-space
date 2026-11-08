@@ -8,7 +8,8 @@
 // work/analysis/m4/s2-gun.md and its verification s2-gun-verify.md (59 confirmed, claim 12
 // CORRECTED: sound id 4 only when ship bytes +0xe0 and +0xe1 are both non-zero; the precision
 // notes on claims 10, 14, 23, 25, 28, 33, 38 and 60 followed). Claim 44's stack word [bp-0x1e]
-// of seg8:0x6f3c is undecided: the port holds it 1, so the seam fix runs [OPEN seg8:0x72ab].
+// of seg8:0x6f3c is the last word seg8:0x29ea left at its depth (seam_word, M4 s5:
+// work/analysis/m4/s5-weapons.md sections 7 and 9.5, verified claims 32-40 and 49).
 // 16-bit arithmetic stays 16-bit (ADR 0013 decision 7): the listings print `cwd` as `cdq`, and
 // every `idiv` there is a 16-bit signed divide.
 //
@@ -75,10 +76,10 @@ struct ShotState {
     // world); persistent, so a one-barrel slot's gate test reads barrel 1's stale entry
     // [BYTES seg8:0x3816 seg8:0x381a].
     std::array<std::int16_t, 4> heads{};
-    // seg8:0x6f3c's [bp-0x1e], never written by seg8:0x6f3c (s2-gun-verify.md 42): a stale
-    // stack word the analyst reads as a far-call return offset (claim 44) and the verifier as
-    // whichever of three pushes ran last; the port holds 1, so the seam fix runs [OPEN
-    // seg8:0x72ab: a Wine break there settles it].
+    // seg8:0x6f3c's [bp-0x1e], never written by seg8:0x6f3c (s2-gun-verify.md 42): the stack
+    // word T - 44 below seg8:0x3688's body sp, which the head loop's last seg8:0x29ea call left
+    // (seam_word); shot_hit_test sets it before its seg8:0x6f3c calls [BYTES seg8:0x3692
+    // seg8:0x36c3 seg8:0x3722 seg8:0x6f40]. 1 until the first hit test [DESIGN].
     std::int16_t stack_1e = 1;
     // The muzzle tables DGROUP:0x7b60 + 4(64n + k), (x, y) per entry, n = 0 ... 7: entries
     // 0 ... 15 one barrel (seg10:0x1460), 16 ... 31 the rear launch (seg10:0x1620), 32 ... 63
@@ -110,20 +111,22 @@ void set_shot_source(const ShotState* s);
 
 // ---- the design words the muzzle tables read (the port has no 0xad-byte design table)
 
-// Design record n's words DGROUP:0x96d2 + 0xad·n + off for the gun [OPEN: their writers;
-// s2-gun.md 1.6]: +0x00 and +0x02 (seg14:0xc42's value s, formats.md MASTER.BOD +0x19), +0x2a
-// (the word seg8:0x45e0 lowers by 14 after a wing loss), +0x68 ... +0x6e (the two barrels'
-// offsets, BOD +0x1e - size/2 - Size, BOD +0x1f - size/2, set by seg14 only while
-// DGROUP:0x95a6 != 0).
+// Design record n's words DGROUP:0x96d2 + 0xad·n + off for the gun: +0x00 and +0x02
+// (seg14:0xc42's value s = trunc(side / 2), formats.md MASTER.BOD +0x19) [BYTES seg14:0xc50
+// seg14:0xc54],
+// +0x2a (the body's cell side; seg8:0x45e0 sets ship +0x20 = +0x2a - 14 at the second wing
+// loss) and +0x68 ... +0x6e (the two barrels' offsets, seg14:0x11a8's design tail while
+// DGROUP:0x95a6 != 0) (design_words.h, s5-weapons-verify.md claims 42, 45).
 struct DesignWords {
     std::int16_t w00 = 0;  // DGROUP:0x96d2
     std::int16_t w02 = 0;  // DGROUP:0x96d4
     std::int16_t w2a = 0;  // DGROUP:0x96fc
     std::int16_t w68 = 0, w6a = 0, w6c = 0, w6e = 0;  // DGROUP:0x973a ... 0x9740
 };
-// The words the World holds today: +0x2a as collide.h design_from_world's stand-in (SHP tank / 40,
-// core-0001's wing rule), the others 0 [OPEN: seg14:0xc42 and the BOD +0x1e / +0x1f rule], so a
-// one-barrel shot leaves 3 px from the sprite cell's centre.
+// The words the World holds: +0x00, +0x02, +0x2a and +0x68 ... +0x6e as design_words.h keeps them
+// (the sheet build's design tail and seg14:0x0's stores write them, player_sheet.h
+// placement_tail; 0 before any). With s = 16 (side 33) a one-barrel shot leaves 19 px from the
+// cell's centre and the tail smoke and the rear launch 16 px behind it (M4 s5 fixer).
 DesignWords design_words_from_world(const World& w, int n);
 // seg10:0x1460(n): entries 0 ... 15 [BYTES seg10:0x146f-0x14f7].
 void muzzle_1460(ShotState& s, int n, const DesignWords& d);
@@ -144,9 +147,9 @@ void fill_muzzles(ShotState& s, int n, const DesignWords& d);
 extern const std::array<std::uint32_t, 20> kShotBrushes;
 extern const std::array<std::uint32_t, 20> kShotBrushesBright;
 // seg8:0x3aec's brush index for slot j: b + lo16(10 · signed ship byte +0xe3) for a ship's
-// shot, else 10 + b, b = (age << 3) / lifetime, all 16-bit; an index >= 20 reaches past the
-// table into DGROUP:0x3b74 (the heat brushes) [OPEN: whether +0xe3 is ever >= 2]
-// [BYTES seg8:0x3c75-0x3caf].
+// shot, else 10 + b, b = (age << 3) / lifetime, all 16-bit. +0xe3 is 0 or 1 (its only writer
+// stores design +0x44 AND 1, flight.h FlightDesign::shot_row), so the index stays inside the 20
+// brushes (core.md "Which row") [BYTES seg8:0x3c75-0x3caf seg14:0x21d4].
 std::int16_t shot_brush_index(std::int16_t age, std::int16_t lifetime, bool ship_shot,
                               std::int8_t row_e3);
 
@@ -179,7 +182,8 @@ public:
         (void)x, (void)y, (void)w, (void)h, (void)rop;
     }
     // The design word +0x32 (DGROUP:0x9704 + 0xad·n, the design mass); the default reads the
-    // ship's pool record +0x44, which seg14:0x20bc sets from the same value [DESIGN].
+    // ship's pool record +0x44, which seg14:0x20bc sets from the same value: an equivalence
+    // [BYTES seg14:0x1e68 seg14:0x20bc] (triage D-22).
     virtual std::int16_t design_mass(const World& w, int ship_pool, int ship) {
         return obj(const_cast<World&>(w), ship_pool, ship).mass;
     }
@@ -214,6 +218,20 @@ std::int16_t shot_update(ShotCtx& c, int i, int j);
 void run_shots(ShotCtx& c);
 // seg8:0x3688(j): 0 none, 1 a hit the shot survives, 2 the shot ends [BYTES seg8:0x3688-0x3adf].
 std::int16_t shot_hit_test(ShotCtx& c, int j);
+// The word seg8:0x29ea(x, y) leaves at T - 44 (T = seg8:0x3688's body sp), which every
+// seg8:0x6f3c call of that seg8:0x3688 reads as its [bp-0x1e] (verified claims 32-36, 49):
+// on the DGROUP:0x9130 = 0 path the last write is CX pushed at seg8:0x2ade for seg9:0x88dc, the
+// low word of off = sext32(y) - sext32(lo16(DGROUP:0x90ec << ((DGROUP:0x9150 - 1) & 31))) -
+// dword DGROUP:0x2410 (claim 37; the byte shift count 0xff at DGROUP:0x9150 = 0 is 31 on a 386),
+// unless the y wrap's far call to seg5:0x346 at seg8:0x2b4a runs and leaves its return IP 0x2b4f:
+// |off| (32-bit, seg9:0x88dc) > sext32(lo16(DGROUP:0x5a2 << 2)), except in a kind-6 wave with
+// byte DGROUP:0x9eb5 != 1 (claims 35, 38) [BYTES seg8:0x2a02-0x2b4f]. `y` is the head loop's last
+// barrel's world y, slot word +0x48 + 12(+0x78 - 1) (claim 40). The word is 0, and the seam fix
+// skipped, exactly when that y equals the player's y at the last recentre. The seg18 path
+// (DGROUP:0x9130 != 0) leaves lo16(|dword DGROUP:0x88cc|) (claim 39); the port returns 1 there,
+// so the fix runs, until seg18 mode is ported [OPEN M6].
+std::int16_t seam_word(const ViewState& v, std::int16_t y, std::int16_t wave_kind, std::uint8_t dg_9eb5,
+                       std::int16_t dg_9130);
 // seg8:0x6f3c(pool, rec, j, -): slot j against one object [BYTES seg8:0x6f3c-0x7ba3].
 std::int16_t shot_hit_object(ShotCtx& c, int pool, int rec, int j);
 // The power of slot j's shot at seg8:0x715d-0x724b (owner, age, lifetime, the design mass, the

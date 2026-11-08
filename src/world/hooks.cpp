@@ -3,6 +3,8 @@
 // world part and the wave start, wired around the briefing's own state-1 and state-3 hooks
 // (src/briefing/hooks.cpp). Win32 only: the host build compiles this file without its hooks.
 #include "world/hooks.h"
+#include "world/design_words.h"
+#include "world/player_sheet.h"
 #include "world/shots.h"
 
 #include <array>
@@ -78,7 +80,9 @@ DeadlineResult run_wave_deadlines(shell::GameState& s) {
 #include "shell/geometry.h"
 #include "shell/rng.h"
 #include "world/draw.h"
+#include "world/effects.h"
 #include "world/flight_hooks.h"
+#include "world/icon_effects.h"
 #include "world/missile.h"
 #include "world/roster.h"
 #include "world/setup.h"
@@ -88,6 +92,7 @@ DeadlineResult run_wave_deadlines(shell::GameState& s) {
 namespace is::world {
 
 namespace {
+std::int16_t g_raw_side = 0;  // the player's raw cell side at the set-up (seg14:0xba9's source)
 
 using app::g;
 
@@ -217,14 +222,38 @@ void ship_setup_player(World& w) {
         // [BYTES MASTER.SHP] [ORACLE core-0001] [ORACLE probe-0001] (M4 s1 fixer, s4 fixer).
         o.hit_sound = static_cast<std::int16_t>(shp->hit_sound);
         // The design words of seg13:0x33d6 (rating.h) (M5 s2 BRIEFING).
-        w.design_ratings[static_cast<std::size_t>(s.design_index >= 0 && s.design_index < kShipCount ? s.design_index : 0)] =
-            design_rating(*shp, *body);
+        const int dn = s.design_index >= 0 && s.design_index < kShipCount ? s.design_index : 0;
+        w.design_ratings[static_cast<std::size_t>(dn)] = design_rating(*shp, *body);
+        // seg14:0x1b84's D, design +0x3c, from BOD +0x1a [BYTES seg14:0x2055-0x208b], and the body
+        // bytes seg14:0x11a8's design tail and seg8:0x2cd8's recompute read (design_words.h)
+        // (M4 s5 SHEET; s5-sheet-verify.md claim 4).
+        set_design_body(dn, body->byte_1a, static_cast<std::int8_t>(body->byte_1e),
+                        static_cast<std::int8_t>(body->byte_1f));
+        {
+            DesignWordSet dw = design_words(dn);
+            dw.w3c = design_band(body->byte_1a, w.size);
+            set_design_words(dn, dw);
+        }
         // seg14:0x1430's roster -> ship fill (roster.h) [BYTES seg14:0x1430-0x1b82].
         ship_from_roster(w, w.player, *shp);
-        // seg14:0x0's three muzzle-table calls for design 0 (shots.h fill_muzzles), from the
-        // design words the World holds (design_words_from_world: +0x2a only) [BYTES seg14:0xcdc
-        // seg14:0xce6 seg14:0xcf0] (M4 s2 fixer).
-        fill_muzzles(shot_state(), 0, design_words_from_world(w, 0));
+        // seg14:0x0's three muzzle-table calls run after the sheet build and the +0x2a store of
+        // the same iteration: briefing_entry, after the placement hook (M4 s5 SHEET;
+        // s5-weapons-verify.md claim 46).
+        // seg14:0xd1a-0xd32: seg16:0x3784(i, 1) for a fresh ship, wave 1 or the restored first
+        // wave; it repairs to 100, sets the gun flags +0x24 / +0xe0 / +0xe1 from +0x0a and the
+        // wings, and fills the tank (the oracle's wave 1: systems 100, +0x24 = 1, +0xe0 = +0xe1 =
+        // 1, fuel 0x528 for TRANSFORMER; structs.md Ship records, Probe values, C035) [BYTES
+        // seg14:0xd32 seg16:0x3468 seg16:0x3e80] [ORACLE probe-0001]. In later waves every value
+        // above comes from the roster (core-0001's
+        // 39, 9, 39, 1) [ORACLE core-0001].
+        // It runs before the cell sizes: seg14:0x0's iteration calls seg16:0x3784 at seg14:0xd32
+        // and reaches the size step seg14:0xbcb-0xc04 only after it (seg14:0xd75 -> seg14:0xb86),
+        // so seg16:0x35ec's ship word +0x20 = object `size` - 2 reads the record before any size
+        // is written: -2, with +0x22 = 1, as core-0001, core-0005 and core-0006 read through the
+        // wave (structs.md Ship records +0x20) [BYTES seg14:0xd32 seg14:0xd75 seg14:0xbe5
+        // seg16:0x35ec-0x35fb] [ORACLE core-0005] (M4 s5 fixer).
+        w.sheet_due = purchase_due(w, rp.fresh_ship);  // the sheet's path (C067) (M4 s4 fixer)
+        if (w.sheet_due) purchase_pass(w, w.player, 1);
         // The cell sizes +0x20, +0x22, +0x24 (seg14:0x11a8's raw side and gap, seg14:0x0's
         // scaling; setup.h ship_cell_raw, ship_cell_sizes). The raw side is the body DIB's
         // height; TRANSFORMER's #4000 60 is 132 x 33, so Size 1 gives extent 264 and size 33,
@@ -234,6 +263,7 @@ void ship_setup_player(World& w) {
         if (body->bitmap_id != fmt::kBodyBitmapFromFile) {
             const fmt::Dib dib = g.store->sprite(body->bitmap_id);
             const ShipCellRaw raw = ship_cell_raw(static_cast<std::int16_t>(dib.height));
+            g_raw_side = raw.side;  // object +0x22 before seg14:0x0's size step [BYTES seg14:0xb97]
             ship_cell_sizes(o, raw, w.size);
             // With a roster record seg14:0x11a8 writes the raw side and gap to roster bytes
             // +0x7a / +0x7b (s1-sprite.md claim 14), the class size of the briefing's ship page
@@ -246,15 +276,6 @@ void ship_setup_player(World& w) {
         } else {
             log("world: ship set-up: body " + body->name + " reads a .DIB file [OPEN]; no cell size");
         }
-        // seg14:0xd1a-0xd32: seg16:0x3784(i, 1) for a fresh ship, wave 1 or the restored first
-        // wave; it repairs to 100, sets the gun flags +0x24 / +0xe0 / +0xe1 from +0x0a and the
-        // wings, and fills the tank (the oracle's wave 1: systems 100, +0x24 = 1, +0xe0 = +0xe1 =
-        // 1, fuel 0x528 for TRANSFORMER; structs.md Ship records, Probe values, C035) [BYTES
-        // seg14:0xd32 seg16:0x3468 seg16:0x3e80] [ORACLE probe-0001]. In later waves every value
-        // above comes from the roster (core-0001's
-        // 39, 9, 39, 1) [ORACLE core-0001].
-        w.sheet_due = purchase_due(w, rp.fresh_ship);  // the sheet's path (C067) (M4 s4 fixer)
-        if (w.sheet_due) purchase_pass(w, w.player, 1);
         log("world: ship set-up: the player flies " + shp->name + " (wave " + std::to_string(w.wave) +
             (rp.fresh_roster ? ", fresh roster" : "") + ", thrust " + std::to_string(s.thrust) + ", drag " +
             std::to_string(s.drag) + ", turn " + std::to_string(s.turn) + ", mass " + std::to_string(o.mass) +
@@ -480,7 +501,11 @@ void briefing_entry() {
     // seg9:0x5e5d seg9:0x688a seg14:0xc7e seg14:0xd32 seg16:0x362b]: the drawing side registers
     // that work here (M5 s2 BRIEFING; world.md Ship sheets, Path, C067).
     if (g_on_placement) g_on_placement(w);
+    // seg14:0x0's per-ship tail for the player (player_sheet.h placement_tail) [BYTES seg14:0xd86-0xd94
+    // seg14:0xb97-0xba9 seg14:0xc42-0xc54 seg14:0xc84 seg14:0xcdc].
+    placement_tail(w, w.player, g_raw_side, shot_state());
     build_strip(w);
+    flush_icon_plans();  // seg10:0x506c, seg7:0x233c(0, k, 0) and seg9:0x94ba on the new strip (world/icon_effects.h)
     bind_flight_world(&w);
     g_briefed = true;
 }
@@ -591,7 +616,7 @@ public:
         if (wave_end_links().close_hud) return wave_end_links().close_hud();
         todo_once("the HUD windows", "seg11:0x2f0");
     }
-    void release_wave_dcs() override { todo_once("the 8 wave DCs", "seg7:0x49b6"); }
+    void release_wave_dcs() override { release_icon_images(); }  // seg7:0x49b6 (world/icon_effects.h)
     void black_client() override {
         if (g.gfx && !g.gfx->surface().empty())
             PatBlt(g.gfx->dc(), 0, 0, g.area.w, g.area.h, BLACKNESS);  // [BYTES seg9:0x6d7a]
@@ -692,6 +717,8 @@ void install_world_hooks(App& app) {
     // The roster routines' stubs log through the program's TODO facility (roster.h) (M4 s3 ROSTER).
     set_roster_todo([](const std::string& what, const char* address) { todo_once(what, address); });
     set_frame_world(&g_world);  // the frame's own drawing reads this World (update.h, M3 s4 DRAW)
+    // DGROUP:0x1e84 in one store: the shell's state-9 case reads World::w1e84 (M4 s5, D-24).
+    app.game.bind_scores_due(&g_world.w1e84);
     auto& h = app.game.hooks();
     // The state-1 entry: seg10:0x0 (the greeting, then the load) or seg9:0x60bc after the
     // briefing (the briefing's part, then the ships).
@@ -724,6 +751,7 @@ void install_world_hooks(App& app) {
     auto prev_teardown = h.teardown;
     h.teardown = [prev_teardown](shell::GameState& s) {
         if (prev_teardown) prev_teardown(s);
+        release_piece_sources(effect_state());  // seg10:0x22e [BYTES seg10:0x2cb-0x301] (effects.h)
         g_briefed = false;  // a state change leaves the wave or its briefing
         g_loaded = false;
     };

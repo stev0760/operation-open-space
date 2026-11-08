@@ -383,6 +383,20 @@ TEST_CASE("flight: the design's thrust, drag, mass and turn word") {
     CHECK(d.has_flame == 1);
     CHECK(flight_design(12, 40, 30, 10, 7, 0x01).has_flame == 0);  // Body Thrust
     CHECK(flight_design(12, 200, 30, 10, 7, 0).mass == 300 * (-14 + 100) / 100);  // signed armor byte
+    // Ship byte +0xe3 = design +0x44 AND 1 (seg14:0x21d6): TRANSFORMER (SHP flags 0x15) 0, the
+    // yellow shots of core-0002; SKY TALON (0x1c) 1, the cyan shots of core-0006 (M4 s5 fixer).
+    CHECK(flight_design(12, 40, 30, 10, 7, 0, 0x15).shot_row == 0);
+    CHECK(flight_design(12, 40, 30, 10, 7, 0, 0x1c).shot_row == 1);
+    CHECK(flight_design(12, 40, 30, 10, 7, 0, 0x21).shot_row == 0);  // 0x20 leaves bit 0 alone
+    {
+        ShipRecord t{};
+        t.roster_index = -1;
+        ObjectRecord u{};
+        apply_flight_design(t, u, flight_design(12, 40, 30, 10, 7, 0, 0x1c), false, 0, 0);
+        CHECK(t.be3 == 1);
+        apply_flight_design(t, u, flight_design(12, 40, 30, 10, 7, 0, 0x15), false, 0, 0);
+        CHECK(t.be3 == 0);
+    }
     ShipRecord s{};
     s.roster_index = -1;
     ObjectRecord o{};

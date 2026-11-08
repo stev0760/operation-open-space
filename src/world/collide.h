@@ -39,14 +39,19 @@ struct DamageDesign {
     std::array<std::int16_t, 4> shot_div{};  // +0x08 ... +0x0e (DGROUP:0x96da): a shot's divisors [OPEN: their writer]
     std::array<std::int16_t, 4> hit_div{};   // +0x10 ... +0x16 (DGROUP:0x96e2): SHP +2 / 4, / 5, / 4, / 5 [BYTES seg14:0x1ce2-0x1d0e]
     std::array<std::int16_t, 4> lamp_row{{0, 1, 2, -1}};  // +0x22 ... +0x28 (DGROUP:0x96f4) [BYTES seg14:0x1d3b-0x1dd6]
-    std::int16_t w2a = 0;        // +0x2a (DGROUP:0x96fc), the wings' +0x20 base [OPEN: its writer]
+    // +0x2a (DGROUP:0x96fc), the wings' +0x20 base: the body's unscaled cell side h, written
+    // after the sheet build (design_words.h DesignWordSet::w2a) [BYTES seg14:0xba9 seg14:0xd94].
+    std::int16_t w2a = 0;
     std::int16_t hit_sound = 0;  // +0x2e (DGROUP:0x9700): SHP +0x1f [BYTES seg14:0x1e18 seg14:0x1e2d]
     std::int16_t team = 0;       // +0x38 (DGROUP:0x970a) [OPEN: its writer]
+    // +0x3c (DGROUP:0x970e): D, the band ordinal 15 keeps at a wing tear (design_words.h
+    // design_band) [BYTES seg14:0x2070-0x208b].
+    std::int16_t w3c = 0;
     std::int16_t captures = 0;   // +0x42 (DGROUP:0x9714): SHP +9 bit 0x10 [BYTES seg14:0x1eb4]
     std::int16_t repair = 0;     // +0x4c (DGROUP:0x971e): SHP +9 bit 0x04 [BYTES seg14:0x1ffd]
 };
-// The design words the World keeps (World::design_ratings, rating.h) as DamageDesign; the words
-// it does not keep are 0 [DESIGN].
+// The design words the World keeps (World::design_ratings, rating.h) and the sheet build's
+// (design_words.h: +0x2a, +0x3c) as DamageDesign; the words neither keeps are 0 [DESIGN].
 DamageDesign design_from_world(const World& w, int n);
 
 // A pool-5 object's entry DGROUP:0x5a50 + 0x14·rec: its shooter and its last-hit object
@@ -99,7 +104,10 @@ struct CollideGlobals {
     // seg8:0x5b88 seg8:0x5b99 seg8:0x5bb8 seg8:0x616a seg8:0x6589] (M4 s4 fixer, C006, C084).
     std::int16_t w0b0c = 1;
     // DGROUP:0x104c: the player takes no damage while it is set (the HUD's score_alt_hi) [OPEN:
-    // its writer]; DGROUP:0x95a6 (seg8:0x2cd8's design recompute runs while 0) [OPEN];
+    // its writer]; DGROUP:0x95a6, the MASTER.SHP block's handle, set between seg14:0x3eda and
+    // seg14:0x4074 (the placement's bracket) and 0 in the wave, where seg8:0x2cd8's design
+    // recompute runs (globals.md DGROUP:0x95a6; design_words.h design_band_recompute) [BYTES
+    // seg14:0x3f8b-0x3fa1 seg14:0x407e-0x40ca seg9:0x6883 seg9:0x6890 seg8:0x2d23];
     // DGROUP:0x8e30, a Demon's Gate deadline [OPEN]; DGROUP:0x9530, seg18's state [OPEN].
     std::int16_t w104c = 0;
     std::int16_t w95a6 = 0;
@@ -218,14 +226,19 @@ public:
     virtual void ship_destroyed(int pool, int ship) { (void)pool, (void)ship; }
     // PatBlt(DGROUP:0x13dc, x, y, w, h, BLACKNESS) of seg7:0x51f9.
     virtual void erase(int x, int y, int w, int h) { (void)x, (void)y, (void)w, (void)h; }
-    // seg8:0x2cd8's design recompute seg14:0x3eda / seg14:0x4074 (DGROUP:0x95a6 = 0) [OPEN].
-    virtual void wing_design(int ship) { (void)ship; }
     // seg8:0x2cd8's taunts seg3:0x6ec(j, 14, ship, 0x19 ... 0x1e) (M5) [OPEN].
     virtual void wing_taunts(int ship, int side) { (void)ship, (void)side; }
-    // seg8:0x2cd8's debris: the torn wing into a free entry of the table DGROUP:0x9176 (the
-    // debris' owner); true when it found one, and seg8:0x2cd8 then plays sound 0x6a
-    // [BYTES seg8:0x33c2 seg8:0x33cd].
-    virtual bool wing_debris(int ship, int side) { return (void)ship, (void)side, false; }
+    // seg8:0x2cd8's picture part, run once per tear (work/analysis/m4/s5-sheet.md 1.2-1.4,
+    // verified claims 2, 6-10): with `make_debris` (DGROUP:0x92e4 = 0) the first entry of the
+    // table DGROUP:0x9176 whose counter is 0 gets the torn wing's strip and ordinal 15 runs with
+    // its flag set; with no free entry, or without `make_debris`, ordinal 15 runs with flag 0
+    // (the cut only) [BYTES seg8:0x2d96 seg8:0x33d7-0x33e9 seg8:0x309a-0x30d9 seg8:0x343d-0x3482].
+    // `cut` is ordinal 15's side, seg8:0x2cd8's [bp-4]: 1 when wing +0xac goes. True when a
+    // debris entry was set up, and seg8:0x2cd8 then plays sound 0x6a [BYTES seg8:0x33c2
+    // seg8:0x33cd]. The program's host runs debris.h wing_picture; the default does nothing.
+    virtual bool wing_picture(int ship, int cut, bool make_debris) {
+        return (void)ship, (void)cut, (void)make_debris, false;
+    }
     // seg13:0x6716(ship), the flame off after the thruster fails (flight.h ship_touched).
     virtual void flame_off(int ship) { (void)ship; }
     // An on_damage the port does not run here (seg7:0x233c, seg7:0x2652, seg16:0x85e, ...):

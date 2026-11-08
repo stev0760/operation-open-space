@@ -3,6 +3,7 @@
 
 #include "world/bounce.h"
 #include "world/damage.h"
+#include "world/design_words.h"
 
 namespace is::world {
 
@@ -163,8 +164,16 @@ void muzzle_1502(ShotState& s, int n, const DesignWords& d) {
 }
 
 DesignWords design_words_from_world(const World& w, int n) {
+    (void)w;
+    const DesignWordSet& s = design_words(n);
     DesignWords d;
-    d.w2a = design_from_world(w, n).w2a;  // [OPEN: the writer of +0x2a]
+    d.w00 = s.w00;  // DGROUP:0x96d2 + 0xad·n, seg14:0x0's s [BYTES seg14:0xc50] (M4 s5 fixer)
+    d.w02 = s.w02;  // DGROUP:0x96d4 + 0xad·n [BYTES seg14:0xc54]
+    d.w2a = s.w2a;  // DGROUP:0x96fc + 0xad·n
+    d.w68 = s.w68;  // DGROUP:0x973a ... 0x9740 + 0xad·n
+    d.w6a = s.w6a;
+    d.w6c = s.w6c;
+    d.w6e = s.w6e;
     return d;
 }
 
@@ -505,6 +514,10 @@ std::int16_t shot_hit_test(ShotCtx& c, int j) {
         s.heads[static_cast<std::size_t>(2 * a)] = p.x;
         s.heads[static_cast<std::size_t>(2 * a + 1)] = p.y;
     }
+    // The word the head loop's last seg8:0x29ea left at T - 44: every seg8:0x6f3c below reads it
+    // as [bp-0x1e]. With no barrel the loop calls nothing and the word stays [OPEN: the stack's
+    // earlier contents] [BYTES seg8:0x369e-0x36e6].
+    if (nb > 0) s.stack_1e = seam_word(c.x.view, s.word(j, shot::kWorldY + 12 * (nb - 1)), g.wave_kind, g.dg_9eb5, g.dg_9130);
     // The visibility list [BYTES seg8:0x36fd-0x3730]
     if (const VisibilityGlobals* v = c.x.vis) {
         for (int k = 0; k < v->count && k < kVisibleMax; ++k) {
@@ -539,6 +552,22 @@ std::int16_t shot_hit_test(ShotCtx& c, int j) {
     }
     // The seg18 mode's tail seg8:0x3833-0x3adf (M6) [OPEN]
     return 0;  // [BYTES seg8:0x382a-0x3831]
+}
+
+std::int16_t seam_word(const ViewState& v, std::int16_t y, std::int16_t wave_kind, std::uint8_t dg_9eb5,
+                       std::int16_t dg_9130) {
+    if (dg_9130 != 0) return 1;  // seg8:0x2b51: lo16(|DGROUP:0x88cc|) (claim 39) [OPEN M6]
+    // shl ax, cl with cl = byte DGROUP:0x9150 - 1, then cwd [BYTES seg8:0x2abf-0x2acb]
+    const std::int16_t half_h = shl16(v.play_h, (v.shift - 1) & 31);
+    // sext32(y) - sext32(that) - dword DGROUP:0x2410, 32-bit [BYTES seg8:0x2a02-0x2a0b seg8:0x2acb-0x2ad9]
+    const std::int32_t off = static_cast<std::int32_t>(static_cast<std::uint32_t>(static_cast<std::int32_t>(y)) -
+                                                       static_cast<std::uint32_t>(static_cast<std::int32_t>(half_h)) -
+                                                       static_cast<std::uint32_t>(v.y0l));
+    // seg9:0x88dc(cx:bx) > sext32(lo16(DGROUP:0x5a2 << 2)), not in a kind-6 wave before
+    // DGROUP:0x9eb5 = 1 [BYTES seg8:0x2ae9-0x2b0c]
+    const bool wrap = abs32(off) > static_cast<std::int32_t>(shl16(kWorldCells, 2)) && !(wave_kind == 6 && dg_9eb5 != 1);
+    if (wrap) return 0x2b4f;  // the return IP of the far call at seg8:0x2b4a [BYTES seg8:0x2b4a seg8:0x2b4f]
+    return lo16(off);         // CX pushed at seg8:0x2ade [BYTES seg8:0x2ade]
 }
 
 // ---- seg8:0x6f3c
@@ -635,7 +664,7 @@ std::int16_t shot_hit_object(ShotCtx& c, int pool, int rec, int j) {
         std::int16_t bvx = mul16(s.word(j, shot::kVx), 5), bvy = mul16(s.word(j, shot::kVy), 5);  // [BYTES seg8:0x7296-0x72a8]
         std::int16_t& hx = s.word(j, shot::kWorldX + 12 * a);
         std::int16_t& hy = s.word(j, shot::kWorldY + 12 * a);
-        if (s.stack_1e != 0) {  // the seam fix (claim 43) [BYTES seg8:0x72ab-0x7393] [OPEN seg8:0x72ab]
+        if (s.stack_1e != 0) {  // the seam fix (claim 43), seam_word's value [BYTES seg8:0x72ab-0x7393]
             if (hx < 1000 && O.x > 5000)
                 hx = add16(hx, kWrapX);
             else if (hx > 5000 && O.x < 1000)

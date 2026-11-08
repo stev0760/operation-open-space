@@ -20,6 +20,7 @@
 #include "hud/target.h"
 #include "shell/game_state.h"
 #include "world/hooks.h"
+#include "world/icon_mover.h"
 #include "world/world.h"
 
 namespace is::hud {
@@ -116,6 +117,12 @@ void draw_row(HDC dc, int i, int flag) {
     if (p.picture && p.slot == 0xd && strip) {
         SetStretchBltMode(dc, COLORONCOLOR);  // seg13:0x5c98
         StretchBlt(dc, p.dx, p.dy, p.dw, p.dh, strip->hdc(), p.sx, p.sy, p.sw, p.sh, SRCCOPY);
+    } else if (p.picture && p.slot >= world::kIconOwnSlot && p.slot < world::kIconOwnSlot + world::kIconRecords) {
+        // A burning icon's own image, slot 14 + i (hud/icon_images.h) [BYTES seg13:0x5d5b-0x5d9b] (M4 s5 ICONS).
+        if (gfx::ImagePtr own = world::slot_image(p.slot)) {
+            SetStretchBltMode(dc, COLORONCOLOR);
+            StretchBlt(dc, p.dx, p.dy, p.dw, p.dh, own->hdc(), p.sx, p.sy, p.sw, p.sh, SRCCOPY);
+        }
     }
     // A shattered icon's four quarters [BYTES seg13:0x5f49-0x6057] (M4 s2 DISPLAY).
     if (p.sub_cells) {

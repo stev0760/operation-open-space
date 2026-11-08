@@ -35,12 +35,7 @@ ShipRecord& served_ship(World& w) {
     return w.ships[static_cast<std::size_t>(w.w952e)];
 }
 
-// The credit dword +0xdc (ShipRecord wdc low word, wde high word), signed [BYTES seg16:0xb9e].
-std::int32_t credit_of(const ShipRecord& s) {
-    const std::uint32_t v = static_cast<std::uint16_t>(s.wdc) |
-                            (static_cast<std::uint32_t>(static_cast<std::uint16_t>(s.wde)) << 16);
-    return static_cast<std::int32_t>(v);
-}
+// The credit dword +0xdc, signed, is purchases.h credit_of [BYTES seg16:0xb9e].
 
 // 32-bit products as the 386 `imul r32` keeps them: the low dword (seg8:0x2658, claim 35).
 std::int32_t mul32(std::int32_t a, std::int32_t b) {

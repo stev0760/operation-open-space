@@ -4,9 +4,9 @@
 // (core.md "Who tests whom"), so a ship meets an icon here, not in the ship mover: this is where
 // the player captures (s2-capture.md 0).
 //
-// The helpers the analysis did not read (seg7:0x477e, 0x4d86, 0x4ffe, 0x5660 and the pool-5
-// cases seg7:0x4a8a-0x4c4f) are UpdateHost stubs tagged [OPEN]; seg7:0x56ba, 0x2512 and the
-// smoke seg7:0x5b68 lie on no path ported here. Portable, no Win32.
+// The helpers seg7:0x477e, 0x4d86, 0x4ffe, 0x5660 and the pool-5 cases seg7:0x4a8a-0x4c4f
+// (with seg7:0x56ba and 0x2512 under them) are icon_effects.h's (M4 s5 ICONS); the smoke
+// seg7:0x5b68 they call is UpdateHost::puff. Portable, no Win32.
 #pragma once
 
 #include "world/update.h"

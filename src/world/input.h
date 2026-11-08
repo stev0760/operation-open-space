@@ -181,9 +181,12 @@ public:
     // seg11:0x4cfe seg11:0x4d81 seg11:0x4d96]. The caller writes ship word +0x2e = 2 between them.
     virtual void vanish_buffer(int pool, int ship) { (void)pool, (void)ship; }
     virtual void vanish_start(int mode, int pool, int ship) { (void)mode, (void)pool, (void)ship; }
-    // seg10:0x7328(...), the ship sprite render ISPACE.DLL ordinal 17's wrapper into the sheet DC
-    // DGROUP:0x3a38[i] with 1, 0x63, after a shield toggle [BYTES seg11:0x4be4-0x4c37] [OPEN: no
-    // port of ordinal 17].
+    // seg10:0x7328(design +0x36, far design +0x84, dword design +0xa9, byte design +0x18, byte
+    // design +0x1a, object +0x28, DGROUP:0x3a38[i], 1, 0x63), ISPACE.DLL ordinal 17's wrapper, on
+    // both the raise and the lowering: body frames 1 and 2 at the ship's heading into column 16
+    // of the sheet DC, rows 0 and 1 [BYTES seg11:0x4ba6 seg11:0x4be4-0x4c37 seg10:0x7335-0x7365]
+    // (work/analysis/m4/s5-sheet.md 4.1-4.3, verified claims 22-34). The program's host runs
+    // player_sheet.h shield_render_program (gfx/ship_quick.h).
     virtual void shield_render(int ship) { (void)ship; }
     // seg11:0xb09c(i, on): the flame (world.h briefing_flame outside the frame) [BYTES seg11:0x4c50].
     virtual void flame(int on, int ship) { (void)on, (void)ship; }
@@ -222,8 +225,13 @@ std::int16_t cloak_toggle(SystemsCtx& c, int i);
 // toggle; 1 when it toggled. 0 when system 3 < 50 (signed) and +0xea = 0, while the animation word
 // +0x10 is 1 ... 6, and for any ship but the action player within 150 frames of +0x152. Down:
 // +0x10 = 6, DGROUP:0x9522 = -1, ship word +0x20 = object size - 2, +0x22 = 1, +0xea = 0. Up:
-// +0x10 = 1, DGROUP:0x9522 = 1, +0x20 = size - 12, +0x22 = 7, +0xea = 1. Then seg10:0x7328,
-// +0x152 = frame#, seg11:0xb09c(i, 1) while thrusting, sound 5 (SHIELD.WAV).
+// +0x10 = 1, DGROUP:0x9522 = 1, +0x20 = size - 12, +0x22 = 7, +0xea = 1. Then seg10:0x7328 (the
+// quick cells into column 16; both branches reach it at seg11:0x4be4, s5-sheet-verify.md claim
+// 22), +0x152 = frame#, seg11:0xb09c(i, 1) while ship word +0x02 (`thrusting`) != 0 (its pastes
+// go to column 16 at the heading while +0x10 is 1 ... 6), sound 5 (SHIELD.WAV) [BYTES
+// seg11:0x4c3a-0x4c63]. The step +0x10 moves one per ship-mover pass on screen (flight.cpp,
+// seg13:0x37f) and the sprite shows column 16 row 0 for steps 1-3, row 1 for 4-6 [ORACLE
+// core-0005].
 std::int16_t shield_toggle(SystemsCtx& c, int i);
 // seg3:0x332e(a, b), Pascal [BYTES seg3:0x332e-0x33b1] (verified claims 3-5): DGROUP:0x8630 =
 // pilot + ": " + string a + string b (each LoadString at most 39 characters), DGROUP:0x58c = 1,

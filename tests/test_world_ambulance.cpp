@@ -64,7 +64,8 @@ public:
 
 struct Rig {
     World w;
-    AmbulanceState a;
+    Shop shop;  // a test-local Shop: AmbulanceState's words refer into it, not the program's
+    AmbulanceState a{shop};
     RecHost host;
     WaveGlobals g;
     FrameGlobals f;
@@ -518,8 +519,27 @@ TEST_CASE("ambulance: the steering adds (t·500 - v·40) / mass on frames 0 and 
     CHECK(A.vy == -10);
 }
 
+TEST_CASE("ambulance: DGROUP:0x9e5b / 0x9e5d are the Shop's words (triage D-25)") {
+    // The pickup writes `served_alive` (seg16:0x441), the visit and the Options dialog read
+    // Shop::alive, and seg16:0x3784's dword store (seg16:0x3b07) writes both: one store [DESIGN].
+    Shop s;
+    AmbulanceState a{s};
+    a.served_alive = 0;  // the pickup of a dead ship
+    CHECK(s.alive == 0);
+    s.sold_total = 7;    // the visit's Sell
+    CHECK(a.sold == 7);
+    a.set_served_alive_dword(1);  // (1, 0) [BYTES seg16:0x3b07]
+    CHECK(s.alive == 1);
+    CHECK(s.sold_total == 0);
+    // Default-constructed, it refers into the program's Shop.
+    AmbulanceState p;
+    CHECK(&p.served_alive == &shop().alive);
+    CHECK(&p.sold == &shop().sold_total);
+}
+
 TEST_CASE("ambulance: the set-up words") {
-    AmbulanceState a;
+    Shop shop_words;
+    AmbulanceState a{shop_words};
     a.served_alive = 3, a.dist = 4, a.frame = 5;
     ambulance_placement(a);
     CHECK(a.served_alive == 0);

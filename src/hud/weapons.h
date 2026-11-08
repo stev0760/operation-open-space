@@ -12,9 +12,13 @@
 #include <array>
 #include <cstdint>
 #include <functional>
+#include <optional>
+#include <vector>
 
 #include "hud/canvas.h"
 #include "hud/host.h"
+#include "world/records.h"
+#include "world/sprite.h"
 
 namespace is::hud {
 
@@ -121,5 +125,49 @@ struct WeaponKeyState {
 // WM_KEYDOWN VK_TAB selects with no PlayMode test. All behind the gate, and the demo
 // (DGROUP:0x95bc = 0) takes none of them [BYTES seg11:0x6d1e seg11:0x6e19-0x6e3e].
 WeaponKey weapon_key(std::uint32_t msg, std::uint16_t key, const WeaponKeyState& s);
+
+// ---- the run-time copy of the table (world/missile.h MissileState::words)
+
+// seg10:0x1fb2 for the edition DGROUP:0x920c (World::w920c) into the words the wave reads and
+// writes, copied in whole when the edition differs from the one `filled_for` names, so
+// seg10:0x533a's run-time W(w)-4 stays between the sheet builds [DESIGN: one mutable copy, M4
+// s2 fixer]. `filled_for` is empty until the first copy: every edition value, the registered
+// edition's -1 among them (shell.md "Editions"), is a real edition and must copy once (M4 s5:
+// a cache whose start value was -1 kept the registered copy's words all 0, so its SKY TALON
+// launched nothing). Returns true when it copied.
+bool fill_weapon_words(int edition, world::WeaponWords& words, std::optional<int>& filled_for);
+
+// ---- seg10:0x4412(k, pool, id, n), the animation-4 sheet (weapons 10, 16 and 17)
+// [BYTES seg10:0x4412-0x4648] (work/analysis/m4/s5-weapons.md 2.5, verified claims 14-18):
+// seg10:0x533a calls it for a weapon whose W(w)+0x06 = 4 with (k, 6, W(w)-2, W(w)+0x26)
+// [BYTES seg10:0x5449 seg10:0x5452 seg10:0x545e]. The graphic is taken as h x h, h its bmHeight
+// (GetObject at seg10:0x443a; the width is never read). Frame i of n is the graphic shrunk to
+// side h + 2(i - n), top-left aligned at (gap + i(gap + h), gap): the frames grow toward the
+// last, which the weapon picture shows (hud/weapons.cpp weapon_picture, W+0x06 = 4).
+struct Anim4Frame {
+    int dx = 0, dy = 0, side = 0;
+};
+struct Anim4Sheet {
+    int gap = 0;           // 5 for an odd h, 6 for an even h [BYTES seg10:0x4445-0x4465]
+    int width = 0;         // lo16(lo16(h n) + lo16(gap (n + 1))) [BYTES seg10:0x4483-0x44a1]
+    int height = 0;        // 2 gap + h [BYTES seg10:0x44c7]
+    bool stretch = false;  // n != 1: StretchBlt in COLORONCOLOR, else one BitBlt [BYTES seg10:0x4540]
+    std::vector<Anim4Frame> frames;
+};
+Anim4Sheet anim4_sheet_plan(int h, int n);
+
+// seg10:0x4412's drawing on the Blitter from CreateCompatibleBitmap to the last frame
+// [BYTES seg10:0x44aa-0x45f5]: a new image of width x height (its DC in DGROUP:0x39e8[k], the
+// bitmap DGROUP:0x3ad0[k]), PatBlt BLACKNESS over it, then the n = 1 BitBlt SRCCOPY of the h x h
+// graphic to (gap, gap), or SetStretchBltMode(3) and per frame StretchBlt SRCCOPY (seg10:0x9962
+// with positive extents is a plain StretchBlt, ispace.md "seg10:0x9962"; a side <= 0 would take
+// its mirror path, which no shipped weapon reaches [OPEN]). The GDI picks the rows and columns a
+// COLORONCOLOR shrink keeps (Wine's in the oracle) [DESIGN ADR 0013 decision 1]. `graphic` is the
+// DC of seg10:0x6c02(id, 3, -1); the caller loads it, deletes it after (seg10:0x45fd-0x4626) and
+// writes `gap` into the pool's record 0 +0x24 (anim4_gap_record). Returns the sheet's DC.
+world::DcId render_anim4_sheet(world::Blitter& out, world::DcId graphic, const Anim4Sheet& plan);
+// seg10:0x4412's word store: es:[DGROUP:0x1df8[pool] + 0x24] = gap, record 0 of the pool
+// [BYTES seg10:0x4449-0x4465]. Nothing when the pool has no record.
+void anim4_gap_record(world::Pools& pools, int pool, int gap);
 
 }  // namespace is::hud

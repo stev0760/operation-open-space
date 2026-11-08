@@ -112,6 +112,11 @@ public:
     Tick now() const { return now_; }
     Deadlines& deadlines() { return deadlines_; }
     const Deadlines& deadlines() const { return deadlines_; }
+    // DGROUP:0x1e84, one word for state 9 (seg7:0x1c5) and the wave (seg7:0x6ac): the program
+    // binds it to World::w1e84 (world/hooks.cpp install_world_hooks); unbound (or bound to null)
+    // it is deadlines().scores_due (M4 s5, triage D-24).
+    void bind_scores_due(Tick* p) { scores_due_ = p; }
+    Tick& scores_due() { return scores_due_ ? *scores_due_ : deadlines_.scores_due; }
     // DGROUP:0x93aa, the briefing phase.
     int briefing_phase() const { return briefing_phase_; }
     void set_briefing_phase(int p) { briefing_phase_ = p; }
@@ -181,6 +186,7 @@ private:
     bool abort_ = false;
     Tick now_ = 0;
     Deadlines deadlines_;
+    Tick* scores_due_ = nullptr;  // bind_scores_due
     int briefing_phase_ = 0;
     int briefing_skip_ = 0;
     bool demon_visit_ = false;

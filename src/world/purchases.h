@@ -47,7 +47,8 @@ struct Shop {
     std::int32_t credit = 0;       // DGROUP:0x9e57 (dword) the shopping credit, "Remaining"
     // DGROUP:0x9e5b, the served ship's `alive` at the pickup (seg16:0x441; the AMBFLIGHT track's
     // writer), and DGROUP:0x9e5d, the Sell total. seg16:0x3784's dword write sets both
-    // (1, 0) [BYTES seg16:0x3b07] (verified claim 82).
+    // (1, 0) [BYTES seg16:0x3b07] (verified claim 82). The one store of both words:
+    // ambulance.h AmbulanceState::served_alive and ::sold refer to them (triage D-25) [DESIGN].
     std::int16_t alive = 1;        // DGROUP:0x9e5b
     std::int16_t sold_total = 0;   // DGROUP:0x9e5d
     std::int16_t weapons = 0;      // DGROUP:0x958e the weapon count the 10-weapon test reads
@@ -136,7 +137,8 @@ public:
     int rand() override;
     void todo(const std::string& what, const char* address) override;
 
-    // The slots the program fills (src/hud/hooks.cpp); an empty slot keeps the TODO.
+    // The slots the program fills (src/hud/hooks.cpp); an empty slot keeps the TODO, except
+    // on_load_weapon, whose empty slot runs weapon_load.h load_weapon_program (seg12:0x6d64).
     std::function<void(int, int)> on_load_weapon;
     std::function<void(int)> on_build_sheet;
     std::function<bool(int)> on_sheet_dc;

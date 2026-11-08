@@ -3,9 +3,13 @@
 // INSPACE.EXE; the verdicts are work/analysis/m4/s3-visit-verify.md's.
 #include "world/purchases.h"
 
+#include "world/design_words.h"
+#include "world/player_sheet.h"
+
 #include <map>
 #include <utility>
 
+#include "world/weapon_load.h"
 #include "world/world.h"
 #include "shell/rng.h"
 
@@ -383,7 +387,7 @@ std::int16_t WorldPurchaseHost::design_word(int design, int off) {
     case 0x24: return 1;
     case 0x26: return 2;
     case 0x28: return r.special;  // DGROUP:0x96fa
-    case 0x2a: return idiv16(r.tank, 40);  // as collide.h design_from_world [OPEN: its writer]
+    case 0x2a: return design_words(design).w2a;  // DGROUP:0x96fc, the sheet build's (design_words.h) [BYTES seg14:0xba9 seg14:0xd94]
     case 0x32: return on_design_mass ? on_design_mass(design) : std::int16_t{0};  // DGROUP:0x9704
     default:
         todo("design word +" + std::to_string(off), "DGROUP:0x96d2");
@@ -420,7 +424,9 @@ void WorldPurchaseHost::set_roster_byte(int index, int off, int v) {
 }
 void WorldPurchaseHost::load_weapon(int ship, int w) {
     if (on_load_weapon) return on_load_weapon(ship, w);
-    todo("load a weapon into a new slot", "seg12:0x6d64");
+    // seg12:0x6d64 on the World's ship, the program's weapon words and seg10:0x533a hook
+    // (weapon_load.h) [BYTES seg16:0x39e2 seg16:0x4021 seg12:0x6d64-0x6de9] (M4 s5 WEAPONS).
+    load_weapon_program(w_, ship, w);
 }
 void WorldPurchaseHost::rate(int ship) { rate_ship(w_, ship); }
 void WorldPurchaseHost::build_sheet(int ship) {
@@ -432,6 +438,7 @@ bool WorldPurchaseHost::sheet_dc(int ship) {
     return slot_image(kShipImageSlotBase + ship) != nullptr;
 }
 std::int16_t WorldPurchaseHost::sheet_dc_word(int ship) {
+    if (on_sheet_dc) return sheet_dc_word_program(ship);  // DGROUP:0x3a38 + 2i, the DC (M4 s5 SHEET)
     return sheet_dc(ship) ? static_cast<std::int16_t>(kShipImageSlotBase + ship) : std::int16_t{0};
 }
 void WorldPurchaseHost::designs_begin() { todo("the design table recompute", "seg14:0x3eda"); }

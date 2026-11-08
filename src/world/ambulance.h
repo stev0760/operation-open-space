@@ -21,6 +21,7 @@
 #include <string>
 
 #include "world/flight.h"
+#include "world/purchases.h"
 #include "world/world.h"
 
 namespace is::world {
@@ -30,8 +31,14 @@ struct FrameGlobals;
 
 // The ambulance's DGROUP words beside World::w9e49 / w952e / w1e88. All BSS (0 at load) unless
 // stated [BYTES DGROUP:0x9e41-0x9e5d]. The visit (seg16:0xcfe, the VISIT track) writes the lift
-// words at its phase 10 and the price words 0x9e55 / 0x9e57 / 0x9e5d.
+// words at its phase 10. The price words DGROUP:0x9e55 / 0x9e57 are the Shop's (purchases.h),
+// and so are DGROUP:0x9e5b / 0x9e5d: `served_alive` and `sold` are references to Shop::alive
+// and Shop::sold_total, the program's Shop unless a test gives its own, so the pickup, the
+// visit, the Options dialog and seg16:0x3784's dword write reach one store (triage D-25)
+// [DESIGN].
 struct AmbulanceState {
+    explicit AmbulanceState(Shop& s = shop()) : served_alive(s.alive), sold(s.sold_total) {}
+
     std::int16_t lift_step = 0;    // DGROUP:0x9e41: +1 / 0 / -1 per frame on the lift
     std::int16_t spin = 0;         // DGROUP:0x9e43: 0 ... 130, the logo spin phase
     std::int16_t frame = 0;        // DGROUP:0x9e45: the logo-strip cell drawn (0 ... 13)
@@ -41,10 +48,8 @@ struct AmbulanceState {
     std::int16_t spin_step = 0;    // DGROUP:0x9e4f: clamp(vx / 8); read only at seg16:0x210
     std::int16_t tick = 0;         // DGROUP:0x9e51: the 0 ... 7 frame counter
     std::int16_t pickup_dist = 0;  // DGROUP:0x9e53: DGROUP:0x9e4b at the 2 -> 3 step
-    std::int16_t cost = 0;         // DGROUP:0x9e55: the visit's cost of work (VISIT)
-    std::int32_t shop_credit = 0;  // DGROUP:0x9e57 (dword): the visit's shopping credit (VISIT)
-    std::int16_t served_alive = 0; // DGROUP:0x9e5b: the served ship's `alive` at the pickup
-    std::int16_t sold = 0;         // DGROUP:0x9e5d: the visit's sold total (VISIT)
+    std::int16_t& served_alive;    // DGROUP:0x9e5b: the served ship's `alive` at the pickup (Shop::alive)
+    std::int16_t& sold;            // DGROUP:0x9e5d: the visit's sold total (Shop::sold_total)
     std::int16_t prev_heading = 0; // DGROUP:0x1c42: S's heading last frame, -1 at the stop
     std::int16_t busy = 0;         // DGROUP:0x111e: 1 in states 1 ... 5; no reader in INSPACE.EXE (claim 58)
     std::int16_t w9596 = 0;        // DGROUP:0x9596 = 1 at the 2 -> 3 step; no reader (claim 58) [OPEN]

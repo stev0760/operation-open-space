@@ -20,9 +20,12 @@ namespace is::gfx {
 struct SheetArgs;
 struct ShipSheet;
 struct FlameHeadings;
+struct QuickCells;
 }  // namespace is::gfx
 
 namespace is::world {
+
+class World;
 
 // ---- the sheet bitmap of ISPACE.DLL seg6:0x11c
 
@@ -92,6 +95,12 @@ struct SheetRequest {
     int mode = 0;                   // sheet_mode
     int sel = 0;                    // sheet_sel
     int size_level = 1;             // INI `Size` (DGROUP:0x9156), for the renderer
+    // DGROUP:0x95a6 != 0: the MASTER.SHP block is loaded, so the render path writes design words
+    // +0x68 ... +0x6e (design_words.h design_barrels). The placement seg9:0x6624 brackets
+    // seg14:0x0 with seg14:0x3eda / seg14:0x4074 [BYTES seg9:0x6883 seg9:0x6890], the visit's
+    // seg16:0x3468(i, 3) does not (core-0006 reads MASTER.BOD only at the re-entry) [BYTES
+    // seg14:0x1380 seg14:0x1385] [ORACLE core-0006].
+    bool shp_loaded = true;
 };
 
 // What ordinal 2 returns: the sheet bitmap's top-down palette indices (w x h) and ordinal 5's
@@ -145,32 +154,50 @@ struct SheetBuild {
 //  - otherwise seg10:0x6ee6: frees the slot's DC (seg10:0x552(slot, 0)), renders, and puts the
 //    bitmap in a new DC in the slot [BYTES seg10:0x6ee6 seg10:0x6f7f seg10:0x6f89]; seg10:0x6308
 //    returns at once at `Size` 1 [BYTES seg10:0x6308], and its rescale at other sizes is [OPEN];
-//  - then bytes +0xac = +0xad = 1 [BYTES seg14:0x13eb seg14:0x13ef]. The design tail +0x68 ...
-//    +0x6e behind DGROUP:0x95a6 and the weapon images seg10:0x533a are [OPEN] here.
-// The object and roster writes are left to the caller (to_object says which) [DESIGN: the
-// size step is the ship set-up's, setup.h ship_cell_sizes].
+//  - on the render path, while DGROUP:0x95a6 != 0 (SheetRequest::shp_loaded), the design tail
+//    +0x68 ... +0x6e from the body's bytes +0x1e/+0x1f (design_words.h design_barrels, the
+//    bytes design_body(ship +0x4e) holds) [BYTES seg14:0x1380-0x13e0] (s5-weapons-verify.md
+//    claim 42); the already-built and shared paths jump past it [BYTES seg14:0x11f2
+//    seg14:0x1206 seg14:0x1225];
+//  - then bytes +0xac = +0xad = 1 [BYTES seg14:0x13eb seg14:0x13ef]. The weapon images
+//    seg10:0x533a are build_weapon_sheets, the caller's.
+// A rendered build also becomes the port's copy of ship i's sheet (sheet_copy) and the request
+// is kept (sheet_request) [DESIGN]. The object and roster writes are left to the caller
+// (to_object says which) [DESIGN: the size step is the ship set-up's, setup.h ship_cell_sizes].
 SheetBuild build_ship_sheet(Blitter& out, ImageSlotTable& images, ShipRecord& ship, int i,
                             const SheetRequest& req, const SheetRenderer& render);
 
 // seg14:0x11a8's tail, the launched weapons' images [BYTES seg14:0x13f3-0x1425] (M4 s2 MISSILE;
 // s2-missile.md 6.2, verified claims 74-75): after every build path, for each slot l <
 // (int8) byte +0xcb (slot 0 included) whose weapon w = (int8) byte +0xb8 + l has W(w)+0x0a !=
-// 0, seg10:0x533a(w) (rock_images.h weapon_image_slot); a new slot is filled by seg10:0x6ee6(k,
-// W(w)-2, far DGROUP:0x76d "", 2, 0x63, W(w)+0x1a, W(w)+0x1c, 1, 0, 12, 12, 0, sel) through
-// the same renderer as the ship sheets [BYTES seg10:0x53b3-0x540c] (weapon 8: IGRAPHIC 370,
-// 23 x 23, one frame). `sel` is 1 when INI `Quick` (DGROUP:0x931e) = 2, or when the screen
-// state DGROUP:0x90f4 = 1, the frame counter DGROUP:0x1e68 != 0 and `Quick` = 1 [BYTES
-// seg10:0x53b3-0x53de] (weapon_sheet_sel). W(w)+0x06 = 4 loads through seg10:0x4412 instead,
-// not ported [OPEN]. Returns the number of slots filled.
+// 0, seg10:0x533a(w) (load_weapon_sheet). `sel` is 1 when INI `Quick` (DGROUP:0x931e) = 2, or
+// when the screen state DGROUP:0x90f4 = 1, the frame counter DGROUP:0x1e68 != 0 and `Quick` = 1
+// [BYTES seg10:0x53b3-0x53de] (weapon_sheet_sel). Returns the number of slots filled.
 std::int16_t weapon_sheet_sel(int quick, int state, std::uint32_t frames);
+
+// seg10:0x4412(k, pool, id, n), the animation-4 sheet of a weapon whose W(w)+0x06 = 4 (weapons
+// 10, 16, 17) into the empty slot k: the weapons track's (hud/weapons.h anim4_sheet_plan,
+// render_anim4_sheet, anim4_gap_record) [BYTES seg10:0x4412-0x4648] (s5-weapons-verify.md claims
+// 14-18). Returns the DC it put in slot k, kDcNone for none.
+using Anim4Renderer = std::function<DcId(int k, int pool, int id, int n)>;
+
+// seg10:0x533a(w), one weapon [BYTES seg10:0x533a-0x5464]: rock_images.h weapon_image_slot
+// picks the slot; a new slot k is filled by seg10:0x4412(k, 6, W(w)-2, W(w)+0x26) when W(w)+0x06
+// = 4 [BYTES seg10:0x5449-0x5461], else by seg10:0x6ee6(k, W(w)-2, far DGROUP:0x76d "", 2, 0x63,
+// W(w)+0x1a, W(w)+0x1c, 1, 0, 12, 12, 0, sel) through the same renderer as the ship sheets
+// [BYTES seg10:0x53b3-0x540c] (weapon 8: IGRAPHIC 370, 23 x 23, one frame). True when it filled
+// a slot. An empty `anim4` leaves the slot empty and logs (sprite_links().todo) [DESIGN].
+bool load_weapon_sheet(Blitter& out, ImageSlotTable& images, Pools& pools, WeaponWords& words, int w, int sel,
+                       int size_level, const SheetRenderer& render, const Anim4Renderer& anim4 = {});
 int build_weapon_sheets(Blitter& out, ImageSlotTable& images, Pools& pools, WeaponWords& words,
                         const ShipRecord& ship, int sel, int size_level,
-                        const SheetRenderer& render);
+                        const SheetRenderer& render, const Anim4Renderer& anim4 = {});
 
 // seg16:0x3468(i, 3)'s sheet part: byte +0xac = 0 so the build renders [BYTES seg16:0x3621], the
 // build [BYTES seg16:0x362b], then object word +0x3a = DGROUP:0x3a38[i] (the sheet DC that
-// seg12:0x2556 and seg7:0x158e read) [BYTES seg16:0x3636 seg16:0x3645]. Its other writes (ship word +0x20, +0x22, object
-// +0x44) are the ship set-up's [OPEN].
+// seg12:0x2556 and seg7:0x158e read) [BYTES seg16:0x3636 seg16:0x3645]. Its other writes (ship
+// word +0x20, +0x22, object +0x44, the restore and the roster bytes) are purchases.cpp
+// repair_system's, the whole seg16:0x35db path (s5-sheet-verify.md claim 38).
 SheetBuild rebuild_ship_sheet(Blitter& out, ImageSlotTable& images, ShipRecord& ship,
                               ObjectRecord& obj, int i, const SheetRequest& req,
                               const SheetRenderer& render);
@@ -179,6 +206,104 @@ SheetBuild rebuild_ship_sheet(Blitter& out, ImageSlotTable& images, ShipRecord& 
 // scaled object words +0x22 and +0x24, 16-bit signed division [BYTES seg14:0xd3f-0xd66
 // seg14:0xc3e]. 0 when size + gap is 0 [DESIGN: the original divides by 0].
 std::uint8_t sheet_last_row(std::int16_t bm_height, std::int16_t size, std::int16_t gap);
+
+// ---- the port's copy of each ship's sheet (M4 s5 SHEET)
+
+// The sheet DC DGROUP:0x3a38[i] as the port last drew it [DESIGN]: a rendered build sets it
+// (build_ship_sheet), and the flame pastes (ship_flame_tail), the shield's quick cells
+// (shield_render) and the wing cut (wing_cut_ship) write into it as they write into the slot's
+// image, so ordinal 15 cuts the sheet as drawn (work/analysis/m4/s5-sheet.md 2.8: a flame patch
+// wider than the band restores pre-cut pixels inside it). Null for no copy; ships 0 ... 7.
+SheetPixels* sheet_copy(int i);
+void set_sheet_copy(int i, const SheetPixels& px);
+void clear_sheet_copies();
+// The request of ship i's last build (null for none): the same graphic id, file and scheme bytes
+// seg11:0x4b00 passes to the quick renderer and seg16:0x3468(i, 3) renders again with [BYTES
+// seg11:0x4be4-0x4c37 seg14:0x129c-0x12d0] (s5-sheet-verify.md claim 22) [DESIGN: kept from the
+// build, as the design record keeps them].
+const SheetRequest* sheet_request(int i);
+
+// A rectangle of `px` back into the image `dc`: a temporary image of the whole picture
+// (create_image_from) and one BitBlt SRCCOPY of the rectangle [DESIGN: the Blitter has no pixel
+// upload of its own].
+void upload_sheet_rect(Blitter& out, DcId dc, const SheetPixels& px, int x, int y, int w, int h);
+
+// ISPACE.DLL ordinal 15 as seg10:0x7370 calls it on ship i's sheet (sheet DC DGROUP:0x3a38[i],
+// cut, object size s = +0x22, D = design +0x3c, gap g = +0x24, hPal, heading f = +0x28, flag)
+// [BYTES seg10:0x7370-0x739a] (s5-sheet-verify.md claims 2, 3): with `flag` the debris cell
+// (gfx::wing_debris_cell) is taken first and returned; the copy gets gfx::wing_cut_sheet, and the
+// slot's image the band of row 0 again (upload_sheet_rect at (0, g), 16 (s + g) x s). The flag-0
+// return 0xffff is ignored by INSPACE [BYTES seg8:0x3482]. Empty, and nothing cut, when ship i
+// has no copy [DESIGN]; `out` or `images` null cut the copy alone.
+std::vector<std::uint8_t> wing_cut_ship(Blitter* out, const ImageSlotTable* images, int i, bool cut, int s, int D,
+                                        int g, int f, bool flag);
+
+// What seg11:0x4b00 passes on to ordinal 17 through seg10:0x7328 (s5-sheet-verify.md claims 22,
+// 23): design +0x36 (BOD +0x21's graphic), far design +0x84 (BOD +0x23's file), dword design
+// +0xa9 (never read, claim 24), bytes design +0x18 / +0x1a (SHP +0x07 / +0x08), object +0x28,
+// DGROUP:0x3a38[i], 1, 0x63, and byte DGROUP:0x9156 (`Size`) [BYTES seg11:0x4be4-0x4c37
+// seg10:0x7335-0x7365].
+struct QuickRequest {
+    int graphic_id = 0;
+    std::string file;
+    int colour_a = 0, colour_b = 0;
+    int heading = 0;
+    int gap_word = kSheetGapAuto;  // 0x63
+    int size_level = 1;
+};
+// The render of ordinal 17's two cells (gfx/ship_quick.h quick_cells_for on the game palette):
+// false for none.
+using QuickRenderer = std::function<bool(const QuickRequest&, gfx::QuickCells&)>;
+
+// seg10:0x7328 for the shield toggle (world/input.h SystemsHost::shield_render): the quick cells
+// of ship i's design at its heading object +0x28, each iteration it = 0, 1 copied into the sheet
+// DC DGROUP:0x3a38[i] at column 16, row it: BitBlt SRCCOPY of the h x h cell at (gap, gap) to (16
+// h + 17 gap, (h + gap) it + gap) at `Size` 1, StretchBlt to those << Size sar 1 otherwise
+// (gfx::quick_blit) [BYTES ISPACE.DLL seg6:0x5c6f-0x5d38]; the copy (sheet_copy) gets the same
+// pixels (nearest-neighbour for a stretch [DESIGN]). Nothing without a kept request or a
+// renderer [DESIGN]. The sprite then shows column 16 row 0 for steps 1-3, row 1 for 4-6 (draw.h
+// player_cell, seg13:0xaa1-0xb37) [ORACLE core-0005].
+void shield_render(Blitter& out, const ImageSlotTable& images, World& w, int i, const QuickRenderer& render);
+
+// ---- the program's sheet side: SpriteLinks' images, render, quick, anim4 and todo, set by
+// src/hud/wave_win32.cpp, and the Blitter wave_blitter() (M4 s5 SHEET)
+
+// DGROUP:0x3a38 + 2i != 0 (WorldPurchaseHost::on_sheet_dc) and the word itself (object +0x3a).
+bool sheet_dc_program(int i);
+std::int16_t sheet_dc_word_program(int i);
+// seg14:0x11a8(i) for seg16:0x3468(i, 3)'s path seg16:0x35db after a visit
+// (WorldPurchaseHost::on_build_sheet) [BYTES seg16:0x362b] (s5-sheet-verify.md claims 37-39):
+// build_ship_sheet with ship i's kept request, DGROUP:0x95a6 = 0 (no design tail), the
+// roster bytes +0x7a/+0x7b or the object words +0x22/+0x24 as to_object says [BYTES
+// seg14:0x12f5-0x134d], and the weapon images (build_weapon_sheets). The flame strip is not
+// built again: seg14:0x11a8 calls seg10:0x5d3c only on its shared-sheet branch, so the strip
+// keeps the patches of the earlier build [BYTES seg14:0x11cf-0x1206] (s5-sheet.md 5.4).
+void build_sheet_program(World& w, int i);
+// shield_render on the program's sheet side (SystemsHost::shield_render).
+void shield_render_program(World& w, int i);
+// seg14:0x0's restore re-cut [BYTES seg14:0xc84-0xcce] (s5-sheet-verify.md claim 39): in a
+// restored game (DGROUP:0x92e4 != 0) a flame ship (byte +0xe4) of a wing design (design +0x28 =
+// 3) has seg8:0x2cd8(i, 0) when byte +0xac = 0 and seg8:0x2cd8(i, 1) when +0xad = 0, after the
+// sheet and its flame strip: dword +0x156 = DGROUP:0x1e50 - 10000 (World::clock), the byte
+// cleared, the design recompute, and, as DGROUP:0x92e4 != 0, ordinal 15 with flag 0 (no taunts,
+// no debris, no sound) [BYTES seg8:0x2cee-0x2d23 seg8:0x2d96 seg8:0x343d-0x3482].
+void recut_lost_wings(World& w, int i);
+struct ShotState;
+// seg14:0x0's per-ship tail after the sheet build and the flame strip, for ship i, in its order
+// [BYTES seg14:0xd86-0xd94 seg14:0xb97-0xba9 seg14:0xc42-0xc54 seg14:0xc84 seg14:0xcdc]
+// (s5-weapons-verify.md claim 46, s5-sheet-verify.md claims 39, 41) (M4 s5 SHEET; portable since
+// the M4 s5 fixer):
+//  - design +0x2a = sext(roster byte +0x7a) for a ship with a roster record, else `raw_side`,
+//    the object's `size` +0x22 before the size step [BYTES seg14:0xd86-0xd94 seg14:0xb97-0xba9];
+//  - design +0x00 = +0x02 = design_half_side(that, Size) [BYTES seg14:0xc42-0xc54];
+//  - in a restored game a flame ship takes the wing bytes from roster +0x72 / +0x73 again (the
+//    drawing side's build leaves both 1) [BYTES seg16:0x3649-0x365a seg14:0x1935-0x1970]
+//    [DESIGN], then the restore re-cut (recut_lost_wings);
+//  - the three muzzle tables seg10:0x1460, seg10:0x1620, seg10:0x1502 of the design (shots.h
+//    fill_muzzles) [BYTES seg14:0xcdc seg14:0xce6 seg14:0xcf0].
+void placement_tail(World& w, int i, std::int16_t raw_side, ShotState& shots);
+// The todo log of the sheet side (SpriteLinks::todo; nothing when unset).
+void sheet_todo(const std::string& what, const char* address);
 
 // ---- the thrust flame (M5 s2 FLAME; work/analysis/m5/s2-flame.md, verified in
 // s2-flame-verify.md)
@@ -331,6 +456,14 @@ struct SpriteLinks {
     std::function<void(int ship)> ship_entered;
     std::function<void()> entry_step;
     std::function<void(int on, int ship)> flame_tail;
+    // M4 s5 SHEET: the image table DGROUP:0x39e8, seg10:0x6ee6's ordinal 2 (SheetRenderer), the
+    // shield's ordinal 17 (QuickRenderer), seg10:0x4412 (Anim4Renderer) and the todo log of the
+    // program's sheet side (build_sheet_program, shield_render_program, recut_lost_wings).
+    std::function<ImageSlotTable*()> images;
+    SheetRenderer render;
+    QuickRenderer quick;
+    Anim4Renderer anim4;
+    std::function<void(const std::string& what, const char* address)> todo;
 };
 SpriteLinks& sprite_links();
 

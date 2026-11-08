@@ -4,6 +4,7 @@
 #include "world/shots.h"
 
 #include "world/effects.h"
+#include "world/smoke.h"
 
 namespace is::world {
 
@@ -88,9 +89,15 @@ void build_wave_images(Blitter& out, ImageSlotTable& images, std::int16_t& dg_74
     // before seg10:0x3a2e (shell.md "Wave set-up", the graphics chain) [BYTES seg9:0x267e
     // seg9:0x26cd] (M4 s1 DEATH).
     build_effect_images(out, images, enhance);
+    // seg10:0x5202, the smoke strip (slot 12), right after seg10:0x5102 at 8 bpp [BYTES
+    // seg9:0x2696] (smoke.h) (M4 s5 EFFECTS).
+    build_smoke_image(out, images);
     build_rocks(out, images, dg_740);
     build_gate_images(out, images, wave_graphics());  // seg9:0x26e5 [BYTES seg9:0x26e5]
     create_wave_brushes(out, wave_graphics());
+    // seg10:0x4b2e's 20 brushes DGROUP:0x576c for the sparks (effects.h) [BYTES
+    // seg10:0x4c0b-0x4d16] (M4 s5 EFFECTS).
+    create_effect_brushes(out, effect_state());
 }
 
 void build_gate_images(Blitter& out, ImageSlotTable& images, WaveGraphics& wg) {

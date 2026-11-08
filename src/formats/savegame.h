@@ -157,7 +157,7 @@ std::optional<Parsed> parse(const std::vector<std::uint8_t>& file, Kind kind, st
 // The header, then each block at its nominal size rounded to `g` and zero-padded; the roster
 // always, the directory records for a .sav only [BYTES seg6:0x8add-0x8b48]. seg6:0x9e66's
 // 0x7fff-byte chunks are a 16-bit _lwrite limit with no trace in the file: the port writes the
-// bytes whole [DESIGN].
+// bytes whole [DESIGN ADR 0014 decision 1, "Writing is atomic"; decision 9] (triage D-37).
 std::vector<std::uint8_t> build(const HeaderBytes& header, const std::vector<RosterBytes>& roster,
                                 const std::vector<DirBytes>& dirs, Kind kind, Granularity g);
 

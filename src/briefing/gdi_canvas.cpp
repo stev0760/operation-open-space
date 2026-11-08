@@ -5,6 +5,7 @@
 #ifdef _WIN32
 #include <exception>
 #include <string>
+#include <vector>
 
 namespace is::briefing {
 
@@ -77,7 +78,27 @@ void GdiCanvas::text(const Font& f, Colour c, unsigned align, int x, int y,
     const UINT al = SetTextAlign(dc(), align);
     const COLORREF tc = SetTextColor(dc(), gfx_.dc_colour(c));
     const std::wstring w = widen1252(cp1252);
-    TextOutW(dc(), x, y, w.c_str(), static_cast<int>(w.size()));
+    // seg9:0x8bec's TextOut (GDI.33) [BYTES seg9:0x8cab seg9:0x8cdb], with the glyphs placed at the
+    // advances of the text extent. On the port's 8-bit DIB section (ADR 0007 decision 2) Wine draws
+    // monochrome glyphs and steps by their hinted cells, which fall short of the extent TA_RIGHT and
+    // TA_CENTER place the string by; on the original's true-colour window DC it steps by the
+    // extent. CreateFont gets the original's arguments (seg9:0x8c19-0x8c3d: h, w, 0, 0, 600, ...,
+    // 2, 0x22, "Arial"), and the font is not the difference: "PRESS 'ESC' TO CONTINUE" at (14, 0)
+    // is 160 px of extent at both depths, its ink spans 158 px on a 32-bit DIB as in the oracle's
+    // debriefing (642 ... 799), 150 px on an 8-bit DIB, and 158 px on the 8-bit DIB with the
+    // extent's advances (a Win32 GDI probe under the oracle's Wine 11.0). Where the two agree, as
+    // GDI on Windows keeps them, the advances change nothing [DESIGN ADR 0007] [ORACLE core-0001]
+    // (M4 s5, triage S1-7).
+    const int n = static_cast<int>(w.size());
+    std::vector<INT> part(static_cast<std::size_t>(n)), dx(static_cast<std::size_t>(n));
+    SIZE ext{};
+    if (n > 1 && GetTextExtentExPointW(dc(), w.c_str(), n, 0, nullptr, part.data(), &ext)) {
+        for (int i = 0; i < n; ++i)
+            dx[static_cast<std::size_t>(i)] = part[static_cast<std::size_t>(i)] - (i > 0 ? part[static_cast<std::size_t>(i - 1)] : 0);
+        ExtTextOutW(dc(), x, y, 0, nullptr, w.c_str(), static_cast<UINT>(n), dx.data());
+    } else {
+        TextOutW(dc(), x, y, w.c_str(), n);
+    }
     SetTextColor(dc(), tc);
     SetTextAlign(dc(), al);
     SetBkMode(dc(), mode);

@@ -43,6 +43,10 @@ enum class Img : int {
     // seg13:0x5e05's graphic 500, the exit gate's picture of seg13:0x5c22 (Host::gate_picture
     // loads it) (M4 s4 fixer B).
     kGatePicture,
+    // DGROUP:0x3a04 + 2r (image slot 14 + r of DGROUP:0x39e8): a burning icon's own image, the
+    // source of seg13:0x5c22's pool-0 picture for slots 14 ... 21 (hud/icon_images.h) [BYTES
+    // seg13:0x5d5b-0x5d9b] (M4 s5 ICONS).
+    kIconOwn,
     kCount
 };
 

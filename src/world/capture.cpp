@@ -73,7 +73,8 @@ void virused(CaptureCtx& c, int ship) {
             g.play_mode = 4;
         }
         // DGROUP:0x95bc and DGROUP:0x9134 are the World's too (flight_hooks.cpp sync_out copies
-        // PlayMode back; the port writes both words here) [DESIGN].
+        // PlayMode back; the port writes both words here) [DESIGN ADR 0013 Consequences: the flight
+        // globals are copied between World and the frame state] (triage D-23).
         w.player_game = g.demo;
         w.play_mode = g.play_mode;
         if (g.play_mode > 2) {  // [BYTES seg13:0x1963-0x19bc]
@@ -222,7 +223,7 @@ void pod_weapons(CaptureCtx& c, int ship, int rec) {
             break;
         }
         if (u == -1) continue;  // [BYTES seg13:0x1e3e]
-        c.h.seg12_6d64(ship, u);  // [BYTES seg13:0x1e4e]
+        c.h.seg12_6d64(w, ship, u);  // [BYTES seg13:0x1e4e]
         // byte +0xad + (byte +0xcb, re-read after the call) = the count's low byte [BYTES seg13:0x1e56-0x1e68]
         set_byte_at(S, 0xad + static_cast<std::int8_t>(S.slots_cb()), P.count[static_cast<std::size_t>(j)] & 0xff);
     }

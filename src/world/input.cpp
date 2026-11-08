@@ -297,7 +297,7 @@ std::int16_t shield_toggle(SystemsCtx& c, int i) {
         s.w22 = 7;
         s.bea = 1;
     }
-    c.h.shield_render(i);                 // seg10:0x7328 [BYTES seg11:0x4be4-0x4c37]
+    c.h.shield_render(i);                 // seg10:0x7328, ordinal 17 [BYTES seg11:0x4be4-0x4c37] (s5-sheet-verify.md claim 22)
     set_ship_dword(s, 0x152, c.frames);   // [BYTES seg11:0x4c3a-0x4c3e]
     if (s.thrusting != 0) c.h.flame(1, i);  // seg11:0xb09c(i, 1) [BYTES seg11:0x4c43-0x4c50]
     c.h.sound(5, w.roles.ships, i, 1);    // SHIELD.WAV [BYTES seg11:0x4c53-0x4c63]

@@ -1,6 +1,6 @@
 # ADR 0014: Saved games
 
-- **Status:** Accepted. [DESIGN]
+- **Status:** Accepted; decision 11 is Proposed. [DESIGN]
 - **Scope:** the port's saved-game files (`.sav`, `.ded`, `.don`): their byte layout and block lengths, how the reader validates a file, where the files live, what a failed restore leaves behind, the trial's refusals, and four rules of play that a saved game carries from wave to wave (the refuel cap, negative fuel, the class byte, the repair end value). The layout, the writer and the reader are in [formats.md](../re/formats.md#saved-games); the rules of play are in [core.md](../re/core.md#fuel). This ADR decides only what the port keeps bit for bit and what it changes. [DESIGN]
 - **Goal:** the port reads the original's saved games, including a long-running registered game that the original saved on a Windows 98 machine, and writes files that the original can read back. [DESIGN] [ORACLE win98-0001]
 
@@ -45,6 +45,13 @@
 
 10. **The Restore Game list shows upper-case 8.3 names.** `_dos_findfirst` on DOS returns the upper-case short name, and the port upper-cases the short name the file system gives it. Under Wine the oracle's list shows `lastgame` in the file's own case, because Wine's `findfirst` returns the stored name; that difference is the host's, not the port's, and the comparison excludes it. [DESIGN] [BYTES ISPACE.DLL seg10:0x15af] [ORACLE core-0003]
 
+11. **Proposed: the roster and save fallbacks.** Where the roster code or the save writer meets a state the original's own data never produces in a consistent game, an index outside its table, a block that is not there or a count that divides by 0, the port takes the smallest local rule that keeps the game consistent, logs once through the todo facility, and tags the site with this decision. The classes follow [ADR 0016](0016-undefined-reads.md): a read outside its table reads zero or takes the table's first record, and an operation that faults is skipped. [DESIGN]
+    - **Indices outside the tables.** A body index outside MASTER.BOD passes seg14:0x455c's check, which in the original reads past the body table (D-15); an SHP index outside the table reads byte 0 in the roster ratings of seg9:0x2e97 (D-16); a negative SHP index becomes record 0 (D-33); DGROUP:0x931c outside the roster becomes record 0 (D-31); a ship's `roster_index` +0xd6 outside the roster takes the no-roster path, as −1 does (D-32). [DESIGN] [BYTES seg14:0x4567 seg9:0x2e97-0x2f74 seg14:0x44d seg14:0x16c5]
+    - **Missing blocks.** The header's ship word +0x22 reads 0 when the player's roster record is not there (D-17); header +0x15e reads −1 for a design the port does not hold (D-18); a later wave without a roster block takes the fresh-roster path of seg14:0x232 (D-30); a weapon met before the weapon table is filled is left as it is by the roster's remap (D-34). [DESIGN] [BYTES seg6:0x9034-0x9043 seg6:0x9131-0x91b3 seg14:0x232 seg14:0x33a-0x354]
+    - **A divide by 0.** With a one-record MASTER.SHP, seg14:0x2300's `rand()` % (DGROUP:0x95aa − 1) divides by 0 in the original; the port draws the `rand()`, so the sequence stays the original's for every larger table, and drops the quotient, which the original overwrites later anyway (D-29). [DESIGN] [BYTES seg14:0x2310 seg14:0x231b seg14:0x231d seg14:0x2435]
+    - **The directory count.** The writer raises the saved directory count to the current record + 1 when the current record lies beyond it, so header +0x2a stays below header +0x32 and decision 1's validation reads the file back (D-35). [DESIGN]
+    - **The target directory.** The writer creates `LocalPath` + `Games` (or `Dead`) when it is missing, where the original's `OpenFile` OF_CREATE fails; a fresh `%APPDATA%` location has no such directory ([ADR 0004](0004-ini-location.md) decision 5) (D-36). [DESIGN]
+
 ## Alternatives
 | Alternative | Verdict |
 |---|---|
@@ -60,4 +67,5 @@
 - The M4 acceptance run (`work/world/m4s4/accept/save.md`) measured the registered path: the port's `ORACLE04.sav` is 1248 bytes with the oracle's blocks and padding, every run-independent field equals the oracle's `ORACLE03`, `lastgame.sav` is written 1.002 s after the gate sound (oracle 1.008), the carry-over into wave 2 follows the roster rules, and the port restores both its own file and the oracle's `ORACLE03` to core-0003's numbers (fuel 1160, systems 82/83/82/80, credit 150, ammo 18, score 900, wave 2). The length of a `.sav` from the user's Windows 98 machine settles that host's granularity; until then the reader's order of decision 1 covers it. [ORACLE core-0003] [DESIGN] [OPEN]
 - A verifier confirms the seg14:0x2300 reading of Context and reads its no-match result before decision 7's new-game rule is implemented. [DESIGN]
 - formats.md's [OPEN] on the Windows 3.x granularity can cite KB Q92942; its doc writer owns that change. [DESIGN]
+- Decision 11 covers the triage's D-15 … D-18 and D-29 … D-36 (`work/analysis/m4/s5-triage.md`); their sites' [DESIGN] tags gain "ADR 0014 decision 11" in the same mechanical pass as ADR 0016's. [DESIGN]
 - The oracle comparison excludes, for a saved file: the padding bytes, roster byte +0x76 where no earlier ship matched (decision 5), the game id and dates, which come from the clock, the gate posts at directory +0x00–+0x07 and the rock counts at +0xa0/+0xa1, which are random per game, and the list's letter case (decision 10). [DESIGN]
