@@ -134,9 +134,13 @@ Header gather_header(Ctx& c, const std::vector<RosterBytes>& roster, int dir_cou
     h.resources = P.resources();                               // +0x164 [BYTES seg6:0x9016-0x9020]
     h.weapon_slot = lo8(P.weapon_slot);                        // +0x172 [BYTES seg6:0x902b-0x902f]
     // +0x22: roster[DGROUP:0x931c] word +0x00 [BYTES seg6:0x9034-0x9043]; an index outside the
-    // block reads 0 [DESIGN].
-    if (w.player_roster >= 0 && static_cast<std::size_t>(w.player_roster) < roster.size())
+    // block reads 0 [DESIGN ADR 0014 decision 11].
+    if (w.player_roster >= 0 && static_cast<std::size_t>(w.player_roster) < roster.size()) {
         h.ship = rw16(roster[static_cast<std::size_t>(w.player_roster)].data());
+    } else {
+        static bool once = false;
+        world::guard_todo(once, "header +0x22 without the player's roster record reads 0", "seg6:0x9034");
+    }
     h.play_mode = lo8(c.s.play_mode);                          // +0x16e [BYTES seg6:0x904e-0x9051]
     h.drive = lo8(c.s.drive);                                  // +0x16f [BYTES seg6:0x9056-0x9059]
     h.w93ac = w.w93ac;                                         // +0x166 [BYTES seg6:0x9061]
@@ -160,11 +164,15 @@ Header gather_header(Ctx& c, const std::vector<RosterBytes>& roster, int dir_cou
     h.completed = done;
     h.set_pilot(c.s.pilot);                                    // +0x04 [BYTES seg6:0x912c]
     // +0x15e: the design word +0x28 of design P +0x4e [BYTES seg6:0x9131-0x91b3]; a design the
-    // port does not hold reads -1 [DESIGN].
+    // port does not hold reads -1 [DESIGN ADR 0014 decision 11].
     const int d = P.design_index;
-    const std::int16_t special =
-        d >= 0 && d < static_cast<int>(w.design_ratings.size()) ? w.design_ratings[static_cast<std::size_t>(d)].special
-                                                                : std::int16_t{-1};
+    std::int16_t special = -1;
+    if (d >= 0 && d < static_cast<int>(w.design_ratings.size())) {
+        special = w.design_ratings[static_cast<std::size_t>(d)].special;
+    } else {
+        static bool once = false;
+        world::guard_todo(once, "header +0x15e of a design the port does not hold reads -1", "seg6:0x9131");
+    }
     h.shape = shape_of({P.w26, P.w28, P.w2a, P.w2c}, special);
     for (std::size_t i = 0; i < 8; ++i)                        // +0x36 [BYTES seg6:0x91c7-0x91dd]
         for (std::size_t j = 0; j < 8; ++j) h.table[8 * i + j] = c.s.table[i][j];
@@ -225,7 +233,12 @@ int save_game(Ctx& c, int named, int kind_n) {
     sync_from_nav(c.nav, c.w);
     int dir_count = static_cast<int>(c.nav.list.size());
     if (dir_count == 0) dir_count = static_cast<int>(c.w.records.size());
-    if (c.w.record >= dir_count && c.w.record < kMaxDirRecords) dir_count = c.w.record + 1;  // [DESIGN]
+    // The count raised to the current record + 1 [DESIGN ADR 0014 decision 11].
+    if (c.w.record >= dir_count && c.w.record < kMaxDirRecords) {
+        static bool once = false;
+        world::guard_todo(once, "the directory count raised to the current record + 1", "seg6:0x8ac8");
+        dir_count = c.w.record + 1;
+    }
     if (roster.empty() || dir_count == 0) {
         c.host.log("save: no roster or no directory records, nothing written (seg6:0x8ac8)");
         return 0;

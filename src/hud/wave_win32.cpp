@@ -417,7 +417,9 @@ void fill_weapon_words(const world::World& wd) {
 // 10, 16, 17; hud/weapons.h anim4_sheet_plan, render_anim4_sheet) [BYTES seg10:0x4412-0x4648]:
 // the graphic through seg10:0x6c02(id, 3, -1) [BYTES seg10:0x4421-0x4429], its bmHeight
 // (GetObject, seg10:0x443a), the gap into the pool's record 0 +0x24, the sheet into
-// DGROUP:0x39e8[k], then DeleteDC / DeleteObject of the graphic [BYTES seg10:0x45fd-0x4626]. The
+// DGROUP:0x39e8[k], then DeleteDC / DeleteObject of the graphic [BYTES seg10:0x45fd-0x4626]; the
+// palette restore at seg10:0x4602, which tests [bp-0xa] also with DGROUP:0x920e = 0, restores
+// nothing [DESIGN ADR 0016 decision 1]. The
 // original overwrites DGROUP:0x39e8[k]; the port frees the image it held [DESIGN]. seg10:0x6308(k,
 // -1, -1, -1) returns at once at `Size` 1 and is [OPEN] at the other sizes [BYTES seg10:0x463a].
 // player_sheet.h load_weapon_sheet calls it as its Anim4Renderer (M4 s5 WEAPONS).

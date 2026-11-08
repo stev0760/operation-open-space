@@ -5,6 +5,8 @@
 // are BSS (0).
 #include "hud/weapons.h"
 
+#include "world/world.h"  // guard_todo
+
 namespace is::hud {
 
 namespace {
@@ -84,10 +86,15 @@ WeaponTable::WeaponTable(int edition) {
 
 std::int16_t WeaponTable::word(int w, int offset) const {
     // The record w's word at offset (negative offsets reach the block before, as seg11:0x2ff6's
-    // DGROUP:0x2f4c + 0x50·w does). Outside the table: 0 [DESIGN] (the original reads whatever
-    // DGROUP holds there).
+    // DGROUP:0x2f4c + 0x50·w does). Outside the table: 0, logged once
+    // [DESIGN ADR 0016 decision 2] (the original reads whatever DGROUP holds there).
     const int at = w * kWeaponBlockSize + offset;
-    if (at < 0 || at >= kWeaponBlocks * kWeaponBlockSize || (at & 1)) return 0;
+    if (at < 0 || at >= kWeaponBlocks * kWeaponBlockSize) {
+        static bool once = false;
+        world::guard_todo(once, "a weapon word outside the table reads 0", "DGROUP:0x2f54");
+        return 0;
+    }
+    if (at & 1) return 0;
     return blocks_[static_cast<std::size_t>(at / kWeaponBlockSize)]
                   [static_cast<std::size_t>((at % kWeaponBlockSize) / 2)];
 }

@@ -103,14 +103,15 @@ std::int16_t turn_toward(const TurnArgs& a, std::int16_t wave_kind, const ShipTa
         h = direction16(sub16(0, dy), sub16(0, dx));
         break;
     default:
-        // An uninitialised local in the original; the port keeps the heading [DESIGN].
+        // An uninitialised local in the original; the port keeps the heading
+        // [DESIGN ADR 0016 decision 1].
         return cur;
     }
     if (h < 0 || h > 15) return cur;                  // [BYTES seg13:0xf87-0xf93]
     if (a.mode == 0x1e || a.ship == -100) return h;  // [BYTES seg13:0xf96-0xfa5]
     if (h == cur) return h;                           // [BYTES seg13:0xfa7-0xfad]
     // seg13:0x6716(ship) [BYTES seg13:0xfaf-0xfb6]; for ship -1 it writes DGROUP:0x708c, which
-    // the port skips [DESIGN] (s2-missile.md 4.4).
+    // the port skips [DESIGN ADR 0016 decision 3] (s2-missile.md 4.4).
     if (a.ship >= 0 && touched) touched(a.ship);
     if (h < cur) {  // [BYTES seg13:0xfb7-0xfdd]
         if (sub16(cur, h) < 9) {

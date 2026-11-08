@@ -59,6 +59,8 @@ void set_9e49(CollideCtx& x, std::int16_t v) {
 
 ObjectRecord& obj(World& w, int pool, int rec) {
     if (pool < 0 || pool >= kPoolCount || rec < 0 || rec >= w.pools.records(pool)) {
+        static bool once = false;
+        guard_todo(once, "an object record outside its pool reads a scratch record", "DGROUP:0x1df8");
         g_scratch_obj = ObjectRecord{};
         return g_scratch_obj;
     }
@@ -67,6 +69,8 @@ ObjectRecord& obj(World& w, int pool, int rec) {
 
 ShipRecord& ship_at(World& w, int i) {
     if (i < 0 || i >= kShipCount) {
+        static bool once = false;
+        guard_todo(once, "a ship record outside the eight reads a scratch record", "DGROUP:0x7090");
         g_scratch_ship = ShipRecord{};
         return g_scratch_ship;
     }

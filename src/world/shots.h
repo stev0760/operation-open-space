@@ -79,7 +79,8 @@ struct ShotState {
     // seg8:0x6f3c's [bp-0x1e], never written by seg8:0x6f3c (s2-gun-verify.md 42): the stack
     // word T - 44 below seg8:0x3688's body sp, which the head loop's last seg8:0x29ea call left
     // (seam_word); shot_hit_test sets it before its seg8:0x6f3c calls [BYTES seg8:0x3692
-    // seg8:0x36c3 seg8:0x3722 seg8:0x6f40]. 1 until the first hit test [DESIGN].
+    // seg8:0x36c3 seg8:0x3722 seg8:0x6f40]. 1 until the first hit test
+    // [DESIGN ADR 0016 decision 5].
     std::int16_t stack_1e = 1;
     // The muzzle tables DGROUP:0x7b60 + 4(64n + k), (x, y) per entry, n = 0 ... 7: entries
     // 0 ... 15 one barrel (seg10:0x1460), 16 ... 31 the rear launch (seg10:0x1620), 32 ... 63
@@ -229,7 +230,8 @@ std::int16_t shot_hit_test(ShotCtx& c, int j);
 // barrel's world y, slot word +0x48 + 12(+0x78 - 1) (claim 40). The word is 0, and the seam fix
 // skipped, exactly when that y equals the player's y at the last recentre. The seg18 path
 // (DGROUP:0x9130 != 0) leaves lo16(|dword DGROUP:0x88cc|) (claim 39); the port returns 1 there,
-// so the fix runs, until seg18 mode is ported [OPEN M6].
+// so the fix runs, until seg18 mode is ported [OPEN M6] [DESIGN ADR 0016 decision 5, Alternatives:
+// the held 1].
 std::int16_t seam_word(const ViewState& v, std::int16_t y, std::int16_t wave_kind, std::uint8_t dg_9eb5,
                        std::int16_t dg_9130);
 // seg8:0x6f3c(pool, rec, j, -): slot j against one object [BYTES seg8:0x6f3c-0x7ba3].

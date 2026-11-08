@@ -173,7 +173,8 @@ struct TurnArgs {
 // ship -100 or h = cur, else seg13:0x6716(ship) and one step the short way (a gap of exactly 8
 // steps the "else" way). Mode 2 inside a race wave or with a0 != 0 (seg8:0x2658) is [OPEN M6]
 // and returns cur. For ship -1 the original's seg13:0x6716(-1) writes now - 1 to DGROUP:0x708c,
-// four bytes below the ship table; the port skips it [DESIGN] (claim 64, precision note).
+// four bytes below the ship table; the port skips it [DESIGN ADR 0016 decision 3] (claim 64,
+// precision note).
 std::int16_t turn_toward(const TurnArgs& a, std::int16_t wave_kind, const ShipTable& ships,
                          const std::function<void(int ship)>& touched);
 

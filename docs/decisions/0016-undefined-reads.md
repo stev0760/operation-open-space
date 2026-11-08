@@ -1,6 +1,6 @@
 # ADR 0016: Reads the original leaves undefined
 
-- **Status:** Proposed. [DESIGN]
+- **Status:** Accepted (2026-11-08). [DESIGN]
 - **Scope:** the sites where the original reads a value its bytes do not define on that path, or acts in a way a Win32 build cannot repeat: a stack local or buffer byte no path writes, a read or write outside the record, table or buffer it means, an operation that faults, a stack word whose residue another routine leaves, and two values the port reads at another moment than the original. The collision pair's orientation word has its own ruling ([ADR 0015](0015-collision-orientation.md)); the roster's class byte is [ADR 0014](0014-saved-games.md) decision 5 and the roster and save fallbacks are its decision 11; the mode-1 flame local is in [ADR 0013](0013-wave-drawing-and-input.md)'s Consequences. [DESIGN]
 
 ## Context

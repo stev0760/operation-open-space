@@ -243,9 +243,9 @@ void visit_type(VisitCtx& c, int init, int blank) {
         if (ch == ' ') {
             // The word after the space up to its terminator (' ', NUL or CR), measured with the
             // buffer's first byte, which the original never writes; the port takes a space for
-            // it [DESIGN: the natural width, "the space before the word"]. The count includes
-            // the terminator: margin 22 for a word of at most 4 letters, else 9 (verified claim
-            // 16) [BYTES seg16:0x31b5-0x3257 seg16:0x2f82-0x2f93].
+            // it [DESIGN ADR 0016 decision 1: the natural width, "the space before the word"].
+            // The count includes the terminator: margin 22 for a word of at most 4 letters, else
+            // 9 (verified claim 16) [BYTES seg16:0x31b5-0x3257 seg16:0x2f82-0x2f93].
             std::string word;
             std::size_t j = ix + 1;
             for (; j < v.text.size(); ++j) {

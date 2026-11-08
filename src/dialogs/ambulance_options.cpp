@@ -22,9 +22,15 @@ using world::sub16;
 namespace {
 
 // t[i], or NUL past the end: the procedures read their 80-byte stack buffers by index
-// [DESIGN: the bytes past the NUL of the original's buffer are unknown; NUL stands for them].
+// [DESIGN ADR 0016 decision 2: the bytes past the NUL of the original's buffer are unknown; NUL
+// stands for them].
 char at(const std::string& t, int i) {
-    return i >= 0 && static_cast<std::size_t>(i) < t.size() ? t[static_cast<std::size_t>(i)] : '\0';
+    if (i >= 0 && static_cast<std::size_t>(i) < t.size()) return t[static_cast<std::size_t>(i)];
+    if (i < 0 || static_cast<std::size_t>(i) > t.size()) {  // past the NUL, which t[size] is
+        static bool once = false;
+        world::guard_todo(once, "a shop text read past its NUL reads NUL", "seg16:0x4104");
+    }
+    return '\0';
 }
 std::string L(const ShopEnv& e, int id) { return e.lang ? e.lang(id) : std::string(); }
 // seg10:0xa332(buf, id, 1, args...) with the shop's strings.

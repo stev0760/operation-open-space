@@ -11,6 +11,7 @@
 #include "world/collide.h"
 #include "world/effects.h"
 #include "world/pods.h"
+#include "world/sprite.h"
 #include "world/tank.h"
 #include "world/update.h"
 
@@ -230,4 +231,34 @@ TEST_CASE("pod mover: no expiry in Demon's Gate [BYTES seg12:0x6b8c]") {
     CHECK(o.state == 0);
     CHECK(pod_age(P) == 600);
     P = PodRecord{};
+}
+
+TEST_CASE("pod dissolve: a slot outside 0 ... 100 takes weapon 16's word W(16)-4 = DGROUP:0x3450 [BYTES seg12:0x1378-0x1395 seg10:0x2da8] [DESIGN ADR 0016 decision 3]") {
+    World w;
+    w.pools.set_in_use(11, 1);
+    ObjectRecord& o = w.pools.rec(11, 0);
+    o.size = 24, o.gap = 4, o.on_screen = 1, o.race_status = 9, o.w4a = 200, o.blast_size = -1;
+    ImageSlotTable images{};
+    images[7] = 0x1234;
+    RecordingBlitter out;
+    DissolveOut d;
+    d.out = &out;
+    d.images = &images;
+    std::vector<std::pair<int, int>> asked;
+    const auto words = [&asked](int wpn, int off) {
+        asked.emplace_back(wpn, off);
+        return wpn == 16 && off == -4 ? std::int16_t{7} : std::int16_t{0};
+    };
+    CHECK(pod_dissolve(w, 11, 0, d, words) == 0);  // phase 9 - 9
+    CHECK(w.pools.bad_index_count == 1);            // DGROUP:0x9498
+    CHECK(w.pools.missile(0).weapon == 0x10);       // DGROUP:0x66e4 + 0x1c·0, for a pod too
+    CHECK(asked == std::vector<std::pair<int, int>>{{16, -4}});
+    // Phase 0's StretchBlt reads weapon 16's sheet, slot 7.
+    int stretches = 0;
+    for (const BlitCall& b : out.calls) {
+        if (b.op != BlitCall::kStretchBlt) continue;
+        CHECK(b.src == 0x1234);
+        ++stretches;
+    }
+    CHECK(stretches > 0);
 }

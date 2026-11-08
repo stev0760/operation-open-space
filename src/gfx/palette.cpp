@@ -579,7 +579,9 @@ QuickColourMap quick_colour_map(PaletteManager& pm, PalHandle pal, const std::ve
             const int id = colour_ramp_id(c) & 0xff;  // seg5:0x66ea, al [BYTES ISPACE.DLL seg5:0x2af3-0x2afc]
             ids[static_cast<std::size_t>(k)] = id;
             has[static_cast<std::size_t>(k)] = true;
-            bool fresh = true;  // [BYTES ISPACE.DLL seg5:0x2aff-0x2b28]
+            // Only this case's ids take part [DESIGN ADR 0016 decision 1] [BYTES ISPACE.DLL
+            // seg5:0x2aff-0x2b28].
+            bool fresh = true;
             for (int j = 0; j < k; ++j)
                 if (has[static_cast<std::size_t>(j)] && ids[static_cast<std::size_t>(j)] == id) fresh = false;
             if (fresh) pm.allocate_ramp(pal, id);  // seg5:0x61b2 [BYTES ISPACE.DLL seg5:0x2b3a]

@@ -341,7 +341,7 @@ void bump_w82(ShipRecord& s, std::int16_t v) {
         return;
     }
     // w = ldiv((i32)(w + v)·1000, (i32)(v + 1000)) [BYTES seg13:0x4f1e-0x4f41]; v = -1000 traps in
-    // the original, the port keeps w [DESIGN].
+    // the original, the port keeps w [DESIGN ADR 0016 decision 4].
     const std::int32_t den = add16(v, 1000);
     if (den == 0) return;
     s.w82 = lo16(div32(static_cast<std::int32_t>(add16(s.w82, v)) * 1000, den));

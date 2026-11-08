@@ -5,6 +5,7 @@
 #include "world/player_sheet.h"
 
 #include <cstring>
+#include <utility>
 
 namespace is::world {
 
@@ -21,6 +22,20 @@ void set_word_of(T& rec, int off, int v) {
     std::memcpy(reinterpret_cast<std::uint8_t*>(&rec) + off, b, 2);
 }
 }  // namespace
+
+namespace {
+GuardTodo& guard_fn() {
+    static GuardTodo f;
+    return f;
+}
+}  // namespace
+
+void set_guard_todo(GuardTodo f) { guard_fn() = std::move(f); }
+void guard_todo(bool& once, const char* what, const char* address) {
+    if (once) return;
+    once = true;
+    if (guard_fn()) guard_fn()(what, address);
+}
 
 std::int16_t word_at(const ShipRecord& s, int off) { return word_of(s, off); }
 void set_word_at(ShipRecord& s, int off, int v) { set_word_of(s, off, v); }

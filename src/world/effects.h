@@ -256,8 +256,8 @@ void ship_destroyed(EffectCtx& c, int pool, int ship);
 
 // The fragment count of seg12:0x274a for `blast_size` b [BYTES seg12:0x2816-0x2880]: 1 for b =
 // 1; else b·30/100, b·60/100, b, b·130/100 for Detail 0 ... 3, at least 2 (another Detail leaves
-// the count unset in the original: the port takes 2 [DESIGN]); then with DGROUP:0x9430 > 10,
-// (35 - DGROUP:0x9430)·n/25, at least 1. All 16-bit.
+// the count unset in the original: the port takes 2 [DESIGN ADR 0016 decision 1]); then with
+// DGROUP:0x9430 > 10, (35 - DGROUP:0x9430)·n/25, at least 1. All 16-bit.
 std::int16_t fragment_count(std::int16_t blast_size, std::int16_t detail, std::int16_t in_use);
 
 struct CollideCtx;

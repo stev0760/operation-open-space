@@ -67,7 +67,8 @@ void set_ship_credit(ShipRecord& s, std::int32_t v);
 // seg14:0x455c(v): 1 while DGROUP:0x11aa != 0, else 0 for a body whose MASTER.BOD word +0x21 is
 // 178, 310, 320, 400, 440, 450, 520, 550, 560, 590, 600, 604, 605, 710, 720, 730, 750, 890, 900,
 // 930 or 950 [BYTES seg14:0x4567 seg14:0x4589-0x45f0 seg14:0x45f4]. A record whose body index
-// lies outside MASTER.BOD is accepted (the original reads past the table) [DESIGN].
+// lies outside MASTER.BOD is accepted (the original reads past the table)
+// [DESIGN ADR 0014 decision 11].
 bool ship_accepted(const World& w, const fmt::MasterShp& ships, const fmt::MasterBod& bodies, int v);
 
 struct MainShipPick {
@@ -95,7 +96,7 @@ RosterRecord fresh_record(const World& w, const fmt::ShipRecord& shp, int index)
 // The remap of weapon `wpn` through word +0x36 of the weapon table (DGROUP:0x2f8a + 0x50·w,
 // collide.h weapon_word) while DGROUP:0x11aa = 0 and the word is not -1 [BYTES seg14:0x33a-0x354
 // seg14:0x16e5-0x170a]. Before the table is filled (its word 0 of block 0 reads 0, not the
-// string id 186) the port leaves the weapon as it is and logs once [DESIGN].
+// string id 186) the port leaves the weapon as it is and logs once [DESIGN ADR 0014 decision 11].
 std::uint8_t remap_weapon(const World& w, std::uint8_t wpn);
 
 struct RosterPlacement {
@@ -106,14 +107,15 @@ struct RosterPlacement {
 };
 // seg14:0x0(-1)'s player part with DGROUP:0x91f8 = w.wave (the briefing has raised it), up to
 // seg14:0x1430's SHP index [BYTES seg14:0x232-0x47e seg14:0x1457-0x148e]:
-//   - DGROUP:0x91f8 <= 1 (or no roster block, which the original cannot reach [DESIGN]):
+//   - DGROUP:0x91f8 <= 1 (or no roster block, which the original cannot reach
+//     [DESIGN ADR 0014 decision 11]):
 //     DGROUP:0x931c = DGROUP:0x9646 = 0, pick_main_ship, a block of one fresh record,
 //     DGROUP:0x9338 = 0 in a player game outside kinds 6 and 7, the arrays DGROUP:0xa14d /
 //     0xa157 zeroed, seg9:0x5be0 (roster_pilot_name), ship 0's +0xd6 = +0x4e = 0, DGROUP:0x1318 = 0;
 //   - later waves: ship 0's +0x4e = the old player ship's, DGROUP:0x9646 = 0, +0xd6 =
 //     DGROUP:0x931c; the fresh flag clears unless DGROUP:0x92e4 != 0, which also sets +0x4e = 0;
 //   - then s = roster +0x00, set to 0 in the record when not below the SHP count.
-// A DGROUP:0x931c outside the block reads record 0 with a log line [DESIGN].
+// A DGROUP:0x931c outside the block reads record 0 with a log line [DESIGN ADR 0014 decision 11].
 // `pilot` is DGROUP:0x380c, the pilot name seg9:0x5be0 copies into the fresh record's +0x65.
 RosterPlacement roster_placement(World& w, const fmt::MasterShp& ships, const fmt::MasterBod& bodies,
                                  const std::string& main_ship, shell::Rng& rng,
@@ -195,7 +197,7 @@ std::int16_t roster_class(std::int16_t v, std::int16_t prev);
 // seg9:0x2e97-0x2f74, after the ship loop when the frame dword DGROUP:0x1e68 > 500 (the caller
 // tests it): word +0x06 of every record 0 ... DGROUP:0x931a moves by the class rule against
 // DGROUP:0x9334 and by |SHP +0x05 - DGROUP:0x9332|, clamped at 0 on the 16-bit sum
-// (claims 23, 24). An SHP index outside `ships` reads byte 0 [DESIGN].
+// (claims 23, 24). An SHP index outside `ships` reads byte 0 [DESIGN ADR 0014 decision 11].
 void roster_ratings(World& w, const fmt::MasterShp& ships);
 
 // ---- M5: ships joining the roster

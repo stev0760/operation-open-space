@@ -121,8 +121,9 @@ public:
         bool player_game = true;
     };
     // seg9:0x6cc4's part: the next frame finds no page (DGROUP:0x6078 = 0) and loads it from
-    // `text` [DESIGN: the text is built at the wave end, from the values seg9:0x6fee would read
-    // at the first frame; the wave's values do not change between the two].
+    // `text` [DESIGN ADR 0016 decision 6: the text is built at the wave end, from the values
+    // seg9:0x6fee would read at the first frame; the wave's values do not change between the
+    // two].
     void start(const Setup& s, std::string text);
     // seg9:0x6dec(arg) [BYTES seg9:0x6dec-0x6fec]. A box hook, when set, draws the box instead
     // of the canvas (src/hud's); otherwise the canvas draws it with seg11:0x1774 and seg9:0x8bec.

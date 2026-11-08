@@ -71,7 +71,9 @@ public:
         // over it; every failure path closes the file and removes the temporary.
         const auto target = local(path);
         std::error_code ec;
-        std::filesystem::create_directories(target.parent_path(), ec);  // [DESIGN]
+        // The target directory created when missing [DESIGN ADR 0014 decision 11].
+        if (std::filesystem::create_directories(target.parent_path(), ec))
+            todo_once("the save directory created, where OpenFile OF_CREATE fails", "seg6:0x885c");
         const std::filesystem::path tmp = target.wstring() + L".tmp";
         HANDLE f = CreateFileW(tmp.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
         if (f == INVALID_HANDLE_VALUE) {

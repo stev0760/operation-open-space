@@ -22,16 +22,34 @@ bool ship_ok(int i) { return i >= 0 && i < kShipCount; }
 ObjectRecord g_scratch_obj{};
 ShipRecord g_scratch_ship{};
 
-ObjectRecord& amb(World& w) { return w.pools.records(kAmb) > 0 ? w.pools.rec(kAmb, 0) : (g_scratch_obj = ObjectRecord{}); }
+// A, the ambulance: pool 7 record 0 (far DGROUP:0x1e14); a pool without it reads a scratch
+// record [DESIGN ADR 0016 decision 2].
+ObjectRecord& amb(World& w) {
+    if (w.pools.records(kAmb) > 0) return w.pools.rec(kAmb, 0);
+    static bool once = false;
+    guard_todo(once, "the ambulance's record outside pool 7 reads a scratch record", "DGROUP:0x1e14");
+    return g_scratch_obj = ObjectRecord{};
+}
 // S, the served ship's object: pool DGROUP:0x9324 record DGROUP:0x952e. A record the port does
-// not hold reads a scratch record [DESIGN] (the original reads whatever lies there).
+// not hold reads a scratch record [DESIGN ADR 0016 decision 2] (the original reads whatever lies
+// there).
 ObjectRecord& served_obj(World& w) {
     const int sp = w.roles.ships;
-    if (!rec_ok(w.pools, sp, w.w952e)) return g_scratch_obj = ObjectRecord{};
+    if (!rec_ok(w.pools, sp, w.w952e)) {
+        static bool once = false;
+        guard_todo(once, "the served ship's object outside its pool reads a scratch record", "DGROUP:0x952e");
+        return g_scratch_obj = ObjectRecord{};
+    }
     return w.pools.rec(sp, w.w952e);
 }
+// The served ship's record DGROUP:0x952e; outside the eight it reads a scratch record
+// [DESIGN ADR 0016 decision 2].
 ShipRecord& served_ship(World& w) {
-    if (!ship_ok(w.w952e)) return g_scratch_ship = ShipRecord{};
+    if (!ship_ok(w.w952e)) {
+        static bool once = false;
+        guard_todo(once, "the served ship outside the eight reads a scratch record", "DGROUP:0x952e");
+        return g_scratch_ship = ShipRecord{};
+    }
     return w.ships[static_cast<std::size_t>(w.w952e)];
 }
 
@@ -105,7 +123,8 @@ std::int16_t ambulance_call(AmbulanceCtx& c, int ship) {
     A.b2e = 0;    // [BYTES seg16:0xc14]
     // The nearest gate: the even pool-12 records k < 2·DGROUP:0x9318 against the ship, from
     // 20000, strictly smaller wins (verified claims 6, 7) [BYTES seg16:0xc19-0xc73]. The
-    // original leaves the index unset when none is nearer; the port starts at 0 [DESIGN].
+    // original leaves the index unset when none is nearer; the port starts at 0
+    // [DESIGN ADR 0016 decision 1].
     std::int16_t best = 20000;
     int pick = 0;
     const ObjectRecord& S = served_obj(w);

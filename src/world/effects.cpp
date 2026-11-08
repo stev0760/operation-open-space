@@ -552,7 +552,7 @@ std::int16_t fragment_count(std::int16_t b, std::int16_t detail, std::int16_t in
         case 1: n = idiv16(mul16(b, 60), 100); break;
         case 2: n = b; break;
         case 3: n = idiv16(mul16(b, 130), 100); break;
-        default: n = 2; break;  // the original's [bp-8] is unset [DESIGN]
+        default: n = 2; break;  // the original's [bp-8] is unset [DESIGN ADR 0016 decision 1]
         }
         if (n < 2) n = 2;  // [BYTES seg12:0x2852-0x285d]
     }

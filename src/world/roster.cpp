@@ -23,6 +23,12 @@ RosterTodo& todo_fn() {
 void todo(const std::string& what, const char* address) {
     if (todo_fn()) todo_fn()(what, address);
 }
+// A fallback's one-time log: `once` is the site's own flag [DESIGN ADR 0014 decision 11].
+void fallback_once(bool& once, const char* what, const char* address) {
+    if (once) return;
+    once = true;
+    todo(what, address);
+}
 
 PurchasePass& purchase_fn() {
     static PurchasePass f;
@@ -187,9 +193,17 @@ void set_ship_credit(ShipRecord& s, std::int32_t v) {
 
 bool ship_accepted(const World& w, const fmt::MasterShp& ships, const fmt::MasterBod& bodies, int v) {
     if (w.w11aa != 0) return true;  // [BYTES seg14:0x4567 seg14:0x456c]
-    if (v < 0 || v >= static_cast<int>(ships.records.size())) return true;  // [DESIGN]
+    if (v < 0 || v >= static_cast<int>(ships.records.size())) {  // [DESIGN ADR 0014 decision 11]
+        static bool once = false;
+        fallback_once(once, "an SHP index outside MASTER.SHP is accepted", "seg14:0x455c");
+        return true;
+    }
     const std::uint16_t body = ships.records[static_cast<std::size_t>(v)].body;  // SHP +0x21
-    if (body >= bodies.records.size()) return true;  // [DESIGN] (roster.h)
+    if (body >= bodies.records.size()) {  // [DESIGN ADR 0014 decision 11] (roster.h)
+        static bool once = false;
+        fallback_once(once, "a body index outside MASTER.BOD is accepted", "seg14:0x4574");
+        return true;
+    }
     // MASTER.BOD word +0x21 of that body (record 0x2c bytes at far DGROUP:0x6e1c) [BYTES
     // seg14:0x4574-0x4585].
     const std::uint16_t b = bodies.records[body].bitmap_id;
@@ -204,8 +218,12 @@ MainShipPick pick_main_ship(World& w, const fmt::MasterShp& ships, const fmt::Ma
     const int count = static_cast<int>(ships.records.size());  // DGROUP:0x95aa
     // rand() % (DGROUP:0x95aa - 1) into [bp-6], overwritten later: only the call counts
     // [BYTES seg14:0x2310 seg14:0x231b seg14:0x231d seg14:0x2435]. A count of 1 divides by 0 in
-    // the original; the port consumes the rand() alone [DESIGN].
+    // the original; the port consumes the rand() alone [DESIGN ADR 0014 decision 11].
     (void)rng.rand();
+    if (count == 1) {
+        static bool once = false;
+        fallback_once(once, "a one-record MASTER.SHP: the rand() % 0 dropped", "seg14:0x231d");
+    }
     std::int16_t best = -1000;  // [BYTES seg14:0x2325]
     if (w.player_roster > roster_last(w)) w.player_roster = 0;  // signed `jle` [BYTES seg14:0x232a-0x2333]
     // Kind 6 / 7 with DGROUP:0x90f8 and DGROUP:0x8e5e set read `Ship1` / `Ship2` and take the
@@ -255,7 +273,8 @@ MainShipPick pick_main_ship(World& w, const fmt::MasterShp& ships, const fmt::Ma
 std::uint8_t remap_weapon(const World& w, std::uint8_t wpn) {
     if (w.w11aa != 0) return wpn;  // [BYTES seg14:0x33a seg14:0x16e5]
     if (weapon_word(0, 0) == 0) {
-        // The weapon table is not filled yet (seg10:0x1fb2 at the state-1 entry) [DESIGN].
+        // The weapon table is not filled yet (seg10:0x1fb2 at the state-1 entry)
+        // [DESIGN ADR 0014 decision 11].
         todo("the weapon remap before the weapon table DGROUP:0x2f54 is filled", "seg14:0x16e5");
         return wpn;
     }
@@ -304,7 +323,11 @@ RosterPlacement roster_placement(World& w, const fmt::MasterShp& ships, const fm
     ShipRecord& s0 = w.ship(0);
     if (w.wave <= 1 || w.roster.empty()) {
         // seg14:0x232-0x438 [BYTES seg14:0x232]. A later wave without a block cannot happen in
-        // the original; the port treats it as the fresh path [DESIGN].
+        // the original; the port treats it as the fresh path [DESIGN ADR 0014 decision 11].
+        if (w.wave > 1) {
+            static bool once = false;
+            fallback_once(once, "a later wave without a roster block takes the fresh path", "seg14:0x232");
+        }
         out.fresh_roster = true;
         w.player_roster = 0;  // DGROUP:0x931c [BYTES seg14:0x23e seg14:0x240]
         w.player = 0;         // DGROUP:0x9646 [BYTES seg14:0x243]
@@ -327,7 +350,8 @@ RosterPlacement roster_placement(World& w, const fmt::MasterShp& ships, const fm
         s0.design_index = w.ship(ship_ok(w, w.player) ? w.player : 0).design_index;
         w.player = 0;
         if (!roster_at(w, w.player_roster)) {
-            todo("DGROUP:0x931c = " + std::to_string(w.player_roster) + " outside the roster: record 0 [DESIGN]",
+            todo("DGROUP:0x931c = " + std::to_string(w.player_roster) +
+                     " outside the roster: record 0 [DESIGN ADR 0014 decision 11]",
                  "seg14:0x44d");
             w.player_roster = 0;
         }
@@ -348,7 +372,14 @@ RosterPlacement roster_placement(World& w, const fmt::MasterShp& ships, const fm
         if (r->shp > count - 1) r->shp = 0;
         out.shp_index = r->shp;
     }
-    if (out.shp_index < 0 || out.shp_index >= count) out.shp_index = count > 0 ? 0 : -1;  // [DESIGN] a negative index
+    // A negative index reads record 0 [DESIGN ADR 0014 decision 11]; an empty MASTER.SHP has none.
+    if (out.shp_index < 0 || out.shp_index >= count) {
+        if (count > 0) {
+            static bool once = false;
+            fallback_once(once, "a negative SHP index reads record 0", "seg14:0x1457");
+        }
+        out.shp_index = count > 0 ? 0 : -1;
+    }
     return out;
 }
 
@@ -358,7 +389,7 @@ void ship_from_roster(World& w, int i, const fmt::ShipRecord& shp) {
     RosterRecord* r = roster_at(w, S.roster_index);
     if (!r && S.roster_index != -1) {
         todo("ship " + std::to_string(i) + "'s +0xd6 = " + std::to_string(S.roster_index) +
-                 " outside the roster: the no-roster path [DESIGN]",
+                 " outside the roster: the no-roster path [DESIGN ADR 0014 decision 11]",
              "seg14:0x16c5");
     }
     const std::int16_t tank = tank_of(shp);
@@ -552,7 +583,12 @@ void roster_from_ship(World& w, int i, RosterUpdate& u) {
     ShipRecord& S = w.ship(i);
     const int R = S.roster_index;
     RosterRecord* rp = roster_at(w, R);
-    if (!rp) return;  // the callers test +0xd6 != -1; an index the block lacks is skipped [DESIGN]
+    // The callers test +0xd6 != -1; an index the block lacks is skipped [DESIGN ADR 0014 decision 11].
+    if (!rp) {
+        static bool once = false;
+        if (R != -1) fallback_once(once, "a ship's +0xd6 outside the roster: no write-back", "seg9:0x2b5d");
+        return;
+    }
     RosterRecord& r = *rp;
     // +0x3c + ship[j].+0xd6 = lo8(word +0x62 + 2j / 10), j = 0 ... DGROUP:0x9316 (i itself
     // included; -1 reaches +0x3b, which the next loop overwrites) [BYTES seg9:0x2b6a seg9:0x2b88].
@@ -633,9 +669,13 @@ void roster_ratings(World& w, const fmt::MasterShp& ships) {
         else
             d = idiv16(x, -14);  // [BYTES seg9:0x2ec4 seg9:0x2ecc]
         const int s = r.shp;
-        const std::int16_t att = s >= 0 && s < static_cast<int>(ships.records.size())
-                                     ? s8(ships.records[static_cast<std::size_t>(s)].to_enemies)
-                                     : std::int16_t{0};
+        std::int16_t att = 0;  // an index outside `ships` reads byte 0 [DESIGN ADR 0014 decision 11]
+        if (s >= 0 && s < static_cast<int>(ships.records.size())) {
+            att = s8(ships.records[static_cast<std::size_t>(s)].to_enemies);
+        } else {
+            static bool once = false;
+            fallback_once(once, "an SHP index outside MASTER.SHP reads byte 0", "seg9:0x2e97");
+        }
         std::int16_t m = sub16(att, w.w9332);  // seg9:0x88ba abs [BYTES seg9:0x2efb seg9:0x2f00]
         if (m < 0) m = sub16(0, m);
         d = add16(d, idiv16(mul16(x, m), -20));  // `imul word`, cwd, idiv [BYTES seg9:0x2f07-0x2f1f]

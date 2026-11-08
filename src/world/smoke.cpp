@@ -68,7 +68,7 @@ int smoke_start(SmokeRecords& t, std::int16_t& dg_9456, std::int16_t detail, she
     case 1: threshold = 0x2d; break;
     case 2: threshold = 0x46; break;
     case 3: threshold = 0x64; break;
-    default: threshold = 0; break;  // unset in the original [DESIGN]
+    default: threshold = 0; break;  // unset in the original [DESIGN ADR 0016 decision 1]
     }
     if (detail != 3) {  // `jge` takes the record [BYTES seg7:0x5d8e-0x5da5]
         if (imod16(static_cast<std::int16_t>(rng.rand()), 100) < threshold) return -1;
@@ -90,7 +90,7 @@ int smoke_start(SmokeRecords& t, std::int16_t& dg_9456, std::int16_t detail, she
 // seg7:0x5b68 [BYTES seg7:0x5b68-0x5d68]
 int smoke_puff(SmokeCtx& c, int pool, int rec, int arg) {
     // The threshold [bp-0xc] by Detail [BYTES seg7:0x5b77-0x5bbb]; another Detail leaves it unset.
-    std::int16_t threshold = 100;  // [DESIGN] takes the record
+    std::int16_t threshold = 100;  // [DESIGN ADR 0016 decision 1] takes the record
     switch (c.detail) {
     case 0: threshold = 0x19; break;
     case 1: threshold = 0x2d; break;
@@ -202,7 +202,8 @@ void move_smoke(SmokeCtx& c) {
                 if (c.dg_9130 != 0 && c.unported) c.unported("seg7:0x5ee6");  // [BYTES seg7:0x5edd-0x5f77] [OPEN M6]
                 if (draw) {  // [BYTES seg7:0x5f79-0x5fbd]
                     const DcId strip = c.images ? (*c.images)[ix(kSlotSmoke)] : kDcNone;
-                    // Counter 54's source x is undefined (A1): no BitBlt, the flag as drawn [DESIGN].
+                    // Counter 54's source x is undefined (A1): no BitBlt, the flag as drawn
+                    // [DESIGN ADR 0016 decision 1].
                     if (c.out && pc.src_x_defined)
                         c.out->bit_blt(kDcWindow, sub16(r.sx, pc.h), sub16(r.sy, pc.h), pc.p, pc.p, strip, pc.src_x, 0,
                                        kSrcCopy);

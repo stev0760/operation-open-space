@@ -146,7 +146,10 @@ bool wing_picture(World& w, DebrisTable& t, Blitter* out, const ImageSlotTable* 
             const DcId wing = out->create_image_from(o.size, o.size, cell);  // ordinal 15's bitmap
             for (const DebrisBlit& b : debris_strip_plan(win, w.shift))  // [BYTES seg8:0x31d9]
                 out->bit_blt(e.dc, b.x, b.y, b.w, b.h, wing, b.sx, b.sy, kSrcCopy);
-            out->delete_image(wing);  // DeleteDC, DeleteObject [BYTES seg8:0x3391-0x33bd]
+            // DeleteDC, DeleteObject [BYTES seg8:0x3391-0x33bd]; the palette restore at
+            // seg8:0x33a1, which tests [bp-0x1a] also with DGROUP:0x920e = 0, restores nothing
+            // [DESIGN ADR 0016 decision 1].
+            out->delete_image(wing);
         }
         e.mask = out->create_mask(e.dc);  // seg10:0x6ec6, the ordinal-6 mask [BYTES seg8:0x3344-0x338d]
     }

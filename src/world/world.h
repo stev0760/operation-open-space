@@ -583,6 +583,13 @@ std::shared_ptr<gfx::Surface> slot_image(int slot);
 // Whether a source is set: without one the briefing draws its stand-in outline [DESIGN].
 bool slot_images_linked();
 
+// The one-time log of a guard that meets an index outside its storage: `once` is the site's own
+// flag, so each guard logs once per session. The program binds its TODO facility
+// (src/world/hooks.cpp); unbound, nothing is logged [DESIGN ADR 0016 decision 2].
+using GuardTodo = std::function<void(const std::string& what, const char* address)>;
+void set_guard_todo(GuardTodo f);
+void guard_todo(bool& once, const char* what, const char* address);
+
 // The world's 16-bit Win16 rectangle tests (USER.PtInRect, USER.IntersectRect, USER.SetRect):
 // half-open, signed 16-bit [REF Win16 SDK].
 inline bool pt_in_rect(const Rect16& r, std::int16_t x, std::int16_t y) {

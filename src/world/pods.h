@@ -56,11 +56,12 @@ void pod_destroyed(World& w, int pool, int rec, const PodDestroyOut& d);
 // image slot +0x4a (pool 11, x offset 0) or W(w)-4 of the record's weapon w = DGROUP:0x66e4 +
 // 0x1c·rec (pool 6, x offset max(0, W(w)+0x26 - 1)·(size + gap)); a slot outside 0 ... 100 counts
 // DGROUP:0x9498, writes 0x10 into the weapon word DGROUP:0x66e4 + 0x1c·rec (for a pod too) and
-// takes the slot DGROUP:0x3450 (verified claim 56); the player's sprite on odd phases for +0x48 =
-// the player at `Detail` > 1; off screen nothing more; then the ten cases (margins u(2) and u(4)
-// where seg12:0xe5c has u(3) and u(6)), phase 9 with seg7:0x2080(pool, -1) and the player's sprite,
-// and the frame (its bottom strip at y + size - 3, a literal 3). Returns the phase. The pool-6
-// weapon words are read through `weapon_word` (W(w)+off); null reads 0.
+// takes the slot DGROUP:0x3450 (verified claim 56), weapon 16's word W(16)-4
+// [DESIGN ADR 0016 decision 3]; the player's sprite on odd phases for +0x48 = the player at
+// `Detail` > 1; off screen nothing more; then the ten cases (margins u(2) and u(4) where
+// seg12:0xe5c has u(3) and u(6)), phase 9 with seg7:0x2080(pool, -1) and the player's sprite,
+// and the frame (its bottom strip at y + size - 3, a literal 3). Returns the phase. The weapon
+// words (pool 6's and W(16)-4) are read through `weapon_word` (W(w)+off); null reads 0.
 std::int16_t pod_dissolve(World& w, int pool, int rec, const DissolveOut& d,
                           const std::function<std::int16_t(int w, int off)>& weapon_word = {});
 

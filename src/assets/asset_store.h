@@ -161,7 +161,9 @@ public:
     // MASTER.BOD and MASTER.SHP from `ship_dir`, the INI's ShipPath once M2 reads it, or from
     // the game directory when `ship_dir` is empty. The directory is listed and the files read
     // afresh on every call, so files that the Ship Factory (M8) wrote are seen, also where
-    // they sit beside the distribution's MASTER.BO1 and MASTER.SH1.
+    // they sit beside the distribution's MASTER.BO1 and MASTER.SH1. A file that does not open or
+    // read throws NotFound: a short read of MASTER.SHP, which seg14:0x3eda follows with a freed
+    // block and a kept handle, loads no table, as a failed open does [DESIGN ADR 0016 decision 4].
     Ships ships(const std::filesystem::path& ship_dir = {}) const;
 
     fmt::Palette5500 palette5500() const;  // ISPACE.DLL #5500 100

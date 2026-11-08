@@ -51,9 +51,9 @@ void smoke_place(SmokeRecords& t);
 // takes nothing (`jge` takes the record); Detail 3 draws no rand(). Otherwise the first record
 // with counter -1 takes counter 0, the world point (x, y) and the velocity (vx, vy), and
 // DGROUP:0x9456 + 1; `arg` is never read and no sound plays. A Detail outside 0 ... 3 reads an
-// unset threshold in the original; the port takes the record [DESIGN]. Returns the record's
-// index, -1 for none. Callers: the wing debris seg13:0x447a (debris.h) and hazard kind 1 at
-// seg12:0x3b5f.
+// unset threshold in the original; the port takes the record [DESIGN ADR 0016 decision 1].
+// Returns the record's index, -1 for none. Callers: the wing debris seg13:0x447a (debris.h) and
+// hazard kind 1 at seg12:0x3b5f.
 int smoke_start(SmokeRecords& t, std::int16_t& dg_9456, std::int16_t detail, shell::Rng& rng,
                 std::int16_t x, std::int16_t y, std::int16_t arg, std::int16_t vx, std::int16_t vy);
 
@@ -85,7 +85,8 @@ struct SmokeCtx {
 // seg7:0x5b68(pool, rec, arg), cdecl [BYTES seg7:0x5b68-0x5d68] (verified claims 37-41):
 //  - the Detail gate: threshold 25, 45, 65, 90 for Detail 0 ... 3; at Detail 3 no rand(),
 //    otherwise rand() % 100 above the threshold returns (`jle` proceeds); a Detail outside
-//    0 ... 3 leaves the threshold unset in the original: the port takes the record [DESIGN];
+//    0 ... 3 leaves the threshold unset in the original: the port takes the record
+//    [DESIGN ADR 0016 decision 1];
 //  - the first record with counter -1 takes counter 0; with none: return, no sound, no count;
 //  - a pool other than DGROUP:0x9324: x = rand() % extent + x, y = rand() % extent + y, then
 //    d = rand() % 16 and v = H[d] / 2 + v / 2 (H = DGROUP:0x1050; signed 16-bit divides);
@@ -125,7 +126,8 @@ PuffCell puff_cell(std::int16_t counter, std::int16_t size);
 //  - counter + 1; at 55: PatBlt BLACKNESS of (24 << Size) >> 1 at scr - ((6 << Size) >> 1),
 //    counter -1, DGROUP:0x9456 - 1.
 // At counter 54 the source x is undefined (A1): the port skips that one BitBlt and keeps the
-// flag as if it drew; the end square of the same call covers the draw at every Size [DESIGN].
+// flag as if it drew; the end square of the same call covers the draw at every Size
+// [DESIGN ADR 0016 decision 1].
 void move_smoke(SmokeCtx& c);
 
 }  // namespace is::world

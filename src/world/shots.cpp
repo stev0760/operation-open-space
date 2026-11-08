@@ -556,7 +556,9 @@ std::int16_t shot_hit_test(ShotCtx& c, int j) {
 
 std::int16_t seam_word(const ViewState& v, std::int16_t y, std::int16_t wave_kind, std::uint8_t dg_9eb5,
                        std::int16_t dg_9130) {
-    if (dg_9130 != 0) return 1;  // seg8:0x2b51: lo16(|DGROUP:0x88cc|) (claim 39) [OPEN M6]
+    // seg8:0x2b51: lo16(|DGROUP:0x88cc|) (claim 39) [OPEN M6]; the port holds 1
+    // [DESIGN ADR 0016 decision 5, Alternatives: the held 1].
+    if (dg_9130 != 0) return 1;
     // shl ax, cl with cl = byte DGROUP:0x9150 - 1, then cwd [BYTES seg8:0x2abf-0x2acb]
     const std::int16_t half_h = shl16(v.play_h, (v.shift - 1) & 31);
     // sext32(y) - sext32(that) - dword DGROUP:0x2410, 32-bit [BYTES seg8:0x2a02-0x2a0b seg8:0x2acb-0x2ad9]

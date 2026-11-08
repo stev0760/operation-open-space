@@ -86,7 +86,7 @@ public:
     virtual std::optional<std::vector<std::uint8_t>> read(const std::string& path, std::size_t max) = 0;
     // ADR 0014 decision 1 "Writing is atomic": a temporary file beside the target, then
     // MoveFileExW(MOVEFILE_REPLACE_EXISTING); false leaves the old file whole and no temporary
-    // behind (decision 9). The directory is created when missing [DESIGN].
+    // behind (decision 9). The directory is created when missing [DESIGN ADR 0014 decision 11].
     virtual bool write_atomic(const std::string& path, const std::vector<std::uint8_t>& bytes) = 0;
     virtual bool remove(const std::string& path) = 0;  // OpenFile(name, OF_DELETE)
     // findfirst/findnext attribute 1 over dir + pattern: the found names, in find order.

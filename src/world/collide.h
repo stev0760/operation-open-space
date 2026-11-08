@@ -113,8 +113,8 @@ struct CollideGlobals {
     std::int16_t w95a6 = 0;
     // The seg18 mode's lock-out scale (s1-hit-verify.md 22, CORRECTED) reads DGROUP:0x90f4, the
     // game state (globals.md), and the byte DGROUP:0xa198. The collisions run in state 1's frame,
-    // so the port holds 1 for the state [DESIGN]; DGROUP:0xa198 is 0 in the image [BYTES
-    // DGROUP:0xa198] and its writer is the seg18 mode's [OPEN M6].
+    // so the port holds 1 for the state [DESIGN ADR 0016 decision 6]; DGROUP:0xa198 is 0 in the
+    // image [BYTES DGROUP:0xa198] and its writer is the seg18 mode's [OPEN M6].
     std::int16_t state_90f4 = 1;
     std::uint8_t ba198 = 0;
     std::uint32_t w8e30 = 0;
@@ -322,7 +322,8 @@ std::int16_t kill_points(int pool);
 std::int16_t kill_weight(int pool);
 
 // Record access with the port's guard: an index outside the storage reads and writes a scratch
-// record, where the original reads past its block [DESIGN].
+// record, where the original reads past its block; each guard logs once (world.h guard_todo)
+// [DESIGN ADR 0016 decision 2].
 ObjectRecord& obj(World& w, int pool, int rec);
 ShipRecord& ship_at(World& w, int i);
 std::uint32_t ship_dword(const ShipRecord& s, int off);

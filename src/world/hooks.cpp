@@ -716,6 +716,8 @@ void install_world_hooks(App& app) {
     power_on(g_world);
     // The roster routines' stubs log through the program's TODO facility (roster.h) (M4 s3 ROSTER).
     set_roster_todo([](const std::string& what, const char* address) { todo_once(what, address); });
+    // So do the guards of ADR 0016 decision 2 (world.h guard_todo).
+    set_guard_todo([](const std::string& what, const char* address) { todo_once(what, address); });
     set_frame_world(&g_world);  // the frame's own drawing reads this World (update.h, M3 s4 DRAW)
     // DGROUP:0x1e84 in one store: the shell's state-9 case reads World::w1e84 (M4 s5, D-24).
     app.game.bind_scores_due(&g_world.w1e84);

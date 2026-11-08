@@ -108,7 +108,7 @@ std::int16_t pod_dissolve(World& w, int pool, int rec, const DissolveOut& d,
     const std::int16_t phase = p;
     if (d.out) d.out->set_stretch_mode(d.window_dc, kColorOnColor);  // [BYTES seg12:0x1329-0x1331]
     // The slot [bp-0xa] and the x offset [bp-0xc] [BYTES seg12:0x1336-0x1375]; another pool leaves
-    // both unset in the original: the port takes 0 [DESIGN].
+    // both unset in the original: the port takes 0 [DESIGN ADR 0016 decision 1].
     std::int16_t slot = 0, xoff = 0;
     if (pool == 11) {
         slot = o.w4a;
@@ -122,7 +122,10 @@ std::int16_t pod_dissolve(World& w, int pool, int rec, const DissolveOut& d,
     if (slot > 100 || slot < 0) {  // [BYTES seg12:0x1378-0x1395] (verified claim 56)
         w.pools.bad_index_count = add16(w.pools.bad_index_count, 1);  // DGROUP:0x9498
         w.pools.missile(rec).weapon = 0x10;  // DGROUP:0x66e4 + 0x1c·rec, for a pod too
-        slot = 0;  // DGROUP:0x3450's value [OPEN]; slot 0 stands for it [DESIGN]
+        // DGROUP:0x3450 = W(16)-4 = DGROUP:0x2f54 + 0x50·16 - 4, the image slot word of weapon 16,
+        // the weapon just written: -1 from seg10:0x1fb2 until seg10:0x533a assigns a slot
+        // [DESIGN ADR 0016 decision 3] [BYTES seg12:0x1392 seg10:0x2da8].
+        slot = weapon_word ? weapon_word(0x10, -4) : std::int16_t{0};
     }
     if (o.blast_size == w.player && w.detail > 1 && (p & 1) != 0 && d.player_sprite)  // [BYTES seg12:0x1398-0x13bc]
         d.player_sprite();

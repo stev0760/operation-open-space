@@ -225,7 +225,8 @@ using QuickColourMap = std::array<std::uint8_t, 15>;
 //    when no earlier entry of this case had the same id, then seg5:0x64f8(slot, r, g, b, id, -1)
 //    [BYTES ISPACE.DLL seg5:0x2ac8-0x2b65]. The earlier ids are stack bytes [bp - 0x5c + j]
 //    written only by this case; an entry of the first case leaves its byte as the stack held it
-//    [OPEN]; the port counts only this case's ids [DESIGN];
+//    [OPEN]; the port counts only this case's ids, so a ramp is allocated once per distinct id
+//    [DESIGN ADR 0016 decision 1];
 //  - the result's low byte (`sub ah, ah`) [BYTES ISPACE.DLL seg5:0x2b61 seg5:0x2b90].
 // The path ported is DGROUP:0x1e9a >= 8 with palette kind 0 (the port's 8-bpp device and the
 // game palette): below 8 bpp (seg5:0x4b40) and kind 1 (seg5:0x4e96) are not [DESIGN], and the

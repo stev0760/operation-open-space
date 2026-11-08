@@ -150,7 +150,7 @@ void drop_pod(EffectCtx& c, int ship, int flag) {
                 pick = i;
             }
         }
-        if (pick < 0) return;  // the original's index is unset [DESIGN]
+        if (pick < 0) return;  // the original's index is unset [DESIGN ADR 0016 decision 1]
         c.host.destroy(kPodPool, pick);  // the record's +0x66 [BYTES seg13:0x4a1d]
         fill_pod(c, ship, pick, flag);
         rec = pick;
