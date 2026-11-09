@@ -291,7 +291,7 @@ structs.md calls the index of one of these the ship's `roster_index` (+0xd6). Th
 | +0x74, +0x75 | byte | the low bytes of ship words +0x24 and +0x0a, read back sign-extended | [BYTES seg6:0x9b11 seg6:0x9b22 seg14:0x1980 seg14:0x198a seg14:0x198e] |
 | +0x76 | byte | class 1–10 of v = (ship dword +0xdc × 3 + word +0xd8) / 100: the first k with word DGROUP:0x952 + 2k ≤ v < word DGROUP:0x96c + 2k (signed), which gives the bands [0, 28), [28, 34), [34, 40), [40, 48), [48, 55), [55, 63), [63, 70), [70, 80), [80, 97), [97, 114). For a v outside them the byte takes the class of the last earlier ship of the same update that matched, or an uninitialised stack value when none did | [BYTES seg6:0x9ba6 seg6:0x9bb4 seg6:0x9bba seg6:0x9bcd seg6:0x9bd4 seg6:0x9bda seg6:0x9be3 seg6:0x9be6 seg6:0x9bf7 seg9:0x2d49-0x2d5e] [BYTES DGROUP:0x952] |
 | +0x77, +0x78, +0x79 | byte | wave counters, kept by seg14:0x1430: when +0x79 = DGROUP:0x91f8 − 1 it adds 1 to +0x78; else when +0x78 > 1 (signed byte) it sets ship word +0x00 = 4 and +0x78 = 1; else +0x78 = 0. It adds 1 to +0x77 when +0x79 ≠ DGROUP:0x91f8, and then stores DGROUP:0x91f8's low byte in +0x79 | [BYTES seg14:0x19b6 seg14:0x19bc-0x19cc seg14:0x19d6-0x19f3 seg14:0x1a04-0x1a1e] |
-| +0x7a, +0x7b | byte | the player's record gives the visit's ship size s4 = 4·(+0x7a + (+0x7b − 6)/2) ([core.md](core.md#phase-2)); the writers are [OPEN] | [BYTES seg16:0xdc1 seg16:0xdd4] |
+| +0x7a, +0x7b | byte | the cell size and gap that seg14:0x11a8 writes back after a ship's sheet build when ship word +0xd6 ≠ −1: the size from ordinal 5 and the gap 5 for an odd size, else 6 ([ispace.md](ispace.md)); the player's record gives the visit's ship size s4 = 4·(+0x7a + (+0x7b − 6)/2) ([core.md](core.md#phase-2)), 132 for a size of 33 with its gap 5 | [BYTES seg14:0x12d8 seg14:0x12f5 seg14:0x130c seg14:0x1337 seg14:0x134d seg16:0xdc1 seg16:0xdd4] |
 
 - The meanings of the fields marked [OPEN] above, the class of +0x76 included, are [OPEN].
 - seg14:0x421c inserts into the +0x08/+0x12/+0x17 table only when a flag is set that it overwrites for every ship of its loop, so in effect the last ship decides. [BYTES seg14:0x421c]
@@ -503,7 +503,7 @@ Only the two Factory builds use this section. The window keys sit at the same ad
 | NETWORK.INF (system directory) | netcard | the `netcard` value | S 0x5a, "" | [BYTES ISPACE.DLL seg8:0x5eb2] | — |
 
 - ISPACE.DLL seg10:0x5b24 writes `XCal123`, `vidsp`, `PDev` and `32BitSP` together with `[Inner Space]` `Accept`; [Resources rewritten in place](#resources-rewritten-in-place) gives what the values encode. [BYTES ISPACE.DLL seg10:0x5b24 seg10:0x5ded]
-- ISPACE.DLL seg8:0x5c86 collects the video, sound and network descriptions into ISPACE.DLL DGROUP:0x1b34, 0x1b8e and 0x1be8. [BYTES ISPACE.DLL seg8:0x5cd5 seg8:0x5d6b seg8:0x5eb2] Their use is [OPEN].
+- ISPACE.DLL seg8:0x5c86 collects the video, sound and network descriptions into ISPACE.DLL DGROUP:0x1b34, 0x1b8e and 0x1be8. [BYTES ISPACE.DLL seg8:0x5cd5 seg8:0x5d6b seg8:0x5eb2] Ordinal 32 runs it on every render and prints them as the labels of scene 105's cards through the string words −12, −11 and −10, with the CPU class "486", "386", "286" or "86" from GetWinFlags on the chip through −13; the cuts, the "Sound Blaster" rule and the flags are in [ispace.md](ispace.md#ordinal-notes), 32, Device texts. The port reads the same files ([win16-translation.md](win16-translation.md#profiles)). [BYTES ISPACE.DLL seg8:0x23b seg8:0x1612-0x1699] [BYTES IGRAPHIC.DLL 6600 105]
 - The oracle runs show these files under `C:\windows`. [ORACLE newgame-0001]
 - INSTALL.EXE also writes SYSTEM.INI [drivers] `MSACM.imaadpcm` and, for the screen saver, SYSTEM.INI [boot] `SCRNSAVE.EXE`, and reads AD_PREFS.INI [After Dark] `Path`; its INSPACE.INI writes are in [install.md](install.md). [BYTES INSTALL.EXE seg2:0x13bb seg2:0x1a18 seg2:0x1a3d]
 
@@ -533,7 +533,9 @@ This section covers what the loading code shows. [resources.md](resources.md) ho
   - When the body holds more than two records and body byte +0x6b is 0xec, it adds an argument to body word +0x51. [BYTES ISPACE.DLL seg8:0xb3 seg8:0xbe seg8:0xc8]
   - Dwords +0x5c, +0x60, +0x64 and +0x68 feed the projection constants of ordinal 32 ([ispace.md](ispace.md#ordinal-notes)); scene 100 holds 500, 217, 1000 and 0. [BYTES ISPACE.DLL seg8:0xd0 seg8:0x11b seg8:0x162 seg8:0x18c] [BYTES IGRAPHIC.DLL 6600 100]
 - INSPACE passes ids 100 (seg15:0xd9b, seg15:0x3405), 105 (seg15:0x31fd), 110 (seg15:0x3284), 115 (seg15:0x903) and 120 (seg15:0x332b) through seg10:0x9526, which places them in ordinal 32's id argument. [BYTES seg15:0x903 seg15:0x911 seg15:0xd9b seg15:0xda9 seg15:0x31fd seg15:0x3284 seg15:0x332b seg15:0x3405 seg10:0x9553 seg10:0x955d]
-- **Header colours.** Words +0x00–+0x11 hold three RGB colours, +0x24 the colour count, +0x26 one divisor per colour and +0x2c–+0x3d three dark colours; ordinal 32 builds one shade ramp per colour from them ([ispace.md](ispace.md#ordinal-notes), ordinal 32). Scene 100 has the colours (255, 255, 255), (0, 224, 0) and (220, 202, 70), the count 3, the divisors 4, 4 and 8 and the dark colours (32, 32, 32), (0, 100, 0) and (120, 108, 38). [BYTES ISPACE.DLL seg8:0x14e2 seg8:0x1512 seg8:0x1537] [BYTES IGRAPHIC.DLL 6600]
+- **Header colours.** Colour i is the three words at +6i, its divisor the word at +0x26 + 2i and its dark colour the three words at +0x2c + 6i, for i below the count word +0x24; the colours can run to +0x23, so up to six. For i ≥ 3 the divisor overlaps dark colour 0. Ordinal 32 builds one shade ramp per colour from them ([ispace.md](ispace.md#ordinal-notes), ordinal 32). [BYTES ISPACE.DLL seg8:0x14e2 seg8:0x1512 seg8:0x1537 seg8:0x1468 seg8:0x1475 seg8:0x14d7 seg8:0x1537-0x1548] [BYTES IGRAPHIC.DLL 6600]
+  - Scene 100 has the colours (255, 255, 255), (0, 224, 0) and (220, 202, 70), the count 3, the divisors 4, 4 and 8 and the dark colours (32, 32, 32), (0, 100, 0) and (120, 108, 38). [BYTES IGRAPHIC.DLL 6600 100]
+  - Scene 105 has four: (255, 255, 255), (0, 255, 0), (255, 235, 80) and (0, 120, 240), the divisors 4, 4, 8 and 8 and the dark colours (8, 12, 12), (0, 32, 0), (60, 54, 19) and (0, 0, 56). Colour 3's divisor, the word +0x2c, is dark colour 0's red, 8. Colour 3 is the blue of the capacitors, records 31, 32, 43 and 59. [BYTES IGRAPHIC.DLL 6600 105]
   - A record whose slot byte v is below −1 draws only when header byte 0x48 − v names a condition that holds ([ispace.md](ispace.md#ordinal-notes), ordinal 32): v = −10 reads +0x52 (3 in scene 100), v = −11 reads +0x53 (5) and v = −20 reads +0x5c (0xf4, the low byte of the dword 500), which matches no case. [BYTES ISPACE.DLL seg8:0x1641] [BYTES IGRAPHIC.DLL 6600]
 - **Records.** The 0x26-byte records start at offset 0x80; scene 100 has 62 and its record 61 is all zero. These are the fields the draw loop uses: [BYTES ISPACE.DLL seg8:0x1afb seg8:0x1b31 seg8:0x1b38 seg8:0x28de] [BYTES IGRAPHIC.DLL 6600]
 
@@ -549,12 +551,17 @@ This section covers what the loading code shows. [resources.md](resources.md) ho
   | +0x1d | signed byte | colour index, −1 for none |
   | +0x1e | byte | primitive: 1 box (ISPACE.DLL seg8:0x28de), 2 line (seg8:0x5470), 3 seg8:0x3874, 4 seg8:0x50ec, 5 seg8:0x4206 |
   | +0x1f | signed byte | type 1 only: output slot when ≥ 0, condition when below −1 |
-  | +0x20 | byte | brightness: the shade level is the colour's peak channel × value / 50 |
-  | +0x21 | byte | type 1 only: 100 takes a pattern brush from BITMAP METAL, 120 one from graphic 76 |
+  | +0x20 | signed byte | brightness: the shade level is lo16(the colour's peak channel × the sign-extended value) / 50, so a value of 128 or more gives a negative level |
+  | +0x21 | byte | type 1: 1 a black square inset in the front face, 2 … 99 that many vents across its lower half, 100 a pattern brush from BITMAP METAL, 120 one from graphic 76; type 3: 1 a cross near the top of the front |
+  | +0x22 | byte | type 1: the number of pin pairs on the visible side face |
+  | +0x23 | byte | type 1: the text's size factor; 0 draws no text, and the top-face text also needs a value other than 1000 |
+  | +0x24 | byte | type 1: 0 puts the text on the top face, any other value on the front face |
+  | +0x25 | byte | type 1, front text: 0 a label, any other value the HIGH VOLTAGE plate when the text starts with 'H' |
 
   - Scene 100's slots are record 42 (slot 0, the monitor screen), 17 (1, the PC tower front), 5 (2), 18 (3) and 60 (4, colour −1, the meal spot). Its conditional records are 36 and 38 (v = −11) and 37 and 39 (v = −10). Every word +0x19 and every byte +0x21–+0x25 is 0, so scene 100 draws no text and loads no bitmap. [BYTES IGRAPHIC.DLL 6600]
   - The layout solver seg8:0xa36 that reads +0x00–+0x17 is in [ispace.md](ispace.md#ordinal-notes) (ordinal 32); it never reads the codes at +0x0f and +0x15. [BYTES ISPACE.DLL seg8:0xa36 seg8:0xa57 seg8:0xdaa]
-  - The text path of scenes 105–120 through ISPACE.DLL seg6:0x7f52 is [OPEN]. [BYTES ISPACE.DLL seg6:0x7f52]
+  - ISPACE.DLL seg6:0x7f52 is the integer square root, three Newton steps, that the cylinder (type 3) uses for its ellipses; the texts go through ISPACE.DLL seg8:0x5978, CreateFont "Arial" and TextOut ([ispace.md](ispace.md#ordinal-notes), 32). [BYTES ISPACE.DLL seg6:0x7f64-0x7fbd seg8:0x3c7a seg8:0x4100 seg8:0x5978]
+  - Scene 105 uses every extra: the patterns of records 2 and 4 (120) and 9 (100), the vents, the pins of records 44, 45, 60, 61 and 87, the texts of records 9, 35–38, 40, 48, 52, 56, 63, 66 and 75 and the conditions of records 8, 39–42 and 66. [BYTES IGRAPHIC.DLL 6600 105]
 
 ### ISPACE.DLL #5000 150
 - No `FindResource` in INSPACE.EXE or ISPACE.DLL names this resource. Its reader is [OPEN]. [BYTES ISPACE.DLL 5000 150]

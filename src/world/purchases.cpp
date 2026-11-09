@@ -5,6 +5,7 @@
 
 #include "world/design_words.h"
 #include "world/player_sheet.h"
+#include "world/roster.h"
 
 #include <map>
 #include <utility>
@@ -370,8 +371,8 @@ void wave_setup_purchases(World& w, PurchaseHost& h, const WeaponWords& W, int s
 
 // ---- WorldPurchaseHost --------------------------------------------------------------------------
 namespace {
-// The roster bytes the RosterRecord does not keep yet, by (index, offset) [OPEN: the ROSTER
-// track's 0x7c-byte record replaces this store].
+// The bytes of a roster index the block does not hold, by (index, offset) [DESIGN: the fakes'
+// store; the original indexes past the block, ADR 0016].
 std::map<std::pair<int, int>, std::uint8_t>& roster_side() {
     static std::map<std::pair<int, int>, std::uint8_t> m;
     return m;
@@ -400,25 +401,19 @@ std::string WorldPurchaseHost::design_name(int design) {
     return {};
 }
 int WorldPurchaseHost::roster_byte(int index, int off) {
-    if (index >= 0 && static_cast<std::size_t>(index) < w_.roster.size()) {
-        const RosterRecord& r = w_.roster[static_cast<std::size_t>(index)];
-        if (off >= 0x33 && off <= 0x37) return static_cast<std::uint8_t>(r.b33[static_cast<std::size_t>(off - 0x33)]);
-        if (off == 0x7a) return r.size;
-    }
+    // The record's own byte +off (roster.h roster_byte), so +0x72/+0x73 (the wings), +0x7a (the
+    // size) and +0x7b (the gap) are the fields seg14:0x1430, the wave end and the visit read
+    // [BYTES seg14:0x1337 seg16:0xdc1-0xdea seg16:0x154a-0x15e0] (M4 s6 fixer: +0x7b read 0 here,
+    // so the visit's s4 was 120 for a size-33 ship, compare item 1).
+    if (index >= 0 && static_cast<std::size_t>(index) < w_.roster.size())
+        return world::roster_byte(w_.roster[static_cast<std::size_t>(index)], off);
     auto it = roster_side().find({index, off});
     return it == roster_side().end() ? 0 : it->second;
 }
 void WorldPurchaseHost::set_roster_byte(int index, int off, int v) {
     if (index >= 0 && static_cast<std::size_t>(index) < w_.roster.size()) {
-        RosterRecord& r = w_.roster[static_cast<std::size_t>(index)];
-        if (off >= 0x33 && off <= 0x37) {
-            r.b33[static_cast<std::size_t>(off - 0x33)] = static_cast<std::int8_t>(v);
-            return;
-        }
-        if (off == 0x7a) {
-            r.size = static_cast<std::uint8_t>(v);
-            return;
-        }
+        world::roster_byte(w_.roster[static_cast<std::size_t>(index)], off) = static_cast<std::uint8_t>(v);
+        return;
     }
     roster_side()[{index, off}] = static_cast<std::uint8_t>(v);
 }

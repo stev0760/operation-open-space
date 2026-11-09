@@ -228,23 +228,8 @@ TEST_CASE("intro pixels: the exact 2x doubling, clipped") {
     CHECK(d2 == std::vector<std::uint8_t>{2, 3, 3, 0, 0, 0, 0, 0});
 }
 
-TEST_CASE("intro pixels: ordinal 12's stand-in maps colour k to its ramp entry") {
-    CHECK(ordinal12_entry(0) == 185);
-    CHECK(ordinal12_entry(1) == 188);
-    CHECK(ordinal12_entry(9) == 212);
-    CHECK(ordinal12_entry(10) == 213);
-    CHECK(ordinal12_entry(14) == 229);
-    CHECK(ordinal12_entry(15) == 0);
-    is::fmt::Dib d;
-    d.width = 2;
-    d.height = 1;
-    d.bpp = 8;
-    d.palette.assign(256, 0);
-    d.bits = {1, 14, 0, 0};
-    d.bottom_up = false;
-    const auto px = ordinal12_plain(d);
-    CHECK(px == std::vector<std::uint8_t>{188, 188, 229, 229, 188, 188, 229, 229});
-}
+// Ordinal 12's smoothed picture of graphic 300 (the title's reveal) is tested in
+// test_gfx_smooth_render.cpp against probe-0001's emblem.
 
 TEST_CASE("intro texts: golden: the strings and resources the intro reads") {
     const auto dir = original_dir();
@@ -290,14 +275,11 @@ TEST_CASE("intro texts: golden: the strings and resources the intro reads") {
     CHECK(p1[10].empty());
     CHECK(lang.find(5000, 200));
 
-    // graphic 300: colour 0 is never used, so the stand-in uses entries 188-229 and black only
+    // graphic 300, the title picture: 138 x 138 at 4 bpp, colour 15 black (no fixed set)
     const is::fmt::Dib d300 = store.sprite(300, is::assets::kGameDll);
     CHECK(d300.width == 138);
     CHECK(d300.height == 138);
-    const auto px = ordinal12_plain(d300);
-    CHECK(px.size() == 276u * 276u);
-    std::set<int> used(px.begin(), px.end());
-    CHECK(used.count(0) == 1);
-    for (int e : used) CHECK((e == 0 || (e >= 188 && e <= 229)));
-    CHECK(used.count(185) == 0);
+    CHECK(d300.bpp == 4);
+    REQUIRE(d300.palette.size() >= 16);
+    CHECK(d300.palette[15] == 0u);
 }

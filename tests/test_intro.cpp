@@ -208,7 +208,7 @@ TEST_CASE("intro: the title's first frame (seg15:0x6cdc)") {
     CHECK(o[25] == "free title");
     CHECK(o[26] == "make_title_reveal");
     CHECK(o[27].rfind("blit reveal 374 ", 0) == 0);
-    CHECK(r.host.has_todo("ordinal 12"));
+    CHECK_FALSE(r.host.has_todo("ordinal 12"));  // the smoothed picture is ported (gfx/smooth_render.h)
     // no 256-colour hint (ADR 0007 decision 5)
     for (const auto& s : o) CHECK(s.find("256 color") == std::string::npos);
     // the Press 'R' line restored the background and TRANSPARENT

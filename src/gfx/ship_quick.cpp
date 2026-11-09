@@ -128,10 +128,18 @@ QuickCells quick_cells_for(const fmt::Dib& body, int body_id, PaletteManager& pm
     // seg5:0x1b8e(hPal, id, lib, kind 0 ? 3 : 1, b1, b2, 0) with DGROUP:0x188 = 1 [BYTES ISPACE.DLL
     // seg6:0x55e8-0x562c]; the DGROUP:0x15c pass inside it [BYTES ISPACE.DLL seg5:0x2a69].
     std::vector<std::uint32_t> table = body.palette;
-    pm.recolour_graphic(pal, body_id, table, kind0 ? 3 : 1, b1, b2, 0, true);
+    // seg6:0x7fc8 while DGROUP:0x1ea8 is set [BYTES ISPACE.DLL seg6:0x5630-0x563b] (palette.h
+    // fixed_set_remap).
+    fmt::Dib remapped;
+    const fmt::Dib* src = &body;
+    if (pm.recolour_graphic(pal, body_id, table, kind0 ? 3 : 1, b1, b2, 0, true)) {
+        remapped = body;
+        fixed_set_remap(remapped);
+        src = &remapped;
+    }
     if (table.size() < 16) table.resize(16, 0);
     const QuickColourMap map = quick_colour_map(pm, pal, table, b1, b2, st.id_a, st.id_b, st.dg_1a6);
-    return render_quick_cells(body, map, gap_word, heading);
+    return render_quick_cells(*src, map, gap_word, heading);
 }
 
 }  // namespace is::gfx

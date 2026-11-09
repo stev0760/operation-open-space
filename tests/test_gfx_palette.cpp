@@ -7,6 +7,7 @@
 
 #include "assets/asset_store.h"
 #include "doctest.h"
+#include "formats/dib.h"
 #include "gfx/palette.h"
 
 using namespace is::gfx;
@@ -466,7 +467,7 @@ TEST_CASE("gfx palette: seg5:0x26a2 recolours graphic tables") {
     SUBCASE("a non-black entry 15 brings the fixed 16 colours") {
         auto u = t;
         u[15] = 0x000100;
-        pm.recolour_graphic(h, 300, u, 3, 12, 12, 0, false);
+        CHECK(pm.recolour_graphic(h, 300, u, 3, 12, 12, 0, false));  // DGROUP:0x1ea8 = 1
         CHECK(u[0] == 0x00ff00);
         CHECK(u[12] == 0xffffff);
         CHECK(u[15] == 0);
@@ -474,7 +475,7 @@ TEST_CASE("gfx palette: seg5:0x26a2 recolours graphic tables") {
         // [BYTES ISPACE.DLL seg5:0x2706-0x2726]
         auto v = t;
         v[15] = 0x010000;
-        pm.recolour_graphic(h, 300, v, 3, 12, 12, 0, false);
+        CHECK_FALSE(pm.recolour_graphic(h, 300, v, 3, 12, 12, 0, false));
         CHECK(v[0] == t[0]);
         pm.recolour_graphic(h, 300, v, 3, 12, 12, 0, true);
         CHECK(v[0] == 0x00ff00);
@@ -603,4 +604,48 @@ TEST_CASE("gfx palette: the title palette from the documented call sequence") {
     } else {
         MESSAGE("IS_ORIGINAL_DIR not set: #5500 100 golden checks skipped");
     }
+}
+
+// ISPACE.DLL seg6:0x7fc8 (review H4): under the fixed 16-colour set each pixel keeps the VGA colour
+// of its index; graphic 76's grey (8), silver (7) and black (0) stay grey, silver and black
+// [BYTES ISPACE.DLL seg6:0x80bc-0x815b seg6:0x8197-0x81df] [ORACLE core-0008].
+TEST_CASE("gfx palette: seg6:0x7fc8 remaps a fixed-set graphic's nibbles") {
+    is::fmt::Dib d;
+    d.width = 3;
+    d.height = 2;
+    d.bpp = 4;
+    d.bits = {0x87, 0x00, 0, 0, 0x0f, 0xa0, 0, 0};  // rows: (8, 7, 0), (0, 15, 10)
+    fixed_set_remap(d);
+    // 8 -> 14 (#808080), 7 -> 13 (#C0C0C0), 0 -> 15 (#000000), 15 -> 12 (#FFFFFF), 10 -> 0 (#00FF00)
+    CHECK(d.bits[0] == 0xed);
+    CHECK(d.bits[1] == 0xf0);  // x = 2's high nibble; the pad nibble (x = 3) is left
+    CHECK(d.bits[4] == 0xfc);
+    CHECK(d.bits[5] == 0x00);
+    CHECK(d.bits[2] == 0);  // the row padding is not touched
+    // Under the fixed set (palette.cpp kFixed16) each mapped index shows its VGA colour.
+    PaletteManager pm;
+    const PalHandle h = pm.create(0);
+    std::vector<std::uint32_t> t(16, 0);
+    t[15] = 0x0000ff;
+    REQUIRE(pm.recolour_graphic(h, 76, t, 3, 12, 12, 0, false));
+    const std::uint32_t vga[16] = {0x000000, 0x800000, 0x008000, 0x808000, 0x000080, 0x800080, 0x008080, 0xc0c0c0,
+                                   0x808080, 0xff0000, 0x00ff00, 0xffff00, 0x0000ff, 0xff00ff, 0x00ffff, 0xffffff};
+    for (int v = 0; v < 16; ++v) {
+        is::fmt::Dib one;
+        one.width = 1;
+        one.height = 1;
+        one.bpp = 4;
+        one.bits = {static_cast<std::uint8_t>(v << 4), 0, 0, 0};
+        fixed_set_remap(one);
+        CAPTURE(v);
+        CHECK(t[static_cast<std::size_t>(one.bits[0] >> 4)] == vga[v]);
+    }
+    // Another depth is left alone [DESIGN].
+    is::fmt::Dib e;
+    e.width = 1;
+    e.height = 1;
+    e.bpp = 8;
+    e.bits = {7, 0, 0, 0};
+    fixed_set_remap(e);
+    CHECK(e.bits[0] == 7);
 }

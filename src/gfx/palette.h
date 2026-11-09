@@ -12,6 +12,10 @@
 #include <functional>
 #include <vector>
 
+namespace is::fmt {
+struct Dib;
+}
+
 namespace is::gfx {
 
 struct Rgb {
@@ -133,12 +137,20 @@ public:
     // command 6), a and b the scheme rows (12 or -1: keep), `last` the last argument
     // (non-zero: record a and b), `ordinal12` DGROUP:0x188 (set by ordinal 12's seg7:0x12d8).
     // seg5:0x1b8e's command 3 for d 0 and 2 is included.
-    void recolour_graphic(PalHandle pal, int id, std::vector<std::uint32_t>& table, int d, int a,
+    // Returns ISPACE.DLL DGROUP:0x1ea8: true when the fixed 16-colour set replaced the table, after
+    // which the loader calls seg6:0x7fc8 (fixed_set_remap) [BYTES ISPACE.DLL seg5:0x26d8 seg5:0x272b
+    // seg5:0x571-0x57c seg6:0x1f5-0x200 seg6:0x5630-0x563b seg7:0x13aa-0x13b8].
+    bool recolour_graphic(PalHandle pal, int id, std::vector<std::uint32_t>& table, int d, int a,
                           int b, int last, bool ordinal12);
 
     // ---- state
     bool valid(PalHandle pal) const { return slot_of(pal) >= 0; }
     const PaletteArray* working(PalHandle pal) const;   // DGROUP:0x116c[slot]
+    // The same entries for the DLL's own writers outside the manager: ordinal 12's ramp builder
+    // ISPACE.DLL seg7:0x4ee8 writes them through DGROUP:0x1168 = DGROUP:0x116c[slot] + 4 [BYTES
+    // ISPACE.DLL seg7:0x4f36-0x4f4a seg7:0x50aa seg7:0x543d] (gfx/smooth_render.h). Null when
+    // the handle is not found.
+    PaletteArray* working_entries(PalHandle pal);
     const PaletteArray* stored(PalHandle pal, int set) const;  // DGROUP:0x14a4[slot*2+set]
     int kind(PalHandle pal) const;                      // DGROUP:0x1e92[slot], -1 unknown
     int mode(PalHandle pal) const;                      // DGROUP:0x1e9c[slot], -1 unknown
@@ -160,6 +172,20 @@ public:
     int ramp_uses(int mode, int record) const;
     // DGROUP:0x1f3c: palettes created and not deleted (the ALPHABET reference count).
     int alphabet_refs() const { return alphabet_refs_; }
+    // DGROUP:0x1eaa and DGROUP:0x1eac, the ramp flags of seg5:0x26a2 (BSS: 0 until the first
+    // write). recolour_graphic writes them only on its d = 0 path at depth >= 8 other than a = 4,
+    // b = -1: each is 1, cleared when a colour of its range (0-9, 10-14) is brighter than the one
+    // before, then forced to 1 when its scheme byte is not 12; they keep their values across calls
+    // [BYTES ISPACE.DLL seg5:0x2ec2 seg5:0x2fde seg5:0x2fe4 seg5:0x3100 seg5:0x3106-0x3118].
+    // Readers: ordinal 12's seg7:0x12d8, which sets b1 (b2) to 100 when DGROUP:0x1eaa (0x1eac) is
+    // not 0 [BYTES ISPACE.DLL seg7:0x1541-0x1551], and ordinal 2 on kind-1 palettes [BYTES
+    // ISPACE.DLL seg6:0xd4e-0xd78] (work/analysis/m4/s6-ord12.md 2.2, verified claims 13 and 14).
+    int dg_1eaa() const { return dg_1eaa_; }
+    int dg_1eac() const { return dg_1eac_; }
+    // DGROUP:0x1e80 + 6 slot + 2k (k = 0 ... 2), ordinal 14's blend rows on kind-1 palettes:
+    // ordinal 12 writes -1 to k = 0 and 1 before its load [BYTES ISPACE.DLL seg7:0x1328-0x134a].
+    void set_blend_from(PalHandle pal, int k, int row);
+    int blend_from(PalHandle pal, int k) const;
 
     // ISPACE.DLL seg5:0x64f8(slot, r, g, b, s1, s2), cdecl: 0 in palette mode 2 (`xor al, al`
     // at seg5:0x6512; the callers clear AH); otherwise the scheme ids s1 then s2, each looked
@@ -201,6 +227,7 @@ private:
     std::array<std::array<int, kRecords>, kModes> record_uses_{};      // DGROUP:0x1eb8
     std::array<std::array<Ramp, kRecords>, kModes> records_{};         // DGROUP:0x1398
     int alphabet_refs_ = 0;  // DGROUP:0x1f3c
+    int dg_1eaa_ = 0, dg_1eac_ = 0;  // DGROUP:0x1eaa, DGROUP:0x1eac
     PublishFn on_publish_;
     AlphabetFn on_alphabet_;
 };
@@ -233,5 +260,18 @@ using QuickColourMap = std::array<std::uint8_t, 15>;
 // map stays 0 there. `dg_1a6` is DGROUP:0x1a6 (seg5:0x64f8's last entry).
 QuickColourMap quick_colour_map(PaletteManager& pm, PalHandle pal, const std::vector<std::uint32_t>& table,
                                 int b1, int b2, int id_a, int id_b, int& dg_1a6);
+
+// ISPACE.DLL seg6:0x7fc8(hPal, hDib), which ordinals 1, 2 and 12 and the quick cells' loader call
+// when DGROUP:0x1ea8 is set (recolour_graphic returned true): a fresh 4-bpp BITMAPINFOHEADER over
+// the DIB's (seg5:0x22e6) and every pixel's nibble v replaced by (15, 5, 1, 2, 9, 6, 10, 13, 14,
+// 4, 0, 3, 8, 7, 11, 12)[v], so that under the fixed set each pixel keeps the VGA colour of its
+// own index (index 8 grey, 7 silver, 0 black) [BYTES ISPACE.DLL seg6:0x7fef-0x8042 seg6:0x8050-0x81fc].
+// Its four class counters and the words DGROUP:0x1670 / 0x1672 it leaves have no reader in
+// ISPACE.DLL [BYTES ISPACE.DLL seg6:0x8162-0x8174 seg6:0x81fe-0x8252]; they are not kept. A DIB of
+// another depth is left alone [DESIGN: the bytes rewrite it as 4 bpp; no graphic reaches that].
+// core-0008's far boxes of the landing corridor show the colours this gives [ORACLE core-0008];
+// the reading is the M4 s6 fixer's [OPEN: unchecked by a verifier; docs/re keeps seg6:0x7fc8
+// open until a verify round on seg6:0x7fc8-0x8264].
+void fixed_set_remap(fmt::Dib& dib);
 
 }  // namespace is::gfx

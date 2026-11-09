@@ -83,9 +83,10 @@ std::string format(const std::string& f, const std::vector<Arg>& args, const Loo
 
 // seg15:0xcb0 [BYTES seg15:0xcc7 seg15:0xcda seg15:0xd15 seg15:0xd1c seg15:0xd29 seg15:0xd35
 // seg15:0xda9 seg15:0xdbd seg15:0xe02 seg15:0xe69 seg15:0xe6e seg15:0xe74 seg15:0xe94
-// seg15:0xec2 seg15:0xed5 seg15:0xee4 seg15:0xeed]. State 0 only: the sound 0x4b and the
-// 1550 ms wait of the other states are not reached.
+// seg15:0xec2 seg15:0xed5 seg15:0xee4 seg15:0xeed]. State 0: the sound 0x4b and the 1550 ms
+// wait of the other states are not reached (enter_visit has them).
 void Desk::enter(Tick now, int W, int H, int play_h) {
+    state_ = 0;
     now_ = now;
     W_ = W;
     H_ = H;
@@ -117,6 +118,32 @@ void Desk::enter(Tick now, int W, int H, int play_h) {
     step_ = 0;                  // [BYTES seg15:0xed5]
     wait_ = now + 1100;         // DGROUP:0x3cc4 [BYTES seg15:0xee4]
     built_ = true;
+}
+
+// seg15:0xcb0 outside state 0 (verified claims 29, 30 and 32 of s6-pacing-verify.md): the
+// ShowLaunch test, the palette, the scene and the deadline DGROUP:0x3cc4 are state 0's
+// [BYTES seg15:0xd01-0xd08 seg15:0xede seg15:0xee4].
+void Desk::enter_visit(Tick now, int W, int H, int pad_w, int pad_c, int end_y) {
+    state_ = 6;
+    now_ = now;
+    W_ = W;
+    H_ = H;
+    play_h_ = H;
+    pad_w_ = pad_w;  // DGROUP:0x3ce6
+    pad_c_ = pad_c;  // DGROUP:0x3c9a
+    t_ = Typing{};
+    built_ = false;
+    rise_alive_ = false;
+    host_.sound(0x6e);  // seg10:0x744c(0x6e) [BYTES seg15:0xcc5 seg15:0xcc7]
+    // dword DGROUP:0x6e28 = DGROUP:0x1e50 + 90000 [BYTES seg15:0xccd-0xcdd] has readers only in
+    // state 0 and the title (verified claim 33), so state 6 keeps no copy [DESIGN].
+    step_ = 5;          // DGROUP:0x92d4 [BYTES seg15:0xede]
+    host_.sound(0x4b);  // [BYTES seg15:0xeeb seg15:0xeed]
+    // seg10:0x740c until GetCurrentTime >= the start + 0x60e, unsigned dword [BYTES seg15:0xef3
+    // seg15:0xef8 seg15:0xf04-0xf18].
+    host_.pump_until(host_.now() + 1550);
+    start_y_ = end_y;  // DGROUP:0x92d8 = DGROUP:0x92d6 [BYTES seg15:0xf1a seg15:0xf1d]
+    end_y_ = 10;       // DGROUP:0x92d6 = 10 [BYTES seg15:0xf20]
 }
 
 // seg15:0x52e4 [BYTES seg15:0x5313 seg15:0x5338-0x5394 seg15:0x53d2 seg15:0x53e5 seg15:0x56ef
@@ -175,10 +202,12 @@ bool Desk::frame(Tick now) {
         host_.sound(0x4b);  // [BYTES seg15:0x110a]
         const Tick t = host_.now() + 1460;
         host_.pump_until(t - 400);
-        const int k = 4 * play_h_ / 3 - 1100;  // seg15:0x482e [BYTES seg15:0x483d seg15:0x48c2]
-        pad_w_ = k / 36 + 164;
-        pad_c_ = k / 30 + 80;
-        canvas_.make_pad(pad_w_, pad_c_ + 52);
+        // seg15:0x482e from the play height and the client height (gfx/pad.h) [BYTES
+        // seg15:0x483d-0x4975] (M4 s6 PAD, binding 2).
+        const gfx::PadGeometry pg = gfx::pad_geometry(play_h_, H_);
+        pad_w_ = pg.pw;
+        pad_c_ = pg.pc;
+        canvas_.make_pad_for(play_h_, H_);
         host_.pump();
         size_ = canvas_.make_ship(host_.ini("MainShip", "EAGLE"));  // seg15:0x9e6, seg15:0x2a08
         host_.pump_until(t);
@@ -188,10 +217,17 @@ bool Desk::frame(Tick now) {
     }
     case 3: rise(false); break;
     case 5: {
-        canvas_.screen_to_scene(monitor_.l + 29, monitor_.t + 29, monitor_.w() - 58, screen_h_ - 58);
-        host_.busy_until(host_.now() + 800);  // [BYTES seg15:0x11df]
+        if (state_ == 0) {
+            canvas_.screen_to_scene(monitor_.l + 29, monitor_.t + 29, monitor_.w() - 58, screen_h_ - 58);
+            host_.busy_until(host_.now() + 800);  // [BYTES seg15:0x11df]
+        } else {
+            // seg15:0x9e6 outside state 0, no BitBlt and no wait (verified claim 35) [BYTES
+            // seg15:0x1193-0x1198 seg15:0x11fe seg15:0x11ff]; INI MainShip in seg15:0x2a08's
+            // 20-byte buffer [BYTES seg15:0x2a39-0x2a50].
+            size_ = canvas_.visit_ship(host_.ini("MainShip", "EAGLE"));
+        }
         launch(2);
-        wait_ = host_.now() + 950;  // [BYTES seg15:0x120e]
+        wait_ = host_.now() + 950;  // in every state (verified claim 36) [BYTES seg15:0x120e seg15:0x121b]
         ++step_;
         break;
     }
@@ -222,6 +258,14 @@ bool Desk::frame(Tick now) {
 // seg15:0x12bd seg15:0x1328 seg15:0x1342 seg15:0x13a8 seg15:0x14be].
 void Desk::end() {
     host_.pump();
+    if (state_ != 0) {
+        // Outside state 0: seg15:0x1328(1) (its 1300 ms wait is state 0's) and seg15:0x14be, then
+        // the visit's phase is raised; no PatBlt, no 450 ms, no palette and no Navigation
+        // (verified claim 39) [BYTES seg15:0x1263 seg15:0x1268 seg15:0x1270 seg15:0x12e5-0x12ec].
+        canvas_.free_all();
+        step_ = 9;
+        return;
+    }
     const bool early = canvas_.pad_alive() && size_ != 0;
     canvas_.free_all();
     if (early) host_.busy_until(host_.now() + 1300);  // seg15:0x1328 after an early ESC
@@ -351,8 +395,9 @@ bool Desk::rise(bool first) {
         rise_alive_ = true;
     }
     if (!rise_alive_) return false;
+    // The blit at the current offset, then the update, on the first call too (s6-pad-verify.md
+    // claim 60) [BYTES seg15:0x51ed-0x520d seg15:0x5212-0x5238] (M4 s6 PAD, binding 3).
     canvas_.rise(pad_w_, pad_c_ + 52, s4_, W_ / 2 - pad_w_ / 2, H_ - s4_ - 0x43 + rise_off_);
-    if (first) return false;
     if (rise_off_ <= 5) {
         ++step_;
         canvas_.free_rise();
@@ -373,7 +418,8 @@ std::array<ShipFrame, kShipFrames> ship_frames(int s) {
         w -= step;
         const int p = i <= 9 ? 101 - 6 * i : 41 + 13 * (i - 10);
         y += out[i - 1].h;
-        out[i] = {w, w * p / 100, y};
+        // The 16-bit product before the divide (verified claim 42) (M4 s6 PAD, binding 4).
+        out[i] = {w, static_cast<std::int16_t>(w * p) / 100, y};
     }
     return out;
 }
@@ -395,19 +441,28 @@ int launch_speed(int f, bool fast) { return std::max(9, fast ? 150 - 4 * f : 150
 
 int launch_advance10(int speed, bool fast) { return (fast ? 3 : 5) * speed / -7; }
 
-// seg15:0x0(arg) in state 0 [BYTES seg15:0x58 seg15:0xc3 seg15:0xce seg15:0x14f seg15:0x185
+// seg15:0x0(arg) [BYTES seg15:0x58 seg15:0xc3 seg15:0xce seg15:0x14f seg15:0x185
 // seg15:0x18b-0x221 seg15:0x25d seg15:0x262 seg15:0x272 seg15:0x290 seg15:0x2c4 seg15:0x598
 // seg15:0x5b6 seg15:0x5cb seg15:0x613 seg15:0x6c3 seg15:0x6db seg15:0x6ea seg15:0x72f
-// seg15:0x74f].
+// seg15:0x74f]; state 6's differences are verified claims 41-47 of s6-pacing-verify.md.
 int Desk::launch(int arg) {
+    // s4 on every call: 4·DGROUP:0x92da in state 0, 4·trunc(bmHeight(DGROUP:0x92b0)/k) outside
+    // it, which is the s that seg15:0x9e6 returned at step 5 (visit_ship) [BYTES seg15:0xe-0x4a].
+    s4_ = 4 * size_;
     if (arg == 2) {
         host_.sound(0x20);
         const int px = W_ / 2 - pad_w_ / 2;  // DGROUP:0x3cb0
         const int py = H_ - pad_c_ - 0x34;   // DGROUP:0x3cb2
-        canvas_.pad_to_screen(px, py);
-        start_y_ = py - s4_ + pad_c_ - 10;   // DGROUP:0x92d8 = H − s4 − 62
-        end_y_ = 60;                         // DGROUP:0x92d6
-        pos10_ = start_y_ * 10;
+        // y0 only while the pad DC DGROUP:0x92b6 exists, else y0 keeps its value [BYTES
+        // seg15:0xb2-0xc3]: DGROUP:0x92d8 = H − s4 − 62.
+        if (canvas_.pad_dc()) start_y_ = py - s4_ + pad_c_ - 10;
+        if (state_ == 0) {
+            canvas_.pad_to_screen(px, py);
+            end_y_ = 60;  // DGROUP:0x92d6
+        } else {
+            end_y_ = -10;  // 0xfff6, no blit (state 6) [BYTES seg15:0xf5-0x102]
+        }
+        pos10_ = start_y_ * 10;  // DGROUP:0x17c2 [BYTES seg15:0x14f seg15:0x154]
         speed_ = 150;
         f_ = 0;
         lum_ = 100;
@@ -432,26 +487,48 @@ int Desk::launch(int arg) {
     d.s = size_;
     const int y = pos10_ / 10;
     d.ship = {W_ / 2 - 2 * size_, y, W_ / 2 - 2 * size_ + s4_, y + s4_ + 15};
-    d.scene = true;  // desk phase 6 (DGROUP:0x95b8)
+    // The scene part in desk phase 6 (DGROUP:0x95b8) or state 8: in state 6 the work DC holds
+    // black, the pad part and the frame (verified claim 48) [BYTES seg15:0x310 seg15:0x317].
+    d.scene = state_ == 0;
     d.column = {monitor_.l, monitor_.t, monitor_.r, desk_bottom_};
     const int px = W_ / 2 - pad_w_ / 2, py = H_ - pad_c_ - 0x34;
     d.pad = {px, py, px + pad_w_, py + pad_c_ + 52};
+    if (arg == 2) prev_top_ = y;  // DGROUP:0x17cc = DGROUP:0x17dc [BYTES seg15:0x2be seg15:0x2c1]
+    d.state = state_;
+    d.y0 = start_y_;
+    d.ye = end_y_;
+    d.pos10 = pos10_;
+    d.prev_top = prev_top_;
     canvas_.launch_frame(d);
+    prev_top_ = y;  // after the screen blit [BYTES seg15:0x592 seg15:0x595]
     ship_rect_ = d.ship;
     pos10_ += launch_advance10(speed_, fast);
+    if (10 * end_y_ > pos10_ && state_ != 0) {
+        // The end outside state 0 [BYTES seg15:0x5c4 seg15:0x5c9]: sound 0x15 (AWAY); the scene
+        // DC DGROUP:0x929a is absent in state 6 (seg15:0x1328(1) freed it at the descent's start
+        // [BYTES seg15:0x35d0 seg15:0x146a]), so the ship's last rectangle is blacked, PatBlt
+        // BLACKNESS with the extents DGROUP:0x17de - DGROUP:0x17da and DGROUP:0x17e0 -
+        // DGROUP:0x17dc; then the CRT flash seg15:0x84b0(left + (right - left)/2, top + 12),
+        // which plays seg10:0x754a(0x14, x, y, 4) outside state 0's step 7; no restores and no
+        // 1460 ms pump (verified claims 44-47) [BYTES seg15:0x61e seg15:0x620 seg15:0x626
+        // seg15:0x69e-0x6be seg15:0x6c3-0x6db seg15:0x84c6 seg15:0x6e3-0x6e8 seg15:0x751].
+        host_.sound(0x15);
+        canvas_.black(ship_rect_.l, ship_rect_.t, ship_rect_.r - ship_rect_.l, ship_rect_.b - ship_rect_.t);
+        const int fx = ship_rect_.l + (ship_rect_.r - ship_rect_.l) / 2, fy = ship_rect_.t + 12;
+        host_.sound_at(0x14, fx, fy, 4);
+        canvas_.flash(fx, fy);
+        return 1;
+    }
     if (10 * end_y_ > pos10_) {
-        // The oracle shows the ship at the top for 1.43 s before the second restore; how that time
-        // splits among the first restore, the ordinal-9 sound call and the flash is [OPEN]
-        // (shell.md item 9, End of the rise). The oracle's 0x4c starts that time (sound-0001:
-        // 0x4c, then 3.3 s to 0x4d) [ORACLE sound-0001 main], so the port plays it first and
-        // then holds the shown frame (with the ship, as the oracle's screen keeps it) before the
-        // first restore, the flash and the second restore [OPEN seg15:0x5cb
-        // seg15:0x613 seg15:0x6db] [ORACLE start-0001 main] (M7 fixer).
-        host_.sound_at(0x4c, 0, 0, 0);
-        host_.busy_until(host_.now() + kLaunchEndHold);
+        // State 0's exit: the first restore of the monitor text area from the scene DC (BitBlt at
+        // seg15:0x606), seg10:0x754a(0x4c, 0, 0, 0) at seg15:0x613, the CRT flash seg15:0x84b0,
+        // silent at step 7 (seg15:0x84bf), the second restore (seg15:0x725) and the 1460 ms
+        // GetCurrentTime pump-wait (seg15:0x72a-0x74f). core-0007 shows the ship gone 20 ms after
+        // 0x4c and step 8 1.478 s after it (compare item 2) [BYTES seg15:0x5c4-0x613 seg15:0x6c3-0x6db
+        // seg15:0x725-0x74f] [ORACLE core-0007].
         const int x = monitor_.l + 29, y = monitor_.t + 29, w = monitor_.w() - 58, h = screen_h_ - 58;
         canvas_.scene_to_screen(x, y, w, h);
-        // seg15:0x84b0 silent at step 7 [BYTES seg15:0x84bf]
+        host_.sound_at(0x4c, 0, 0, 0);
         canvas_.flash(ship_rect_.l + (ship_rect_.r - ship_rect_.l) / 2, ship_rect_.t + 12);
         canvas_.scene_to_screen(x, y, w, h);
         host_.pump_until(host_.now() + 1460);

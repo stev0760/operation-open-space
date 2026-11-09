@@ -389,8 +389,6 @@ void Intro::title_first_frame() {
     std::memset(row_map_, 0, sizeof row_map_);
     // At 8 bpp and above the second copy is ordinal 12 (seg15:0x757c -> seg10:0x73a6).
     canvas_.make_title_reveal();
-    todo_once("ordinal 12's smoothed 2x picture ([OPEN]); the title reveals a plain 2x copy",
-              "seg10:0x73a6");
 }
 
 void Intro::title() {

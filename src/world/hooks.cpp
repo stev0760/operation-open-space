@@ -2,6 +2,7 @@
 // The wave set-up's hooks (hooks.h): the program's World, the state-1 load, the briefing entry's
 // world part and the wave start, wired around the briefing's own state-1 and state-3 hooks
 // (src/briefing/hooks.cpp). Win32 only: the host build compiles this file without its hooks.
+#include "gfx/guard.h"
 #include "world/hooks.h"
 #include "world/design_words.h"
 #include "world/player_sheet.h"
@@ -718,6 +719,8 @@ void install_world_hooks(App& app) {
     set_roster_todo([](const std::string& what, const char* address) { todo_once(what, address); });
     // So do the guards of ADR 0016 decision 2 (world.h guard_todo).
     set_guard_todo([](const std::string& what, const char* address) { todo_once(what, address); });
+    // and those of the ISPACE.DLL ordinals in src/gfx (gfx/guard.h) (M4 s6 fixer, review M7).
+    gfx::set_guard_todo([](const std::string& what, const char* address) { todo_once(what, address); });
     set_frame_world(&g_world);  // the frame's own drawing reads this World (update.h, M3 s4 DRAW)
     // DGROUP:0x1e84 in one store: the shell's state-9 case reads World::w1e84 (M4 s5, D-24).
     app.game.bind_scores_due(&g_world.w1e84);

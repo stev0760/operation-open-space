@@ -330,13 +330,15 @@ TEST_CASE("desk: the step table of seg15:0x10be with a fake clock") {
     d.frame(h.t);  // step 2: sound 0x4b, the pad and ship, the rise's first call
     CHECK(d.step() == 3);
     CHECK(cv.pad);
-    // Step 3 repeats the rise until its offset is down to 5: (128 + 62 - 5)/2 + 1 calls.
+    // Step 3 repeats the rise until its offset is down to 5: step 2's first call already moved
+    // the strip by 2 (s6-pad-verify.md claim 60: the blit, then the update, on the first call
+    // too), so (128 + 62 - 5 + 1)/2 calls.
     int rises = 0;
     while (d.step() == 3 && rises < 1000) {
         d.frame(h.t);
         ++rises;
     }
-    CHECK(rises == (128 + 0x3e - 5 + 1) / 2 + 1);
+    CHECK(rises == (128 + 0x3e - 5 + 1) / 2);
     CHECK(d.step() == 4);
     CHECK_FALSE(cv.pad);
     // Step 4 types the launch line to the NUL: step 5.

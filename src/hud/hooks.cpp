@@ -17,7 +17,12 @@
 #include "audio/audio.h"
 #include "briefing/debriefing.h"
 #include "briefing/hooks.h"
+#include "desk/desk.h"
+#include "desk/gdi_desk.h"
+#include "desk/scene_gdi.h"
 #include "formats/ships.h"
+#include "gfx/launch_ship.h"
+#include "gfx/ship_flame.h"
 #include "hud/design.h"
 #include "hud/gdi_canvas.h"
 #include "hud/hooks.h"
@@ -32,6 +37,7 @@
 #include "hud/wave.h"
 #include "hud/weapons.h"
 #include "shell/rng.h"
+#include "shell/window_keys.h"
 #include "world/ambulance.h"
 #include "world/flight.h"
 #include "world/flight_hooks.h"
@@ -972,11 +978,127 @@ VisitStatus visit_status() {
 
 std::unique_ptr<VisitGdi> g_visit_screen;
 
+// The desk machine's calls in state 6 (src/desk/desk.h Host), for the visit's launch at phases
+// 61 and 63 (M4 s6 PACING, plan item 5).
+class VisitDeskHost final : public desk::Host {
+public:
+    desk::Tick now() override { return now_tick(); }  // GetCurrentTime
+    void sound(int id) override { is::sound::play(id); }  // seg10:0x744c
+    void sound_at(int id, int x, int y, int mode) override { is::sound::play_at(id, x, y, mode); }  // seg10:0x754a
+    void music(int code) override { is::sound::music(code, 1); }  // seg10:0x7480
+    // seg10:0x740c is ISPACE.DLL ordinal 7 command 9 (the WaveMix pump) while the game's task
+    // owns the active window, not a message pump (verified claim 22) [BYTES seg10:0x7419-0x7441];
+    // the port shows the surface and lets the time pass without dispatching [DESIGN].
+    void pump() override { app::present_frame(); }
+    void pump_until(desk::Tick t) override { wait_until(t); }
+    void busy_until(desk::Tick t) override { wait_until(t); }
+    std::string lang(int id) override { return hud::lang_text(id); }
+    std::string lang_text(int, int) override { return {}; }  // the desk monitor's only (state 0)
+    // seg15:0x2a08's GetPrivateProfileString into 20 bytes [BYTES seg15:0x2a39-0x2a50].
+    std::string ini(const char* key, const char* def) override {
+        return g.ini ? g.ini->get_string(settings::kGameSection, key, def, 20) : std::string(def);
+    }
+    int ini_int(const char* key, int def) override {
+        return g.ini ? g.ini->get_int(settings::kGameSection, key, def) : def;
+    }
+    desk::Clock clock() override { return {}; }  // the desk monitor's only (state 0)
+    int rand() override { return shell::game_rng().rand(); }
+    int calibrate_value() override { return shell::kCalibrate; }  // ADR 0001 decision 9
+    desk::Conditions conditions() override { return {}; }      // the scene's only (state 0)
+    desk::Render render(int, int W, int H) override {          // the scene's only (state 0)
+        desk::Render r;
+        r.proj.W = W;
+        r.proj.H = H;
+        return r;
+    }
+    void todo(const std::string& what, const char* address) override { visit_todo(what, address); }
+
+private:
+    static void wait_until(desk::Tick t) {
+        app::present_frame();
+        while (static_cast<std::int32_t>(t - now_tick()) > 0) Sleep(1);
+    }
+};
+
+// The visit's desk machine (seg15:0xcb0 / seg15:0x10be in state 6) on its own canvas over the
+// program's surface, as the desk scene's (src/desk/hooks.cpp). The canvas reads the visit's ship
+// and pad images DGROUP:0x92b0, DGROUP:0x92b2 and DGROUP:0x92a8 (VisitGdi::launch_pictures; the
+// PAD track's Canvas::visit_ship and Canvas::pad_dc), and seg15:0x2a08's branch A from INI
+// MainShip (desk::program_ships) when the visit has no ship image [DESIGN] (M4 s6 PAD, binding 6).
+desk::Desk& launch_desk() {
+    static VisitDeskHost host;
+    static desk::GdiDesk canvas([] { return g.gfx.get(); }, visit_todo, [](const std::string& n) {
+        return desk::program_ships() ? desk::program_ships()(n) : std::optional<desk::ShipArt>{};
+    });
+    static desk::Desk d(canvas, host);
+    static const bool wired = (canvas.set_visit_pictures([] {
+        return g_visit_screen ? g_visit_screen->launch_pictures() : desk::LaunchPictures{};
+    }), true);
+    (void)wired;
+    return d;
+}
+
+// seg15:0x20ca's inputs for the player's ship (gfx/launch_ship.h VisitShipArt) (M4 s6 PAD,
+// binding 6): the player's design records (player_design_records; the design table holds +0x36 =
+// BOD +0x21, bytes +0x18 / +0x1a = SHP +0x07 / +0x08, the words +0x44 and +0x48 of
+// world/player_sheet.h flame_design and +0x28 = World::design_ratings special), the ship bytes
+// +0xac, +0xad and +0xe4, the roster bytes +0x7a and +0x7b as phase 0 reads them, DGROUP:0x9e5b
+// and `Detail` DGROUP:0x9208 [BYTES seg15:0x20d9-0x2134]. An empty art (no body) leaves the pad
+// without a ship [DESIGN].
+gfx::VisitShipArt visit_ship_look() {
+    gfx::VisitShipArt v;
+    world::World& w = world::current();
+    fmt::ShipRecord shp;
+    fmt::BodyRecord body;
+    if (!g.store || !player_design_records(shp, body) || w.player < 0 || w.player >= world::kShipCount) {
+        visit_todo("the pad ship: no design records for the player", "seg15:0x20ca");
+        return v;
+    }
+    if (body.bitmap_id == fmt::kBodyBitmapFromFile) {
+        visit_todo("the pad ship of a body graphic in a .DIB file (M8)", "seg15:0x20ca");
+        return v;
+    }
+    try {
+        v.body = g.store->sprite(body.bitmap_id);
+        v.flame = g.store->sprite(gfx::kFlameGraphic);
+    } catch (const std::exception& x) {
+        visit_todo(std::string("the pad ship: ") + x.what(), "seg15:0x20ca");
+        return gfx::VisitShipArt{};
+    }
+    const world::ShipRecord& S = w.ship(w.player);
+    v.id = body.bitmap_id;
+    v.a = shp.byte_07;
+    v.b = shp.byte_08;
+    const world::FlameDesign fd = world::flame_design(shp.flags, body.flags, body.byte_19);
+    v.flame_row = fd.type;
+    v.behind = fd.behind ? 1 : 0;
+    v.ability = S.design_index >= 0 && S.design_index < world::kShipCount
+                    ? int{w.design_ratings[static_cast<std::size_t>(S.design_index)].special}
+                    : -1;
+    v.left_wing = world::sbyte_at(S, 0xac) != 0;
+    v.right_wing = world::sbyte_at(S, 0xad) != 0;
+    v.flame_on = S.has_flame != 0;
+    v.r7a = static_cast<std::int8_t>(purchase_host().roster_byte(S.roster_index, 0x7a));
+    v.r7b = static_cast<std::int8_t>(purchase_host().roster_byte(S.roster_index, 0x7b));
+    // seg15:0x20ca reads BOD +0x19 / +0x1a of the roster's SHP (roster +0x00 -> SHP +0x21 -> BOD)
+    // [BYTES seg15:0x22d1 seg15:0x2c66-0x2c85]; the port takes the player's design records, the
+    // same records unless the roster's SHP and the player's design differ [OPEN: whether a new body
+    // or a restored game makes them differ; reading the roster's SHP here settles it] (review L6).
+    v.fy = body.byte_19;
+    v.band = body.byte_1a;
+    v.dead = world::shop().alive == 0;
+    v.detail = w.detail;
+    return v;
+}
+
 // The visit's calls on the program (world/visit.h VisitHost).
 class ProgramVisitHost final : public world::VisitHost {
 public:
     std::uint32_t now() override { return g.game.now(); }
     std::uint32_t current_time() override { return now_tick(); }
+    void entry_step() override {  // seg7:0x158e (review H3)
+        if (world::sprite_links().entry_step) world::sprite_links().entry_step();
+    }
     void busy_wait(int ms) override { busy_ms(ms); }
     void pump_wait(int ms) override { busy_ms(ms); }  // seg10:0x740c's pump [OPEN: the port presents only]
     void sound(int id) override { is::sound::play(id); }
@@ -988,8 +1110,11 @@ public:
     }
     bool ctrl_held() override { return (GetKeyState(VK_CONTROL) & 0x8000) != 0; }
     int w8f70() override { return 0; }  // DGROUP:0x8f70 [OPEN: its writer]
-    int calibrate() override { return 2000; }  // DGROUP:0x8ffc [OPEN: the port's Calibrate]
+    // DGROUP:0x8ffc: the program's one Calibrate, so every Calibrate branch of the visit is the
+    // fast machine's (ADR 0001 decision 9, ruling R1 of M4 stage 6) [DESIGN].
+    int calibrate() override { return shell::kCalibrate; }
     int depth() override { return g.depth; }
+    int client_height() override { return g.area.h; }  // DGROUP:0x10 (M4 s6 PAD, binding 9)
     bool limited() override { return g.edition.edition == 0; }
     void options_dialog() override;
     void body_chooser() override { visit_todo("the New Ship Body chooser of a dead ship (M8)", "seg10:0x82a2"); }
@@ -1003,11 +1128,12 @@ public:
             g.gfx->palette_scheme(8, 0);  // seg10:0x6e76(8, 0)
         }
     }
-    void launch_enter() override {
-        visit_todo("the launch scene seg15:0xcb0 / seg15:0x10be in state 6 (the desk's)", "seg16:0x1b7c");
-        launch_due_ = now_tick() + 2800;  // [ORACLE core-0003: PREPARE FOR LAUNCH 37.477, back 40.297]
+    // Phase 61's seg15:0xcb0 and phase 63's seg15:0x10be: the desk machine in state 6 [BYTES
+    // seg16:0x1b77 seg16:0x1b7f].
+    void launch_enter(const world::VisitLayout& l, int end_y) override {
+        launch_desk().enter_visit(now_tick(), l.W, l.H, l.pad_w, l.pad_c, end_y);
     }
-    bool launch_frame() override { return static_cast<std::int32_t>(now_tick() - launch_due_) >= 0; }
+    bool launch_frame() override { return launch_desk().frame(g.game.now()); }
     void recreate_dcs() override {}
     void seg18_7b2() override { visit_todo("seg18:0x7b2 after the visit", "seg16:0x1c3b"); }
     void to_screen(std::int16_t x, std::int16_t y, std::int16_t& sx, std::int16_t& sy) override {
@@ -1025,9 +1151,6 @@ public:
     void box_2322() override { app::message_box_ids(g.main, 2322, -1); }
     int rand() override { return shell::game_rng().rand(); }
     void todo(const std::string& what, const char* address) override { visit_todo(what, address); }
-
-private:
-    Tick launch_due_ = 0;
 };
 
 ProgramVisitHost g_visit_host;
@@ -1083,10 +1206,11 @@ void ProgramVisitHost::options_dialog() {
 
 }  // namespace
 
-// State 6's hooks: the frame (seg7:0x18f's seg16:0xcfe(0)), the repaint (seg11:0xafe case 6:
-// seg16:0xcfe(1)), the input (seg11:0x785e: WM_KEYUP VK_ESCAPE with DGROUP:0x93a6 = 0 reaches
-// seg16:0x638a(0, 0, 0, 1)) and the slots of world/visit.h [BYTES seg7:0x18f seg11:0x16b6
-// seg11:0x787c seg11:0x788b].
+// State 6's hooks: the frame (seg7:0x18f's seg16:0xcfe(0), one per scheduler frame at every
+// phase: ruling R1 of M4 stage 6), the repaint (seg11:0xafe case 6: seg16:0xcfe(1)), the input
+// (seg11:0x785e: WM_KEYUP VK_ESCAPE with DGROUP:0x93a6 = 0 reaches seg16:0x638a(0, 0, 0, 1), and
+// any message with DGROUP:0x952c set seg16:0x614c) and the slots of world/visit.h [BYTES
+// seg7:0x18f seg11:0x16b6 seg11:0x787c seg11:0x788b seg11:0x789a-0x78a9].
 void install_visit(app::App& app) {
     g_visit_screen = std::make_unique<VisitGdi>([] { return g.gfx.get(); }, [] { return g_canvas.get(); }, visit_status,
                                                 [] {
@@ -1095,14 +1219,31 @@ void install_visit(app::App& app) {
                                                 });
     g_visit_screen->lang = lang_text;
     g_visit_screen->limited = [] { return g.edition.edition == 0; };
-    g_visit_screen->ship_cell = [] {  // the player's first sheet cell (M4 s4 fixer)
-        world::World& w = world::current();
-        VisitGdi::Cell c;
-        if (w.player < 0 || w.player >= world::kShipCount) return c;
-        const world::ObjectRecord& o = w.ship_object(w.player);
-        c.x = o.gap, c.y = o.gap, c.side = o.size;
-        return c;
+    // seg10:0x9526 for the landing scene (ISPACE.DLL ordinal 32, src/desk/scene_gdi.h) (M4 s6 SCENE).
+    g_visit_screen->scene = [](int id, int W, int H) -> desk::Render {
+        try {
+            if (g.store) return desk::render_scene(*g.store, id, W, H, g.screen_cx, g.screen_cy, lang_text);
+        } catch (const std::exception& x) {
+            visit_todo(std::string("#6600 ") + std::to_string(id) + ": " + x.what(), "ISPACE.DLL seg8:0x5b76");
+        }
+        desk::Render r;
+        r.proj.W = W;
+        r.proj.H = H;
+        return r;
     };
+    g_visit_screen->todo = visit_todo;
+    // seg15:0x20ca's player ship, seg15:0x2a08's INI MainShip for a new body (20 bytes [BYTES
+    // seg15:0x2a39-0x2a50]) and the play height DGROUP:0x90ec of seg15:0x482e (M4 s6 PAD, binding 6).
+    g_visit_screen->ship_look = visit_ship_look;
+    g_visit_screen->main_ship_art = []() -> std::optional<gfx::LaunchShipArt> {
+        const std::string n =
+            g.ini ? g.ini->get_string(settings::kGameSection, "MainShip", "EAGLE", 20) : std::string("EAGLE");
+        return desk::program_ships() ? desk::program_ships()(n) : std::optional<gfx::LaunchShipArt>{};
+    };
+    g_visit_screen->play_height = [] { return g.area.play_h; };
+    // DGROUP:0x953f != 0 with DGROUP:0x9563 = 0: seg15:0x2a08 branch B's common part at the launch
+    // (review H2) [BYTES seg15:0x2ca3-0x2cbe].
+    g_visit_screen->wing_repair = [] { return world::shop().wing != 0 && world::shop().new_body == 0; };
     auto& h = app.game.hooks();
     h.frame[shell::kAmbulance] = [](shell::GameState&) {
         world::VisitCtx c = visit_ctx();
@@ -1119,6 +1260,12 @@ void install_visit(app::App& app) {
                 world::VisitCtx c = visit_ctx();
                 world::visit_click(c, 0, 0, 1);
             }
+            // seg16:0x614c(msg, wParam, lParam) while DGROUP:0x952c != 0: it acts only with
+            // DGROUP:0x9530 = 1 (the Inner Demon subgame: the message into the record DGROUP:0x6da4
+            // +0x22 ... +0x29, DGROUP:0x9530 = 5, seg16:0x64fa) (verified claim 5, CORRECTED)
+            // [BYTES seg11:0x789a-0x78a9 seg16:0x6156-0x6193] [OPEN M6].
+            const world::VisitState& vs = world::visit_state();
+            if (vs.left_on != 0 && vs.left_mode == 1) visit_todo("the Inner Demon subgame's input (M6)", "seg16:0x614c");
             return;
         }
         if (prev_route) prev_route(s, in);

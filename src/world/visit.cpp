@@ -10,6 +10,7 @@
 
 #include "briefing/briefing.h"
 #include "briefing/lang_format.h"
+#include "gfx/pad.h"
 #include "world/ambulance.h"
 #include "world/world.h"
 
@@ -27,15 +28,19 @@ VisitLinks& visit_links() {
     return l;
 }
 
-VisitLayout visit_layout(int W, int H) {
+VisitLayout visit_layout(int W, int client_h, int play_h) {
     VisitLayout l;
+    const int H = client_h;  // DGROUP:0x10 [BYTES seg16:0x1fbc seg16:0x1ff5]
     l.W = W;
     l.H = H;
-    // seg15:0x482e's pad: k = 4·H/3 - 1100, width k/36 + 164, the column k/30 + 80 (the desk's
-    // values; src/desk/desk.cpp step 2) [BYTES seg15:0x483d seg15:0x48c2].
-    const int k = idiv16(lo16(4 * H), 3) - 1100;
-    l.pad_w = idiv16(lo16(k), 36) + 164;
-    l.pad_c = idiv16(lo16(k), 30) + 80;
+    // seg15:0x482e's pad from the play height DGROUP:0x90ec and the client height (gfx/pad.h
+    // pad_geometry: k = trunc(lo16(4·play_h)/3) - 1100, width k/36 + 164, the column k/30 + 80,
+    // the vanishing point's y DGROUP:0x3ca2; the desk's values, src/desk/desk.cpp step 2) [BYTES
+    // seg15:0x483d-0x4975] (M4 s6 PAD, binding 9).
+    const gfx::PadGeometry pg = gfx::pad_geometry(play_h, client_h);
+    l.pad_w = pg.pw;
+    l.pad_c = pg.pc;
+    l.vy = pg.vy;
     // seg16:0x1f78 (verified claim 47) [BYTES seg16:0x1f78-0x2142].
     l.panel_w = std::min<int>(260, idiv16(lo16(W - l.pad_w), 2) - 20);
     l.panel_h = 200;
@@ -50,6 +55,8 @@ VisitLayout visit_layout(int W, int H) {
     l.mon_h = l.panel_h - 36;
     return l;
 }
+
+VisitLayout visit_layout(int W, int H) { return visit_layout(W, H, H); }
 
 bool visit_pace_gate(const VisitState& v) { return v.left_on != 0 && v.left_mode == 1; }
 bool visit_pace_slow(const VisitState& v) { return v.phase == 1 && v.descent == 0; }
@@ -88,6 +95,46 @@ void bar_k(VisitCtx& c, int k, int v) {
 // A deadline test on the dword `now` (DGROUP:0x1e50): passed once now > d, unsigned (`ja`
 // waits) [BYTES seg16:0x11c6 seg16:0x1460].
 bool passed(std::uint32_t now, std::uint32_t d) { return d < now; }
+
+// seg16:0x64fa's tail (M4 s6 PACING, plan item 6): DGROUP:0x958a = ([bp-0x76] != 0) on every
+// call (verified claim 75, CORRECTED: but the early return of seg16:0x6507-0x651a, DGROUP:0x13dc
+// = 0 with DGROUP:0x9530 = 2, which the port's surface never meets [DESIGN]). [bp-0x76] starts
+// at 0 and only seg16:0x6818 sets it, outside state 1 when DGROUP:0x9530 = 6, which only
+// seg8:0x4671 and seg18:0x414a write, each beside the Inner Demon's seg18 code [OPEN M6], so the
+// port's visit clears the flag [BYTES seg16:0x654c seg16:0x6804-0x6818 seg16:0x6897-0x68a5
+// seg8:0x4671 seg18:0x414a].
+void left_monitor_tail(VisitState& v) { v.clicked = 0; }
+
+// seg16:0x2144 (VisitScreen::redraw) and its tail seg16:0x27d6-0x27de: seg16:0x64fa while
+// DGROUP:0x952c != 0 (verified claim 73) [BYTES seg16:0x27d6 seg16:0x27db seg16:0x27de].
+void redraw(VisitCtx& c) {
+    VisitState& v = c.v;
+    c.scr.redraw(v.lay, v.phase, v.saved_phase, v.left_on != 0);
+    if (v.left_on != 0) left_monitor_tail(v);
+}
+
+}  // namespace
+
+// seg16:0x1f78's state, called by seg15:0x374c(1) in state 6 (verified claim 70) [BYTES
+// seg15:0x3859 seg16:0x2052 seg16:0x2056] (M4 s6 PACING, plan item 4): seg16:0x27ea stores
+// DGROUP:0x952c = seg16:0x619e() when DGROUP:0x93a6 = 0 (verified claim 71) [BYTES
+// seg16:0x2e26-0x2e31]; seg16:0x619e runs seg16:0x64c8 (DGROUP:0x9530 = 3), sets DGROUP:0x958a =
+// 1 and returns 1 (verified claim 72) [BYTES seg16:0x630a seg16:0x630d seg16:0x6310]; the layout
+// is phase 0's visit_layout and the drawing VisitScreen::descent_start's; seg16:0x2144's tail
+// then clears DGROUP:0x958a (claim 73). Ctrl therefore counts at phase 0's frame and the
+// sub-step 0 frames (seg16:0xd44) [BYTES seg16:0xd44-0xd5e].
+void visit_panels(VisitCtx& c) {
+    VisitState& v = c.v;
+    if (v.demon == 0) {
+        v.w959a = 0;      // [BYTES seg16:0x6303]
+        v.left_mode = 3;  // seg16:0x64c8 [BYTES seg16:0x64d6]
+        v.clicked = 1;    // [BYTES seg16:0x630d seg16:0x6310]
+        v.left_on = 1;    // [BYTES seg16:0x2e31]
+    }
+    if (v.left_on != 0) left_monitor_tail(v);
+}
+
+namespace {
 
 // seg15:0x374c(first) in state 6, the descent's step (core.md "The descent", steps 1-5,
 // C050-C054; sound.md Catalogue "The descent", C052) [BYTES seg15:0x374c-0x3bf9] (M4 s4 fixer).
@@ -150,41 +197,79 @@ void descent(VisitCtx& c) {
     VisitState& v = c.v;
     switch (v.descent) {
     case 0:
-        if (c.scr.incoming(0) == 0) return;
-        // seg15:0x1328(1), seg15:0x1eac, the black screen, the fades and ramps, seg15:0x482e
-        // (the pad) and seg15:0x374c(1), whose return is dropped [BYTES seg15:0x36b9 seg15:0x36bc].
-        c.scr.descent_start(v.lay);
-        descent_step(c, true);
+        // seg15:0x3caa(0) returns 1 at once while DGROUP:0x928 is set (verified claim 14) [BYTES
+        // seg15:0x35a6 seg15:0x3cb9-0x3cc3].
+        if (v.fast == 0 && c.scr.incoming(0) == 0) return;
+        // dword DGROUP:0x17f2 = 0 and DGROUP:0x92a2 = 1 [BYTES seg15:0x35c1-0x35c9]; seg15:0x1328(1),
+        // seg15:0x1eac, the black screen (DGROUP:0x93a6 = 0), the fades (DGROUP:0x928 = 0) and ramps,
+        // seg15:0x482e (the pad) and seg15:0x374c(1), whose return is dropped [BYTES seg15:0x36b9
+        // seg15:0x36bc]; its seg16:0x1f78 opens the left monitor's record (visit_panels) [BYTES
+        // seg15:0x3859].
+        v.descent_due = 0;
         v.descent = 1;
+        // seg16:0x2144's 120 calls of seg7:0x158e at the descent's first redraw, which flush every
+        // entry effect still pending (their rand() draws, blits and sound 0x65), with DGROUP:0x93a6
+        // = 0 (review H3) [BYTES seg16:0x2764-0x2775]. The port makes them before the descent's
+        // set-up: nothing between draws rand(), and their window blits are covered there by the
+        // black screen (DGROUP:0x93a6 = 0 [BYTES seg15:0x35d8-0x35f3]) as the back buffer's whole
+        // blit covers them in the original [DESIGN]. The demon's seg7:0x13b2 calls there
+        // (seg16:0x2724-0x2762) are M6's.
+        if (v.demon == 0)
+            for (int i = 0; i < 120; ++i) c.h.entry_step();
+        c.scr.descent_start(v.lay, v.demon == 0, v.fast == 0);
+        visit_panels(c);
+        descent_step(c, true);
         return;
     case 1:
-        // seg15:0x374c(0) each tick until it returns 1, then sound 9 and 1000 ms [BYTES
-        // seg15:0x36cc-0x36ef].
-        if (descent_step(c, false) != 0) {
-            c.h.sound(9);
-            v.descent_due = c.h.now() + 1000;
+        // seg15:0x374c(0) per frame while dword DGROUP:0x17f2 = 0; on its non-zero return sound 9
+        // and DGROUP:0x17f2 = DGROUP:0x1e50 + 1000 (verified claim 16) [BYTES seg15:0x36c3-0x36ef];
+        // then DGROUP:0x92a2 = 2 on the frame that sees DGROUP:0x17f2 < DGROUP:0x1e50, unsigned
+        // (verified claim 17) [BYTES seg15:0x36f5-0x370a]. Ctrl does not count meanwhile
+        // (DGROUP:0x92a2 = 1) [BYTES seg16:0xd57].
+        if (v.descent_due == 0) {
+            if (descent_step(c, false) != 0) {
+                c.h.sound(9);
+                v.descent_due = c.h.now() + 1000;
+            }
+        } else if (passed(c.h.now(), v.descent_due)) {
             v.descent = 2;
         }
         return;
     default:
-        if (v.descent_due != 0 && !passed(c.h.now(), v.descent_due)) return;
-        v.descent_due = 0;
-        ++v.phase;  // sub-step 2 in state 6 (verified claim 6) [BYTES seg15:0x3717]
+        // Sub-step 2 in state 6: DGROUP:0x914a += 1, so phase 2's handler first runs two frames
+        // after the one that set DGROUP:0x92a2 = 2 (verified claim 18, CORRECTED) [BYTES
+        // seg15:0x3710-0x3717]. core-0007 and core-0008 hear phase 2's 0x14 46-51 ms after
+        // DGROUP:0x92a2 = 2, three to four 72 Hz frames, where the port's two give 27 ms [OPEN: a
+        // relay trace counting seg7:0x2206's calls between the two in a paced visit settles
+        // whether the oracle ran extra frames or slower ones] (compare item 9).
+        ++v.phase;
         return;
     }
 }
 
-// Phase 0's seg15:0x302e [BYTES seg15:0x302e-0x358d] (s3-visit.md 2.1).
+// Phase 0's seg15:0x302e [BYTES seg15:0x302e-0x358d] (s3-visit.md 2.1, s6-scene.md section 2).
 void landing(VisitCtx& c) {
     VisitState& v = c.v;
-    c.h.sound(0x6e);
+    c.h.sound(0x6e);  // seg10:0x744c(0x6e) [BYTES seg15:0x3071]
     std::string slow;
     const int cal = c.h.calibrate();
     if (v.demon == 0 && (cal < 850 || (cal < 1600 && c.h.depth() < 8)))
         slow = (v.lay.W > 700 ? c.h.lang(2137) : std::string()) + c.h.lang(2138);
-    c.scr.landing_scene(v.lay, slow);
-    v.descent = 0;
-    c.scr.incoming(1);
+    // The scene unless DGROUP:0x928 (verified claims 55-56). The jet's words DGROUP:0x92d6 =
+    // trunc(22·H/100), DGROUP:0x92d8 = H - 10 and, with the scene, DGROUP:0x92de = out +6 and
+    // DGROUP:0x92d6 = out +0xa - 0x28 are the screen's, which alone reads them (hud/visit_win32.h
+    // VisitGdi d92d6 / d92d8 / d92de) [BYTES seg15:0x314b-0x318f seg15:0x3192-0x3199
+    // seg15:0x3248-0x325a seg15:0x34f9] (review M1).
+    (void)c.scr.landing_scene(v.lay, slow, v.demon == 0, v.fast == 0);
+    v.descent = 0;  // [BYTES seg15:0x354b]
+    // seg15:0x3caa(1) with its sound 0x1c [BYTES seg15:0x3cc6-0x3d5a] (M4 s6 PAD, binding 7); it
+    // returns 1 at once, before its sound 0x1c and its set-up, while the fast flag DGROUP:0x928 is
+    // set (Ctrl at this frame, or DGROUP:0x8f70 > 1) (s6-pacing.md section 10, verified claims
+    // 14-15) [BYTES seg15:0x3551-0x3554 seg15:0x3cb9-0x3cc3 seg15:0x3cf9].
+    if (v.fast == 0) {
+        c.h.sound(0x1c);
+        c.scr.incoming(1);
+    }
 }
 
 // The repair step of phases 24 and 29 for system k: below 100 and with a lamp row, old = sys;
@@ -302,12 +387,18 @@ void visit_pad(VisitCtx& c, int first, int down) {
             c.scr.rebuild_ship();
             c.h.busy_wait(2000);
         }
-        c.h.sound(5);  // [BYTES seg15:0x4dbd]
-        v.pad_max = v.s4 + 0x3e;
-        if (down != 0) v.pad_off = 0;  // [BYTES seg15:0x4dd1]
-        c.scr.pad_strip(v.lay, v.pad_off, v.s4);
-        return;
     }
+    // s4 from the body image DGROUP:0x92b0 on every call, not phase 0's roster s4 (review H1)
+    // [BYTES seg15:0x4cec-0x4d1c seg15:0x4dab-0x4db1].
+    const int s4 = c.scr.pad_s4(v.s4);
+    v.pad_max = add16(lo16(s4), 0x3e);  // [bp-0x26] [BYTES seg15:0x4dab-0x4db1]
+    if (first != 0) {
+        c.h.sound(5);  // [BYTES seg15:0x4dbd]
+        if (down != 0) v.pad_off = 0;  // [BYTES seg15:0x4dd1]
+    }
+    // The blit at the current offset, then the update, on first calls too (M4 s6 PAD:
+    // s6-pad-verify.md claim 60) [BYTES seg15:0x51ed-0x520d seg15:0x5212-0x5238].
+    c.scr.pad_move(v.lay, first, down, v.pad_off, s4);
     // (verified claim 32) [BYTES seg15:0x5238-0x52d8]
     if (down != 0) {
         if (v.pad_off >= v.pad_max)
@@ -320,7 +411,6 @@ void visit_pad(VisitCtx& c, int first, int down) {
         else
             ++v.phase;  // in state 6 (state 0 is the desk's)
     }
-    c.scr.pad_strip(v.lay, v.pad_off, v.s4);
 }
 
 // ---- seg16:0x638a ------------------------------------------------------------------------------------
@@ -430,7 +520,7 @@ void visit(VisitCtx& c, int repaint) {
     // [BYTES seg16:0xd0d-0xd37] (verified claim 2)
     if (repaint != 0) {
         if ((v.phase > 0 || v.phase == -1) && (v.phase >= 2 || v.descent >= 1))
-            c.scr.redraw(v.lay, v.phase, v.saved_phase, v.left_on != 0);  // seg16:0x2144
+            redraw(c);  // seg16:0x2144
         return;
     }
     if (s.dlg != 0) return;  // DGROUP:0x9532 (verified claim 1) [BYTES seg16:0xd3b-0xd40]
@@ -455,16 +545,21 @@ void visit(VisitCtx& c, int repaint) {
             const int b = static_cast<std::int8_t>(c.ph.roster_byte(P.roster_index, 0x7b));
             v.s4 = mul16(add16(lo16(a), idiv16(lo16(b - 6), 2)), 4);
         }
-        v.lay = visit_layout(c.w.W, c.w.H);
+        {
+            // The width DGROUP:0x90ea, the client height DGROUP:0x10 and the play height
+            // DGROUP:0x90ec (M4 s6 PAD, binding 9) [BYTES seg16:0x1fbc seg16:0x1ff5 seg15:0x483d].
+            const int ch = c.h.client_height();
+            v.lay = visit_layout(c.w.W, ch > 0 ? ch : c.w.H, c.w.H);
+        }
         landing(c);  // seg15:0x302e
         if (c.w.w952e == c.w.player) {
             c.w.w1e84 = 0;  // [BYTES seg16:0xdae]
             c.w.w1e80 = 0;  // [BYTES seg16:0xdb2]
         }
-        // seg16:0x27ea's DGROUP:0x952c = seg16:0x619e() when DGROUP:0x93a6 = 0: the left
-        // monitor's record, from the panel layout of the descent [BYTES seg16:0x27f8-0x2815].
-        if (v.demon == 0) v.left_on = 1;
-        v.left_mode = 3;  // seg16:0x64c8 [BYTES seg16:0x64c8]
+        // DGROUP:0x952c keeps phase 0's value until seg15:0x374c(1)'s seg16:0x1f78 opens the left
+        // monitor's record (descent, visit_panels), so Ctrl counts at this frame and at the
+        // sub-step 0 frames (s6-pacing.md plan item 4) [BYTES seg16:0xd83-0xd90 seg15:0x3859
+        // seg16:0x2e31].
         break;
     case 1:  // seg15:0x3590 [BYTES seg16:0xdb9]
         descent(c);
@@ -608,7 +703,7 @@ void visit(VisitCtx& c, int repaint) {
                     computer_shop(p, c.w.player, 0);  // seg16:0x3b18(player, 0)
                 }
             }
-            c.scr.redraw(v.lay, v.phase, v.saved_phase, v.left_on != 0);  // seg16:0x2144
+            redraw(c);  // seg16:0x2144
         }
         if (s.new_body == 0) {
             v.phase = 22;
@@ -879,12 +974,16 @@ void visit(VisitCtx& c, int repaint) {
             advance = false;
         }
         break;
-    case 61:  // [BYTES seg16:0x1b55-0x1b7c]
+    case 61:  // (verified claim 34) [BYTES seg16:0x1b55-0x1b7c]
         load(c, v.demon != 0 ? 2022 : 1180);  // "PREPARE FOR LAUNCH"
-        v.text += "...";
-        c.h.launch_enter();  // seg15:0xcb0
+        v.text += "...";                      // DGROUP:0x111a
+        // seg15:0xcb0 in state 6: 0x6e, desk step 5, 0x4b, 1550 ms of seg10:0x740c, DGROUP:0x92d8
+        // = DGROUP:0x92d6 and DGROUP:0x92d6 = 10 (Desk::enter_visit) [BYTES seg16:0x1b77].
+        c.h.launch_enter(v.lay, v.end_y);
         break;
-    case 63:  // seg15:0x10be; it advances the phase at its end [BYTES seg16:0x1b7f]
+    case 63:  // seg15:0x10be, steps 5-9 of the desk machine (Desk::frame in state 6); step 9
+        // raises DGROUP:0x914a itself and the case adds nothing (verified claims 39-40) [BYTES
+        // seg16:0x1b7f seg16:0x1b84 seg15:0x12e5-0x12ec].
         if (c.h.launch_frame()) ++v.phase;
         advance = false;
         break;
@@ -899,11 +998,15 @@ void visit(VisitCtx& c, int repaint) {
         v.monitor_saved = v.strip_saved = false;
         advance = false;
         if (v.demon == 1) {
+            // The Inner Demon's exit (M6): seg10:0xa90c, DGROUP:0x92be = 0, seg16:0x7210(1) and the
+            // tail through seg16:0x11e8, without DGROUP:0x6da8, the free spot, seg16:0x872 or
+            // seg11:0xafe (verified claim 55, CORRECTED) [BYTES seg16:0x1bdf-0x1bf8 seg16:0x11e8].
+            c.h.todo("phase 64's Inner Demon exit (M6)", "seg16:0x1bdf");
             c.h.recreate_dcs();
             c.h.demon_end();  // DGROUP:0x92be = 0, seg16:0x7210(1)
             break;
         }
-        ambulance_state().dist = 1200;  // DGROUP:0x9e4b [BYTES seg16:0x1bf3] (M4 s3 fixer)
+        ambulance_state().dist = 1200;  // DGROUP:0x9e4b [BYTES seg16:0x1bfb] (M4 s3 fixer)
         ObjectRecord& so = c.w.ship_object(c.w.w952e);
         ObjectRecord& amb = c.w.pools.rec(kPool7, 0);
         so.state = 1;   // [BYTES seg16:0x1bfb]
@@ -938,7 +1041,8 @@ void visit(VisitCtx& c, int repaint) {
     // count is the World's) [OPEN: DGROUP:0x5a8].
     if (v.clicked != 0 || v.phase == -1 || (v.demon != 0 && v.phase >= 2)) {
         c.w.frames += 1;
-        c.scr.left_monitor(v.lay, c.h.limited());
+        c.scr.left_monitor(v.lay, c.h.limited());  // seg16:0x64fa [BYTES seg16:0x1f17]
+        left_monitor_tail(v);
     }
 }
 

@@ -24,8 +24,9 @@ constexpr bool tick_reached(Tick now, Tick due) {
 enum class Pace : std::uint8_t {
     kNone,      // no frame function (state 4): passes only check deadlines
     kIntro,     // state 0: every 13 ms, the lower bound of its 14/13 ms gate (decision 8)
-    kScreen,    // 72 Hz, seg7:0x2206's usual target (decision 8)
+    kScreen,    // 72 Hz, seg7:0x2206's usual target (decision 8) [BYTES seg7:0x2262]
     kScreen32,  // 32 Hz, seg7:0x2206's state-6 target while DGROUP:0x914a = 1, DGROUP:0x92a2 = 0
+                // [BYTES seg7:0x2241-0x2267]
     kWave,      // 1000 / FrameRateSet ms (decision 2)
 };
 
@@ -41,6 +42,14 @@ struct PaceInputs {
 // state 0 the intro gate; states 2, 3, 5, 8, 9 and the help pass of state 7 72 Hz; state 6
 // 72 Hz (32 Hz in its slow phase), or the wave rate under its gate; state 4 none. Values
 // outside 0-9 share state 1's tick case [BYTES seg7:0x492] and so its pace.
+//
+// State 6 has no pace per phase: each state-6 frame calls seg16:0xcfe(0) once, whatever the
+// phase, after seg7:0x2206 [BYTES seg7:0x17e seg7:0x18f], so every phase of the visit steps
+// at the screen pace and waits on its own deadlines (the typing's 40 ms, the 1000 ms after the
+// landing, ...) (ADR 0001 decision 8 as corrected in M4 stage 6, ruling R1) [DESIGN]. The
+// oracle's unpaced stretches (a frame per pass while DGROUP:0x9004 <= 0, from a negative
+// Calibrate or the 16-bit wrap of seg7:0x2206's 1000 ms product above 511) are not reproduced
+// (decision 7) [ORACLE core-0007] [ORACLE core-0008].
 Pace pace_for_state(int state, const PaceInputs& in = {});
 
 // FrameRateSet above this runs frames back to back (decision 6) [BYTES seg7:0x9ed].
@@ -63,8 +72,10 @@ public:
     Pace pace() const { return pace_; }
     int rate() const { return rate_; }
 
-    // Switches the pace. A change restarts the schedule with its first frame due at `now`;
-    // the same pace keeps the schedule.
+    // Switches the pace. A change restarts the schedule with its first frame due at `now`,
+    // except between the two screen paces (state 6's 72 and 32 Hz), where the next frame is due
+    // one new interval after the last that ran (or at `now` when that has passed); the same pace
+    // keeps the schedule.
     void set_pace(Pace pace, Tick now);
     // Sets FrameRateSet (values below 1 count as 1 [DESIGN]: the original divides by it). A
     // change of R restarts the schedule from the current frame (decision 2): the next frame

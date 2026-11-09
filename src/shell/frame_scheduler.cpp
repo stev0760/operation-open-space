@@ -13,6 +13,8 @@ Pace pace_for_state(int state, const PaceInputs& in) {
     case 9: return Pace::kScreen;
     case 4: return Pace::kNone;  // no frame function [BYTES seg7:0x3f1]
     case 6:
+        // The gate holds the frames S ... F + 1 ms apart (decision 2) [BYTES seg7:0x126-0x163];
+        // otherwise seg7:0x2206's targets for every phase (R1) [BYTES seg7:0x2241-0x2267].
         if (in.state6_gate) return Pace::kWave;
         return in.state6_slow ? Pace::kScreen32 : Pace::kScreen;
     default: return Pace::kWave;  // state 1 and values outside 0-9 [BYTES seg7:0x492]
@@ -39,7 +41,18 @@ void FrameScheduler::restart(Tick now) {
 
 void FrameScheduler::set_pace(Pace pace, Tick now) {
     if (pace == pace_) return;
+    const bool screens = (pace_ == Pace::kScreen || pace_ == Pace::kScreen32) &&
+                         (pace == Pace::kScreen || pace == Pace::kScreen32);
     pace_ = pace;
+    // State 6's 72 <-> 32 Hz change: seg7:0x2206 changes only its target and keeps the threshold
+    // DGROUP:0x9004, so no frame runs early; the next frame is due one new interval after the last
+    // one, or at once when that has passed [BYTES seg7:0x2213-0x2267] [DESIGN: ADR 0001 decision 8]
+    // (review L7).
+    if (screens && has_run_ && !tick_reached(now, last_run_ + offset(1))) {
+        origin_ = last_run_;
+        k_ = 1;
+        return;
+    }
     has_run_ = false;
     restart(now);
 }

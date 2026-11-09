@@ -132,8 +132,11 @@ ImagePtr Gfx::image_from_dib(const fmt::Dib& dib) {
 
 fmt::Dib Gfx::graphic_dib(int id, int d, int a, int b, int last, bool ordinal12) {
     fmt::Dib dib = sprite(id);
-    if (dib.bpp <= 8)
-        palettes_.recolour_graphic(hpal_, id, dib.palette, d, a, b, last, ordinal12);
+    // seg5:0x1b8e, then the loader's seg6:0x7fc8 while DGROUP:0x1ea8 is set (ordinal 1 at
+    // seg5:0x571-0x57c, ordinal 12 at seg7:0x13aa-0x13b8): graphic 76 of the landing corridor's far
+    // boxes takes the fixed set (review H4) [BYTES ISPACE.DLL seg5:0x571-0x57c seg7:0x13aa-0x13b8].
+    if (dib.bpp <= 8 && palettes_.recolour_graphic(hpal_, id, dib.palette, d, a, b, last, ordinal12))
+        fixed_set_remap(dib);
     return dib;
 }
 

@@ -579,7 +579,15 @@ ShipSheet ship_sheet_for(const fmt::Dib& body, int body_id, PaletteManager& pm, 
     // The load: seg5:0x1b8e(hPal, id, lib, d = 1, a, b, 0) with DGROUP:0x188 = 1
     // [BYTES ISPACE.DLL seg6:0x1cf-0x1ec].
     std::vector<std::uint32_t> table = body.palette;
-    pm.recolour_graphic(pal, body_id, table, 1, args.scheme_a, args.scheme_b, 0, true);
+    // seg6:0x7fc8 while DGROUP:0x1ea8 is set [BYTES ISPACE.DLL seg6:0x1f5-0x200] (palette.h
+    // fixed_set_remap).
+    fmt::Dib remapped;
+    const fmt::Dib* src = &body;
+    if (pm.recolour_graphic(pal, body_id, table, 1, args.scheme_a, args.scheme_b, 0, true)) {
+        remapped = body;
+        fixed_set_remap(remapped);
+        src = &remapped;
+    }
     if (table.size() < 16) table.resize(16, 0);
     SheetPalette sp;
     sp.working = pm.working(pal);
@@ -592,7 +600,7 @@ ShipSheet ship_sheet_for(const fmt::Dib& body, int body_id, PaletteManager& pm, 
         const auto rr = pm.ramp_record(mode, rec);
         return RampRange{rr.first, rr.last};
     };
-    return render_ship_sheet(body, table, args, sp);
+    return render_ship_sheet(*src, table, args, sp);
 }
 
 }  // namespace is::gfx

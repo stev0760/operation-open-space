@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <string>
 
 #include "world/purchases.h"
@@ -32,6 +33,9 @@ struct VisitLayout {
     int panel_bg_h = 0;    // DGROUP:0x6dae = max(H/2, 370): the panels' background height
     int mon_dx = 12, mon_dy = 10;  // DGROUP:0x6e18, DGROUP:0x6e1a
     int mon_w = 0, mon_h = 0;      // DGROUP:0x6e14 = panel_w - 30, DGROUP:0x6e16 = panel_h - 36
+    // DGROUP:0x3ca2, seg15:0x482e's vanishing point y (gfx/pad.h pad_geometry; 321 at 1024 x 768),
+    // read by seg15:0x454c [BYTES seg15:0x4902-0x4975 seg15:0x45a5].
+    int vy = 0;
     // The right monitor's text origin L = mon_dx + rx, T = mon_dy + ry.
     int L() const { return mon_dx + rx; }
     int T() const { return mon_dy + ry; }
@@ -41,9 +45,12 @@ struct VisitLayout {
     int bar_y(int k) const { return ry + panel_h + 0x16 + 25 * k; }
     int bar_w() const { return panel_w - 0x50; }
 };
-// seg16:0x1f78 and seg16:0x27ea for the play area W x H [BYTES seg16:0x1f78-0x2142
-// seg16:0x27f8-0x2815] (verified claims 47-48) and seg15:0x482e's pad [BYTES seg15:0x483d
-// seg15:0x48c2].
+// seg16:0x1f78 and seg16:0x27ea for the width W and the client height DGROUP:0x10 [BYTES
+// seg16:0x1f78-0x2142 seg16:0x1fbc seg16:0x1ff5 seg16:0x27f8-0x2815] (verified claims 47-48) and
+// seg15:0x482e's pad from the play height DGROUP:0x90ec and the client height (gfx/pad.h
+// pad_geometry: DGROUP:0x3ce6, DGROUP:0x3c9a, DGROUP:0x3ca2) [BYTES seg15:0x483d-0x4975].
+VisitLayout visit_layout(int W, int client_h, int play_h);
+// The same with one height for both [DESIGN: the tests' and the callers' single-height form].
 VisitLayout visit_layout(int W, int H);
 
 // ---- the visit's DGROUP words ----------------------------------------------------------------------
@@ -79,31 +86,46 @@ struct VisitState {
     int speed = 150;               // DGROUP:0x17f6
     std::int16_t flag = 0;         // DGROUP:0x17fc, the descent's flag (core.md "The descent", step 3)
     std::int16_t flag_prev = 0;    // DGROUP:0x17f8, the flag at the previous call (sound.md "The descent")
-    std::uint32_t descent_due = 0; // seg15:0x3590 sub-step 1's 1000 ms [OPEN: busy or not]
+    // dword DGROUP:0x17f2, seg15:0x3590 sub-step 1's deadline: 0 from sub-step 0's end while the
+    // descent runs, then DGROUP:0x1e50 + 1000 at sound 9; sub-step 1 holds until it lies below
+    // DGROUP:0x1e50 (a deadline, no busy-wait) [BYTES seg15:0x35c1-0x35c6 seg15:0x36c3-0x370a].
+    std::uint32_t descent_due = 0;
     int pad_off = 0;               // DGROUP:0x181c
     int pad_max = 0;               // seg15:0x4c76's [bp-0x26] = s4 + 0x3e
     bool monitor_saved = false;    // DGROUP:0x953a exists
     bool strip_saved = false;      // DGROUP:0x953c exists
-    std::uint32_t launch_due = 0;  // the port's stand-in launch [OPEN]
     VisitLayout lay;
 };
 // The program's visit (DGROUP), as Shop is.
 VisitState& visit_state();
 
 // ---- the drawing (src/hud/visit_win32.cpp; the tests record) ------------------------------------
+// seg15:0x302e's out block for scene 105: slot 0's bottom + 1 (word +6) and slot 1's top (word
+// +0xa) [BYTES seg15:0x3248-0x325a].
+struct LandingSlots {
+    int bottom = 0, top = 0;
+};
+
 class VisitScreen {
 public:
     virtual ~VisitScreen() = default;
-    // seg15:0x302e's drawing: the scene (IGRAPHIC #6600 id 0x69) and, on a slow machine, the
-    // "Incoming Jet / Approaching Landing Pad.." line [BYTES seg15:0x302e-0x358d] [OPEN: the
-    // render].
-    virtual void landing_scene(const VisitLayout& l, const std::string& slow_text) = 0;
+    // seg15:0x302e's drawing in order (s6-scene.md section 2, verified claims 53-58) [BYTES
+    // seg15:0x3079-0x3519]: PatBlt(screen, 0, 0, W, H, BLACKNESS) when `black` (DGROUP:0x93a6 =
+    // 0), seg10:0x6da6(0, 1), the slow-machine line when slow_text is not empty, and when
+    // `render` (DGROUP:0x928 = 0) IGRAPHIC.DLL #6600 105 through ordinal 32 at (W, H) into the
+    // kept scene image DGROUP:0x929a, blitted whole to the screen. Returns the out block's two
+    // words when it rendered.
+    virtual std::optional<LandingSlots> landing_scene(const VisitLayout& l, const std::string& slow_text,
+                                                      bool black, bool render) = 0;
     // seg15:0x3caa(first), the incoming-jet animation; non-zero when it has ended [OPEN: read in
-    // summary only].
+    // summary only]. The visit does not call it while DGROUP:0x928 is set: seg15:0x3caa then
+    // returns 1 before anything else [BYTES seg15:0x3cb9-0x3cc3].
     virtual int incoming(int first) = 0;
-    // seg15:0x3590 sub-step 0's tail: the black screen, the pad (seg15:0x482e) and the panels
-    // (seg16:0x1f78) [BYTES seg15:0x3590-0x374a] [OPEN].
-    virtual void descent_start(const VisitLayout& l) = 0;
+    // seg15:0x3590 sub-step 0's drawing between seg15:0x1eac and seg15:0x374c(1): the black screen
+    // when `black` (DGROUP:0x93a6 = 0), ordinal 14 (3, 0xcc) and (2, 0x89) when `fade`
+    // (DGROUP:0x928 = 0), then state 6's palette sequence around seg15:0x482e (the pad)
+    // (s6-pad-verify.md claim 16, CORRECTED) [BYTES seg15:0x35d8-0x36b1].
+    virtual void descent_start(const VisitLayout& l, bool black, bool fade) = 0;
     // seg15:0x374c's frame: the ship at y over the pad, its source row picked by the flag
     // DGROUP:0x17fc (DGROUP:0x3ce8 + 2·flag) [BYTES seg15:0x3b2b-0x3b31] [OPEN: the drawing is
     // summarised].
@@ -115,8 +137,20 @@ public:
     virtual void ship_on_pad(const VisitLayout& l, int x, int y, int s4, int strip_h) = 0;
     // seg15:0x4c76's strip at the pad's place, the ship lowered by `offset` pixels.
     virtual void pad_strip(const VisitLayout& l, int offset, int s4) = 0;
+    // seg15:0x4c76(first, down)'s drawing at DGROUP:0x181c = offset [BYTES seg15:0x4c76-0x52d8]
+    // (the PAD track of M4 stage 6); the default draws pad_strip [DESIGN: the fakes].
+    virtual void pad_move(const VisitLayout& l, int first, int down, int offset, int s4) {
+        (void)first, (void)down;
+        pad_strip(l, offset, s4);
+    }
     // seg15:0x4c76(1, 0) with the new body: the ship image rebuilt (seg15:0x2a08) [OPEN M8].
     virtual void rebuild_ship() = 0;
+    // seg15:0x4c76's own s4 on every call: GetObject(DGROUP:0x92b0) and 4·trunc(bmHeight/k), k = 4
+    // below 8 bpp else 2, after the new body's rebuild; the pad move's bound DGROUP:0x181c's
+    // [bp-0x26] = s4 + 0x3e and the strip's blit height and y read it [BYTES seg15:0x4cec-0x4d1c
+    // seg15:0x4d99-0x4db1]. `roster_s4` (phase 0's s4) when the screen has no body image [DESIGN:
+    // the fakes].
+    virtual int pad_s4(int roster_s4) { return roster_s4; }
     // seg10:0x6d52(screen, x, y, w, h, v), ISPACE ordinal 35.
     virtual void bar(int x, int y, int w, int h, int v) = 0;
     // ---- seg16:0x2e3c's monitor
@@ -161,6 +195,9 @@ public:
     virtual int w8f70() = 0;                   // DGROUP:0x8f70
     virtual int calibrate() = 0;               // DGROUP:0x8ffc
     virtual int depth() = 0;                   // DGROUP:0x90ee
+    // DGROUP:0x10, the client height that seg16:0x1f78 reads (phase 0's layout); 0 takes the
+    // play height DGROUP:0x90ec for it [DESIGN: the fakes] [BYTES seg16:0x1fbc seg16:0x1ff5].
+    virtual int client_height() { return 0; }
     virtual bool limited() = 0;                // DGROUP:0x920c = 0
     // DialogBox(0xc2, ..., seg16:0x4104), modal; its result is ignored (verified claim 28).
     virtual void options_dialog() = 0;
@@ -169,12 +206,18 @@ public:
     // Phase 0's calls: seg10:0xa856 (the image-slot DCs freed), seg11:0x2f0 (the HUD windows),
     // seg13:0x65f2(3, 0, 0) and seg10:0x7480(-2, 1) of the scene.
     virtual void enter_calls() = 0;
+    // seg7:0x158e, the wave's entry/vanish step (world/entry_effect.h entry_step), which
+    // seg16:0x2144 calls 120 times while the back buffer DGROUP:0x9580 exists and DGROUP:0x93a6 = 0
+    // [BYTES seg16:0x2764-0x2775] (review H3). The default does nothing [DESIGN: the fakes].
+    virtual void entry_step() {}
     // seg10:0x6dd4(0), seg10:0x6e76(8, 0): the palette back for the wave.
     virtual void palette_back() = 0;
-    // seg15:0xcb0 then seg15:0x10be per frame in state 6: the launch; true when it ended
-    // (seg15:0x10be advances the phase at its end) [OPEN: the desk's launch is not reachable from
-    // here; the program's stand-in].
-    virtual void launch_enter() = 0;
+    // Phase 61's seg15:0xcb0 in state 6 (src/desk/desk.h Desk::enter_visit): the play area, the
+    // pad's DGROUP:0x3ce6 and DGROUP:0x3c9a from `l` and DGROUP:0x92d6 = `end_y` (the descent's
+    // end y) [BYTES seg16:0x1b77 seg15:0xf1a].
+    virtual void launch_enter(const VisitLayout& l, int end_y) = 0;
+    // Phase 63's seg15:0x10be (Desk::frame); true when step 9 ran, which raises DGROUP:0x914a in
+    // state 6 [BYTES seg16:0x1b7f seg15:0x12e5-0x12ec].
     virtual bool launch_frame() = 0;
     virtual void recreate_dcs() = 0;           // seg10:0xa90c
     virtual void seg18_7b2() = 0;              // with DGROUP:0x92e4 = 1 (DGROUP:0x9662)
@@ -217,6 +260,10 @@ void visit(VisitCtx& c, int repaint);
 void visit_type(VisitCtx& c, int init, int blank);
 // seg15:0x4c76(first, down) in state 6 [BYTES seg15:0x4c76-0x52d8] (verified claims 31-33).
 void visit_pad(VisitCtx& c, int first, int down);
+// seg16:0x1f78's words at seg15:0x374c(1) in state 6 [BYTES seg15:0x3859 seg16:0x2052
+// seg16:0x2056]: DGROUP:0x952c = seg16:0x619e() (DGROUP:0x9530 = 3, DGROUP:0x958a = 1) when
+// DGROUP:0x93a6 = 0, then seg16:0x2144's tail clears DGROUP:0x958a (s6-pacing.md plan item 4).
+void visit_panels(VisitCtx& c);
 // seg16:0x638a(flags, x, y, esc): a click (WM_LBUTTONDOWN) or ESC (WM_KEYUP VK_ESCAPE with
 // DGROUP:0x93a6 = 0) on the visit screen [BYTES seg16:0x638a-0x64c6].
 void visit_click(VisitCtx& c, int x, int y, int esc);
@@ -241,7 +288,8 @@ struct VisitLinks {
 VisitLinks& visit_links();
 
 // The state-6 pace inputs of timing.md (shell::PaceInputs): the gate (DGROUP:0x952c set,
-// DGROUP:0x9530 = 1) and the slow phase (DGROUP:0x914a = 1, DGROUP:0x92a2 = 0).
+// DGROUP:0x9530 = 1) and the slow phase (DGROUP:0x914a = 1, DGROUP:0x92a2 = 0); no other phase
+// changes the pace (ruling R1 of M4 stage 6) [BYTES seg7:0x126 seg7:0x2241-0x2267].
 bool visit_pace_gate(const VisitState& v);
 bool visit_pace_slow(const VisitState& v);
 

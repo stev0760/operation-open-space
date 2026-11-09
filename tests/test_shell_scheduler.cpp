@@ -32,8 +32,13 @@ TEST_CASE("scheduler: the pace of each screen state") {
     CHECK(pace_for_state(1) == Pace::kWave);
     for (int s : {2, 3, 5, 7, 8, 9}) CHECK(pace_for_state(s) == Pace::kScreen);
     CHECK(pace_for_state(4) == Pace::kNone);
+    // State 6: one pace for every phase of the visit, seg7:0x2206's 72 Hz or its 32 Hz slow
+    // phase, and the wave rate under the gate (ADR 0001 decisions 2 and 8, ruling R1 of M4
+    // stage 6) [BYTES seg7:0x18f seg7:0x2241-0x2267].
     CHECK(pace_for_state(6) == Pace::kScreen);
+    CHECK(pace_for_state(6, {false, false}) == Pace::kScreen);
     CHECK(pace_for_state(6, {false, true}) == Pace::kScreen32);
+    CHECK(pace_for_state(6, {true, false}) == Pace::kWave);
     CHECK(pace_for_state(6, {true, true}) == Pace::kWave);
     CHECK(pace_for_state(10) == Pace::kWave);  // outside 0-9: state 1's case
     CHECK(pace_for_state(-1) == Pace::kWave);
@@ -96,6 +101,25 @@ TEST_CASE("scheduler: a change of pace starts with a frame due at once") {
     s.ran(101);
     s.set_pace(Pace::kScreen, 102);
     CHECK_FALSE(s.due(102));
+}
+
+TEST_CASE("scheduler: state 6's 72 <-> 32 Hz change runs no frame early (review L7)") {
+    FrameScheduler s;
+    s.set_pace(Pace::kScreen, 1000);
+    CHECK(s.due(1000));
+    s.ran(1000);
+    s.set_pace(Pace::kScreen32, 1005);
+    CHECK_FALSE(s.due(1005));
+    CHECK_FALSE(s.due(1030));
+    CHECK(s.due(1031));  // 1000 + trunc(1000 / 32)
+    s.ran(1031);
+    s.set_pace(Pace::kScreen, 1040);
+    CHECK_FALSE(s.due(1040));
+    CHECK(s.due(1044));  // 1031 + 13
+    // a change after the new interval has passed runs at once
+    s.ran(1044);
+    s.set_pace(Pace::kScreen32, 2000);
+    CHECK(s.due(2000));
 }
 
 TEST_CASE("scheduler: a change of R restarts the schedule from the current frame") {

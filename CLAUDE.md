@@ -24,7 +24,7 @@ The Hermes-era docs in `../innerspace-rea/` (read-only archive) are **not** a so
 ## Rules for code and tools
 - **RE tools live in `re/isre/`** (Python package + CLI). They take paths as arguments; no absolute paths anywhere in `re/`, `docs/` or `oracle/`. Every tool has tests. `re/legacy/` holds the Hermes-era scripts awaiting refactor; don't extend them.
 - **Generated outputs go to `work/`** (gitignored) and must regenerate from `original/` with one command. Only small manifests and indexes are committed, under `re/artifacts/`.
-- **Python** runs from the venv at `re/.venv` (python3.9). Run it with `-I` when it reads untrusted files. Tests: `re/.venv/bin/python -m pytest re/tests` and, as a separate run (the two `conftest.py` files clash in one process), `re/.venv/bin/python -m pytest oracle/tests`.
+- **Python** runs from the venv at `re/.venv` (Python 3.14). Run it with `-I` when it reads untrusted files. Tests: `re/.venv/bin/python -m pytest re/tests` and, as a separate run (the two `conftest.py` files clash in one process), `re/.venv/bin/python -m pytest oracle/tests`.
 - **The port is C++17, Win32 GDI + winmm,** no engine. It builds with MinGW-w64 GCC (`i686-w64-mingw32-g++`, `x86_64-w64-mingw32-g++`), linked `-static`, and later with MSVC.
   - Build and test: `cmake --preset mingw-x64 && cmake --build --preset mingw-x64 && ctest --preset mingw-x64` (also `mingw-i686`). CTest runs the Windows test executable under Wine. The `host` preset builds the portable libraries and tests natively, for quick iteration.
   - `src/formats/` holds the portable readers (no Win32 calls); tests are doctest (`third_party/doctest/`). Golden tests compare them with the `isre` outputs and skip when `work/` or `original/` is absent.

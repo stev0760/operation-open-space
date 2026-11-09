@@ -5,6 +5,7 @@
 #include <exception>
 
 #include "formats/bytes.h"
+#include "gfx/smooth_render.h"
 #include "intro/pixels.h"
 
 namespace is::intro {
@@ -92,21 +93,16 @@ void GdiCanvas::load_title_picture() {
     }
 }
 
-// Ordinal 12 through seg10:0x73a6(300, "", -2, -2, 2, 0, 1, 1, 12): seg5:0x1b8e in mode 0 with
-// a = 1, b = 12 writes the ramps of entries 185-229 and animates (shell.md "Title palette");
-// the picture is the plain stand-in of intro/pixels.h.
+// Ordinal 12 through seg10:0x73a6(300, "", -2, -2, 2, 0, 1, 1, 12) [BYTES seg15:0x7567-0x758c]
+// (s6-ord12 verified claim 2): seg5:0x1b8e with d = 0, a = 1, b = 12 and its last argument
+// DGROUP:0x1e92[slot] != 0 writes the ramps of entries 185-229 and animates (shell.md "Title
+// palette"), then seg7:0x12d8 renders the smoothed 276 x 276 picture (gfx/smooth_render.h; with
+// both flags set it takes b1 = b2 = 100) and returns the bitmap the title reveals row by row
+// [ORACLE probe-0001: 57 960 of 57 960 pixels of (374, 229, 276 x 210)].
 void GdiCanvas::make_title_reveal() {
     reveal_.reset();
     try {
-        const fmt::Dib d = gfx_.graphic_dib(kTitleGraphic, 0, 1, 12, 0, true);
-        const std::vector<std::uint8_t> px = ordinal12_plain(d);
-        const int w = d.width * 2, h = d.height * 2;
-        gfx::ImagePtr img = gfx_.create_image(w, h);
-        img->flush();
-        for (int y = 0; y < h; ++y)
-            std::memcpy(img->pixels() + static_cast<std::size_t>(img->stride()) * y,
-                        px.data() + static_cast<std::size_t>(w) * y, static_cast<std::size_t>(w));
-        reveal_ = img;
+        reveal_ = gfx::smooth_bitmap(gfx_, kTitleGraphic, gfx::smooth_args(1, 12));
     } catch (const std::exception& x) {
         fail("title picture (ordinal 12)", x);
     }

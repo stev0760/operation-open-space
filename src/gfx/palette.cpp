@@ -2,6 +2,8 @@
 
 #include "gfx/ship_sheet.h"
 
+#include "formats/dib.h"
+
 #include <algorithm>
 #include <cstdlib>
 
@@ -114,6 +116,19 @@ int PaletteManager::slot_of(PalHandle pal) const {
 const PaletteArray* PaletteManager::working(PalHandle pal) const {
     const int s = slot_of(pal);
     return s < 0 ? nullptr : &slots_[s].working;
+}
+PaletteArray* PaletteManager::working_entries(PalHandle pal) {
+    const int s = slot_of(pal);
+    return s < 0 ? nullptr : &slots_[s].working;
+}
+void PaletteManager::set_blend_from(PalHandle pal, int k, int row) {
+    const int s = slot_of(pal);
+    if (s < 0 || k < 0 || k > 2) return;  // [DESIGN] no slot: the original writes slot 3's words
+    slots_[s].blend_from[static_cast<std::size_t>(k)] = row;
+}
+int PaletteManager::blend_from(PalHandle pal, int k) const {
+    const int s = slot_of(pal);
+    return s < 0 || k < 0 || k > 2 ? 0 : slots_[s].blend_from[static_cast<std::size_t>(k)];
 }
 const PaletteArray* PaletteManager::stored(PalHandle pal, int set) const {
     const int s = slot_of(pal);
@@ -420,21 +435,24 @@ int PaletteManager::luminance(Rgb c) {
 }
 
 // seg5:0x26a2 and the command 3 of seg5:0x1b8e [BYTES ISPACE.DLL seg5:0x1be2 seg5:0x26a2].
-void PaletteManager::recolour_graphic(PalHandle pal, int id, std::vector<std::uint32_t>& table,
+bool PaletteManager::recolour_graphic(PalHandle pal, int id, std::vector<std::uint32_t>& table,
                                       int d, int a, int b, int last, bool ordinal12) {
     const int s = slot_of(pal);
     const std::size_t n = table.size();
-    if (n == 0) return;
+    if (n == 0) return false;
     if (table.size() < 16) table.resize(16, 0);  // the pass reads 16 entries [DESIGN]
     auto rgb = [&](int k) { return Rgb::of(table[k]); };
     // The fixed set when entry 15 is not black, except that its red byte counts only with
     // DGROUP:0x188: red (+0x66 of the BITMAPINFO) is tested only when DGROUP:0x188 != 0, green
     // (+0x65) and blue (+0x64) always [BYTES ISPACE.DLL seg5:0x2706 seg5:0x270b seg5:0x2710
     // seg5:0x271a seg5:0x2721 seg5:0x272b] (shell.md "Palette").
+    bool fixed = false;  // DGROUP:0x1ea8, cleared at the pass's entry [BYTES ISPACE.DLL seg5:0x26d8]
     {
         const Rgb e15 = rgb(15);
-        if ((ordinal12 && e15.r != 0) || e15.g != 0 || e15.b != 0)
+        if ((ordinal12 && e15.r != 0) || e15.g != 0 || e15.b != 0) {
             for (int k = 0; k < 16; ++k) table[k] = kFixed16[k];
+            fixed = true;  // [BYTES ISPACE.DLL seg5:0x272b]
+        }
     }
     // DGROUP:0x15a has no known writer that the intro reaches; the port takes it as 0 [OPEN].
     if (last != 0) {
@@ -480,27 +498,33 @@ void PaletteManager::recolour_graphic(PalHandle pal, int id, std::vector<std::ui
         } else {
             // DGROUP:0x1ea4 is 0 here: ordinal 12 clears it [BYTES ISPACE.DLL seg6:0xc4].
             const int step1 = sl.kind == 0 ? 3 : 8, step2 = sl.kind == 0 ? 4 : 7;
-            bool ramp1 = true, ramp2 = true;
+            // The flags DGROUP:0x1eaa and DGROUP:0x1eac, kept as manager state for ordinal 12
+            // [BYTES ISPACE.DLL seg5:0x2ec2 seg5:0x2fde seg5:0x2fe4 seg5:0x3100 seg5:0x310c
+            // seg5:0x3118].
+            dg_1eaa_ = 1;
             int prev = 1000;
             for (int k = 0; k < 10; ++k) {
                 const int l = luminance(rgb(k));
                 if (prev < l) {
-                    ramp1 = false;
+                    dg_1eaa_ = 0;
                     break;
                 }
                 prev = l;
             }
+            dg_1eac_ = 1;
             prev = 1000;
             for (int k = 10; k < 15; ++k) {
                 const int l = luminance(rgb(k));
                 if (prev < l) {
-                    ramp2 = false;
+                    dg_1eac_ = 0;
                     break;
                 }
                 prev = l;
             }
-            if (sa != 12) ramp1 = true;
-            if (sb != 12) ramp2 = true;
+            if (sa != 12) dg_1eaa_ = 1;
+            if (sb != 12) dg_1eac_ = 1;
+            // The ramp writes test them [BYTES ISPACE.DLL seg5:0x311e-0x312a seg5:0x32c9-0x32d7].
+            const bool ramp1 = dg_1eaa_ != 0, ramp2 = dg_1eac_ != 0;
             const auto write = [&](int from, int to_last, int step, int pos) {
                 for (int k = from; k < to_last; ++k) {
                     const Rgb c0 = rgb(k), c1 = rgb(k + 1);
@@ -529,6 +553,29 @@ void PaletteManager::recolour_graphic(PalHandle pal, int id, std::vector<std::ui
     }
     table.resize(std::max<std::size_t>(n, 1));
     if (d == 0 || d == 2) animate(pal);  // seg5:0x1b8e [BYTES seg5:0x1bff]
+    return fixed;
+}
+
+// ISPACE.DLL seg6:0x7fc8 [BYTES ISPACE.DLL seg6:0x7fc8-0x8264].
+void fixed_set_remap(fmt::Dib& dib) {
+    // The nibble map of the switch at seg6:0x8138 (cases 0 ... 15) [BYTES ISPACE.DLL seg6:0x80bc-0x815b].
+    static constexpr std::uint8_t kMap[16] = {15, 5, 1, 2, 9, 6, 10, 13, 14, 4, 0, 3, 8, 7, 11, 12};
+    if (dib.bpp != 4 || dib.width <= 0 || dib.height <= 0) return;  // [DESIGN] the bytes assume 4 bpp
+    // The row stride: trunc((w + 1) / 2) rounded up to a multiple of 4 [BYTES ISPACE.DLL
+    // seg6:0x8050-0x807e]; the same as the DIB's own.
+    const std::size_t stride = dib.stride();
+    for (int y = 0; y < dib.height; ++y)
+        for (int x = 0; x < dib.width; ++x) {
+            const std::size_t at = static_cast<std::size_t>(y) * stride + static_cast<std::size_t>(x / 2);
+            if (at >= dib.bits.size()) return;  // a short DIB [DESIGN]
+            std::uint8_t& byte = dib.bits[at];
+            // An even x is the high nibble, an odd one the low [BYTES ISPACE.DLL seg6:0x80a5-0x80b3
+            // seg6:0x81c6-0x81df seg6:0x8197-0x81aa].
+            if ((x & 1) == 0)
+                byte = static_cast<std::uint8_t>((byte & 0x0f) | (kMap[byte >> 4] << 4));
+            else
+                byte = static_cast<std::uint8_t>((byte & 0xf0) | kMap[byte & 0x0f]);
+        }
 }
 
 // ---- ISPACE.DLL seg5:0x64f8 and ordinal 17's colour map (M4 s5 SHEET)

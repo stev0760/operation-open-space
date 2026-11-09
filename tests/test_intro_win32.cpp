@@ -16,6 +16,7 @@
 #include "intro/gdi_canvas.h"
 #include "intro/intro.h"
 #include "intro_fakes.h"
+#include "png_decode.h"
 
 using namespace intro_test;
 
@@ -112,9 +113,38 @@ TEST_CASE("intro win32: golden: phases 0-5 on the surface") {
     h = histogram(g, 374, 229, 650, 439);
     for (const auto& [k, n] : h) {
         CAPTURE(k);
-        CHECK((k == 0 || (k >= 188 && k <= 229)));
+        CHECK((k == 0 || k == 0xf5 || (k >= 188 && k <= 229)));
     }
-    CHECK(h.size() >= 12);
+    // ordinal 12's smoothed emblem (gfx/smooth_render.h): 0, 0xf5 x 30 and 188-229, 44 values
+    // [ORACLE probe-0001] (work/analysis/m4/s6-ord12.md section 3 vector A, the top 210 rows)
+    CHECK(h.size() == 44);
+    CHECK(h[0xf5] == 30);
+    CHECK(h[203] == 1049);
+    {
+        // the emblem on the screen through the device palette against probe-0001's title at
+        // (374, 229), 276 x 210 [ORACLE probe-0001]; work/ beside IS_ORIGINAL_DIR
+        // (work/extracted/game)
+        const auto png = dir.parent_path().parent_path() / "probe" / "run" / "probe-title.png";
+        if (std::filesystem::exists(png)) {
+            const pngtest::Image o = pngtest::read(png.string());
+            REQUIRE(o.w >= 374 + 276);
+            REQUIRE(o.h >= 229 + 210);
+            auto& s = g.surface();
+            s.flush();
+            int same = 0;
+            for (int y = 0; y < 210; ++y)
+                for (int x = 0; x < 276; ++x) {
+                    const auto& e = pal[s.at(374 + x, 229 + y)];
+                    const std::uint32_t pc = static_cast<std::uint32_t>(e.r) << 16 |
+                                             static_cast<std::uint32_t>(e.g) << 8 | e.b;
+                    same += pc == o.at(374 + x, 229 + y);
+                }
+            MESSAGE("title emblem on the surface: " << same << " of 57960 pixels equal");
+            CHECK(same == 57960);
+        } else {
+            MESSAGE("skipped the picture: work/probe/run/probe-title.png not found");
+        }
+    }
     // the ramps of ordinal 12 in entries 185-229: entry 188 is graphic 300's colour 1
     CHECK(pal[185].r == 0xff);
     CHECK(pal[185].g == 0xe6);

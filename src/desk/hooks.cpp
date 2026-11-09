@@ -16,15 +16,20 @@
 
 #include "app/app.h"
 #include "assets/asset_store.h"
+#include "desk/main_ship.h"
 #include "desk/desk.h"
 #include "dialogs/audio_options.h"  // is::sound (M7 audio rewiring)
 #include "desk/gdi_desk.h"
+#include "desk/scene_gdi.h"
 #include "formats/ne.h"
 #include "formats/records.h"
+#include "gfx/ship_flame.h"
 #include "intro/intro.h"
 #include "settings/settings.h"
 #include "shell/rng.h"
 #include "shell/window_keys.h"
+#include "world/hooks.h"
+#include "world/world.h"
 
 namespace is::desk {
 
@@ -104,23 +109,16 @@ public:
     }
     int rand() override { return shell::game_rng().rand(); }
     int calibrate_value() override { return shell::kCalibrate; }
-    // ISPACE.DLL seg8:0x5c86 [BYTES ISPACE.DLL seg8:0x5c86 seg8:0x5dd5 seg8:0x5dfe seg8:0x5e0a].
-    Conditions conditions() override {
-        Conditions c;
-        if (waveOutGetNumDevs() > 0) {
-            WAVEOUTCAPSW caps{};
-            if (waveOutGetDevCapsW(0, &caps, sizeof caps) == MMSYSERR_NOERROR) {
-                c.async_wave = (caps.dwSupport & WAVECAPS_SYNC) == 0;
-                c.stereo = caps.wChannels > 1;
-            }
-        }
-        return c;
-    }
+    // ISPACE.DLL seg8:0x5c86 on the system (ruling R3 of M4 stage 6) [BYTES ISPACE.DLL
+    // seg8:0x5c95-0x5fa5].
+    Conditions conditions() override { return desk::read_devices(); }
     Render render(int id, int W, int H) override {
         try {
             if (g.store) {
-                const fmt::Scene6600 raw = fmt::load_scene6600(g.store->module(assets::kGraphicsDll), static_cast<std::uint16_t>(id));
-                Render r = desk::render(raw, W, H, g.screen_cx, g.screen_cy, conditions());
+                // seg10:0x9526 with LoadString(ENG_LANG.DLL) for the record strings [BYTES
+                // seg10:0x9530-0x955d] [BYTES ISPACE.DLL seg8:0x1b45-0x1b54].
+                Render r = desk::render_scene(*g.store, id, W, H, g.screen_cx, g.screen_cy,
+                                              [this](int s) { return lang(s); });
                 char buf[160];
                 for (std::size_t i = 0; i < r.slots.size(); ++i) {
                     const Rect& s = r.slots[i];
@@ -189,13 +187,17 @@ std::filesystem::path ship_dir() {
 }
 
 // seg15:0x2a08's record lookup: MainShip against SHP + 0x0a by exact lstrcmp, then the body
-// record SHP + 0x21 and its graphic BOD + 0x21 [BYTES seg15:0x2a2f seg15:0x2a50 seg15:0x2b8f].
+// record SHP + 0x21 and its graphic BOD + 0x21 [BYTES seg15:0x2a2f seg15:0x2a50 seg15:0x2b8f]. A
+// name no record matches reads record DGROUP:0x95aa, one past the table; the port reads the zeroed
+// scratch record (body 0, SHP +0x07 = +0x08 = +0x09 = 0) and logs that read once [DESIGN ADR 0016
+// decision 2] (ruling R4 of M4 stage 6) [BYTES seg15:0x2a55-0x2a8e] (M4 s6 PAD, binding 5).
 std::optional<ShipArt> ship_art(const std::string& name) {
     if (!g.store) return std::nullopt;
     try {
         const assets::Ships ships = g.store->ships(ship_dir());
-        const fmt::ShipRecord* r = ships.find(name);
-        if (!r) return std::nullopt;
+        const fmt::ShipRecord* r = main_ship_record(ships, name, [](const std::string& w, const char* a) {
+            app::log_todo(w, a);
+        });  // desk/main_ship.h
         const fmt::BodyRecord* b = ships.body(*r);
         if (!b || b->bitmap_id == fmt::kBodyBitmapFromFile) return std::nullopt;  // [OPEN] a .DIB file
         ShipArt a;
@@ -203,6 +205,25 @@ std::optional<ShipArt> ship_art(const std::string& name) {
         a.id = b->bitmap_id;
         a.a = r->byte_07;
         a.b = r->byte_08;
+        // sext BOD +0x19 and +0x1a, BOD +0x20, SHP +0x09 and graphic 280 [BYTES seg15:0x2abf-0x2af0
+        // seg15:0x2b5c-0x2b72] (gfx/launch_ship.h LaunchShipArt).
+        a.fy = static_cast<std::int8_t>(b->byte_19);
+        a.band = static_cast<std::int8_t>(b->byte_1a);
+        a.body_flags = b->flags;
+        a.ship_flags = r->flags;
+        a.flame = g.store->sprite(gfx::kFlameGraphic);
+        // A kept or restored game (DGROUP:0x92e4 != 0): the wing bytes +0x72 / +0x73 of roster
+        // record DGROUP:0x931c for seg15:0x2a08's cuts; otherwise both wings stay on [BYTES
+        // seg15:0x2edf-0x2f8c] (verified claim 30, CORRECTED).
+        const world::World& w = world::current();
+        if (w.restored != 0) {
+            a.keep = true;
+            if (w.player_roster >= 0 && static_cast<std::size_t>(w.player_roster) < w.roster.size()) {
+                const world::RosterRecord& R = w.roster[static_cast<std::size_t>(w.player_roster)];
+                a.left_wing = R.wing0 != 0;
+                a.right_wing = R.wing1 != 0;
+            }
+        }
         return a;
     } catch (const std::exception& x) {
         app::log_todo(std::string("launch ship: ") + x.what(), "seg15:0x2a08");
@@ -225,6 +246,7 @@ void install_desk_hooks(App&) {
     g_canvas = std::make_unique<GdiDesk>([] { return g.gfx.get(); },
                                          [](const std::string& w, const char* a) { log_todo(w, a); },
                                          ship_art);
+    program_ships() = ship_art;  // the visit's launch and new body (src/hud/hooks.cpp)
     g_scene = std::make_unique<SceneHook>(*g_canvas, *g_host);
     intro::set_desk_scene(g_scene.get());
 }

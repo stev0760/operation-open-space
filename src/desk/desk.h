@@ -1,7 +1,9 @@
 // The desk and launch scene: state 0 phase 6 (docs/re/shell.md "Game-start dialogs" items
 // 6-10). The entry seg15:0xcb0, the frame seg15:0x10be with its steps 0-9, the monitor text
 // seg15:0x52e4 with the formatter seg10:0xa332, the typing routine seg15:0x1584, the rise
-// seg15:0x4c76 and the launch seg15:0x0 with its ordinal-14 fades.
+// seg15:0x4c76 and the launch seg15:0x0 with its ordinal-14 fades. The same machine runs the
+// visit's launch in state 6 (phases 61 and 63 of seg16:0xcfe): seg15:0xcb0's state != 0 path
+// and steps 5-9 (work/analysis/m4/s6-pacing.md section 7 with s6-pacing-verify.md) (M4 s6).
 //
 // The logic is portable: it draws through Canvas (the GDI work on DGROUP:0x13dc and the scene
 // DC DGROUP:0x929a, src/desk/gdi_desk.h on Win32) and reaches the program through Host. The
@@ -17,6 +19,7 @@
 #include <vector>
 
 #include "desk/scene.h"
+#include "gfx/pad.h"
 #include "shell/shared_rules.h"
 
 namespace is::desk {
@@ -55,9 +58,6 @@ int launch_speed(int f, bool fast);
 // the change of pos10 after drawing: trunc(3 speed/-7), or trunc(5 speed/-7) below 1400.
 int launch_advance10(int speed, bool fast);
 
-// The hold before seg15:0x0's exit path, the oracle's t065.54-t066.97 [OPEN] (desk.cpp launch).
-constexpr Tick kLaunchEndHold = 1430;
-
 // What one seg15:0x0 call draws (item 9, Drawing) [BYTES seg15:0x30b seg15:0x310 seg15:0x377
 // seg15:0x3d4 seg15:0x481 seg15:0x4c5 seg15:0x4e1 seg15:0x4f8 seg15:0x518 seg15:0x55f
 // seg15:0x58d].
@@ -65,9 +65,17 @@ struct LaunchDraw {
     int f = 0;        // DGROUP:0x17ca
     int s = 0;        // DGROUP:0x92da
     Rect ship;        // DGROUP:0x17da: the work DC's place on the screen, 4s × (4s + 15)
-    bool scene = false;  // desk phase 6 or state 8: the scene part is copied in
+    bool scene = false;  // desk phase 6 or state 8: the scene part is copied in [BYTES seg15:0x310 seg15:0x317]
     Rect column;      // DGROUP:0x17d2: slot 0 left, top, right and DGROUP:0x92de
     Rect pad;         // DGROUP:0x3cb0: the pad on the screen
+    // The shadow's inputs (s6-pad.md section 5) [BYTES seg15:0x3d9-0x4d1]: the game state
+    // DGROUP:0x90f4, y0 DGROUP:0x92d8, ye DGROUP:0x92d6, the position DGROUP:0x17c2 before the
+    // step and the previous top DGROUP:0x17cc (the top at arg 2, then after each screen blit)
+    // [BYTES seg15:0x2be seg15:0x592].
+    int state = 0;
+    int y0 = 0, ye = 0;
+    int pos10 = 0;
+    int prev_top = 0;
 };
 
 class Canvas {
@@ -97,8 +105,15 @@ public:
     virtual int text_extent(const std::string& cp1252) = 0;     // GetTextExtent's cx
     virtual void scroll_up(const Rect& r, int pixels) = 0;      // ScrollDC(0, -1) `pixels` times
     virtual void flash(int x, int y) = 0;                       // seg15:0x84b0's drawing
-    // ---- launch [OPEN: the pad drawer seg15:0x4a2e and the rise-strip mask DGROUP:0x181e]
+    // ---- launch: the pad drawer seg15:0x4a2e and the rise-strip mask DGROUP:0x181e are read
+    // (gfx/pad.h, src/desk/gdi_desk.h).
     virtual void make_pad(int w, int h) = 0;   // seg15:0x482e: DGROUP:0x92a8 in DC 0x92b6
+    // seg15:0x482e from the play height DGROUP:0x90ec and the client height DGROUP:0x10 (gfx/pad.h
+    // pad_geometry) [BYTES seg15:0x483d-0x4975]; the default builds make_pad's size [DESIGN].
+    virtual void make_pad_for(int play_h, int client_h) {
+        const gfx::PadGeometry g = gfx::pad_geometry(play_h, client_h);
+        make_pad(g.pw, g.height());
+    }
     // seg15:0x9e6 with seg15:0x2a08: the ship image of INI MainShip and its 16 frames
     // (ship_frames) with their mask; returns s (DGROUP:0x92da).
     virtual int make_ship(const std::string& main_ship) = 0;
@@ -113,6 +128,18 @@ public:
     virtual void launch_frame(const LaunchDraw& d) = 0;
     virtual void free_all() = 0;               // seg15:0x1328(1) and seg15:0x14be
     virtual bool pad_alive() = 0;              // DGROUP:0x92ac still present
+    // ---- state 6: the visit's launch (phase 63). Defaults are the state-0 parts, stand-ins
+    // until the visit's pictures reach the desk's canvas (the PAD track, s6-pad.md P2) [DESIGN].
+    // seg15:0x9e6 in state 6 [BYTES seg15:0x11fe seg15:0xa07-0xa32]: s = trunc(bmHeight of the
+    // visit's ship image DGROUP:0x92b0 / k) (seg15:0x2a08's branch B and early return while the
+    // image exists [BYTES seg15:0x2c31-0x2c48 seg15:0x2ca3-0x2cbb], or seg15:0x9e6's own when a
+    // new body is bought [BYTES seg15:0xa07-0xa32]; seg15:0x2a08's branch A from INI MainShip
+    // when the image is absent), then the 16 frames stretched from the flame square
+    // DGROUP:0x92b2 with their mask; returns s.
+    virtual int visit_ship(const std::string& main_ship) { return make_ship(main_ship); }
+    // The pad DC DGROUP:0x92b6 exists (in state 6 the visit's, made by seg15:0x482e at the
+    // descent's start) [BYTES seg15:0xb2 seg15:0x3694].
+    virtual bool pad_dc() { return true; }
 };
 
 class Host {
@@ -183,14 +210,24 @@ public:
     // seg15:0xcb0 in state 0 with the play area W × H (DGROUP:0x90ea, DGROUP:0x10) and play
     // height DGROUP:0x90ec. The caller plays sound 0x6e and arms the 90 s phase deadline.
     void enter(Tick now, int W, int H, int play_h);
-    // seg15:0x10be at DGROUP:0x1e50 = now. True when step 9 ran: the caller then sets phase 7
-    // and runs seg6:0x1d9a and seg6:0x1c72(1) (seg15:0x12c3-0x12dd).
+    // seg15:0xcb0 in state 6 (phase 61 of the visit) [BYTES seg15:0xcc5-0xcdd seg15:0xd01-0xd08
+    // seg15:0xede seg15:0xee4-0xf20]: sound 0x6e, the desk step 5, sound 0x4b, 1550 ms of
+    // seg10:0x740c, y0 = DGROUP:0x92d6 (the descent's end y `end_y`) and ye = 10. The play area
+    // W × H and the pad's width DGROUP:0x3ce6 and column DGROUP:0x3c9a are the visit's
+    // (seg15:0x482e at the descent's start).
+    void enter_visit(Tick now, int W, int H, int pad_w, int pad_c, int end_y);
+    // seg15:0x10be at DGROUP:0x1e50 = now. True when step 9 ran: in state 0 the caller then sets
+    // phase 7 and runs seg6:0x1d9a and seg6:0x1c72(1) (seg15:0x12c3-0x12dd); in state 6 step 9
+    // has raised the visit's phase DGROUP:0x914a, which the caller does [BYTES seg15:0x12e5-0x12ec].
     bool frame(Tick now);
     void escape() { step_ = 9; }  // ESC in phase 6 [BYTES seg11:0x7a11]
     // Space at steps 1 [BYTES seg11:0x7b03-0x7b13]: seg15:0x1584(1).
     void space(Tick now);
 
     int step() const { return step_; }
+    int state() const { return state_; }  // DGROUP:0x90f4 as the machine was entered: 0 or 6
+    int start_y() const { return start_y_; }  // DGROUP:0x92d8
+    int end_y() const { return end_y_; }      // DGROUP:0x92d6
     int meal() const { return meal_; }
     const Render& render() const { return render_; }
     const Typing& typing() const { return t_; }
@@ -211,6 +248,7 @@ private:
 
     Canvas& canvas_;
     Host& host_;
+    int state_ = 0;           // DGROUP:0x90f4: 0 (the desk) or 6 (the visit's launch)
     Tick now_ = 0;
     int W_ = 0, H_ = 0, play_h_ = 0;
     int step_ = 9;            // DGROUP:0x92d4
@@ -235,6 +273,7 @@ private:
     int speed_ = 150;             // DGROUP:0x17c8
     int f_ = 0;                   // DGROUP:0x17ca
     int lum_ = 100;               // DGROUP:0x17d0
+    int prev_top_ = 0;            // DGROUP:0x17cc
     Rect ship_rect_;              // DGROUP:0x17da-0x17e0
 };
 
