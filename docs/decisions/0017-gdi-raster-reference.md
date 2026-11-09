@@ -1,6 +1,6 @@
 # ADR 0017: Wine's GDI raster as the reference for polygon masks
 
-- **Status:** Proposed (2026-11-09). [DESIGN]
+- **Status:** Accepted (2026-11-09), to be revisited at M10 on real Windows. [DESIGN]
 - **Scope:** the port's pixel tables and emulations of GDI polygon and region fills: the wing cut masks of ISPACE.DLL ordinal 15 (`src/gfx/wing_cut`) and the landing pad's trapezoid mask and bands of seg15:0x482e and seg15:0x4a2e (`src/gfx/pad`). [DESIGN]
 
 ## Context
