@@ -64,6 +64,17 @@ TEST_CASE("window keys: defaults, reads and the write-back") {
     CHECK(ini.get_int(kGameSection, "ShowRight", -1) == 3);
     CHECK(ini.get_int(kGameSection, "ShowBottom", -1) == 4);
 
+    // IconLeft and IconTop only after the icon column moved, then the flag is clear
+    k.icon_left = 700;
+    k.icon_top = 12;
+    write_window_keys(ini, k);
+    CHECK(ini.get_int(kGameSection, "IconLeft", -1) == -1);
+    k.icon_dirty = true;
+    write_window_keys(ini, k);
+    CHECK_FALSE(k.icon_dirty);
+    CHECK(ini.get_int(kGameSection, "IconLeft", -1) == 700);
+    CHECK(ini.get_int(kGameSection, "IconTop", -1) == 12);
+
     // a new file gets the keys in seg6:0x33e's order
     const fs::path q = temp_ini("b.ini", "");
     fs::remove(q);
@@ -73,11 +84,14 @@ TEST_CASE("window keys: defaults, reads and the write-back") {
     CHECK(d.show == Rect{});
     d.show = {102, 77, 921, 691};
     d.show_dirty = true;
+    d.icon_left = 976;
+    d.icon_top = 5;
+    d.icon_dirty = true;
     write_window_keys(fresh, d);
     fresh.save();
     CHECK(slurp(q) ==
           "[Inner Space]\r\nFull=1\r\nMenu=0\r\nIconWnd=1\r\nVScale=0\r\nSmWnd=0\r\n"
-          "SScale=0\r\nShowLeft=102\r\nShowRight=921\r\nShowTop=77\r\nShowBottom=691\r\n");
+          "SScale=0\r\nIconLeft=976\r\nIconTop=5\r\nShowLeft=102\r\nShowRight=921\r\nShowTop=77\r\nShowBottom=691\r\n");
 }
 
 TEST_CASE("window keys: Border and Menu defaults of seg6:0xb3e") {

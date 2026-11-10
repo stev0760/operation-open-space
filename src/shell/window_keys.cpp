@@ -43,7 +43,12 @@ void write_window_keys(settings::IniFile& ini, WindowKeys& k) {
     ini.set_int(kGameSection, "VScale", k.vscale);     // seg6:0x4bc
     ini.set_int(kGameSection, "SmWnd", k.sm_wnd);      // seg6:0x4e2
     ini.set_int(kGameSection, "SScale", k.sscale);     // seg6:0x508
-    // IconLeft/IconTop, SmLeft/SmTop, HelpLeft/HelpTop: their windows come later.
+    if (k.icon_dirty) {  // DGROUP:0x8fee [BYTES seg6:0x50d]
+        ini.set_int(kGameSection, "IconLeft", k.icon_left);  // seg6:0x535
+        ini.set_int(kGameSection, "IconTop", k.icon_top);    // seg6:0x55b
+    }
+    k.icon_dirty = false;
+    // SmLeft/SmTop, HelpLeft/HelpTop: their windows come later.
     if (k.show_dirty) {
         ini.set_int(kGameSection, "ShowLeft", k.show.left);      // seg6:0x630
         ini.set_int(kGameSection, "ShowRight", k.show.right);    // seg6:0x656

@@ -1,6 +1,6 @@
 # Behaviour spec
 
-Each file below specifies one subsystem from the manual, the oracle digests and the original's bytes. A file starts as a stub that its milestone fills in. Feature status lives in [checklist.md](checklist.md), whose area codes the list gives. [DESIGN]
+Each file below will specify one subsystem from the manual, the oracle digests and the original's bytes. A file is added when its milestone writes it; until then the behaviour is in [`docs/re/`](../re/) and the oracle digests. Feature status lives in [checklist.md](checklist.md), whose area codes the list gives. [DESIGN]
 
 - `input.md`: key bindings, accelerators, mouse and joystick (KEY).
 - `windows.md`: main window, status display, dialogs, menus, intro and briefing screens (WIN).

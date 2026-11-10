@@ -55,7 +55,6 @@ HWND g_wnd = nullptr;         // DGROUP:0x9458
 HMENU g_sys = nullptr;        // DGROUP:0x945a
 int g_left = 0, g_top = 0;    // DGROUP:0x1de4 / 0x1de6 (IconLeft, IconTop)
 bool g_pos_read = false;
-bool g_pos_dirty = false;     // DGROUP:0x8fee
 // The row marks DGROUP:0x6e38 + 0x1e·(i + 3): +0x14, the glint counter of seg13:0x5a6a.
 std::array<int, world::kIconRecords> g_glint{};
 gfx::ImagePtr g_image;
@@ -186,11 +185,13 @@ LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         RECT r;
         GetWindowRect(hwnd, &r);
         if (r.left != g_left || r.top != g_top) {
-            // CopyRect into DGROUP:0x1de4 and DGROUP:0x8fee = 1; the INI write-back of IconLeft
-            // and IconTop is not ported [OPEN].
+            // CopyRect into DGROUP:0x1de4 and DGROUP:0x8fee = 1; seg6:0x33e writes IconLeft and
+            // IconTop back at exit (shell::write_window_keys).
             g_left = r.left;
             g_top = r.top;
-            g_pos_dirty = true;
+            g.keys.icon_left = g_left;
+            g.keys.icon_top = g_top;
+            g.keys.icon_dirty = true;
         }
         // seg7:0x6273: SetActiveWindow(main). The main window's reactivation runs the emulated
         // WM_QUERYNEWPALETTE (ADR 0007 decision 5) [BYTES seg7:0x6273 seg2:0x5cb].

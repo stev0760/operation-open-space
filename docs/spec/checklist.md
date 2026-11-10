@@ -525,39 +525,39 @@ Keys are in `INSPACE.INI` `[Inner Space]` unless the row names another file or s
 |---|---|---|---|---|---|---|
 | INI-01 | `Path`: install directory; regenerated from the module path when missing | [ORACLE smoke-0001] [ORACLE newgame-0001] [BYTES seg6:0x70a] | oracle | understood | done | demo |
 | INI-02 | `LocalPath`: regenerated with Path | [ORACLE smoke-0001] [ORACLE newgame-0001] [BYTES seg6:0x725] | oracle | understood | done | demo |
-| INI-03 | `ShipPath`: ships directory (MASTER.BOD, MASTER.SHP) | [ORACLE smoke-0001] [ORACLE newgame-0001] [BYTES seg14:0x3dea] | oracle | understood | todo | demo |
+| INI-03 | `ShipPath`: ships directory (MASTER.BOD, MASTER.SHP) | [ORACLE smoke-0001] [ORACLE newgame-0001] [BYTES seg14:0x3dea] | oracle | understood | done | demo |
 | INI-04 | `SndPath`: sounds directory | [ORACLE smoke-0001] [ORACLE newgame-0001] [BYTES ISPACE.DLL seg9:0x152 seg9:0xba seg9:0x162] | oracle | understood | done | demo |
 | INI-05 | `RacePath`: directory of the race records (.rac) | [MANUAL Race Records] [ORACLE smoke-0001] [ORACLE newgame-0001] [BYTES seg6:0x9c8] | oracle | understood | todo | demo |
 | INI-06 | `Dead`: regenerated as RETIRED | [ORACLE smoke-0001] [ORACLE newgame-0001] [BYTES seg6:0x978] | oracle | understood | done | demo |
 | INI-07 | `Games`: regenerated as GAMES | [ORACLE smoke-0001] [ORACLE newgame-0001] [BYTES seg6:0x9a0] | oracle | understood | done | demo |
-| INI-08 | `Language`: language code (ENG) for the _LANG, _FX and _HELP files | [ORACLE newgame-0001] [BYTES DGROUP:0x3a2] [BYTES seg10:0x668b] | oracle | located | todo | demo |
+| INI-08 | `Language`: language code (ENG) for the _LANG, _FX and _HELP files | [ORACLE newgame-0001] [BYTES DGROUP:0x3a2] [BYTES seg10:0x668b] | oracle | located | done | demo |
 | INI-09 | `IgnoreRes`: default 0 | [ORACLE newgame-0001] [BYTES seg6:0x1401] | oracle | understood | todo | demo |
 | INI-10 | `Full`: full screen, default 1 | [ORACLE newgame-0001] [BYTES seg6:0x14] [BYTES seg6:0x180e] | oracle | understood | done | demo |
-| INI-11 | `ShowLeft`: default 0 | [ORACLE newgame-0001] [BYTES seg6:0x2b] [BYTES seg6:0x75] | oracle | understood | todo | demo |
-| INI-12 | `ShowTop`: default 0 | [ORACLE newgame-0001] [BYTES seg6:0x41] [BYTES seg6:0x75] | oracle | understood | todo | demo |
-| INI-13 | `ShowRight`: default 0 | [ORACLE newgame-0001] [BYTES seg6:0x57] [BYTES seg6:0x75] | oracle | understood | todo | demo |
-| INI-14 | `ShowBottom`: default 0 | [ORACLE newgame-0001] [BYTES seg6:0x6d] [BYTES seg6:0x75] | oracle | understood | todo | demo |
-| INI-15 | `IconWnd`: default 1 | [ORACLE newgame-0001] [BYTES seg6:0x112] [BYTES seg2:0x4f7] | oracle | understood | todo | demo |
-| INI-16 | `VScale`: default 0 | [ORACLE newgame-0001] [BYTES seg6:0x128] [BYTES seg2:0x4f7] | oracle | understood | todo | demo |
-| INI-17 | `SmWnd`: default 0 | [ORACLE newgame-0001] [BYTES seg6:0x13e] [BYTES seg2:0x4f7] | oracle | understood | todo | demo |
-| INI-18 | `SScale`: default 0 | [ORACLE newgame-0001] [BYTES seg6:0x154] [BYTES seg2:0x4f7] | oracle | understood | todo | demo |
-| INI-19 | `ShowLaunch`: default 2 | [ORACLE newgame-0001] [BYTES seg6:0x16a] | oracle | located | todo | demo |
-| INI-20 | `Menu`: (App Menu), default 0 | [ORACLE newgame-0001] [BYTES seg6:0x180] [BYTES seg2:0xd88] | oracle | understood | todo | demo |
+| INI-11 | `ShowLeft`: default 0 | [ORACLE newgame-0001] [BYTES seg6:0x2b] [BYTES seg6:0x75] | oracle | understood | done | demo |
+| INI-12 | `ShowTop`: default 0 | [ORACLE newgame-0001] [BYTES seg6:0x41] [BYTES seg6:0x75] | oracle | understood | done | demo |
+| INI-13 | `ShowRight`: default 0 | [ORACLE newgame-0001] [BYTES seg6:0x57] [BYTES seg6:0x75] | oracle | understood | done | demo |
+| INI-14 | `ShowBottom`: default 0 | [ORACLE newgame-0001] [BYTES seg6:0x6d] [BYTES seg6:0x75] | oracle | understood | done | demo |
+| INI-15 | `IconWnd`: default 1 | [ORACLE newgame-0001] [BYTES seg6:0x112] [BYTES seg2:0x4f7] | oracle | understood | done | demo |
+| INI-16 | `VScale`: default 0 | [ORACLE newgame-0001] [BYTES seg6:0x128] [BYTES seg2:0x4f7] | oracle | understood | done | demo |
+| INI-17 | `SmWnd`: default 0 | [ORACLE newgame-0001] [BYTES seg6:0x13e] [BYTES seg2:0x4f7] | oracle | understood | wip | demo |
+| INI-18 | `SScale`: default 0 | [ORACLE newgame-0001] [BYTES seg6:0x154] [BYTES seg2:0x4f7] | oracle | understood | wip | demo |
+| INI-19 | `ShowLaunch`: default 2 | [ORACLE newgame-0001] [BYTES seg6:0x16a] | oracle | located | done | demo |
+| INI-20 | `Menu`: (App Menu), default 0 | [ORACLE newgame-0001] [BYTES seg6:0x180] [BYTES seg2:0xd88] | oracle | understood | done | demo |
 | INI-21 | `RadarLeft`: default 0 | [ORACLE newgame-0001] [BYTES seg6:0x196] | oracle | located | todo | demo |
 | INI-22 | `RadarTop`: default 0 | [ORACLE newgame-0001] [BYTES seg6:0x1ac] | oracle | located | todo | demo |
 | INI-23 | `WatchLeft`: default 0 | [ORACLE newgame-0001] [BYTES seg6:0x1c2] | oracle | located | todo | demo |
 | INI-24 | `WatchTop`: default 0 | [ORACLE newgame-0001] [BYTES seg6:0x1d8] | oracle | located | todo | demo |
 | INI-25 | `WatchRight`: default `WatchLeft` + 280 | [ORACLE newgame-0001] [BYTES seg6:0x1e8] | oracle | located | todo | demo |
-| INI-26 | `IconLeft`: default screen width − 48 (976 at 1024 pixels) | [ORACLE newgame-0001] [BYTES seg6:0x205] | oracle | located | todo | demo |
-| INI-27 | `IconTop`: default 0 | [ORACLE newgame-0001] [BYTES seg6:0x245] | oracle | located | todo | demo |
+| INI-26 | `IconLeft`: default screen width − 48 (976 at 1024 pixels) | [ORACLE newgame-0001] [BYTES seg6:0x205] | oracle | located | done | demo |
+| INI-27 | `IconTop`: default 0 | [ORACLE newgame-0001] [BYTES seg6:0x245] | oracle | located | done | demo |
 | INI-28 | `SmLeft`: default 0 | [ORACLE newgame-0001] [BYTES seg6:0x25b] | oracle | located | todo | demo |
 | INI-29 | `SmTop`: default 0 | [ORACLE newgame-0001] [BYTES seg6:0x28e] | oracle | located | todo | demo |
 | INI-30 | `HelpLeft`: default 0 | [ORACLE newgame-0001] [BYTES seg6:0x2a4] | oracle | located | todo | demo |
 | INI-31 | `HelpTop`: default 0 | [ORACLE newgame-0001] [BYTES seg6:0x2ba] | oracle | located | todo | demo |
 | INI-32 | `Aux`: default 0 | [ORACLE newgame-0001] [BYTES seg6:0x2fb] | oracle | understood | todo | demo |
-| INI-33 | `QuickIntro`: (Skip Sequences), default 0; 1 does not shorten the desk scene | [ORACLE newgame-0001] [BYTES seg6:0x318] | oracle | located | todo | demo |
+| INI-33 | `QuickIntro`: (Skip Sequences), default 0; 1 does not shorten the desk scene | [ORACLE newgame-0001] [BYTES seg6:0x318] | oracle | located | done | demo |
 | INI-34 | `Rate`: default 0 | [ORACLE newgame-0001] [BYTES seg6:0x32e] | oracle | located | todo | demo |
-| INI-35 | `OnTop`: default 1 | [ORACLE newgame-0001] [BYTES seg2:0x101d] | oracle | located | todo | demo |
+| INI-35 | `OnTop`: default 1 | [ORACLE newgame-0001] [BYTES seg2:0x101d] | oracle | located | done | demo |
 | INI-36 | `SoundFX`: (Sound FX), default 1 | [ORACLE newgame-0001] [BYTES ISPACE.DLL seg9:0x22e5] [BYTES ISPACE.DLL seg9:0x22ca] | oracle | understood | done | demo |
 | INI-37 | `VoiceFX`: (Voice Effects), default 1 | [ORACLE newgame-0001] [BYTES ISPACE.DLL seg9:0x22fb] [BYTES ISPACE.DLL seg9:0x22ca] | oracle | understood | done | demo |
 | INI-38 | `Music`: (Music Soundtrack), default 1 | [ORACLE newgame-0001] [BYTES ISPACE.DLL seg9:0x2311] [BYTES ISPACE.DLL seg9:0x22ca] | oracle | understood | done | demo |
@@ -572,14 +572,14 @@ Keys are in `INSPACE.INI` `[Inner Space]` unless the row names another file or s
 | INI-47 | `JMinY`: joystick calibration, default 0 | [ORACLE newgame-0001] [BYTES ISPACE.DLL seg9:0x23dd] | oracle | located | todo | demo |
 | INI-48 | `JRangeX`: joystick calibration, default 0 | [ORACLE newgame-0001] [BYTES ISPACE.DLL seg9:0x23f3] | oracle | located | todo | demo |
 | INI-49 | `JRangeY`: joystick calibration, default 0 | [ORACLE newgame-0001] [BYTES ISPACE.DLL seg9:0x2409] | oracle | located | todo | demo |
-| INI-50 | `JBtn0`: (Button 1 function), default 0 | [ORACLE newgame-0001] [BYTES seg6:0xbeb] | oracle | located | todo | demo |
-| INI-51 | `JBtn1`: (Button 2 function), default 1 | [ORACLE newgame-0001] [BYTES seg6:0xbeb] | oracle | located | todo | demo |
-| INI-52 | `JBtn2`: (Button 3 function), default 2 | [ORACLE newgame-0001] [BYTES seg6:0xbeb] | oracle | located | todo | demo |
-| INI-53 | `JBtn3`: (Button 4 function), default 3 | [ORACLE newgame-0001] [BYTES seg6:0xbeb] | oracle | located | todo | demo |
+| INI-50 | `JBtn0`: (Button 1 function), default 0 | [ORACLE newgame-0001] [BYTES seg6:0xbeb] | oracle | located | wip | demo |
+| INI-51 | `JBtn1`: (Button 2 function), default 1 | [ORACLE newgame-0001] [BYTES seg6:0xbeb] | oracle | located | wip | demo |
+| INI-52 | `JBtn2`: (Button 3 function), default 2 | [ORACLE newgame-0001] [BYTES seg6:0xbeb] | oracle | located | wip | demo |
+| INI-53 | `JBtn3`: (Button 4 function), default 3 | [ORACLE newgame-0001] [BYTES seg6:0xbeb] | oracle | located | wip | demo |
 | INI-54 | `SoundSystem`: (sound system), default -1; regenerated as 0 | [ORACLE smoke-0001] [ORACLE newgame-0001] [ORACLE sound-0002] [BYTES ISPACE.DLL seg9:0x2538 seg9:0x2569] [BYTES ISPACE.DLL seg9:0x22ca] | oracle | understood | done | demo |
-| INI-55 | `Enhance`: (Enhanced Graphics), default 1 | [ORACLE newgame-0001] [BYTES seg6:0xc8c] | oracle | located | todo | demo |
+| INI-55 | `Enhance`: (Enhanced Graphics), default 1 | [ORACLE newgame-0001] [BYTES seg6:0xc8c] | oracle | located | wip | demo |
 | INI-56 | `Detail`: (Play Detail), default 3 | [ORACLE newgame-0001] [BYTES seg6:0xc76] [BYTES INSTALL.EXE seg2:0x2b53] | oracle | understood | done | demo |
-| INI-57 | `Quick`: (Quickload), default 0 (INSPACE, Factory), 1 (ISPACE.DLL) | [ORACLE newgame-0001] [BYTES seg6:0xc60] | oracle | located | todo | demo |
+| INI-57 | `Quick`: (Quickload), default 0 (INSPACE, Factory), 1 (ISPACE.DLL) | [ORACLE newgame-0001] [BYTES seg6:0xc60] | oracle | located | done | demo |
 | INI-58 | `Calibrate`: speed measure rewritten 1.5 s after each launch; guides the detail level | [MANUAL Optimizing for Your Computer] [ORACLE newgame-0001] [ORACLE smoke-0001] [BYTES seg6:0xa6c] | oracle | understood | done | demo |
 | INI-59 | `GameSpeed`: default 20000 | [ORACLE newgame-0001] [BYTES seg6:0xb5c] | oracle | located | todo | demo |
 | INI-60 | `FrameRateSet`: (Play Speed), default 36 | [ORACLE newgame-0001] [BYTES seg6:0xb7d] | oracle | understood | done | demo |
@@ -588,8 +588,8 @@ Keys are in `INSPACE.INI` `[Inner Space]` unless the row names another file or s
 | INI-63 | `Complex`: default 0 (INSPACE), 2 (ISPACE.DLL) | [ORACLE newgame-0001] [BYTES seg6:0x1204] [BYTES INSTALL.EXE seg2:0x34a6] | oracle | understood | done | demo |
 | INI-64 | `Braking`: (Ship Auto Braking), default 0 | [ORACLE newgame-0001] [BYTES seg6:0xcf4] [BYTES INSTALL.EXE seg2:0x34a6] | oracle | understood | done | demo |
 | INI-65 | `ShipAnim`: (Animated Ship Watches), default 1 | [ORACLE newgame-0001] [BYTES seg6:0xd0a] | oracle | located | todo | demo |
-| INI-66 | `Border`: (Game Border), default 1 | [ORACLE newgame-0001] [BYTES seg6:0xd20] [BYTES seg2:0xcb1] | oracle | understood | todo | demo |
-| INI-67 | `Bright`: (Enhanced Brightness), default 0 | [ORACLE newgame-0001] [BYTES seg6:0xe88] | oracle | located | todo | demo |
+| INI-66 | `Border`: (Game Border), default 1 | [ORACLE newgame-0001] [BYTES seg6:0xd20] [BYTES seg2:0xcb1] | oracle | understood | done | demo |
+| INI-67 | `Bright`: (Enhanced Brightness), default 0 | [ORACLE newgame-0001] [BYTES seg6:0xe88] | oracle | located | done | demo |
 | INI-68 | `Size`: default 1; New Game OK writes it | [ORACLE newgame-0001] [BYTES seg6:0xaf8] [BYTES seg10:0x9a5f] [ORACLE m2-accept-0001] [BYTES seg6:0x95e8] | oracle | understood | verified | demo |
 | INI-69 | `SetSize`: default 1; New Game OK writes it | [ORACLE newgame-0001] [BYTES ISPACE.DLL seg10:0x1ff7] [ORACLE m2-accept-0001] | oracle | located | verified | demo |
 | INI-70 | `Accept`: (I Accept), default 0 | [ORACLE newgame-0001] [BYTES seg11:0x7a28] | oracle | located | done | demo |
@@ -598,32 +598,32 @@ Keys are in `INSPACE.INI` `[Inner Space]` unless the row names another file or s
 | INI-73 | `ThePlayer`: (PILOT), default "" (INSPACE), AutoPilot (ISPACE.DLL) | [ORACLE newgame-0001] [BYTES seg10:0x8c] | oracle | located | done | demo |
 | INI-74 | `MainShip`: (SHIP), default EAGLE; regenerated as TRANSFORMER | [ORACLE smoke-0001] [ORACLE newgame-0001] [BYTES seg14:0x23bf] [ORACLE m2-accept-0001] | oracle | located | verified | demo |
 | INI-75 | `PlayMode`: (PLAY), default 0 | [ORACLE newgame-0001] [BYTES seg10:0x8478] [ORACLE m2-accept-0001] [BYTES seg11:0x6d6c seg6:0x972d] | oracle | verified | verified | demo |
-| INI-76 | `Breakfast`: default 800 | [MANUAL Special Times of Day] [ORACLE newgame-0001] [BYTES seg10:0x96df] | oracle | located | todo | demo |
-| INI-77 | `Coffee`: default 1000 | [MANUAL Special Times of Day] [ORACLE newgame-0001] [BYTES seg10:0x970b] | oracle | located | todo | demo |
-| INI-78 | `Lunch`: default 1200 | [MANUAL Special Times of Day] [ORACLE newgame-0001] [BYTES seg10:0x96b2] | oracle | located | todo | demo |
-| INI-79 | `Tea`: default 1530 | [MANUAL Special Times of Day] [ORACLE newgame-0001] [BYTES seg10:0x9737] | oracle | located | todo | demo |
+| INI-76 | `Breakfast`: default 800 | [MANUAL Special Times of Day] [ORACLE newgame-0001] [BYTES seg10:0x96df] | oracle | located | done | demo |
+| INI-77 | `Coffee`: default 1000 | [MANUAL Special Times of Day] [ORACLE newgame-0001] [BYTES seg10:0x970b] | oracle | located | done | demo |
+| INI-78 | `Lunch`: default 1200 | [MANUAL Special Times of Day] [ORACLE newgame-0001] [BYTES seg10:0x96b2] | oracle | located | done | demo |
+| INI-79 | `Tea`: default 1530 | [MANUAL Special Times of Day] [ORACLE newgame-0001] [BYTES seg10:0x9737] | oracle | located | done | demo |
 | INI-80 | `NavLeft`: Navigation window, default 30 | [ORACLE newgame-0001] [BYTES seg6:0x1cb6] [ORACLE m2-accept-0001] | oracle | located | verified | demo |
 | INI-81 | `NavTop`: default 30 | [ORACLE newgame-0001] [BYTES seg6:0x1ccc] [ORACLE m2-accept-0001] | oracle | located | verified | demo |
 | INI-82 | `NavRight`: default 560 | [ORACLE newgame-0001] [BYTES seg6:0x1ce3] [ORACLE m2-accept-0001] | oracle | located | verified | demo |
 | INI-83 | `NavBottom`: default 350 | [ORACLE newgame-0001] [BYTES seg6:0x1cfa] [ORACLE m2-accept-0001] | oracle | located | verified | demo |
-| INI-84 | `Racers`: (RACE competitors), default 1 | [ORACLE newgame-0001] [BYTES seg6:0x2773] | oracle | located | todo | demo |
-| INI-85 | `RaceDiff`: (RACE difficulty), default 0 | [ORACLE newgame-0001] [BYTES seg6:0x2930] | oracle | located | todo | demo |
-| INI-86 | `RaceLaps`: (RACE laps), default 1 | [ORACLE newgame-0001] [BYTES seg6:0x2aee] | oracle | located | todo | demo |
-| INI-87 | `RaceOpp`: (RACE speed), default 2 | [ORACLE newgame-0001] [BYTES seg6:0x2c3a] | oracle | located | todo | demo |
-| INI-88 | `Duelers`: (DUEL opponents) | [BYTES DGROUP:0xdaa] [BYTES seg6:0x2851] | strings | located | todo | unknown |
-| INI-89 | `DuelDiff`: (DUEL difficulty), default 0 | [ORACLE newgame-0001] [BYTES seg6:0x2a0f] | oracle | located | todo | demo |
-| INI-90 | `DuelOpp`: (DUEL toughness), default 2 | [ORACLE newgame-0001] [BYTES seg6:0x2d7f] | oracle | located | todo | demo |
-| INI-91 | `Tree`: default 0 | [ORACLE newgame-0001] [BYTES seg6:0x37ef] | oracle | located | todo | demo |
+| INI-84 | `Racers`: (RACE competitors), default 1 | [ORACLE newgame-0001] [BYTES seg6:0x2773] | oracle | located | wip | demo |
+| INI-85 | `RaceDiff`: (RACE difficulty), default 0 | [ORACLE newgame-0001] [BYTES seg6:0x2930] | oracle | located | wip | demo |
+| INI-86 | `RaceLaps`: (RACE laps), default 1 | [ORACLE newgame-0001] [BYTES seg6:0x2aee] | oracle | located | wip | demo |
+| INI-87 | `RaceOpp`: (RACE speed), default 2 | [ORACLE newgame-0001] [BYTES seg6:0x2c3a] | oracle | located | wip | demo |
+| INI-88 | `Duelers`: (DUEL opponents) | [BYTES DGROUP:0xdaa] [BYTES seg6:0x2851] | strings | located | wip | unknown |
+| INI-89 | `DuelDiff`: (DUEL difficulty), default 0 | [ORACLE newgame-0001] [BYTES seg6:0x2a0f] | oracle | located | wip | demo |
+| INI-90 | `DuelOpp`: (DUEL toughness), default 2 | [ORACLE newgame-0001] [BYTES seg6:0x2d7f] | oracle | located | wip | demo |
+| INI-91 | `Tree`: default 0 | [ORACLE newgame-0001] [BYTES seg6:0x37ef] | oracle | located | done | demo |
 | INI-92 | `SavePrompt`: (Always Ask for Save Name) | [BYTES DGROUP:0x865] [BYTES ISPACE.DLL DGROUP:0x9dd] [BYTES seg10:0x85a5] [BYTES seg10:0x8585 seg10:0x85a5] | code | verified | done | unknown |
 | INI-93 | `PlusCount` | [BYTES DGROUP:0x879] [BYTES seg10:0x880e] | strings | located | done | unknown |
 | INI-94 | `StratAsk` | [BYTES DGROUP:0x915] [BYTES ISPACE.DLL DGROUP:0x3c0] [BYTES seg10:0xa988] | strings | located | done | unknown |
-| INI-95 | `DemoType`: (Demo Options mode) | [BYTES DGROUP:0x121e] [BYTES ISPACE.DLL DGROUP:0x41c] [BYTES seg15:0x5aa6] | strings | located | todo | unknown |
+| INI-95 | `DemoType`: (Demo Options mode) | [BYTES DGROUP:0x121e] [BYTES ISPACE.DLL DGROUP:0x41c] [BYTES seg15:0x5aa6] | strings | located | wip | unknown |
 | INI-96 | `Ship1`: (SHIP #1) | [BYTES DGROUP:0x11ae] [BYTES ISPACE.DLL DGROUP:0x445] [BYTES seg14:0x236c] | strings | located | todo | unknown |
 | INI-97 | `Ship2`: (SHIP #2) | [BYTES DGROUP:0x11b5] [BYTES ISPACE.DLL DGROUP:0x44c] [BYTES seg14:0x239c] | strings | located | todo | unknown |
-| INI-98 | `Track`: (Demo Options track) | [BYTES DGROUP:0xe99] [BYTES ISPACE.DLL DGROUP:0x426] [BYTES seg6:0x3c8a] | strings | located | todo | unknown |
-| INI-99 | `DRacers`: (Demo Options racers) | [BYTES DGROUP:0xe34] [BYTES ISPACE.DLL DGROUP:0x434] [BYTES seg6:0x3208] | strings | located | todo | unknown |
-| INI-100 | `DDiff`: (Demo Options difficulty) | [BYTES DGROUP:0xe3c] [BYTES ISPACE.DLL DGROUP:0x42c] [BYTES seg6:0x3262] | strings | located | todo | unknown |
-| INI-101 | `DLaps`: (Demo Options laps) | [BYTES DGROUP:0xe42] [BYTES ISPACE.DLL DGROUP:0x43e] [BYTES seg6:0x327e] | strings | located | todo | unknown |
+| INI-98 | `Track`: (Demo Options track) | [BYTES DGROUP:0xe99] [BYTES ISPACE.DLL DGROUP:0x426] [BYTES seg6:0x3c8a] | strings | located | wip | unknown |
+| INI-99 | `DRacers`: (Demo Options racers) | [BYTES DGROUP:0xe34] [BYTES ISPACE.DLL DGROUP:0x434] [BYTES seg6:0x3208] | strings | located | wip | unknown |
+| INI-100 | `DDiff`: (Demo Options difficulty) | [BYTES DGROUP:0xe3c] [BYTES ISPACE.DLL DGROUP:0x42c] [BYTES seg6:0x3262] | strings | located | wip | unknown |
+| INI-101 | `DLaps`: (Demo Options laps) | [BYTES DGROUP:0xe42] [BYTES ISPACE.DLL DGROUP:0x43e] [BYTES seg6:0x327e] | strings | located | wip | unknown |
 | INI-102 | `DScale`: (Demo Options Zoom:) | [BYTES DGROUP:0x9ab] [BYTES ISPACE.DLL DGROUP:0x3fb] [BYTES seg9:0x236b] | strings | located | todo | unknown |
 | INI-103 | `AllowSound`: 1 forces audio on cards that misreport themselves | [MANUAL Troubleshooting] [BYTES ISPACE.DLL DGROUP:0x95b] [BYTES ISPACE.DLL seg9:0x2444] | manual | located | todo | unknown |
 | INI-104 | `ForceVol` | [BYTES ISPACE.DLL DGROUP:0x828] [BYTES ISPACE.DLL seg9:0xbde] | code | understood | todo | unknown |
@@ -634,19 +634,19 @@ Keys are in `INSPACE.INI` `[Inner Space]` unless the row names another file or s
 | INI-109 | `SYSTEM.INI [386Enh] 32BitSP`: default 0; purpose [OPEN] | [ORACLE newgame-0001] [BYTES seg10:0x8a3f] | oracle | located | todo | demo |
 | INI-110 | `SYSTEM.INI [386Enh] XCal123`: purpose [OPEN] | [BYTES ISPACE.DLL DGROUP:0x5c6] [BYTES ISPACE.DLL seg10:0x5bf7] | strings | located | todo | unknown |
 | INI-111 | `WIN.INI [windows] PDev`: default 0; purpose [OPEN] | [ORACLE newgame-0001] [BYTES seg10:0x8a52] | oracle | located | todo | demo |
-| INI-112 | `SYSTEM.INI [Boot.description] display.drv`: video card name | [ORACLE newgame-0001] [BYTES ISPACE.DLL seg8:0x5cd5] | oracle | located | todo | demo |
-| INI-113 | `SYSTEM.INI [drivers] Wave`: wave driver | [ORACLE newgame-0001] [BYTES ISPACE.DLL seg8:0x5d30] | oracle | located | todo | demo |
-| INI-114 | `CONTROL.INI [drivers.desc]`: sound card description | [ORACLE newgame-0001] [BYTES ISPACE.DLL seg8:0x5d6b] | oracle | located | todo | demo |
-| INI-115 | `PROTOCOL.INI [network.setup] netcard`: network card | [ORACLE newgame-0001] [BYTES ISPACE.DLL seg8:0x5e51] | oracle | located | todo | demo |
-| INI-116 | `NETWORK.INF [netcard]`: network card | [ORACLE newgame-0001] [BYTES ISPACE.DLL seg8:0x5eb2] | oracle | located | todo | demo |
-| INI-117 | `[Teams] Team1`: team name, AVENGERS in the shipped INI | [ORACLE newgame-0001] [BYTES INSPACE.INI] [BYTES seg13:0x21cf] | oracle | located | todo | demo |
-| INI-118 | `[Teams] Team2`: PREDATORS | [BYTES INSPACE.INI] [BYTES seg13:0x21cf] | strings | located | todo | unknown |
-| INI-119 | `[Teams] Team3`: FUZZY ONES | [BYTES INSPACE.INI] [BYTES seg13:0x21cf] | strings | located | todo | unknown |
-| INI-120 | `[Teams] Team4`: PIRATES | [BYTES INSPACE.INI] [BYTES seg13:0x21cf] | strings | located | todo | unknown |
-| INI-121 | `[Teams] Team5`: KNIGHTS | [BYTES INSPACE.INI] [BYTES seg13:0x21cf] | strings | located | todo | unknown |
-| INI-122 | `[Teams] Team6`: SPEED DEMONS | [BYTES INSPACE.INI] [BYTES seg13:0x21cf] | strings | located | todo | unknown |
-| INI-123 | `[Teams] Team7`: RENEGADES | [BYTES INSPACE.INI] [BYTES seg13:0x21cf] | strings | located | todo | unknown |
-| INI-124 | `[Teams] Team8`: ENFORCERS | [BYTES INSPACE.INI] [BYTES seg13:0x21cf] | strings | located | todo | unknown |
+| INI-112 | `SYSTEM.INI [Boot.description] display.drv`: video card name | [ORACLE newgame-0001] [BYTES ISPACE.DLL seg8:0x5cd5] | oracle | located | done | demo |
+| INI-113 | `SYSTEM.INI [drivers] Wave`: wave driver | [ORACLE newgame-0001] [BYTES ISPACE.DLL seg8:0x5d30] | oracle | located | done | demo |
+| INI-114 | `CONTROL.INI [drivers.desc]`: sound card description | [ORACLE newgame-0001] [BYTES ISPACE.DLL seg8:0x5d6b] | oracle | located | done | demo |
+| INI-115 | `PROTOCOL.INI [network.setup] netcard`: network card | [ORACLE newgame-0001] [BYTES ISPACE.DLL seg8:0x5e51] | oracle | located | done | demo |
+| INI-116 | `NETWORK.INF [netcard]`: network card | [ORACLE newgame-0001] [BYTES ISPACE.DLL seg8:0x5eb2] | oracle | located | done | demo |
+| INI-117 | `[Teams] Team1`: team name, AVENGERS in the shipped INI | [ORACLE newgame-0001] [BYTES INSPACE.INI] [BYTES seg13:0x21cf] | oracle | located | wip | demo |
+| INI-118 | `[Teams] Team2`: PREDATORS | [BYTES INSPACE.INI] [BYTES seg13:0x21cf] | strings | located | wip | unknown |
+| INI-119 | `[Teams] Team3`: FUZZY ONES | [BYTES INSPACE.INI] [BYTES seg13:0x21cf] | strings | located | wip | unknown |
+| INI-120 | `[Teams] Team4`: PIRATES | [BYTES INSPACE.INI] [BYTES seg13:0x21cf] | strings | located | wip | unknown |
+| INI-121 | `[Teams] Team5`: KNIGHTS | [BYTES INSPACE.INI] [BYTES seg13:0x21cf] | strings | located | wip | unknown |
+| INI-122 | `[Teams] Team6`: SPEED DEMONS | [BYTES INSPACE.INI] [BYTES seg13:0x21cf] | strings | located | wip | unknown |
+| INI-123 | `[Teams] Team7`: RENEGADES | [BYTES INSPACE.INI] [BYTES seg13:0x21cf] | strings | located | wip | unknown |
+| INI-124 | `[Teams] Team8`: ENFORCERS | [BYTES INSPACE.INI] [BYTES seg13:0x21cf] | strings | located | wip | unknown |
 | INI-125 | `[Ship Factory] Ship`: Factory's current ship, DRAGON in the shipped INI | [BYTES INSPACE.INI] [BYTES FACTORY.EXE DGROUP:0xc1] [BYTES FACTORY.EXE seg2:0x5a3] | strings | located | todo | registered |
 | INI-126 | `BitmapEditor`: Enhanced Factory bitmap editor path, default PBRUSH | [MANUAL Editing Ship Bitmaps] [BYTES theworks/FACTORY.EXE DGROUP:0xcf] [BYTES theworks/FACTORY.EXE seg2:0x1255] | manual | located | todo | registered |
 | INI-127 | `ShowLeft`: Ship Factory window, section [Ship Factory] | [BYTES FACTORY.EXE DGROUP:0x106] [BYTES FACTORY.EXE seg4:0x18] | strings | located | todo | registered |

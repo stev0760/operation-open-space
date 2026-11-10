@@ -31,7 +31,7 @@ Operation: Open Space is a rewrite of v1.29.08 in C++17 on plain Win32 (GDI and 
 | M9 Release | Not started |
 | M10 Quality pass: the remaster | Not started |
 
-The feature checklist counts 205 of 662 rows ported. [`docs/PLAN.md`](docs/PLAN.md) holds each stage's results and open items, and [`docs/spec/checklist.md`](docs/spec/checklist.md) the status of every feature.
+The feature checklist counts 232 of 662 rows ported. [`docs/PLAN.md`](docs/PLAN.md) holds each stage's results and open items, and [`docs/spec/checklist.md`](docs/spec/checklist.md) the status of every feature.
 
 ## Screenshots
 All taken from the port.
@@ -78,7 +78,7 @@ sha256sum -c original.sha256
 | Path | Contents |
 |---|---|
 | `src/`, `tests/`, `tools/` | The C++17 port, its tests and the `isview` asset viewer |
-| `docs/` | Plan, feature checklist, reverse-engineering reference, design decisions |
+| `docs/` | Plan, feature checklist, reverse-engineering reference, design decisions ([map](docs/README.md)) |
 | `re/` | Reverse-engineering tools (`isre`), Ghidra scripts and their tests |
 | `oracle/` | Scripts that run the original under Wine, and the digests of those runs |
 | `original/` | Your original game files. Not committed |

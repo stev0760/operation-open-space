@@ -29,6 +29,13 @@ struct WindowKeys {
 
     // DGROUP:0x8f6a: the Show keys are written back only while set.
     bool show_dirty = false;
+
+    // IconLeft, IconTop -> DGROUP:0x1de4, 0x1de6: the icon column stores its position here
+    // when it moves and sets icon_dirty (DGROUP:0x8fee) [BYTES seg7:0x62a1]. The start-up
+    // read is the icon column's own (its default needs the screen width).
+    int icon_left = 0;
+    int icon_top = 0;
+    bool icon_dirty = false;
 };
 
 // The start-up reads of seg6:0x0 (Full, the Show keys, IconWnd, VScale, SmWnd, SScale, Menu)
@@ -49,11 +56,12 @@ struct BorderMenu {
 };
 BorderMenu read_border_menu(const settings::IniFile& ini);
 
-// seg6:0x33e: always Full, Menu, IconWnd, VScale, SmWnd and SScale; the Show keys while
-// show_dirty, which it then clears. The order is the original's [BYTES seg6:0x37e seg6:0x3a4
-// seg6:0x496 seg6:0x4bc seg6:0x4e2 seg6:0x508 seg6:0x630 seg6:0x656 seg6:0x67c seg6:0x6a2].
-// The keys of windows the port does not have yet (Radar, Watch, Icon, Sm, Help) have no dirty
-// flag set and are not written. Does not save the file.
+// seg6:0x33e: always Full, Menu, IconWnd, VScale, SmWnd and SScale; IconLeft and IconTop
+// while icon_dirty and the Show keys while show_dirty, both of which it then clears. The order
+// is the original's [BYTES seg6:0x37e seg6:0x3a4 seg6:0x496 seg6:0x4bc seg6:0x4e2 seg6:0x508
+// seg6:0x535 seg6:0x55b seg6:0x630 seg6:0x656 seg6:0x67c seg6:0x6a2]. The keys of windows the
+// port does not have yet (Radar, Watch, Sm, Help) have no dirty flag set and are not written.
+// Does not save the file.
 void write_window_keys(settings::IniFile& ini, WindowKeys& keys);
 
 // The constant Calibrate of ADR 0001 decision 9, which the port writes where seg6:0xa6c
