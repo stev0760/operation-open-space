@@ -334,7 +334,7 @@ Cheaper models handle refactors, tests and lint. I merge, update the checklist a
 - WaveMix's loop-word and `WMIX_CLEARQUEUE` semantics ([OPEN] in sound.md; the port follows the header).
 - Test gaps the reviewer listed: admission rules 2–6 and 8–10, ordinal 8's loudness rule, commands 3 and 4, the seg10:0x754a modes 1–5, the SND-12 effects-volume-0 loop exception, Options Cancel and the in-use box.
 - The music volume is computed from Settings in `config_from` rather than from the engine; pass the engine's value once command 10 (`SaverVolume`) gets a caller (M8).
-- A port-own master volume (below, stage 2b) is a small follow-on with its own ADR.
+- A port-own master volume (below, stage 2b) waits for the remaster pass (M10), with its own ADR.
 
 **Stage 2b open items** (each tagged at its site in the code or in ADR 0011):
 - The title mix with the 0x22 bursts over the OPL3 music peaks within 0.1 dB of full scale; a louder burst would clip in the mixer's sum (ADR 0011 decision 1). The levels themselves are set (OPL3 at unity, SoundFont at −16 dB, judged by ear).
@@ -342,7 +342,7 @@ Cheaper models handle refactors, tests and lint. I merge, update the checklist a
 - The Windows 9x volume model (bank volume model 4) is not followed; the driver's 40·log10 law is a GM convention.
 - Release packaging for the statically linked LGPL Nuked OPL3 (the LGPL text and source access with every binary).
 - Nuked OPL3 resamples with linear interpolation and no low-pass filter, so 11025 Hz output carries aliasing; not measured.
-- A port-own master volume for the whole output stream (the original left the device volume to Windows' mixer; the port scales music and effects in software, so the Audio Options volume and FX/Music balance are the only controls under Wine): a modernisation for a later stage, with an ADR first (user request, 2026-10-27).
+- A port-own master volume for the whole output stream (the original left the device volume to Windows' mixer; the port scales music and effects in software, so the Audio Options volume and FX/Music balance are the only controls under Wine): a modernisation for the remaster pass (M10), since it needs a main menu the port does not have; an ADR first (user request, 2026-10-27; deferred 2026-11-10).
 
 **Stage 2 open items** (each tagged at its site in the code or in ADR 0011):
 - The comparison script reports the bubbles loop 0x6f as 5.7 s against 2.0 s expected after the load-screen change; probably the neighbouring plays merging into its window, not checked.

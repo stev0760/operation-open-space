@@ -69,25 +69,25 @@ One row per binding. MAINACCEL and FACTACCEL are the accelerator tables in ENG_L
 | KEY-23 | Ctrl+Plus / Ctrl+Minus: rescale the game (1/2x, 1x, 2x) | [MANUAL Game Settings] [BYTES ENG_LANG.DLL STRING 77] id 1220 [BYTES seg10:0x9a2a] [BYTES seg6:0xb07] | manual | understood | wip | unknown |
 | KEY-24 | Plus / Minus: radar zoom | [BYTES ENG_LANG.DLL STRING 77] id 1219 [BYTES ENG_LANG.DLL STRING 83] id 1319 [MANUAL General] [BYTES seg11:0x7215] [BYTES seg11:0x772e seg11:0x719c] | strings | verified | done | unknown |
 | KEY-25 | F12: toggle Action and Strategy modes | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 77] id 1222 [BYTES seg11:0x6d19] [BYTES seg11:0x6d6c] | manual | verified | todo | unknown |
-| KEY-26 | Alt+G: Game Settings dialog (command 192) | [MANUAL QuickStart] [BYTES ENG_LANG.DLL STRING 76] id 1209 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES seg10:0x7f18] | manual | understood | todo | unknown |
+| KEY-26 | Alt+G: Game Settings dialog (command 192) | [MANUAL QuickStart] [BYTES ENG_LANG.DLL STRING 76] id 1209 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES seg10:0x7f18] | manual | understood | done | unknown |
 | KEY-27 | Alt+I: open/close the Icon Watch (command 491) | [MANUAL Icons] [BYTES ENG_LANG.DLL STRING 76] id 1210 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES seg11:0x6e94] [BYTES seg2:0x4f0] | manual | understood | verified | unknown |
 | KEY-28 | Alt+R: Ship Watch (command 471) | [BYTES ENG_LANG.DLL STRING 76] id 1211 [BYTES ENG_LANG.DLL STRING 82] id 1311 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES seg11:0x6ea0] | code | understood | todo | unknown |
-| KEY-29 | Alt+B: Boss Key (command 412) | [BYTES ENG_LANG.DLL STRING 76] id 1212 [BYTES ENG_LANG.DLL STRING 83] id 1312 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES seg2:0x1486] | code | understood | todo | unknown |
-| KEY-30 | Alt+X: exit the game (command 176) | [MANUAL QuickStart] [BYTES ENG_LANG.DLL STRING 76] id 1213 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [ORACLE smoke-0001] [BYTES seg2:0x1625] [BYTES seg2:0xe07] [BYTES seg2:0x14ea seg2:0xd78] | oracle | verified | todo | demo |
+| KEY-29 | Alt+B: Boss Key (command 412) | [BYTES ENG_LANG.DLL STRING 76] id 1212 [BYTES ENG_LANG.DLL STRING 83] id 1312 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES seg2:0x1486] | code | understood | done | unknown |
+| KEY-30 | Alt+X: exit the game (command 176) | [MANUAL QuickStart] [BYTES ENG_LANG.DLL STRING 76] id 1213 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [ORACLE smoke-0001] [BYTES seg2:0x1625] [BYTES seg2:0xe07] [BYTES seg2:0x14ea seg2:0xd78] | oracle | verified | done | demo |
 | KEY-31 | Alt+S: save the game (command 422) | [MANUAL High Scores] [BYTES ENG_LANG.DLL STRING 76] id 1214 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES ENG_LANG.DLL STRING 146] id 2324 [BYTES seg10:0x8568] [BYTES seg2:0x166c seg2:0x15b7 seg10:0x8568] [ORACLE wave-0001] [ORACLE core-0003] | oracle | verified | verified | registered |
 | KEY-32 | Alt+X then S: save on exit | [MANUAL High Scores] [BYTES ENG_LANG.DLL DIALOG 244] [BYTES seg2:0xe50 seg10:0x8568 seg6:0x99b6] [ORACLE core-0003] | oracle | verified | done | registered |
 | KEY-33 | Ctrl+Alt+X: self destruct | [BYTES ENG_LANG.DLL STRING 77] id 1216 [BYTES ENG_LANG.DLL STRING 83] id 1316 | strings | none | todo | unknown |
 | KEY-34 | ESC while playing: abort to the intro, offering a save | [MANUAL High Scores] [BYTES seg2:0x55c seg10:0x8568] | manual | verified | verified | unknown |
 | KEY-35 | ESC on a race track: abort the race | [MANUAL Race Courses] | manual | none | todo | unknown |
 | KEY-36 | ESC in the black hole: return to Inner Space | [MANUAL Inner Demon] | manual | none | todo | registered |
-| KEY-37 | ESC on the title or intro: skip it; opens Restore Game, or Navigation after the desk scene | [MANUAL QuickStart] [MANUAL Game Settings] [BYTES ENG_LANG.DLL STRING 77] id 1217 [ORACLE smoke-0001] [ORACLE newgame-0001] | oracle | none | todo | demo |
-| KEY-38 | ESC in the pre-wave briefing: skip it and start the wave | [MANUAL Game Settings] [ORACLE runtime-0001] [BYTES seg7:0x2cc] | oracle | understood | todo | demo |
-| KEY-39 | Space in the intro or briefing: skip a minor section | [MANUAL Game Settings] [BYTES ENG_LANG.DLL STRING 77] id 1218 | manual | none | todo | unknown |
+| KEY-37 | ESC on the title or intro: skip it; opens Restore Game, or Navigation after the desk scene | [MANUAL QuickStart] [MANUAL Game Settings] [BYTES ENG_LANG.DLL STRING 77] id 1217 [ORACLE smoke-0001] [ORACLE newgame-0001] | oracle | none | done | demo |
+| KEY-38 | ESC in the pre-wave briefing: skip it and start the wave | [MANUAL Game Settings] [ORACLE runtime-0001] [BYTES seg7:0x2cc] | oracle | understood | done | demo |
+| KEY-39 | Space in the intro or briefing: skip a minor section | [MANUAL Game Settings] [BYTES ENG_LANG.DLL STRING 77] id 1218 | manual | none | done | unknown |
 | KEY-40 | Ctrl held on entering the ambulance or Hall of Justice: skip the landing; the fast flag DGROUP:0x928 is set in the poll of the change to state 6 and cleared with phase 64, and only the descent changes (the jet is skipped, the ship steps 4 px) | [MANUAL Game Settings] [BYTES seg15:0x3914 seg16:0x1e6e] [ORACLE core-0007] | oracle | verified | done | unknown |
-| KEY-41 | S during the intro: start a new demo and choose its ship | [MANUAL QuickStart] | manual | none | todo | unknown |
-| KEY-42 | C during the intro: continue the most recent demo | [MANUAL QuickStart] | manual | none | todo | unknown |
+| KEY-41 | S during the intro: start a new demo and choose its ship | [MANUAL QuickStart] | manual | none | wip | unknown |
+| KEY-42 | C during the intro: continue the most recent demo | [MANUAL QuickStart] | manual | none | wip | unknown |
 | KEY-43 | ESC during the demo: stop it and return to the intro | [MANUAL QuickStart] | manual | none | todo | unknown |
-| KEY-44 | R on the title screen: order the full game | [BYTES ENG_LANG.DLL STRING 145] id 2310 [BYTES ENG_LANG.DLL DIALOG 799] [ORACLE smoke-0001] | oracle | none | todo | demo |
+| KEY-44 | R on the title screen: order the full game | [BYTES ENG_LANG.DLL STRING 145] id 2310 [BYTES ENG_LANG.DLL DIALOG 799] [ORACLE smoke-0001] | oracle | none | done | demo |
 | KEY-45 | W: open the Ship Watch; each press watches another ship | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 78] id 1237 [BYTES seg11:0x7127] | manual | understood | todo | unknown |
 | KEY-46 | Ctrl+W: open the Ship Watch, or close it when open | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 78] id 1246 | manual | none | todo | unknown |
 | KEY-47 | Alt+W: watch one of your defenders (command 481) | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 79] id 1255 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] | manual | none | todo | unknown |
@@ -110,7 +110,7 @@ One row per binding. MAINACCEL and FACTACCEL are the accelerator tables in ENG_L
 | KEY-64 | Alt+D: defenders defend my target; MAINACCEL has no Alt+D entry [OPEN] | [MANUAL Icons] [BYTES ENG_LANG.DLL STRING 79] id 1252 | manual | none | todo | unknown |
 | KEY-65 | Alt+E: defenders exit the wave (command 461) | [MANUAL Icons] [BYTES ENG_LANG.DLL STRING 79] id 1256 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] | manual | none | todo | unknown |
 | KEY-66 | Alt+H: defenders return and defend me (command 451) | [MANUAL Icons] [BYTES ENG_LANG.DLL STRING 79] id 1257 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES seg11:0x6f94] | manual | located | todo | unknown |
-| KEY-67 | Double-click mid-screen: toggle full screen and window | [MANUAL General] [BYTES INSTALL.EXE DIALOG 1774] [BYTES seg2:0x1152] | manual | understood | todo | unknown |
+| KEY-67 | Double-click mid-screen: toggle full screen and window | [MANUAL General] [BYTES INSTALL.EXE DIALOG 1774] [BYTES seg2:0x1152] | manual | understood | done | unknown |
 | KEY-68 | Double-click the score / target / radar / damage / weapon display: matching help page | [MANUAL General] [MANUAL High Scores] | manual | none | todo | unknown |
 | KEY-69 | Double-click a score in the score list: that game's description | [MANUAL High Scores] | manual | none | todo | unknown |
 | KEY-70 | Joystick: 2-axis steering; button 1 fires the gun, button 2 a weapon by default | [MANUAL Joystick Settings] | manual | none | wip | unknown |
