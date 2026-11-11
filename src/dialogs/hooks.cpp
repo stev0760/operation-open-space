@@ -28,7 +28,10 @@
 #include "nav/pilot.h"
 #include "shell/edition.h"
 #include "shell/rng.h"
+#include "world/flight_hooks.h"
 #include "world/hooks.h"
+#include "world/rescale.h"
+#include "world/world.h"
 
 namespace is::dialogs {
 
@@ -182,14 +185,12 @@ Env make_env(int x4, int x5) {
     return e;
 }
 
-// seg10:0x7f88: INI Size against DGROUP:0x9156 [BYTES seg10:0x7fa9 seg10:0x7fb1].
+// seg10:0x7f88: INI Size against DGROUP:0x9156 [BYTES seg10:0x7fa9 seg10:0x7fb1], on the
+// program's World with the program's RescaleHost (world/flight_hooks.h program_size_reread,
+// world/rescale.h size_reread) (M4 s8 integrate). The session's word follows the World's.
 void size_reread() {
-    const int size = ini_int("Size", 1);
-    if (size == g_session.size) return;
-    app::log_todo("Size " + std::to_string(g_session.size) + " -> " + std::to_string(size) +
-                      ": the rescale seg10:0x9a2a (M3)",
-                  "seg10:0x7f88");
-    g_session.size = size;
+    world::program_size_reread();
+    g_session.size = world::current().size;
 }
 
 void write_log(int cmd, int result) {
@@ -292,7 +293,12 @@ Flow g_flow;
 
 }  // namespace
 
-Session& session() { return g_session; }
+// DGROUP:0x9156 has one home, the World's (world.h World::size): the session's copy follows it,
+// so a save after Ctrl +/- writes the Size in force [BYTES seg6:0x8f32-0x8f38] (M4 s8 integrate).
+Session& session() {
+    g_session.size = world::current().size;
+    return g_session;
+}
 
 int dialog(int cmd) {  // seg10:0x82a2
     music(-2);  // [BYTES seg10:0x82bb]
@@ -491,7 +497,21 @@ int nav_demo_type() { return is::dialogs::ini_int("DemoType", 519); }
 
 void install_dialog_hooks(App& app) {
     using namespace is::dialogs;
-    g_session.size = app.ini ? app.ini->get_int(settings::kGameSection, "Size", 1) : 1;  // seg6:0xaf8
+    // DGROUP:0x9156 and DGROUP:0x9150 = 4 - Size from the start-up's read, so the Restore before
+    // any wave compares the saved Size with the INI's [BYTES seg6:0xaf8-0xb07 seg6:0x95b4]; a value
+    // outside 0 ... 2 is refused and logged once, as the load's reread refuses it, and recorded
+    // for seg10:0x7f88's compare (world/rescale.h size_from_ini, ruling R2) [DESIGN ADR 0016
+    // decision 2] (M4 s8 integrate; M4 s8 fixer, review L3, M3).
+    const std::int16_t start_size =
+        world::size_from_ini(app.ini ? app.ini->get_int(settings::kGameSection, "Size", 1) : 1, "seg6:0xaf8");
+    // The world's guard log (world.h guard_todo) has no sink before install_world_hooks, so the
+    // start-up's refusal is logged here (M4 s8 fixer: the L3 log line was lost).
+    if (world::size_session().refused)
+        todo_once("an INI Size outside 0 ... 2 (the port's tables would be indexed outside their storage): Size 1",
+                  "seg6:0xaf8");
+    g_session.size = start_size;
+    world::current().size = start_size;
+    world::current().shift = static_cast<std::int16_t>(4 - start_size);
     intro::set_game_start(&g_flow);
     nav::Host h;
     h.instance = app.instance;

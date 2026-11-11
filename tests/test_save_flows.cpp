@@ -13,6 +13,7 @@
 #include "formats/savegame.h"
 #include "hud/screens.h"
 #include "nav/tree.h"
+#include "world/rescale.h"
 #include "world/roster.h"
 #include "world/world.h"
 
@@ -259,6 +260,7 @@ TEST_CASE("save flow: the version rule and the Size write-back") {
     file[0x171] = 2;   // Size 2
     Fixture r;
     r.host.files = f.host.files;
+    world::size_session().dg_92e2 = 0;
     CHECK(restore_game(r.c) == 1);
     REQUIRE(r.w.roster.size() == 2);
     // Records k < DGROUP:0x931a: -20000 is below -15000, so (uint16) / 10 = 4553.
@@ -266,7 +268,8 @@ TEST_CASE("save flow: the version rule and the Size write-back") {
     CHECK(r.w.roster[1].credit10 == 450);  // the last record is not divided
     CHECK(r.s.size == 2);
     CHECK(r.host.ini_size == 2);
-    CHECK(r.g.w92e2 == 1);
+    CHECK(world::size_session().dg_92e2 == 1);  // DGROUP:0x92e2's one home (world/rescale.h)
+    world::size_session().dg_92e2 = 0;
 }
 
 TEST_CASE("save flow: the roster check with decision 7's last record") {

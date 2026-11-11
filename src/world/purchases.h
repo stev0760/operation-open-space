@@ -138,7 +138,9 @@ public:
     void todo(const std::string& what, const char* address) override;
 
     // The slots the program fills (src/hud/hooks.cpp); an empty slot keeps the TODO, except
-    // on_load_weapon, whose empty slot runs weapon_load.h load_weapon_program (seg12:0x6d64).
+    // on_load_weapon, whose empty slot runs weapon_load.h load_weapon_program (seg12:0x6d64), and
+    // on_build_sheet and on_sheet_dc, whose empty slots run the program's sheet side
+    // (player_sheet.h build_sheet_program, sheet_dc_program, sheet_dc_word_program).
     std::function<void(int, int)> on_load_weapon;
     std::function<void(int)> on_build_sheet;
     std::function<bool(int)> on_sheet_dc;

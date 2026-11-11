@@ -76,6 +76,15 @@ std::int16_t sheet_sel(int quick, int state, std::uint32_t frames, int ship, int
 // seg10:0x6ee6's scale flag w6: 1 when `Size` (DGROUP:0x9156) >= 2, w6 != -1 and sel = 0, or when
 // w6 > 1; else 0 [BYTES seg10:0x6f21-0x6f41]. seg14:0x11a8 passes w6 = 0.
 std::int16_t sheet_scale_flag(int size_level, int w6, int sel);
+// seg10:0x6ee6's rescale test after the render [BYTES seg10:0x6ef4 seg10:0x6f12-0x6f1c
+// seg10:0x6fba-0x6fe1]: [bp-0x14] = 1 unless the gap word w2 >= 100 (w2 - 100 then goes to
+// ordinal 2), and seg10:0x6308(slot, -1, -1, -1) runs when DGROUP:0x9130 = 0, that flag is set
+// and `Size` != 2 or sel != 0. At Size 2 with sel = 0 the scale flag made ordinal 2 render the
+// sheet at twice the size instead (core-0011: the Size 2 ship is a fresh render) [ORACLE
+// core-0011]; at Size 0 the 1x render is halved; at Size 1 seg10:0x6308 returns at once. The
+// port has no seg18 mode, so DGROUP:0x9130 is the caller's `dg_9130` (0) [DESIGN] (M4 s8
+// SIZE-SITES).
+bool sheet_rescales(int size_level, int gap_word, int sel, int dg_9130 = 0);
 
 // What seg14:0x11a8 hands to seg10:0x6ee6 and on to ordinal 2 (ISPACE.DLL seg6:0x0: hPal, id,
 // lib, hdc, six words, three bytes, sel) [BYTES seg14:0x11c6 seg14:0x129c-0x12d0 seg10:0x6f46-0x6f76]
@@ -122,6 +131,14 @@ bool sheet_pixels_from(const gfx::ShipSheet& sh, SheetPixels& px);
 // The render: false when there is nothing to render (no graphic), and ordinal 2 returns 0.
 using SheetRenderer = std::function<bool(const SheetRequest&, SheetPixels&)>;
 
+// ---- the port's copy of a rescaled sheet (M4 s8 SIZE-SITES)
+
+// seg10:0x6308 on a sheet's pixels: the w x h picture to ((w << Size) sar 1) x ((h << Size) sar
+// 1) through gfx::gdi_stretch_map (gfx/ship_quick.h) on both axes, as GDI's StretchBlt rescales
+// the slot's own image (rescale.h); `source_height` is kept. Size 1 returns `px` [BYTES
+// seg10:0x632d seg10:0x63c5-0x641f seg10:0x6546] (M4 s8 SIZE-SITES).
+SheetPixels rescaled_sheet_pixels(const SheetPixels& px, int size_level);
+
 // The stand-in render until the render track's rotation lands (src/gfx/ship_sheet.h) [DESIGN]:
 // a black sheet of sheet_geometry's measures with source frame r, unrotated, in every heading
 // column 0 ... 15 of row r < rows (pixel-doubled when the scale flag is set); column 16 stays
@@ -155,8 +172,10 @@ struct SheetBuild {
 //  - already built: the slot holds a DC and bytes +0xac and +0xad are set [BYTES seg14:0x120e
 //    seg14:0x1219 seg14:0x1220];
 //  - otherwise seg10:0x6ee6: frees the slot's DC (seg10:0x552(slot, 0)), renders, and puts the
-//    bitmap in a new DC in the slot [BYTES seg10:0x6ee6 seg10:0x6f7f seg10:0x6f89]; seg10:0x6308
-//    returns at once at `Size` 1 [BYTES seg10:0x6308], and its rescale at other sizes is [OPEN];
+//    bitmap in a new DC in the slot [BYTES seg10:0x6ee6 seg10:0x6f7f seg10:0x6f89], then under
+//    sheet_rescales seg10:0x6308(slot, -1, -1, -1) at req.size_level [BYTES seg10:0x6fd4-0x6fe1]:
+//    at Size 0 the slot's image is halved, the build's pixels and the port's copy with it
+//    (rescaled_sheet_pixels) and bm_height is the halved height (M4 s8 SIZE-SITES);
 //  - on the render path, while DGROUP:0x95a6 != 0 (SheetRequest::shp_loaded), the design tail
 //    +0x68 ... +0x6e from the body's bytes +0x1e/+0x1f (design_words.h design_barrels, the
 //    bytes design_body(ship +0x4e) holds) [BYTES seg14:0x1380-0x13e0] (s5-weapons-verify.md
@@ -188,8 +207,11 @@ using Anim4Renderer = std::function<DcId(int k, int pool, int id, int n)>;
 // picks the slot; a new slot k is filled by seg10:0x4412(k, 6, W(w)-2, W(w)+0x26) when W(w)+0x06
 // = 4 [BYTES seg10:0x5449-0x5461], else by seg10:0x6ee6(k, W(w)-2, far DGROUP:0x76d "", 2, 0x63,
 // W(w)+0x1a, W(w)+0x1c, 1, 0, 12, 12, 0, sel) through the same renderer as the ship sheets
-// [BYTES seg10:0x53b3-0x540c] (weapon 8: IGRAPHIC 370, 23 x 23, one frame). True when it filled
-// a slot. An empty `anim4` leaves the slot empty and logs (sprite_links().todo) [DESIGN].
+// [BYTES seg10:0x53b3-0x540c] (weapon 8: IGRAPHIC 370, 23 x 23, one frame), with seg10:0x6ee6's
+// rescale (sheet_rescales). seg10:0x4412 ends with seg10:0x6308(k, -1, -1, -1) whatever sel is
+// [BYTES seg10:0x4630-0x463d]: the port runs it here after the Anim4Renderer [DESIGN: the
+// renderer is the HUD's] (M4 s8 SIZE-SITES). True when it filled a slot. An empty `anim4`
+// leaves the slot empty and logs (sprite_links().todo) [DESIGN].
 bool load_weapon_sheet(Blitter& out, ImageSlotTable& images, Pools& pools, WeaponWords& words, int w, int sel,
                        int size_level, const SheetRenderer& render, const Anim4Renderer& anim4 = {});
 int build_weapon_sheets(Blitter& out, ImageSlotTable& images, Pools& pools, WeaponWords& words,
@@ -263,8 +285,8 @@ using QuickRenderer = std::function<bool(const QuickRequest&, gfx::QuickCells&)>
 // DC DGROUP:0x3a38[i] at column 16, row it: BitBlt SRCCOPY of the h x h cell at (gap, gap) to (16
 // h + 17 gap, (h + gap) it + gap) at `Size` 1, StretchBlt to those << Size sar 1 otherwise
 // (gfx::quick_blit) [BYTES ISPACE.DLL seg6:0x5c6f-0x5d38]; the copy (sheet_copy) gets the same
-// pixels (nearest-neighbour for a stretch [DESIGN]). Nothing without a kept request or a
-// renderer [DESIGN]. The sprite then shows column 16 row 0 for steps 1-3, row 1 for 4-6 (draw.h
+// pixels, a stretch through gfx::gdi_stretch_map (M4 s8 SIZE-SITES) [DESIGN ADR 0017]. Nothing
+// without a kept request or a renderer [DESIGN]. The sprite then shows column 16 row 0 for steps 1-3, row 1 for 4-6 (draw.h
 // player_cell, seg13:0xaa1-0xb37) [ORACLE core-0005].
 void shield_render(Blitter& out, const ImageSlotTable& images, World& w, int i, const QuickRenderer& render);
 

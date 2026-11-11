@@ -43,7 +43,34 @@ int scale(int d, int stereo_effect) {
     }
 }
 
+// INSPACE's 16-bit words.
+int s16(int v) { return static_cast<std::int16_t>(static_cast<std::uint16_t>(v & 0xffff)); }
+int sar16(int v, int n) { return s16(v) >> (n & 0x1f); }  // `sar r16, cl`: a 386 masks cl to 5 bits
+
+// PtInRect: left <= x < right, top <= y < bottom [REF Win16 SDK PtInRect].
+bool pt_in(const int (&r)[4], Point p) {
+    return p.x >= r[0] && p.x < r[2] && p.y >= r[1] && p.y < r[3];
+}
+
 }  // namespace
+
+// seg8:0x285a's DGROUP:0x9130 = 0 path [BYTES seg8:0x2872-0x2888 seg8:0x2892-0x28b8
+// seg8:0x28bb-0x28f1 seg8:0x2931-0x2977 seg8:0x2993-0x29db]. [bp+6] is the ship and [bp+0xa]
+// the point (seg10:0x78cc-0x78e0 push the point first), so each axis is ship - point.
+int cell_distance(Point ship, Point p, int cells_x, int cells_y) {
+    auto axis = [](int a, int b, int cells) {
+        int d = s16(sar16(a, 3) - sar16(b, 3));
+        if (std::abs(d) > sar16(cells, 1)) d = s16(sar16(a, 3) + (d < 0 ? cells : -cells) - sar16(b, 3));
+        return d;
+    };
+    const std::int32_t ax = std::abs(axis(ship.x, p.x, cells_x));  // seg9:0x88ba, then `cwd`
+    const std::int32_t ay = std::abs(axis(ship.y, p.y, cells_y));
+    // e = |dx| + |dy| / 2 when |dx| >= |dy| (unsigned compare of the low words after equal
+    // high words), else |dy| + |dx| / 2 [BYTES seg8:0x2951-0x2977].
+    const std::int32_t e = ax >= ay ? (ay >> 1) + ax : (ax >> 1) + ay;
+    if (e == 0) return 1;  // [BYTES seg8:0x2993 seg8:0x29db]
+    return s16(((ax * ax + ay * ay) / e + e) >> 1);  // seg5:0x314 twice, `idiv ecx`, `sar eax, 1`
+}
 
 std::uint8_t slot_flag(int id) {
     return id >= 0 && id < kSlots ? kFlags[id] : 0;
@@ -359,6 +386,7 @@ void Engine::pump() {
 // seg9:0xe35 seg9:0xe63 seg9:0xe75 seg9:0xe9d seg9:0xea6 seg9:0x101b seg9:0x1037 seg9:0x1099].
 int Engine::ordinal9(int id, Point p, int q, int r, int s, int w, int h, std::uint32_t now,
                      const std::string& name) {
+    played_ = false;
     if (sound_system_ == 0) return 0;
     if (id == -1 && s_.voice_fx == 0) return 0;
     pump();
@@ -423,6 +451,7 @@ int Engine::ordinal9(int id, Point p, int q, int r, int s, int w, int h, std::ui
     // it [BYTES ISPACE.DLL seg9:0x1333 seg9:0x1367] (M7 s3 fixer).
     if (file && !file_wave) return 0;
     if (player(slot, file_wave, q, loop, g) == 0) return 0;
+    played_ = true;
 
     if (id == 0x66) last_66_ = pick66;
     if (id == 0x67) alt_67_ = alt_67_ == 0;
@@ -540,45 +569,67 @@ int Engine::wrap_744c(int id, std::uint32_t now) {
     return wrap_754a(id, 0, 0, 0, now);
 }
 
-// The point of a source for modes 1-3 (seg10:0x76d9-0x775c) and the zoom wrap (seg10:0x77c1-
-// 0x781d) [BYTES seg10:0x776c seg10:0x778b seg10:0x77c1 seg10:0x7801].
-bool Engine::point_for(int mode, int a, int b, Point& p, bool wrap_seg18_test) {
+// The point of a source by mode, before seg8:0x29ea [BYTES seg10:0x776c seg10:0x76d9-0x775c]:
+// mode 1-3's world point comes from the wave; `stand_in` marks the port's centre point of a
+// source without wave state, which neither seg10:0x7896 nor seg8:0x29ea sees [OPEN].
+bool Engine::source_point(int mode, int a, int b, Point& p, bool& stand_in) {
+    stand_in = false;
     switch (mode) {
     case 0: p = {kCentre, kCentre}; return true;
     case 4: p = {a, b}; return true;
-    case 5: p = {kPreload, b}; return true;
+    // Case 5 stores 0xd499 in [bp - 8] and jumps to case 4's [bp - 6] store with the same AX, so
+    // the preload point is (-11111, -11111): b is never read (M4 s8 fixer, review L1) [BYTES
+    // seg10:0x775c-0x7762 seg10:0x774e].
+    case 5: p = {kPreload, kPreload}; return true;
     default: break;
     }
     if (mode == 1 && a > world_.pool_count && world_.source) return false;
     if (!world_.source || !world_.source(mode, a, b, p)) {
         // No wave state yet: the sound plays as from the centre [OPEN].
         p = {kCentre, kCentre};
-        return true;
-    }
-    if (world_.to_view) p = world_.to_view(p);
-    if (world_.zoom_shift != 1 && (!wrap_seg18_test || world_.seg18 == 0)) {
-        p.x = world_.ship.x + ((2 * (p.x - world_.ship.x)) >> world_.zoom_shift);
-        p.y = world_.ship.y + ((2 * (p.y - world_.ship.y)) >> world_.zoom_shift);
+        stand_in = true;
     }
     return true;
 }
 
-// seg10:0x7896 [BYTES seg10:0x78a9 seg10:0x78b5 seg10:0x78bc seg10:0x78e5 seg10:0x78ed
-// seg10:0x78f7 seg10:0x78fa seg10:0x7905 seg10:0x792b].
+// seg8:0x29ea, then the Size wrap p' = scr + ((2 (p - scr)) sar Size) around the player's
+// `scr_x`, `scr_y` while Size != 1, in 16-bit words (`sub; add ax, ax; sar ax, cl; add`), and
+// only while DGROUP:0x9130 = 0 for seg10:0x754a (`wrap_seg18_test`) [BYTES seg10:0x77b9-0x781d
+// seg10:0x7a58-0x7ab5 seg10:0x7cd0-0x7d2d].
+void Engine::view_point(Point& p, bool wrap_seg18_test) {
+    if (world_.to_view) p = world_.to_view(p);
+    WaveView v;
+    if (!world_.view || !world_.view(v)) return;  // outside a wave Size is 1 [DESIGN]
+    if (v.size == 1 || (wrap_seg18_test && world_.seg18 != 0)) return;
+    p.x = s16(v.scr_x + sar16(2 * s16(p.x - v.scr_x), v.size));
+    p.y = s16(v.scr_y + sar16(2 * s16(p.y - v.scr_y), v.size));
+}
+
+// seg10:0x7896(mode, p) on the source point before seg8:0x29ea [BYTES seg10:0x78a4-0x78c0
+// seg10:0x78c2-0x78e5 seg10:0x78ed-0x78fc seg10:0x7901-0x7939]: 1 for mode 0, mode 4 and
+// DGROUP:0x9130 != 0; otherwise d = seg8:0x285a(the player's `x`, `y`, p) decides: above 800
+// gives -1, 341-800 gives 0, and up to 340 gives 1 only when p lies in one of the DGROUP:0x9158
+// activity rectangles: the `mov dword ptr [bp - 6], 0` at seg10:0x7907 clears the result word
+// [bp - 4] with the loop index [bp - 6], and only a PtInRect hit stores 1 again (seg10:0x7934).
 int Engine::q_for(int mode, Point p) {
-    // p.x = -6000 here is the port's stand-in point of a source without wave state [OPEN].
-    if (mode == 0 || mode == 4 || world_.seg18 != 0 || p.x == kCentre) return 1;
-    const int d = world_.distance ? world_.distance(world_.ship, p)
-                                  : std::max(std::abs(p.x - world_.ship.x),
-                                             std::abs(p.y - world_.ship.y));
+    if (mode == 0 || world_.seg18 != 0 || mode == 4) return 1;
+    WaveView v;
+    // Outside a wave there is no player record to measure from: every point plays as near
+    // [DESIGN].
+    if (!world_.view || !world_.view(v)) return 1;
+    const int d = cell_distance({v.x, v.y}, p, period_x_, period_y_);
     if (d > 800) return -1;
     if (d > 340) return 0;
-    return 1;
+    const int n = std::min(v.rect_count, 4);  // DGROUP:0x9158 is 1, 2 or 4 [DESIGN] bound
+    for (int i = 0; i < n; ++i)
+        if (pt_in(v.rects[i], p)) return 1;
+    return 0;
 }
 
 // seg10:0x754a [BYTES seg10:0x7558 seg10:0x7563 seg10:0x756c seg10:0x7574 seg10:0x7582
 // seg10:0x7597 seg10:0x765d seg10:0x7677 seg10:0x7795 seg10:0x7820 seg10:0x785e seg10:0x786f].
 int Engine::wrap_754a(int id, int a, int b, int mode, std::uint32_t now) {
+    call_q_ = -2;
     if (id == 0x6e) mode = 0;
     if (world_.edition == 3) return 0;
     if (mode != 5 && id >= 0x6a) {
@@ -603,14 +654,20 @@ int Engine::wrap_754a(int id, int a, int b, int mode, std::uint32_t now) {
         if (!seq) seq_deadline_ = 0;  // 0x6e, 0x6f, 0x70, 0x75 and ids above 0x76
     }
     Point p;
-    if (!point_for(mode, a, b, p, true)) return 0;
-    const int q = q_for(mode, p);
+    bool stand_in = false;
+    if (!source_point(mode, a, b, p, stand_in)) return 0;
+    // q comes from the source point, before seg8:0x29ea [BYTES seg10:0x777d-0x778b].
+    const int q = stand_in ? 1 : q_for(mode, p);
+    call_q_ = q;
     if (q == -1) {
         seq_deadline_ = 0;
         seq_first_ = 0;
         seq_follow_ = 0;
         return 0;
     }
+    // DGROUP:0x3b98 keeps the point before seg8:0x29ea ([bp - 0xc], seg10:0x7781).
+    const Point source_p = p;
+    if (!stand_in && mode != 0 && mode != 4 && mode != 5) view_point(p, true);  // [BYTES seg10:0x77a7-0x77b7]
     const bool alt = world_.seg18 != 0;
     const int w = alt ? world_.seg18_area_w : world_.area_w;
     const int h = alt ? world_.seg18_area_h : world_.area_h;
@@ -620,7 +677,7 @@ int Engine::wrap_754a(int id, int a, int b, int mode, std::uint32_t now) {
         last_a_ = a;
         last_b_ = b;
         last_mode_ = mode;
-        last_p_ = p;
+        last_p_ = source_p;
         last_q_ = q;
     }
     return r;
@@ -647,8 +704,12 @@ void Engine::wrap_7b48(std::uint32_t now) {
     Point p;
     if (last_mode_ == 5) {
         p = last_p_;  // an uninitialised p in the original [OPEN]
-    } else if (!point_for(last_mode_, last_a_, last_b_, p, false)) {
-        return;
+    } else {
+        bool stand_in = false;
+        if (!source_point(last_mode_, last_a_, last_b_, p, stand_in)) return;
+        // Every mode but 0 takes seg8:0x29ea and the Size wrap, with no DGROUP:0x9130 test
+        // [BYTES seg10:0x7cc9-0x7d2d].
+        if (!stand_in && last_mode_ != 0) view_point(p, false);
     }
     ordinal8(world_.area_w, world_.area_h, 1, 1, p);
 }

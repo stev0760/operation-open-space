@@ -18,6 +18,7 @@
 
 #include "formats/dib.h"
 #include "gfx/palette.h"
+#include "gfx/ship_flame.h"
 
 namespace is::gfx {
 
@@ -69,6 +70,37 @@ struct QuickBlit {
     bool stretch = false;
 };
 QuickBlit quick_blit(int h, int gap, int it, int scale);
+
+// ---- GDI's StretchBlt on index pixels (M4 s8 SIZE-SITES)
+
+// The port's StretchBlt in COLORONCOLOR (STRETCH_DELETESCANS) on one axis, as Wine's GDI walks it
+// (the oracle's renderer, ruling R4, ADR 0017's approach): map[d] is the source index that
+// destination index d of `dst_len` takes from `src_len`. A stretch (dst >= src) walks the
+// destination with e = 2 src - dst, a shrink walks the source with e = dst - src - 1; after each
+// step e > 0 moves on and adds 2 (min - max), else adds 2 min. In a shrink each source column
+// overwrites the current destination column, so the last of each run stays, while a source row is
+// written only when it opens its run, so the first stays (`rows`): 2:1 keeps the second column and
+// the first row of each pair, and an odd extent's one run of three falls in the middle (31 to 15:
+// columns 1, 3, ..., 13, 16, 18, ..., 30). A column halving to one pixel takes floor((src - 1) /
+// 2). 1:2 repeats each pixel; other stretches are not pinned. The original's Size 0 TRANSFORMER is
+// its Size 1 picture halved by that rule, pixel for pixel (core-0011 tr3 sw01 / sw10, the cell at
+// (512, 341)) [ORACLE core-0011], and tests/test_world_size_sites.cpp holds the rule against GDI
+// under Wine 11.20 (CTest) and the oracle's Wine 11.0 old WoW64 [DESIGN ADR 0017]. Its users:
+// quick_blit's stretch at `Size` != 1 on the port's sheet copy (world/player_sheet.h shield_render)
+// and seg10:0x6308 on a sheet's pixels (rescaled_sheet_pixels).
+std::vector<int> gdi_stretch_map(int src_len, int dst_len, bool rows);
+// The same walk's runs for a shrink (dst_len < src_len): the destination index each source index
+// falls in, -1 where the walk ends before it. WHITEONBLACK ORs every source pixel of a run into its
+// destination pixel, along both axes, where COLORONCOLOR keeps the one gdi_stretch_map names
+// (world/rescale.h stretch_index) (M4 s8 fixer, review M1) [DESIGN ADR 0017].
+std::vector<int> gdi_shrink_owner(int src_len, int dst_len);
+
+// seg10:0x7032's seg10:0x6308(-1, -1, bitmap, -1) on ordinal 18's flame bitmap outside seg18 mode
+// [BYTES seg10:0x7071-0x708f]: ((w << Size) sar 1) x ((h << Size) sar 1) through gdi_stretch_map,
+// so its cell (h / 2) becomes seg10:0x5c42's f = (9 << Size) sar 1, which the copies then take
+// unstretched ([bp-0x1a] = f, seg10:0x7092-0x7095); gfx/ship_flame.h flame_headings(result, f)
+// is seg10:0x7032's result at that Size. Size 1 returns `bmp` (M4 s8 SIZE-SITES).
+FlameBitmap rescaled_flame_bitmap(const FlameBitmap& bmp, int size_level);
 
 // The state ordinal 17 keeps between calls: DGROUP:0x147c and DGROUP:0x1480 (seg5:0x6f58 of b1
 // and b2, written only for a scheme other than 12) [BYTES ISPACE.DLL seg6:0x55a8-0x55e5] and

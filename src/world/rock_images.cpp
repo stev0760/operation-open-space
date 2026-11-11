@@ -4,6 +4,7 @@
 #include "world/shots.h"
 
 #include "world/effects.h"
+#include "world/rescale.h"
 #include "world/smoke.h"
 
 namespace is::world {
@@ -17,7 +18,7 @@ constexpr int kFrames = 0x12; // 18 frames [BYTES seg10:0x3cb3]
 
 namespace {
 
-void build_rocks(Blitter& out, ImageSlotTable& images, std::int16_t& dg_740) {
+void build_rocks(Blitter& out, ImageSlotTable& images, std::int16_t& dg_740, int size_level) {
     auto slot = [&images](int s) -> DcId& { return images[static_cast<std::size_t>(s)]; };
     if (slot(kSlotRockMaskBig) != kDcNone) return;  // [BYTES seg10:0x3a3d-0x3a42]
     // DGROUP:0x90f0 != 0: #4000 50 in mode 3 [BYTES seg10:0x3a61-0x3a68].
@@ -54,7 +55,12 @@ void build_rocks(Blitter& out, ImageSlotTable& images, std::int16_t& dg_740) {
                         k * kBig, 0, kBig, kBig, kSrcCopy);
     }
     // The sources are deleted [BYTES seg10:0x3e0a-0x3e5c]; the Blitter keeps no handle the
-    // slots do not hold, so nothing else is freed here. seg10:0x6308 [OPEN].
+    // slots do not hold, so nothing else is freed here.
+    // seg10:0x6308(7), (6), (9), (8), each (k, -1, -1, -1) [BYTES seg10:0x3e5c-0x3e95]: at Size 2
+    // slot 9 (8) takes slot 7's (6's) unscaled image with DGROUP:0x740 = 1 and the calls for 9
+    // and 8 return at once (rescale.h) (M4 s8 SIZE-SITES).
+    for (const int k : {kSlotRockBig, kSlotRockMaskBig, kSlotRockSmall, kSlotRockMaskSmall})
+        rescale_image(out, images, k, kDcNone, -1, size_level, dg_740);
 }
 
 WaveGraphics g_wave_graphics;
@@ -79,28 +85,36 @@ const std::array<std::uint32_t, 15> kStarColours = {
 const std::uint8_t kMaskRows[8] = {0x82, 0x10, 0x45, 0x10, 0x84, 0x20, 0x02, 0x90};
 const std::uint8_t kCheckerRows[8] = {0xaa, 0x55, 0xaa, 0x55, 0xaa, 0x55, 0xaa, 0x55};
 
-void build_rock_images(Blitter& out, ImageSlotTable& images, std::int16_t& dg_740) {
-    build_rocks(out, images, dg_740);
+void build_rock_images(Blitter& out, ImageSlotTable& images, std::int16_t& dg_740, int size_level) {
+    build_rocks(out, images, dg_740, size_level);
+}
+
+DcId rescale_bitmap(Blitter& out, DcId bitmap, int size_level) {
+    if (bitmap == kDcNone) return kDcNone;  // [DESIGN]
+    // The bitmap form reads neither table nor flag: a scratch pair stands for both [DESIGN].
+    static ImageSlotTable unused{};
+    std::int16_t dg_740 = 0;
+    return rescale_image(out, unused, kRescaleSlotNone, bitmap, -1, size_level, dg_740);
 }
 
 void build_wave_images(Blitter& out, ImageSlotTable& images, std::int16_t& dg_740,
-                       std::int16_t enhance) {
+                       std::int16_t enhance, int size_level) {
     // At 8 bpp and above the chain runs seg10:0x5102 (the explosion images, slots 10 and 11)
     // before seg10:0x3a2e (shell.md "Wave set-up", the graphics chain) [BYTES seg9:0x267e
     // seg9:0x26cd] (M4 s1 DEATH).
-    build_effect_images(out, images, enhance);
+    build_effect_images(out, images, enhance, size_level);
     // seg10:0x5202, the smoke strip (slot 12), right after seg10:0x5102 at 8 bpp [BYTES
     // seg9:0x2696] (smoke.h) (M4 s5 EFFECTS).
-    build_smoke_image(out, images);
-    build_rocks(out, images, dg_740);
-    build_gate_images(out, images, wave_graphics());  // seg9:0x26e5 [BYTES seg9:0x26e5]
+    build_smoke_image(out, images, size_level);
+    build_rocks(out, images, dg_740, size_level);
+    build_gate_images(out, images, wave_graphics(), size_level);  // seg9:0x26e5 [BYTES seg9:0x26e5]
     create_wave_brushes(out, wave_graphics());
     // seg10:0x4b2e's 20 brushes DGROUP:0x576c for the sparks (effects.h) [BYTES
     // seg10:0x4c0b-0x4d16] (M4 s5 EFFECTS).
     create_effect_brushes(out, effect_state());
 }
 
-void build_gate_images(Blitter& out, ImageSlotTable& images, WaveGraphics& wg) {
+void build_gate_images(Blitter& out, ImageSlotTable& images, WaveGraphics& wg, int size_level) {
     auto slot = [&images](int s) -> DcId& { return images[static_cast<std::size_t>(s)]; };
     if (slot(kSlotGate) != kDcNone) return;  // [BYTES seg10:0x3eb1]
     constexpr int c = kGateCell, g = kGateGap;
@@ -153,11 +167,35 @@ void build_gate_images(Blitter& out, ImageSlotTable& images, WaveGraphics& wg) {
     // OUT_SIGN frame 1 on cells 0 and 1 of slot 1 only [BYTES seg10:0x4202 seg10:0x4262
     // seg10:0x4288].
     wg.gate_dc = slot(kSlotGate);
+    // The copy a previous build left (the rescale's reload path and the load's DGROUP:0x92e2 free
+    // build the gate images again) is the port's own: dropped before the new load (M4 s8 fixer,
+    // review L6) [DESIGN].
+    if (wg.out_sign != kDcNone) out.delete_image(wg.out_sign);
     wg.out_sign = out.load_bitmap("OUT_SIGN");
     out.bit_blt(slot(kSlotGate), g + 2, g + 10, kOutSignW, kOutSignH, wg.out_sign, kOutSignW, 0,
                 kSrcCopy);
     out.bit_blt(slot(kSlotGate), 2 * (g + 3) + c, g + 10, kOutSignW, kOutSignH, wg.out_sign,
                 kOutSignW, 0, kSrcCopy);
+    // seg10:0x6308(1, -1, -1, -1), seg10:0x6308(2, -1, -1, -1) [BYTES seg10:0x42c6-0x42e1]; the
+    // flag word is untouched for these slots (M4 s8 SIZE-SITES).
+    std::int16_t dg_740 = 0;
+    rescale_image(out, images, kSlotGate, kDcNone, -1, size_level, dg_740);
+    rescale_image(out, images, kSlotGateMask, kDcNone, -1, size_level, dg_740);
+    wg.gate_dc = slot(kSlotGate);
+    // OUT_SIGN for the flash: seg12:0x1776's seg10:0x6308(-1, -1, OUT_SIGN, -1) [BYTES
+    // seg12:0x1b76-0x1b94] on the copy the gate image was drawn from [DESIGN] (WaveGraphics).
+    wg.out_sign = rescale_bitmap(out, wg.out_sign, size_level);
+    wg.out_sign_level = size_level;
+}
+
+void refresh_wave_graphics(Blitter& out, const ImageSlotTable& images, WaveGraphics& wg, int size_level) {
+    wg.gate_dc = images[static_cast<std::size_t>(kSlotGate)];
+    if (wg.out_sign == kDcNone || wg.out_sign_level == size_level) return;
+    out.delete_image(wg.out_sign);
+    // seg10:0x6d38(DGROUP OUT_SIGN) and seg10:0x6308(-1, -1, bitmap, -1) as each flash makes them
+    // [BYTES seg12:0x1b76-0x1b94] [DESIGN].
+    wg.out_sign = rescale_bitmap(out, out.load_bitmap("OUT_SIGN"), size_level);
+    wg.out_sign_level = size_level;
 }
 
 void create_wave_brushes(Blitter& out, WaveGraphics& wg) {

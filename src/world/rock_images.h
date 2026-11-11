@@ -27,17 +27,30 @@ constexpr int kSlotRockSmall = 9;      // DGROUP:0x39fa
 
 // seg10:0x3a2e: runs only while slot 6 is empty [BYTES seg10:0x3a3d]. Sets DGROUP:0x740 = 0
 // through `dg_740` [BYTES seg10:0x3aa1]. The 1-bpp CreateBitmap of slots 6 and 8 becomes an
-// image of the renderer's (index) format [DESIGN ADR 0013]. seg10:0x6308(slot, -1, -1, -1) for
-// slots 7, 6, 9, 8 at the end is [OPEN].
-void build_rock_images(Blitter& out, ImageSlotTable& images, std::int16_t& dg_740);
+// image of the renderer's (index) format [DESIGN ADR 0013]. At the end seg10:0x6308(k, -1, -1,
+// -1) for k = 7, 6, 9, 8 [BYTES seg10:0x3e5c-0x3e95] at `size_level` (DGROUP:0x9156, rescale.h
+// rescale_image): at Size 2 slot 9 (8) takes slot 7's (6's) unscaled image, DGROUP:0x740 = 1 and
+// the calls for 9 and 8 return at once, so the small rocks draw from the big rocks at their own
+// pitch 48; at Size 0 all four are halved (869 x 53 to 434 x 26, 473 x 31 to 236 x 15) (M4 s8
+// SIZE-SITES).
+void build_rock_images(Blitter& out, ImageSlotTable& images, std::int16_t& dg_740, int size_level = 1);
 // The seg9:0x22b4 graphics chain as the port has it: seg10:0x3a2e (build_rock_images), the gate
 // images seg10:0x3ea2 (seg9:0x26e5) and the wave's brush tables (create_wave_brushes) into
 // wave_graphics() [DESIGN: one call for the chain's images] (M3 s4 DRAW). The integration's
 // load (src/hud/wave_win32.cpp load_wave_resources) calls it. The chain also loads the explosion
 // images seg10:0x5102 (effects.h build_effect_images) with `enhance`, INI `Enhance`
 // (DGROUP:0x8fe8, 1 by default, formats.md) (M4 s1 DEATH).
+// `size_level` is DGROUP:0x9156, which each builder's own seg10:0x6308 reads (M4 s8 SIZE-SITES).
 void build_wave_images(Blitter& out, ImageSlotTable& images, std::int16_t& dg_740,
-                       std::int16_t enhance = 1);
+                       std::int16_t enhance = 1, int size_level = 1);
+
+// seg10:0x6308(-1, -1, bitmap, -1), the bitmap form of rescale.h rescale_image, for the routines
+// that load a picture and rescale it before they use it (OUT_SIGN seg12:0x1b8c, graphic 230
+// seg7:0x47d0, seg13:0x4693 and seg13:0x4756, graphic 360 seg7:0x256f): `bitmap` itself at Size 1,
+// else a new image of ((w << Size) sar 1) x ((h << Size) sar 1) with `bitmap` deleted. The bitmap
+// form touches neither the slot table nor DGROUP:0x740 [BYTES seg10:0x6316-0x664b]. kDcNone
+// stays kDcNone [DESIGN: the original would GetObject a null handle] (M4 s8 SIZE-SITES).
+DcId rescale_bitmap(Blitter& out, DcId bitmap, int size_level);
 
 // ---- the launched weapons' image slots seg10:0x533a (M4 s2 MISSILE; s2-missile.md 6.2, verified
 // claim 74 with its precision note)
@@ -82,9 +95,13 @@ struct WaveGraphics {
     std::array<BrushId, 20> star{};
     BrushId mask = kBrushNone;        // DGROUP:0x5ea8, the sparse-dot pattern brush (seg10:0xd8)
     BrushId checker = kBrushNone;     // DGROUP:0x5eaa, the checkerboard pattern brush (seg10:0xd8)
-    // OUT_SIGN as seg10:0x3ea2 loaded it. seg12:0x1776 loads and frees it on every flash; the
-    // port keeps the one copy (the Blitter frees no image) [DESIGN].
+    // OUT_SIGN as the flash draws it: seg12:0x1776 loads BITMAP OUT_SIGN on every flash and
+    // rescales it with seg10:0x6308(-1, -1, bitmap, -1) [BYTES seg12:0x1b76-0x1b94], so its
+    // frames are sprite_side(26) wide at every Size; the port keeps one copy made at
+    // `out_sign_level` and makes it again when Size differs (refresh_wave_graphics) [DESIGN] (M4
+    // s8 SIZE-SITES).
     DcId out_sign = kDcNone;
+    int out_sign_level = 1;
     DcId gate_dc = kDcNone;           // DGROUP:0x39ea, slot 1's DC, which the flash draws on
     bool brushes = false;             // create_wave_brushes ran
 };
@@ -110,9 +127,17 @@ extern const std::uint8_t kCheckerRows[8];
 // (g, g) is the post, cell 1 at (2g + c, g) its mirror with the right 29 columns re-mirrored,
 // cells 2 and 3 at (2c + 3g, g) and (4g + 3c, g) the two cells of graphic 820 (BW_MBLOCKS);
 // slot 1 carries OUT_SIGN frame 1 on cells 0 and 1. Pool-8 record 0's +0x22 = 34 and
-// +0x24 = 6 [BYTES seg10:0x40ca seg10:0x40de] are the placement's values at Size 1; the Size
-// rescale seg10:0x6308(1 and 2, -1, -1, -1) is not ported [OPEN Size != 1].
-void build_gate_images(Blitter& out, ImageSlotTable& images, WaveGraphics& wg);
+// +0x24 = 6 [BYTES seg10:0x40ca seg10:0x40de] are the placement's values at Size 1. Last,
+// seg10:0x6308(1, -1, -1, -1) and seg10:0x6308(2, -1, -1, -1) [BYTES seg10:0x42c6-0x42e1] at
+// `size_level`: 166 x 46 becomes 332 x 92 at Size 2 and 83 x 23 at Size 0, the cells (34 << Size)
+// sar 1 with gaps (6 << Size) sar 1. `wg.out_sign` is then OUT_SIGN rescaled for the flash
+// (WaveGraphics::out_sign) (M4 s8 SIZE-SITES).
+void build_gate_images(Blitter& out, ImageSlotTable& images, WaveGraphics& wg, int size_level = 1);
+// The port's copies of slot words in `wg` after the slot table changed (a live rescale,
+// rescale.h RescaleHost::images_changed): `gate_dc` = slot 1, and OUT_SIGN made again at
+// `size_level` when its copy was made at another Size (seg12:0x1776's per-flash load and
+// seg10:0x6308) [DESIGN ADR 0016 decision 3] (M4 s8 SIZE-SITES).
+void refresh_wave_graphics(Blitter& out, const ImageSlotTable& images, WaveGraphics& wg, int size_level);
 // seg10:0x4b2e's heat and beam brushes, seg10:0x4dfe's star brushes (Bright = 0, the branch at
 // seg10:0x4f52) and the start-up's pattern brushes, once per Blitter [DESIGN: the port makes
 // them at the wave's load] (M3 s4 DRAW).

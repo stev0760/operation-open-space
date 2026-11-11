@@ -11,6 +11,7 @@
 
 #include "audio/settings.h"
 #include "audio/mixer.h"
+#include "audio/wave_view.h"
 #include "shell/rng.h"
 
 namespace is::audio {
@@ -38,25 +39,32 @@ struct Point {
     int x = 0, y = 0;
 };
 
-// What INSPACE's wrappers read from the game (DGROUP globals); the shell has no wave yet, so
-// the defaults stand for the title screens [OPEN] until the wave code sets them.
+// seg8:0x285a(ship, p), its DGROUP:0x9130 = 0 path [BYTES seg8:0x2872-0x29e6], the distance
+// seg10:0x7896 measures (cells, 1/8 world unit): both points `sar 3` in 16 bits, each axis's
+// difference moved by the cell count (DGROUP:0x5a0 = DGROUP:0x5a2 = 3200, the periods INSPACE
+// gives command 0) when its magnitude passes half of it, then one Newton step of the root from
+// e = max + min / 2: ((dx² + dy²) / e + e) >> 1, and 1 when e = 0. world::distance_cells is the
+// same routine for the world's callers; isaudio cannot link isworld [DESIGN].
+int cell_distance(Point ship, Point p, int cells_x = 3200, int cells_y = 3200);
+
+// What INSPACE's wrappers read from the game (DGROUP globals); outside a wave the defaults
+// stand for the title screens [OPEN].
 struct World {
     int area_w = 640, area_h = 480;  // DGROUP:0x90ea, DGROUP:0x90ec (audio::set_area)
     int seg18_area_w = 640, seg18_area_h = 480;  // DGROUP:0x88c0, DGROUP:0x88c2
     int seg18 = 0;           // DGROUP:0x9130
     int edition = 0;         // DGROUP:0x920c (3 plays nothing)
     int mix_channels = 1;    // DGROUP:0x920a (INSPACE's own MixChannels read, default 1)
-    int zoom_shift = 1;      // DGROUP:0x9156
     int pool_count = -1;     // DGROUP:0x9324
     int player = 0;          // DGROUP:0x9646
-    Point ship;              // the ship position the zoom wrap and distance use
-    // Mode 1-3 sources (pool record, table, dword DGROUP:0x5144); false: no point [OPEN].
+    // Mode 1-3 sources (pool record, table, dword DGROUP:0x5144): the point before seg8:0x29ea;
+    // false: no point [OPEN].
     std::function<bool(int mode, int a, int b, Point& p)> source;
     // seg8:0x29ea; identity by default.
     std::function<Point(Point)> to_view;
-    // seg8:0x285a(ship, p): signed distance; the default is the Chebyshev distance (the
-    // larger axis) [OPEN].
-    std::function<int(Point, Point)> distance;
+    // The player's points, Size and the activity rectangles of the running wave; false (or
+    // empty) outside a wave (audio::set_wave_view, M4 s8).
+    std::function<bool(WaveView&)> view;
 };
 
 // INSPACE's music wrapper seg10:0x7480(code, flag) before its ordinal 7 command 11 [BYTES
@@ -144,6 +152,11 @@ public:
     std::uint32_t pending_deadline() const { return seq_deadline_; }
     int pending_id() const { return seq_follow_; }
     int loudness() const { return loudness_; }  // DGROUP:0x21a6
+    // The last seg10:0x754a call, for the log: seg10:0x7896's q (-2 when the call returned
+    // before it), and whether ordinal 9 reached a successful play (its return is 1 only for
+    // g != 0, so 0 does not mean refused) [DESIGN].
+    int last_call_q() const { return call_q_; }
+    bool last_played() const { return played_; }
     shell::Rng& rng() { return rng_; }
     const Settings& settings() const { return s_; }
 
@@ -153,7 +166,8 @@ private:
     void read_ini(const Settings& s);
     bool load_module(int k);
     int q_for(int mode, Point p);
-    bool point_for(int mode, int a, int b, Point& p, bool wrap_seg18_test);
+    bool source_point(int mode, int a, int b, Point& p, bool& stand_in);
+    void view_point(Point& p, bool wrap_seg18_test);
 
     Mixer& mixer_;
     WaveSource& src_;
@@ -190,6 +204,8 @@ private:
     int last_id_ = 0, last_a_ = 0, last_b_ = 0, last_mode_ = 0;  // DGROUP:0x921c, 0x928c, 0x928e, 0x9290
     Point last_p_;     // DGROUP:0x3b98
     int last_q_ = 0;   // DGROUP:0x9226
+    int call_q_ = -2;      // last_call_q()
+    bool played_ = false;  // last_played()
     std::uint32_t seq_deadline_ = 0;  // DGROUP:0x3c88
     int seq_follow_ = 0;              // DGROUP:0x9292
     int seq_first_ = 0, seq_a_ = 0, seq_b_ = 0;  // DGROUP:0x9216, 0x9218, 0x921a

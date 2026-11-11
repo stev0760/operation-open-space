@@ -68,7 +68,10 @@ std::int16_t pod_dissolve(World& w, int pool, int rec, const DissolveOut& d,
 
 // seg10:0x42ee [BYTES seg10:0x42ee-0x440a]: unless slot 0x1d (DGROUP:0x3a22) holds an image, an 89
 // x 33 image blacked, then graphic 690 + k (seg10:0x6c02(690 + k, 3, -1)) cell (0, 0, 23 x 23) at
-// (28k + 5, 5) for k = 0, 1, 2. The rescale seg10:0x6308(0x1d, -1, -1, -1) at Size != 1 is [OPEN].
-void build_pod_image(Blitter& out, ImageSlotTable& images);
+// (28k + 5, 5) for k = 0, 1, 2; last seg10:0x6308(0x1d, -1, -1, -1) at `size_level`
+// (DGROUP:0x9156, rescale.h rescale_image) [BYTES seg10:0x43fe-0x440a]: 178 x 66 at Size 2, 44 x 16
+// at Size 0, where fill_pod's (24 << Size) sar 1 and (4 << Size) sar 1 read the cells (M4 s8
+// SIZE-SITES).
+void build_pod_image(Blitter& out, ImageSlotTable& images, int size_level = 1);
 
 }  // namespace is::world

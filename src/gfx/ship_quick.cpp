@@ -107,6 +107,82 @@ QuickBlit quick_blit(int h, int gap, int it, int scale) {
     return b;
 }
 
+std::vector<int> gdi_stretch_map(int src_len, int dst_len, bool rows) {
+    std::vector<int> map(dst_len > 0 ? static_cast<std::size_t>(dst_len) : 0, 0);
+    if (src_len <= 0 || dst_len <= 0) return map;
+    if (dst_len >= src_len) {  // stretch: one step per destination index
+        int e = 2 * src_len - dst_len, si = 0;
+        for (int d = 0; d < dst_len; ++d) {
+            map[static_cast<std::size_t>(d)] = si;
+            if (e > 0) {
+                ++si;
+                e += 2 * (src_len - dst_len);
+            } else {
+                e += 2 * src_len;
+            }
+        }
+        return map;
+    }
+    // A one-pixel column halving (2 or 3 to 1) takes the middle, floor((src - 1) / 2), in Wine's
+    // GDI; the run rule below would take the last [DESIGN: the Win32 test's two cases].
+    if (!rows && dst_len == 1) {
+        map[0] = (src_len - 1) / 2;
+        return map;
+    }
+    int e = dst_len - src_len - 1, d = 0;  // shrink: one step per source index
+    bool first = true;
+    for (int si = 0; si < src_len && d < dst_len; ++si) {
+        // A column overwrites, so the run's last stays; a row is written only when it opens its
+        // run, so the first stays.
+        if (!rows || first) map[static_cast<std::size_t>(d)] = si;
+        first = false;
+        if (e > 0) {
+            first = true;
+            ++d;
+            e += 2 * (dst_len - src_len);
+        } else {
+            e += 2 * dst_len;
+        }
+    }
+    return map;
+}
+
+std::vector<int> gdi_shrink_owner(int src_len, int dst_len) {
+    std::vector<int> owner(src_len > 0 ? static_cast<std::size_t>(src_len) : 0, -1);
+    if (src_len <= 0 || dst_len <= 0 || dst_len >= src_len) return owner;
+    int e = dst_len - src_len - 1, d = 0;  // gdi_stretch_map's shrink walk
+    for (int si = 0; si < src_len && d < dst_len; ++si) {
+        owner[static_cast<std::size_t>(si)] = d;
+        if (e > 0) {
+            ++d;
+            e += 2 * (dst_len - src_len);
+        } else {
+            e += 2 * dst_len;
+        }
+    }
+    return owner;
+}
+
+FlameBitmap rescaled_flame_bitmap(const FlameBitmap& bmp, int size_level) {
+    if (size_level == 1 || !bmp.ok() || bmp.height <= 0 ||
+        bmp.px.size() < static_cast<std::size_t>(bmp.width) * bmp.height)
+        return bmp;
+    const int sh = size_level & 0x1f;  // a 386 masks the count [DESIGN]
+    const int W = w16(static_cast<long>(bmp.width) << sh) >> 1, H = w16(static_cast<long>(bmp.height) << sh) >> 1;
+    FlameBitmap r;
+    r.dirs = bmp.dirs;
+    r.width = W > 0 && H > 0 ? W : 1;  // a zero extent makes a 1 x 1 bitmap (world/rescale.h)
+    r.height = W > 0 && H > 0 ? H : 1;
+    r.cell = r.height / 2;
+    r.px.assign(static_cast<std::size_t>(r.width) * r.height, 0);
+    if (W <= 0 || H <= 0) return r;
+    const std::vector<int> mx = gdi_stretch_map(bmp.width, W, false), my = gdi_stretch_map(bmp.height, H, true);
+    for (int y = 0; y < H; ++y)
+        for (int x = 0; x < W; ++x)
+            r.px[static_cast<std::size_t>(y) * W + x] = bmp.at(mx[static_cast<std::size_t>(x)], my[static_cast<std::size_t>(y)]);
+    return r;
+}
+
 QuickState& quick_state() {
     static QuickState s;
     return s;

@@ -56,9 +56,11 @@ int g_mix_920a = 1;                  // DGROUP:0x920a, default 1 [BYTES seg6:0xc
 std::function<bool(int, int, int, int&, int&)> g_source;
 std::function<void(int&, int&)> g_to_view;
 int g_pool_count = -1;
+std::function<bool(WaveView&)> g_view;  // set_wave_view, kept across init (M4 s8)
 
 void apply_world_source(World& w) {
     w.pool_count = g_pool_count;
+    w.view = g_view;
     if (g_source) {
         w.source = [](int mode, int a, int b, Point& p) { return g_source(mode, a, b, p.x, p.y); };
     } else {
@@ -190,6 +192,18 @@ void set_world_source(std::function<bool(int mode, int a, int b, int& x, int& y)
     if (g) apply_world_source(g->engine.world());
 }
 
+void set_wave_view(std::function<bool(WaveView&)> view) {
+    g_view = std::move(view);
+    if (g) g->engine.world().view = g_view;
+}
+
+bool last_call(int& q, bool& played) {
+    if (!g) return false;
+    q = g->engine.last_call_q();
+    played = g->engine.last_played();
+    return true;
+}
+
 void set_inspace_mix_channels(int n) {
     g_mix_920a = n;
     if (g) g->engine.world().mix_channels = n;
@@ -212,10 +226,9 @@ int play_at(int id, int x, int y, int mode, std::uint32_t now) {
     return g->engine.wrap_754a(id, x, y, mode, now);
 }
 
-void frame(int x, int y, std::uint32_t now) {
+void frame(int, int, std::uint32_t now) {
     if (!g) return;
     g->sync(now);
-    g->engine.world().ship = {x, y};
     g->engine.wrap_7b48(now);
 }
 

@@ -66,7 +66,6 @@ struct FrameGlobals {
     std::int16_t dg_95fc = 0;           // DGROUP:0x95fc
     std::uint32_t dg_6da8 = 0;          // DGROUP:0x6da8
     std::int16_t dg_5d2 = 0;            // DGROUP:0x5d2, toggled each frame
-    std::int16_t dg_1016 = 0;           // DGROUP:0x1016
     std::int16_t dg_9600 = 0;           // DGROUP:0x9600
     std::uint32_t music_due = 0;        // DGROUP:0x2384
     std::int16_t dg_950 = 0;            // DGROUP:0x950
@@ -139,7 +138,6 @@ public:
     virtual void mover(Mover m) { (void)m; }           // the movers this stage does not port
     virtual void music_due() {}                        // seg13:0xba04
     virtual void seg13_b93a() {}
-    virtual void player_tick() {}                      // seg7:0xdaf-0x117d, every 1500 ms [OPEN]
     virtual void seg7_158e() {}
     virtual void seg13_447a() {}
     // ---- the ship entry seg7:0x1d0c

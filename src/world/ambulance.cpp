@@ -319,8 +319,16 @@ void ambulance_move(UpdateCtx& u, AmbulanceCtx& c) {
     const std::uint32_t now = c.now;
     const int sp = w.roles.ships;
     ObjectRecord& A = p.rec(kAmb, 0);
-    ObjectRecord& S = served_obj(w);
-    ShipRecord& Sship = served_ship(w);
+    // S and its ship record where the original reads them: it indexes DGROUP:0x952e at each read,
+    // and those are the lift's end in state 8 [BYTES seg16:0x14d-0x16a], the gone test, which
+    // skips DGROUP:0x952e < 0 [BYTES seg16:0x23b-0x240], and states 0, 1 and 6 [BYTES
+    // seg16:0x2d7-0x4ac seg16:0x572-0x589]. After the park (state 10, DGROUP:0x952e = -1) the
+    // frame calls the mover until the vanish gives A `state` 1, and the switch skips every state
+    // above 9 [BYTES seg16:0x5d8-0x5e0 seg16:0x7aa], so it reads neither record and the guards
+    // stay quiet (M4 s6 compare 12, S6-9) (M4 s8 VISIT).
+    const bool reads_s = w.w952e >= 0 || w.w9e49 == 0 || w.w9e49 == 1 || w.w9e49 == 6 || w.w9e49 == 8;
+    ObjectRecord& S = reads_s ? served_obj(w) : (g_scratch_obj = ObjectRecord{});
+    ShipRecord& Sship = reads_s ? served_ship(w) : (g_scratch_ship = ShipRecord{});
     // size and gap, read at entry [BYTES seg16:0xb1-0xc0]
     const std::int16_t size = A.size, gap = A.gap;
 

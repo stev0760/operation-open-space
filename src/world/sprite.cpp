@@ -235,6 +235,28 @@ DcId RecordingBlitter::create_image_from(int w, int h, const std::vector<std::ui
 
 void RecordingBlitter::delete_image(DcId id) { deleted.push_back(id); }
 
+// M4 s8 SIZE-CORE: the last record of the id, unless delete_image freed it.
+bool RecordingBlitter::image_size(DcId id, int& w, int& h) const {
+    if (std::find(deleted.begin(), deleted.end(), id) != deleted.end()) return false;
+    for (auto it = images.rbegin(); it != images.rend(); ++it)
+        if (it->id == id) {
+            if (it->w <= 0 || it->h <= 0) return false;  // a load whose size no test gave
+            w = it->w;
+            h = it->h;
+            return true;
+        }
+    return false;
+}
+
+void RecordingBlitter::set_image_size(DcId id, int w, int h) {
+    for (auto it = images.rbegin(); it != images.rend(); ++it)
+        if (it->id == id) {
+            it->w = w;
+            it->h = h;
+            return;
+        }
+}
+
 DcId RecordingBlitter::create_mask(DcId src) {
     images.push_back(Image{next_dc_, 0, 0, "mask", src});
     return next_dc_++;

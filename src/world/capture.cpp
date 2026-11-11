@@ -277,7 +277,7 @@ void touch_pod(CaptureCtx& c, int ship, std::int16_t pr) {
         c.h.sound(0x71, g.ship_pool, ship, 1);
     rivals(c, pr, ship);         // [BYTES seg13:0x1f41]
     bump_w82(S, 50);             // [BYTES seg13:0x1f4d]
-    c.h.seg12_129e(pool, rec);   // [BYTES seg13:0x1f59] [OPEN]
+    c.h.seg12_129e(pool, rec);   // [BYTES seg13:0x1f59]; pods.h pod_dissolve
     // [BYTES seg13:0x1f61-0x1f90] (C030); seg13:0xb6f2 is the computer pilots' (M5)
     if (c.h.team(S.design_index) != 7 && pool == 11 && pod(rec).kind == 1 && g.demons_gate == 0)
         c.h.seg13_b6f2(ship, 2);

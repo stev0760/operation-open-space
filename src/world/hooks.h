@@ -33,6 +33,9 @@ World& current();
 // in-use count, black, slot s's 32 x 32 cell at (38 s + 6, 6) (world.md "Extraction"). Null
 // before the first briefing entry.
 gfx::ImagePtr icon_strip();
+// seg10:0x5b30 again on the program's World, the strip unscaled and blacked with each slot's
+// icon or placeholder, for the rescale's reload path [BYTES seg10:0x9f7f-0x9f83] (M4 s8 integrate).
+void rebuild_icon_strip();
 #endif
 
 // seg9:0x60bc's calls after the ships (seg11:0x3cc2(player) and the HUD repaint): src/hud sets

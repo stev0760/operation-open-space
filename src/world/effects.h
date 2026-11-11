@@ -43,11 +43,12 @@ constexpr int kExplosionFrames = 8;
 
 // seg10:0x5102 [BYTES seg10:0x5110-0x51f6]: returns at once while both slots 10 and 11 hold a
 // DC; otherwise slot 10 (when empty) takes seg10:0x6c02(170, 2 when `Enhance` DGROUP:0x8fe8 != 0
-// else 0, 1) and slot 11 (when empty) seg10:0x6c02(175, 0, -1). Slot 11's seg9:0x27da(50) (the
-// load's progress step while DGROUP:0x1e68 = 0) and the rescale seg10:0x6308(slot, -1, -1, -1)
-// at Size != 1 are not ported [OPEN]. The wave's load calls it beside seg10:0x3a2e (shell.md
-// "Wave set-up", the graphics chain), through build_wave_images.
-void build_effect_images(Blitter& out, ImageSlotTable& images, std::int16_t enhance);
+// else 0, 1) and slot 11 (when empty) seg10:0x6c02(175, 0, -1), each followed by
+// seg10:0x6308(slot, -1, -1, -1) at `size_level` (DGROUP:0x9156, rescale.h rescale_image)
+// [BYTES seg10:0x51b9-0x51c6] (M4 s8 SIZE-SITES). Slot 11's seg9:0x27da(50) (the load's progress
+// step while DGROUP:0x1e68 = 0) is not ported [OPEN]. The wave's load calls it beside
+// seg10:0x3a2e (shell.md "Wave set-up", the graphics chain), through build_wave_images.
+void build_effect_images(Blitter& out, ImageSlotTable& images, std::int16_t enhance, int size_level = 1);
 
 // seg8:0x7ba8(x, y) [BYTES seg8:0x7ba8]: PtInRect of (-50, -50, W + 50, H + 50) (verified claim 14).
 bool in_play_area(std::int16_t x, std::int16_t y, std::int16_t W, std::int16_t H);

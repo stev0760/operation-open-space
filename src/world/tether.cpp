@@ -7,6 +7,7 @@
 #include "world/collide.h"
 #include "world/line.h"
 #include "world/missile.h"
+#include "world/rescale.h"
 #include "world/shots.h"
 #include "world/update.h"
 #include "world/view.h"
@@ -326,8 +327,13 @@ bool load_hook_sheet(Blitter& out, ImageSlotTable& images, const Pools& pools, i
     req.sel = 0;
     req.size_level = size_level;
     SheetPixels px;
-    if (render && render(req, px) && px.w > 0 && px.h > 0)
+    if (render && render(req, px) && px.w > 0 && px.h > 0) {
         slot = out.create_image_from(px.w, px.h, px.index);  // [BYTES seg10:0x6f7f seg10:0x6f89]
+        // seg10:0x6ee6's seg10:0x6308(3, -1, -1, -1) [BYTES seg10:0x6fd4-0x6fe1] (M4 s8 SIZE-SITES).
+        std::int16_t dg_740 = 0;
+        if (slot != 0 && sheet_rescales(size_level, req.gap_word, req.sel))
+            rescale_image(out, images, kHookImageSlot, kDcNone, -1, size_level, dg_740);
+    }
     return slot != 0;
 }
 

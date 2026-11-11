@@ -165,6 +165,34 @@ DcId GdiBlitter::create_image_from(int w, int h, const std::vector<std::uint8_t>
 
 void GdiBlitter::delete_image(DcId id) { images_.erase(id); }
 
+// GetObject's bmWidth / bmHeight: the bound Surface's (M4 s8 SIZE-CORE) [BYTES seg10:0x63c8].
+bool GdiBlitter::image_size(DcId id, int& w, int& h) const {
+    const std::shared_ptr<gfx::Surface> img = image(id);
+    if (!img || img->empty()) return false;
+    w = img->width();
+    h = img->height();
+    return true;
+}
+
+// The bound Surface's pixels: an index bitmap's bits after GdiFlush, a monochrome bitmap's bits
+// as 0 (text colour DIBINDEX(0)) and 255 (background DIBINDEX(255)) (M4 s8 fixer, review M1).
+bool GdiBlitter::read_index(DcId id, std::vector<std::uint8_t>& px, int& w, int& h) const {
+    const std::shared_ptr<gfx::Surface> img = image(id);
+    if (!img || img->empty()) return false;
+    img->flush();
+    w = img->width();
+    h = img->height();
+    const bool mono = img->format() == gfx::Surface::Format::kMono1;
+    px.assign(static_cast<std::size_t>(w) * static_cast<std::size_t>(h), 0);
+    for (int y = 0; y < h; ++y)
+        for (int x = 0; x < w; ++x) {
+            const std::uint8_t v = img->at(x, y);
+            px[static_cast<std::size_t>(y) * static_cast<std::size_t>(w) + static_cast<std::size_t>(x)] =
+                mono ? static_cast<std::uint8_t>(v != 0 ? 255 : 0) : v;
+        }
+    return true;
+}
+
 // seg10:0x6ec6 -> ordinal 6 on the image behind `src` (Gfx::mask): a monochrome Surface in its
 // own DC (M4 s1 DEATH).
 DcId GdiBlitter::create_mask(DcId src) {

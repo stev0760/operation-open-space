@@ -5,6 +5,7 @@
 #include "world/effects.h"
 #include "world/flight.h"
 #include "world/player_sheet.h"
+#include "world/rock_images.h"
 #include "world/world.h"
 
 namespace is::world {
@@ -213,10 +214,11 @@ void move_debris(DebrisCtx& c) {
         e.vy = sub16(e.vy, sar16(e.vy, 4));
         if (e.counter == 1) {
             // The flames into the strip, then the player's sprite [BYTES seg13:0x467d-0x4554];
-            // the rescale seg10:0x6308 at Size != 1 is not ported [OPEN].
+            // graphic 230 through seg10:0x6308(-1, -1, bitmap, -1) before its mask [BYTES
+            // seg13:0x467d-0x469b] (rock_images.h rescale_bitmap) (M4 s8 SIZE-SITES).
             if (c.out) {
                 const std::int16_t p = debris_cell(c.size, c.dg_9130);
-                const DcId g = c.out->load_graphic(kGraphicFlames, 0, -1);
+                const DcId g = rescale_bitmap(*c.out, c.out->load_graphic(kGraphicFlames, 0, -1), c.size);
                 const DcId gm = c.out->create_mask(g);
                 const std::int16_t w5 = mul16(p, 5);
                 c.out->bit_blt(e.dc, 0, 0, w5, p, gm, 0, 0, kSrcAnd);      // [BYTES seg13:0x44c7]

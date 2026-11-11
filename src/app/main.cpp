@@ -36,6 +36,7 @@
 #include "briefing/hooks.h"  // high_score_links (M4 s3 SAVE)
 #include "world/flight_hooks.h"  // install_flight_hooks (M3 stage 2, flight)
 #include "world/hooks.h"
+#include "world/rescale.h"
 #include "world/visit.h"  // the state-6 pace inputs (M4 s3 fixer)
 #include "hud/hooks.h"  // install_hud_hooks (M3 stage 2, the HUD)
 
@@ -563,6 +564,9 @@ bool idle_step() {
 namespace {
 void read_rate_settings(Tick now) {
     g.scheduler.set_rate(shell::read_frame_rate(*g.ini), now);  // seg6:0xb7d
+    // INI `Quick` into DGROUP:0x931e (world/rescale.h load_quick) [BYTES seg6:0xc60 seg6:0xc65]
+    // (M4 s8 integrate).
+    world::load_quick(g.ini->get_int(settings::kGameSection, "Quick", 0));
     const shell::BorderMenu b = shell::read_border_menu(*g.ini);  // seg6:0xd20 seg6:0xd36
     if (b.border == g.keys.border && b.menu == g.keys.menu) return;  // seg6:0xd3e-0xd4c
     g.keys.border = b.border;  // seg6:0xd51

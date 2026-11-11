@@ -140,6 +140,25 @@ public:
     virtual void delete_pen(PenId pen) { (void)pen; }
     virtual void move_to(DcId dc, int x, int y) { (void)dc, (void)x, (void)y; }
     virtual void line_to(DcId dc, int x, int y) { (void)dc, (void)x, (void)y; }
+
+    // GetObject(hbm, 14, &bm)'s bmWidth and bmHeight of the bitmap behind `id`, as seg10:0x6308
+    // measures the image it rescales [BYTES seg10:0x63c8] (s8-size-verify.md claim 31) (M4 s8
+    // SIZE-CORE). False, with w and h untouched, for an id the Blitter does not hold (a GetObject
+    // that fails); the default holds none.
+    virtual bool image_size(DcId id, int& w, int& h) const {
+        (void)id, (void)w, (void)h;
+        return false;
+    }
+    // The pixels of the image behind `id` as 8-bit indices, top-down, w * h; a monochrome image's
+    // bits read as 0 and 255, the indices GDI maps them to on an index image (gfx/surface.h's DC
+    // colours). They let seg10:0x6308 make its copy from Wine's StretchBlt rule on every host
+    // (world/rescale.h rescale_image) [DESIGN ADR 0017 decision 2] (M4 s8 fixer, review M1).
+    // False when the Blitter holds no pixels for `id`; the default holds none, so the copy goes
+    // through stretch_blt.
+    virtual bool read_index(DcId id, std::vector<std::uint8_t>& px, int& w, int& h) const {
+        (void)id, (void)px, (void)w, (void)h;
+        return false;
+    }
 };
 
 // The window's Blitter, the one the wave pass clips (GdiBlitter registers itself on
@@ -235,6 +254,11 @@ public:
     void delete_image(DcId id) override;
     // Recorded as an image named "mask" whose `graphic` is the source id.
     DcId create_mask(DcId src) override;
+    // M4 s8 SIZE-CORE: the size an image was made with (create_image, create_image_from) or given
+    // by set_image_size (a loaded bitmap or graphic, recorded as 0 x 0); false for an id it never
+    // handed out, one delete_image freed, or a 0 x 0 record.
+    bool image_size(DcId id, int& w, int& h) const override;
+    void set_image_size(DcId id, int w, int h);
 
     // M4 s7 TETHER: pens get ids counting up from 0x300; select_pen tracks each DC's pen and
     // returns the previous one (kPenNone at first).
@@ -371,6 +395,10 @@ public:
     DcId create_image_from(int w, int h, const std::vector<std::uint8_t>& index) override;
     void delete_image(DcId id) override;
     DcId create_mask(DcId src) override;
+    // The bound Surface's width and height (M4 s8 SIZE-CORE).
+    bool image_size(DcId id, int& w, int& h) const override;
+    // The bound Surface's pixels after GdiFlush (M4 s8 fixer).
+    bool read_index(DcId id, std::vector<std::uint8_t>& px, int& w, int& h) const override;
     // M4 s7 TETHER: the pens (stock pens are GetStockObject(id - kPenStock)); the line calls on
     // the window DC take the pass's clip as the blits do.
     PenId create_pen(int style, int width, std::uint32_t colorref) override;

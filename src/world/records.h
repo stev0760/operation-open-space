@@ -225,7 +225,7 @@ struct ShipRecord {
     std::int16_t w1a;             // +0x1a [OPEN]
     std::int16_t thrust_mult;     // +0x1c k: OverThruster 5, decays to 1 [BYTES seg11:0x5c21 seg14:0x21bb]
     std::int16_t fuel;            // +0x1e [BYTES seg11:0x65d7 seg11:0x1cfe]
-    std::int16_t w20, w22, w24;   // +0x20..+0x25 [OPEN]
+    std::int16_t w20, w22, w24;   // +0x20..+0x25 the wing state: a wing tear stores design word +0x2a - 14, 7 and min(w24, 1) [BYTES seg8:0x4b1e-0x4c61] (damage.cpp)
     std::int16_t w26, w28, w2a, w2c;  // +0x26..+0x2d [OPEN] roster bytes +0x38..+0x3b; +0x2a gates thrust and go [BYTES seg18:0x4a7 seg11:0x662b seg11:0x5b35]
     std::int16_t w2e, w30;        // +0x2e, +0x30 [OPEN]
     std::int16_t w32;             // +0x32 [OPEN] 8 at a race flag [BYTES seg4:0x216e seg11:0x5ba5]

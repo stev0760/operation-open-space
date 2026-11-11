@@ -69,9 +69,12 @@ std::int16_t tank_dissolve(World& w, int i, const DissolveOut& d);
 // seg10:0x565a [BYTES seg10:0x565a-0x58cd]: the image DGROUP:0x39f0 (slot 4) for DGROUP:0x9214 =
 // 0, 1 or 2: s = 36, g = 6 (0) or s = 30, g = 4, graphic 270, 272 or 274; a (5s + 6g) x (2g + s)
 // image blacked, then cell k = 0 ... 4 of the graphic (s·k, 0, s x s) at ((g + s)k + g, g). It
-// returns while the slot holds an image made for the same DGROUP:0x9214 (DGROUP:0x17c0). The
-// variants 3 and 4 (two graphics, seg10:0x6ea0(9)) and the rescale seg10:0x6308(4, -1, -1, -1)
-// at Size != 1 are [OPEN]. `made_for` stands for DGROUP:0x17c0.
-void build_tank_image(Blitter& out, ImageSlotTable& images, std::int16_t w9214, std::int16_t& made_for);
+// returns while the slot holds an image made for the same DGROUP:0x9214 (DGROUP:0x17c0). Last,
+// seg10:0x6308(4, -1, -1, -1) at `size_level` (DGROUP:0x9156, rescale.h rescale_image) [BYTES
+// seg10:0x58bb-0x58c4]: the 216 x 48 can becomes 432 x 96 at Size 2 and 108 x 24 at Size 0 (M4 s8
+// SIZE-SITES). The variants 3 and 4 (two graphics, seg10:0x6ea0(9)) are [OPEN] (the meals, M6).
+// `made_for` stands for DGROUP:0x17c0.
+void build_tank_image(Blitter& out, ImageSlotTable& images, std::int16_t w9214, std::int16_t& made_for,
+                      int size_level = 1);
 
 }  // namespace is::world

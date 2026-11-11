@@ -53,6 +53,18 @@ VisitLayout visit_layout(int W, int client_h, int play_h);
 // The same with one height for both [DESIGN: the tests' and the callers' single-height form].
 VisitLayout visit_layout(int W, int H);
 
+class World;
+// sh, the pad strip's extra height: (word +0x22 of the player's pool-14 record (DGROUP:0x1e30 +
+// 0x70·DGROUP:0x9646) << 3) sar byte DGROUP:0x959e, the Size the ambulance latched at the pickup
+// (ambulance.h AmbulanceState::pickup_size, seg16:0x492), not the Size in force: the three reads
+// seg16:0xe54 (phase 2, the strip's creation), seg16:0x2059 (seg16:0x1f78's creation when
+// DGROUP:0x953c = 0) and seg16:0x2615 (seg16:0x2144's blit of padW x (sh + 0x3e) at (half(W) -
+// half(padW), DGROUP:0x10 - sh - 0x3e)) take the latch, which a Ctrl +/- between the pickup and
+// the visit leaves behind (verified claim 45 of s8-size-verify.md) [BYTES seg16:0xe54
+// seg16:0x2059-0x206f seg16:0x2615-0x262b seg16:0x48f-0x492]. 16-bit, cl the latch's low byte
+// masked to 5 bits as a 386 does (M4 s8 SIZE-SITES).
+std::int16_t visit_strip_shift(const World& w);
+
 // ---- the visit's DGROUP words ----------------------------------------------------------------------
 struct VisitState {
     std::int16_t phase = 0;        // DGROUP:0x914a

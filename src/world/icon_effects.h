@@ -93,10 +93,15 @@ struct IconOverlayPlan {
     std::int16_t x = 0;              // (g + S)·icon + g
     std::int16_t level = 1;          // Size DGROUP:0x9156
 };
+// seg9:0x5cca's seg10:0x6308(0xd, -1, -1, -1) between the crack loop and seg9:0x94ba [BYTES
+// seg9:0x5da6-0x5db3] (hud/icon_images.h IconImages::strip_rescale) (M4 s8 SIZE-SITES).
+struct IconStripRescalePlan {
+    std::int16_t level = 1;  // Size DGROUP:0x9156
+};
 // One picture for the drawing side; CrackPlan is seg7:0x233c's (collide.h), deferred with the
 // rest in the briefing.
 using IconPlan = std::variant<IconDripPlan, IconFlamePlan, IconRestorePlan, IconBackupPlan,
-                              IconBackupAllPlan, IconOverlayPlan, CrackPlan>;
+                              IconBackupAllPlan, IconOverlayPlan, CrackPlan, IconStripRescalePlan>;
 
 // The drawing side's calls (src/hud/icon_images.h install_icon_images sets them; an empty slot
 // draws nothing, as the host build and the tests without a recorder).

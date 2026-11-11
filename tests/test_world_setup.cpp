@@ -12,6 +12,7 @@
 #include "doctest.h"
 #include "nav/fs.h"
 #include "shell/rng.h"
+#include "world/ambulance.h"
 #include "world/setup.h"
 
 using namespace is::world;
@@ -307,6 +308,20 @@ TEST_CASE("world setup: the icon limit of 10 candidates [BYTES seg9:0x0]") {
     CHECK(r.w.icon_tries <= 10);
     CHECK(r.w.icons_a <= 8);
     CHECK(r.w.pools.in_use(kPoolIcons) <= kIconRecords);
+}
+
+// seg9:0x6624 clears the dword DGROUP:0x6da8 at every placement (`sub eax, eax; mov [0x6da8],
+// eax`), so a re-entry watch the tick set before the wave ended does not reach the next wave
+// [BYTES seg9:0x694a-0x694d] (M4 s8 fixer, review M2).
+TEST_CASE("world setup: the placement clears the re-entry deadline DGROUP:0x6da8") {
+    Rig r;
+    r.w.wave = 1;
+    state1_load(r.w, r.host);
+    new_game(r.w);
+    ambulance_state().reentry_due = 1;
+    enter_briefing(r.w, r.host);
+    REQUIRE(r.w.placed == 1);
+    CHECK(ambulance_state().reentry_due == 0);
 }
 
 TEST_CASE("world setup: the briefing entry places once and the wave start follows") {

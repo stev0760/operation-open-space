@@ -253,7 +253,7 @@ std::int16_t shot_hit_object(ShotCtx& c, int pool, int rec, int j);
 // Demon's Gate x 3 and the roster scale).
 std::int16_t shot_power(ShotCtx& c, int j);
 // seg8:0x804a(j, v, a): the spark, effect type 7 [BYTES seg8:0x804a-0x81f6]; its drawing is
-// seg8:0x3fbe's branch at seg8:0x4256 (effects.h EffectHost::pieces) [OPEN seg8:0x4256].
+// effects.h piece_frame (seg8:0x3fbe's branch at seg8:0x4256) [BYTES seg8:0x4256-0x4538].
 void spark(ShotCtx& c, int j, std::int16_t v, int a);
 
 }  // namespace is::world

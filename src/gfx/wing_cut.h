@@ -57,8 +57,12 @@ const WingMask& wing_mask();
 // seg5:0x16dc-0x171b] (verified claims 12, 13):
 //   o = 45 - trunc(s / 2), A[k] = lo16(T1[k] D) sar 7, B[k] = lo16(T2[k] D) sar 7,
 //   sx = 90 k - A[k] + o, sy = B[k] + o, w = min(A[k] - o + 89, s), h = min(89 - sy, s)
-// (min as a signed `jle`, 16-bit throughout). For s > 90, o < 0 and cell 0's window starts left
-// of the bitmap [OPEN: no shipped body reaches it].
+// (min as a signed `jle`, 16-bit throughout). For s > 90, o < 0 and cell 0's window starts above
+// (and for a small D left of) the bitmap: the part outside the mask is clipped and its
+// destination left as it is, as GDI's BitBlt clips a source rectangle to its bitmap
+// (tests/test_world_size_sites.cpp draws heading 0 through GDI under Wine for s = 100 ... 120)
+// [DESIGN ADR 0017]. Only Size 2 reaches it, with a body side above 45: the add-on's IDRAGON (53,
+// 106 at Size 2); the game's widest body, ORCA's 41, gives 82 (M4 s8 SIZE-SITES).
 struct WingWindow {
     int sx = 0, sy = 0, w = 0, h = 0;
 };

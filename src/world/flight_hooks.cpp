@@ -32,7 +32,9 @@
 #include "world/icon_effects.h"
 #include "world/lightning.h"
 #include "world/missile.h"
+#include "world/rescale.h"
 #include "world/ring.h"
+#include "world/setup.h"
 #include "world/shots.h"
 #include "world/smoke.h"
 #include "world/tank.h"
@@ -184,6 +186,9 @@ public:
     LinkHooks* link_hooks() override { return program_link_hooks(); }
     // seg11:0xa9ea(arg), the bolt's frame call (lightning.h bolt_frame) (M4 s7 RING).
     void seg11_a9ea(int arg) override;
+    // seg10:0x7f88 at seg7:0xb7a while DGROUP:0x103c != 0 (world/rescale.h size_reread, the
+    // program's RescaleHost) (M4 s8 integrate).
+    void size_reread() override;
 };
 
 CollideLinks g_collide_links;
@@ -290,9 +295,9 @@ public:
     void speed_step(int d) override;
     // WM_KEYDOWN 'H' (seg11:0x6f7a-0x6fe8): ambulance.h ambulance_key_program (M4 s3 fixer, review H1).
     void ambulance(bool ctrl, bool alt) override;
-    void rescale_step(int d) override {
-        todo_once("rescale " + std::to_string(d), "seg10:0x9a2a");
-    }
+    // Ctrl +/- (seg11:0x7207, seg11:0x7266): seg10:0x9a2a(d) on the program's World (world/rescale.h
+    // rescale_step) through the program's RescaleHost (M4 s8 integrate).
+    void rescale_step(int d) override;
     void unported(std::uint32_t msg, std::uint16_t key, const char* address) override {
         char buf[64];
         std::snprintf(buf, sizeof buf, "key msg 0x%x key 0x%x", msg, key);
@@ -853,6 +858,38 @@ std::uint16_t DefaultHost::joy_read() {
 // sets the display's deadline and mode and posts its WM_PAINT only while the left display
 // DGROUP:0xa7c exists [BYTES seg10:0x7e2a seg10:0x7e2f seg10:0x7e51]; in a wave it always
 // exists, and the port's key switch runs only in a wave [DESIGN].
+// ---- the Size change (world/rescale.h) on the program's World (M4 s8 integrate)
+
+RescaleHost* g_rescale_host = nullptr;
+
+// DGROUP:0x9156 and DGROUP:0x9150 are one word each in the original, so the rest of a frame
+// that rescaled reads the new Size: the flight role's copies follow at once [DESIGN].
+void size_sync(Runtime& r) {
+    if (!r.world) return;
+    r.g.size = r.world->size;
+    r.view.shift = r.world->shift;
+}
+
+void DefaultActions::rescale_step(int d) {
+    Runtime& r = rt();
+    if (!r.world || !g_rescale_host) {
+        todo_once("rescale " + std::to_string(d) + " without the drawing side", "seg10:0x9a2a");
+        return;
+    }
+    world::rescale_step(*r.world, d, *g_rescale_host);  // seg10:0x9a2a(d) [BYTES seg11:0x7207 seg11:0x7266]
+    size_sync(r);
+}
+
+void DefaultHost::size_reread() {
+    Runtime& r = rt();
+    if (!r.world || !g_rescale_host) {
+        todo_once("the INI Size reread without the drawing side", "seg10:0x7f88");
+        return;
+    }
+    world::size_reread(*r.world, *g_rescale_host);  // seg10:0x7f88 [BYTES seg7:0xb7a]
+    size_sync(r);
+}
+
 void DefaultActions::speed_step(int d) {
     Runtime& r = rt();
     const int rate = speed_step_rate(g.scheduler.rate(), d);
@@ -1032,6 +1069,34 @@ void bind_flight_world(World* w) {
             w->roles.ships);  // DGROUP:0x9324
     else
         audio::set_world_source(nullptr, nullptr, -1);
+    // seg10:0x7896's player point, the Size wrap's centre and Size, and the activity rectangles
+    // (audio/wave_view.h; M4 s8 sound track) [BYTES seg10:0x78d0-0x78e0 seg10:0x77e0-0x781d
+    // seg10:0x7914-0x792b].
+    if (w)
+        audio::set_wave_view([](audio::WaveView& v) {
+            Runtime& rr = rt();
+            const World* ww = rr.world;
+            if (!ww) return false;
+            const int ships = ww->roles.ships;  // DGROUP:0x9324
+            if (ww->player < 0 || ww->player >= ww->pools.records(ships)) return false;
+            const ObjectRecord& o = ww->pools.rec(ships, ww->player);  // record DGROUP:0x9646
+            v.x = o.x;
+            v.y = o.y;
+            v.scr_x = o.scr_x;
+            v.scr_y = o.scr_y;
+            v.size = ww->size;                    // DGROUP:0x9156
+            v.rect_count = rr.view.active_count;  // DGROUP:0x9158
+            for (int i = 0; i < 4; ++i) {
+                const ViewRect& a = rr.view.active[static_cast<std::size_t>(i)];  // DGROUP:0x23e0
+                v.rects[i][0] = a.left;
+                v.rects[i][1] = a.top;
+                v.rects[i][2] = a.right;
+                v.rects[i][3] = a.bottom;
+            }
+            return true;
+        });
+    else
+        audio::set_wave_view(nullptr);
     // The flight globals stand for DGROUP words and live for the run, as DGROUP does (the 0 ... 8
     // cycle DGROUP:0x95f6 runs on across waves); the INI keys are read again for the new wave
     // [DESIGN].
@@ -1039,6 +1104,48 @@ void bind_flight_world(World* w) {
 }
 void set_update_host(UpdateHost* host) { rt().host = host; }
 void set_key_actions(KeyActions* actions) { rt().default_actions.hud = actions; }
+void set_rescale_host(RescaleHost* host) { g_rescale_host = host; }
+// seg10:0x7f88 on DGROUP:0x9156's one home, the program's World (world/hooks.h current()), for
+// the Options dialog's seg10:0x7f58 and ordinal 10's tail seg10:0x8409 (src/dialogs/hooks.cpp).
+void program_size_reread() {
+    if (!g_rescale_host) {
+        todo_once("the INI Size reread without the drawing side", "seg10:0x7f88");
+        return;
+    }
+    world::size_reread(current(), *g_rescale_host);  // [BYTES seg10:0x7f58 seg10:0x8409]
+    size_sync(rt());
+}
+void program_load_size_reread(int ini_size) {
+    if (g_rescale_host) {
+        world::load_size_reread(current(), *g_rescale_host);  // [BYTES seg9:0x23e4-0x2418]
+    } else {
+        // No drawing side (the host tests): the INI's Size and shift only, the table untouched.
+        struct IniOnly final : RescaleHost {
+            int v;
+            explicit IniOnly(int s) : v(s) {}
+            int ini_size() override { return v; }
+        } h(ini_size);
+        world::load_size_reread(current(), h);
+    }
+    size_sync(rt());
+}
+void program_new_game_logo() {
+    if (g_rescale_host) world::new_game_logo(current(), *g_rescale_host);  // [BYTES seg9:0xd38-0xd5c]
+}
+void program_icon_overlays() {
+    Runtime& r = rt();
+    if (!r.world) return;
+    r.collide_host.u = &r.h();
+    CollideCtx x = program_collide_ctx(r);
+    icon_overlay_pass(x);  // seg9:0x94ba [BYTES seg10:0x9fb3]
+}
+void program_icon_crack(int i) {
+    Runtime& r = rt();
+    if (!r.world) return;
+    r.collide_host.u = &r.h();
+    CollideCtx x = program_collide_ctx(r);
+    icon_damage(x, 0, i, 0);  // seg7:0x233c(0, i, 0): no sound, no rand() [BYTES seg10:0x9fbf-0x9fd7]
+}
 WaveLinks& wave_links() { return g_links; }
 void set_zoom_source(std::function<std::int32_t()> zoom) { rt().zoom = std::move(zoom); }
 void wave_started() {

@@ -11,6 +11,7 @@
 // Settings lives in its own header so music.h's namespace is::audio::music and the function
 // is::audio::music below never meet in one translation unit [DESIGN] (a C++ name cannot be both).
 #include "audio/settings.h"
+#include "audio/wave_view.h"
 
 namespace is::assets {
 class AssetStore;
@@ -28,7 +29,9 @@ void reread_settings(const Settings&);  // command 10 and the dialogs' reloads
 int play(int id);  // INSPACE seg10:0x744c(id): the 0x69 reset then the id
 // INSPACE seg10:0x754a(id, x, y, mode): the modes, p/q derivation and the two-step sequences.
 int play_at(int id, int x, int y, int mode, std::uint32_t now);
-// INSPACE seg10:0x7b48: the per-frame ordinal 8 update and the pending second sound.
+// INSPACE seg10:0x7b48: the per-frame ordinal 8 update and the pending second sound. The
+// caller's (x, y), the play-area centre, are not read: the player's points come from
+// set_wave_view (M4 s8) [DESIGN].
 void frame(int x, int y, std::uint32_t now);
 // INSPACE seg10:0x7480(track, flag): tracks and control codes -1, -2, -3, -5.
 void music(int track, int wait);
@@ -68,5 +71,16 @@ int channels();
 // (the screens outside a wave play every source from the stand-in point). Kept across init.
 void set_world_source(std::function<bool(int mode, int a, int b, int& x, int& y)> source,
                       std::function<void(int& x, int& y)> to_view, int pool_count);
+
+// ---- M4 stage 8 sound track additions to the contract.
+// The rest of what seg10:0x754a, seg10:0x7944 and seg10:0x7b48 read in a wave (wave_view.h):
+// the player's world point, which seg10:0x7896's distance seg8:0x285a measures from, its screen
+// point and Size for the Size wrap, and the activity rectangles seg10:0x7896 tests the source
+// point against. `view` fills the struct and returns true while a wave runs; an empty function
+// or false makes every point near and leaves points unwrapped. Kept across init.
+void set_wave_view(std::function<bool(WaveView&)> view);
+// The last play_at call for the log: seg10:0x7896's q (-2 when the call returned before it) and
+// whether ordinal 9 played (its result is 1 only for a priority play) [DESIGN]. False before init.
+bool last_call(int& q, bool& played);
 
 }  // namespace is::audio

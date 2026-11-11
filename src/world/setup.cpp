@@ -1741,6 +1741,12 @@ void place(World& w, SetupHost& h) {
     // [BYTES seg9:0x6901 seg9:0x6906 seg9:0x6909] (M4 s3 ROSTER, claim 25).
     if (w.kind == 6) refuel_all(w);
     w.w1e6c = w.clock + 10000;
+    // `sub eax, eax; mov dword [0x6da8], eax`: the re-entry deadline cleared at every placement,
+    // so a watch store of the tick (player_tick.cpp reentry_watch) whose step 20 has not run
+    // when a wave ends does not reach the next wave [BYTES seg9:0x694a-0x694d] (M4 s8 fixer,
+    // review M2). The frame's FrameGlobals::dg_6da8 takes it at the next sync
+    // (flight_hooks.cpp, ambulance.cpp).
+    ambulance_state().reentry_due = 0;
     // seg11:0xae94 and seg11:0x2f8c (the weapon picture) run only for wave 1 or a restored game;
     // the program runs them at the wave start (src/hud/wave_win32.cpp) [BYTES seg9:0x6951
     // seg9:0x6958 seg9:0x695c seg9:0x695e seg9:0x6963] (M3 s4 fixer, review M6).
@@ -1790,6 +1796,19 @@ struct BriefingIcons {
 
 }  // namespace
 
+void icon_overlay_pass(CollideCtx& x) {
+    World& w = x.w;
+    for (int k = 0; k < kIconRecords; ++k) {
+        const std::int8_t mark = w.dir().sbyte(static_cast<std::size_t>(0x1c8 + k));  // `cbw` [BYTES seg9:0x94cd-0x94eb]
+        if (mark != 0) icon_overlay(x, k, mark - 1);  // seg7:0x2512(k, byte - 1) [BYTES seg9:0x94ef]
+        if (w.dir().byte(static_cast<std::size_t>(0x1c8 + k)) == 2 && k < w.pools.records(kPoolIcons))
+            w.pools.rec(kPoolIcons, k).flame = 0x9c;  // [BYTES seg9:0x94f7-0x9519]
+        // A kind-2 wave virus-marks the icons: all without rand() at DGROUP:0x9334 = 0, else one in
+        // three [BYTES seg9:0x951e-0x9545].
+        if (w.kind == 2 && (w.score_level == 0 || rmod(x.rng.rand(), 3) == 0)) icon_overlay(x, k, 0);
+    }
+}
+
 void enter_briefing(World& w, SetupHost& h) {
     // seg9:0x5cca [BYTES seg9:0x5cca]
     w.placed = 0;  // DGROUP:0x93b0 = 0 [BYTES seg9:0x5d24]
@@ -1814,17 +1833,11 @@ void enter_briefing(World& w, SetupHost& h) {
     // [BYTES seg9:0x5d70-0x5d8b].
     for (int k = 0; k < kIconRecords; ++k) icon_damage(bi.x, 0, k, 0);
     w.w8e34.fill(-1);  // [BYTES seg9:0x5d8d-0x5da4]
-    // seg10:0x6308(0xd, -1, -1, -1) [OPEN] [BYTES seg9:0x5da6-0x5db3]; seg9:0x94ba [BYTES seg9:0x94ba]
-    // (verified claims 21, 22):
-    for (int k = 0; k < kIconRecords; ++k) {
-        const std::int8_t mark = w.dir().sbyte(static_cast<std::size_t>(0x1c8 + k));  // `cbw` [BYTES seg9:0x94cd-0x94eb]
-        if (mark != 0) icon_overlay(bi.x, k, mark - 1);  // seg7:0x2512(k, byte - 1) [BYTES seg9:0x94ef]
-        if (w.dir().byte(static_cast<std::size_t>(0x1c8 + k)) == 2 && k < w.pools.records(kPoolIcons))
-            w.pools.rec(kPoolIcons, k).flame = 0x9c;  // [BYTES seg9:0x94f7-0x9519]
-        // A kind-2 wave virus-marks the icons: all without rand() at DGROUP:0x9334 = 0, else one in
-        // three [BYTES seg9:0x951e-0x9545].
-        if (w.kind == 2 && (w.score_level == 0 || rmod(h.rng.rand(), 3) == 0)) icon_overlay(bi.x, k, 0);
-    }
+    // seg10:0x6308(0xd, -1, -1, -1) [BYTES seg9:0x5da6-0x5db3] (hud/icon_images.h
+    // IconImages::strip_rescale) (M4 s8 SIZE-SITES); seg9:0x94ba [BYTES seg9:0x94ba] (verified
+    // claims 21, 22).
+    icon_draw(IconStripRescalePlan{w.size});
+    icon_overlay_pass(bi.x);
     defer_icon_plans(false);
     w.w9130 = 0;
     w.w913a = 0;

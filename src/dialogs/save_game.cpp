@@ -5,6 +5,7 @@
 
 #include "nav/dir_bytes.h"
 #include "nav/tree.h"
+#include "world/rescale.h"
 #include "world/roster.h"
 #include "world/world.h"
 
@@ -284,7 +285,9 @@ void install(Ctx& c, Parsed& p) {
         c.s.size = sx(h.size);
         w.size = static_cast<std::int16_t>(c.s.size);
         c.host.ini_set_int("Size", c.s.size);
-        c.g.w92e2 = 1;
+        // DGROUP:0x92e2 = 1: the next load rereads INI `Size` and makes every image again
+        // (world/rescale.h load_size_reread) [BYTES seg6:0x95ed] (M4 s8 fixer, review H1, L4).
+        world::size_session().dg_92e2 = 1;
     }
     // Step 7 in the reader's order [BYTES seg6:0x95f3-0x9856].
     c.s.game_id = h.game_id;

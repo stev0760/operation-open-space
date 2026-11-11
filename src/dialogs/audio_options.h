@@ -310,9 +310,14 @@ inline int play(int id) {
 inline int play_at(int id, int x, int y, int mode) {
     const std::uint32_t now = app::now_tick();
     const int r = audio::play_at(id, x, y, mode, now);
-    char buf[128];
-    std::snprintf(buf, sizeof buf, "sound 0x%x seg10:0x754a(%d, %d, %d) -> %d at %lu ms", id, x,
-                  y, mode, r, static_cast<unsigned long>(now));
+    // q is seg10:0x7896's result and `played` whether the sound started: r is 1 only for a
+    // priority play (sound.md "Playing" step 8), so r = 0 is not a refusal (M4 s8) [DESIGN].
+    int q = -2;
+    bool played = false;
+    audio::last_call(q, played);
+    char buf[160];
+    std::snprintf(buf, sizeof buf, "sound 0x%x seg10:0x754a(%d, %d, %d) -> %d at %lu ms q=%d played=%d",
+                  id, x, y, mode, r, static_cast<unsigned long>(now), q, played ? 1 : 0);
     log_call(buf);
     return r;
 }

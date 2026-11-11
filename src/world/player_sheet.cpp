@@ -9,6 +9,7 @@
 #include "world/damage.h"
 #include "world/design_words.h"
 #include "world/missile.h"
+#include "world/rescale.h"
 #include "world/roster.h"
 #include "world/shots.h"
 #include "world/world.h"
@@ -110,6 +111,32 @@ std::int16_t sheet_scale_flag(int size_level, int w6, int sel) {
     return (size_level >= 2 && w6 != -1 && sel == 0) ? 1 : 0;
 }
 
+bool sheet_rescales(int size_level, int gap_word, int sel, int dg_9130) {
+    const bool flag = gap_word < 100;  // [bp-0x14] [BYTES seg10:0x6ef4 seg10:0x6f12-0x6f1c]
+    if (dg_9130 != 0 || !flag) return false;  // [BYTES seg10:0x6fba-0x6fc5]
+    return size_level != 2 || sel != 0;       // [BYTES seg10:0x6fc7-0x6fd2]
+}
+
+SheetPixels rescaled_sheet_pixels(const SheetPixels& px, int size_level) {
+    if (size_level == 1 || px.w <= 0 || px.h <= 0 ||
+        px.index.size() < static_cast<std::size_t>(px.w) * px.h)
+        return px;
+    const int W = size_scaled(lo16(px.w), size_level), H = size_scaled(lo16(px.h), size_level);
+    SheetPixels r;
+    r.source_height = px.source_height;
+    r.w = W > 0 && H > 0 ? W : 1;  // a zero extent makes a 1 x 1 bitmap, as rescale_image's
+    r.h = W > 0 && H > 0 ? H : 1;
+    r.index.assign(static_cast<std::size_t>(r.w) * r.h, 0);  // PatBlt BLACKNESS
+    if (W <= 0 || H <= 0) return r;
+    const std::vector<int> mx = gfx::gdi_stretch_map(px.w, W, false), my = gfx::gdi_stretch_map(px.h, H, true);
+    for (int y = 0; y < H; ++y)
+        for (int x = 0; x < W; ++x)
+            r.index[static_cast<std::size_t>(y) * W + x] =
+                px.index[static_cast<std::size_t>(my[static_cast<std::size_t>(y)]) * px.w +
+                         mx[static_cast<std::size_t>(x)]];
+    return r;
+}
+
 SheetPixels unrotated_sheet(const std::vector<std::uint8_t>& src, int src_w, int src_h,
                             const SheetRequest& req) {
     SheetPixels px;
@@ -172,6 +199,14 @@ SheetBuild build_ship_sheet(Blitter& out, ImageSlotTable& images, ShipRecord& sh
         b.rendered = slot != 0;
         b.bm_height = static_cast<std::int16_t>(px.h);
         if (b.rendered) b.pixels = px;
+        // seg10:0x6ee6's seg10:0x6308(slot, -1, -1, -1) [BYTES seg10:0x6fd4-0x6fe1] (M4 s8 SIZE-SITES):
+        // the slot's image through the Blitter, the port's pixels through rescaled_sheet_pixels.
+        if (b.rendered && req.size_level != 1 && sheet_rescales(req.size_level, req.gap_word, req.sel)) {
+            std::int16_t dg_740 = 0;  // the sheet slots never set it
+            rescale_image(out, images, req.slot, kDcNone, -1, req.size_level, dg_740);
+            b.pixels = rescaled_sheet_pixels(b.pixels, req.size_level);
+            b.bm_height = static_cast<std::int16_t>(b.pixels.h);  // GetObject at seg14:0xd59
+        }
     }
     b.dc = slot;
     // Ordinal 5 after the render and the gap [BYTES seg10:0x86d7 seg14:0x12d8 seg14:0x12e0].
@@ -208,6 +243,7 @@ bool load_weapon_sheet(Blitter& out, ImageSlotTable& images, Pools& pools, Weapo
     const WeaponSlotChoice ch = weapon_image_slot(words, images, pools, w);  // [BYTES seg10:0x533a-0x5445]
     if (!ch.load || ch.slot < 0 || ch.slot >= kImageSlots) return false;
     std::uint16_t& slot = images[static_cast<std::size_t>(ch.slot)];
+    std::int16_t dg_740 = 0;  // the weapon slots never set it
     if (words.word(w, 0x06) == 4) {
         // seg10:0x4412(k, 6, W(w)-2, W(w)+0x26) into the empty slot [BYTES seg10:0x5449-0x5461]
         if (!anim4) {
@@ -215,6 +251,8 @@ bool load_weapon_sheet(Blitter& out, ImageSlotTable& images, Pools& pools, Weapo
             return false;
         }
         slot = anim4(ch.slot, kPoolMissiles, words.word(w, -2), words.word(w, 0x26));
+        // seg10:0x4412's tail seg10:0x6308(k, -1, -1, -1) [BYTES seg10:0x4630-0x463d] (M4 s8 SIZE-SITES).
+        if (slot != kDcNone) rescale_image(out, images, ch.slot, kDcNone, -1, size_level, dg_740);
         return slot != kDcNone;
     }
     SheetRequest req;
@@ -237,8 +275,12 @@ bool load_weapon_sheet(Blitter& out, ImageSlotTable& images, Pools& pools, Weapo
         slot = 0;
     }
     SheetPixels px;
-    if (render && render(req, px) && px.w > 0 && px.h > 0)
+    if (render && render(req, px) && px.w > 0 && px.h > 0) {
         slot = out.create_image_from(px.w, px.h, px.index);  // [BYTES seg10:0x6f7f seg10:0x6f89]
+        // seg10:0x6ee6's rescale [BYTES seg10:0x6fd4-0x6fe1] (M4 s8 SIZE-SITES).
+        if (slot != 0 && sheet_rescales(size_level, req.gap_word, sel))
+            rescale_image(out, images, ch.slot, kDcNone, -1, size_level, dg_740);
+    }
     return slot != 0;
 }
 
@@ -635,14 +677,18 @@ void shield_render(Blitter& out, const ImageSlotTable& images, World& w, int i, 
                 out.delete_image(tmp);
             }
         }
-        if (copy && b.w > 0 && b.h > 0)  // nearest-neighbour for a stretch [DESIGN]
+        if (copy && b.w > 0 && b.h > 0) {  // a stretch as GDI's (gfx::gdi_stretch_map) (M4 s8 SIZE-SITES)
+            const std::vector<int> mx = b.stretch ? gfx::gdi_stretch_map(b.sw, b.w, false) : std::vector<int>{};
+            const std::vector<int> my = b.stretch ? gfx::gdi_stretch_map(b.sh, b.h, true) : std::vector<int>{};
             for (int y = 0; y < b.h; ++y)
                 for (int x = 0; x < b.w; ++x) {
                     const int tx = b.x + x, ty = b.y + y;
                     if (tx < 0 || ty < 0 || tx >= copy->w || ty >= copy->h) continue;
-                    copy->index[static_cast<std::size_t>(ty) * copy->w + tx] =
-                        cells.at(it, b.sx + x * b.sw / b.w, b.sy + y * b.sh / b.h);
+                    const int ux = b.stretch ? mx[static_cast<std::size_t>(x)] : x;
+                    const int uy = b.stretch ? my[static_cast<std::size_t>(y)] : y;
+                    copy->index[static_cast<std::size_t>(ty) * copy->w + tx] = cells.at(it, b.sx + ux, b.sy + uy);
                 }
+        }
     }
 }
 

@@ -14,8 +14,9 @@ namespace is::world {
 
 // seg13:0x4710(ship) [BYTES seg13:0x4710-0x498d] (verified claims 28, 29):
 //  - seg10:0x754a(0x6a, DGROUP:0x9324, ship, 1);
-//  - graphic #230 through seg10:0x6c02(0xe6, 0, -1) and its mask (seg10:0x6ec6); the rescale
-//    seg10:0x6308(-1, -1, bitmap, -1) at Size != 1 is not ported [OPEN];
+//  - graphic #230 through seg10:0x6c02(0xe6, 0, -1), seg10:0x6308(-1, -1, bitmap, -1) at `Size`
+//    (rock_images.h rescale_bitmap: 160 x 32 becomes 320 x 64 or 80 x 16, five cells of p) and
+//    its mask (seg10:0x6ec6) [BYTES seg13:0x4740-0x4762] (M4 s8 SIZE-SITES);
 //  - the mask of the ship's sheet, image slot 0x28 + ship (DGROUP:0x3a38 + 2 ship), SRCAND with
 //    itself shifted up by (9 << Size) >> 1 rows over 16 size + 17 gap x size + 2 gap: the
 //    silhouette and its copy 9 px higher;

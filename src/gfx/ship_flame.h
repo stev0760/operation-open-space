@@ -114,8 +114,8 @@ FlameBitmap flame_bitmap_for(const fmt::Dib& flame, PaletteManager& pm, PalHandl
 // the vertical flip of 0, heading 12 the horizontal flip of 4, and for k = 1 ... 3 heading 8 - k
 // the vertical flip, k + 8 the 180-degree turn and 16 - k the horizontal flip of k [BYTES
 // seg10:0x70a4-0x72a7]. The copies StretchBlt cells of s = ordinal 18's cell to f; at Size 1
-// (f = 9 = s) they are exact. seg10:0x6308's rescale of the bitmap at other sizes is [OPEN]; the
-// port stretches nearest-neighbour then [DESIGN].
+// (f = 9 = s) they are exact. At other sizes seg10:0x7032 first rescales the bitmap
+// (gfx/ship_quick.h rescaled_flame_bitmap), so the copies take cells of f = s (M4 s8 SIZE-SITES).
 struct FlameHeadings {
     int f = 0;
     int width = 0, height = 0;  // 16 f x 2 f

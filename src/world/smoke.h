@@ -36,10 +36,11 @@ constexpr int kSmokeLife = 0x37;        // the counter that frees a record (55 c
 // bitmap DGROUP:0x3ae8), PatBlt BLACKNESS; then for k = 0 ... 5 the band at (0, y_k) of
 // 6(k + 5) x 2(k + 5) to (3 y_k, 0), y_0 = 0, y_{k+1} = y_k + 2(k + 5) (bands at x = 0, 30, 66,
 // 108, 156, 210); the source freed. The palette DGROUP:0x920e selected into both DCs is the
-// renderer's (ADR 0007); the rescale seg10:0x6308(12, -1, -1, -1) at Size != 1 is not ported
-// [OPEN], like the other slots'. The chain runs it only while DGROUP:0x3a00 is 0 [BYTES
-// seg9:0x265c seg9:0x2696] (shell.md "Load"): the port tests slot 12 here.
-void build_smoke_image(Blitter& out, ImageSlotTable& images);
+// renderer's (ADR 0007). Last, seg10:0x6308(12, -1, -1, -1) at `size_level` (DGROUP:0x9156,
+// rescale.h rescale_image) [BYTES seg10:0x5322-0x532e]: 540 x 44 at Size 2, 135 x 11 at Size 0
+// (M4 s8 SIZE-SITES). The chain runs it only while DGROUP:0x3a00 is 0 [BYTES seg9:0x265c
+// seg9:0x2696] (shell.md "Load"): the port tests slot 12 here.
+void build_smoke_image(Blitter& out, ImageSlotTable& images, int size_level = 1);
 
 // The placement seg9:0x6624's part: counter -1 for k < 20, no other field [BYTES
 // seg9:0x6747-0x675d] (verified claim 36). The set-up calls it (setup.cpp); DGROUP:0x9456 = 0 is

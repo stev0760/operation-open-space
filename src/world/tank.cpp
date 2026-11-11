@@ -2,6 +2,7 @@
 #include "world/tank.h"
 
 #include "world/capture.h"
+#include "world/rescale.h"
 #include "world/update.h"
 
 namespace is::world {
@@ -206,7 +207,8 @@ std::int16_t tank_dissolve(World& w, int i, const DissolveOut& d) {
 }
 
 // seg10:0x565a [BYTES seg10:0x565a-0x58cd]
-void build_tank_image(Blitter& out, ImageSlotTable& images, std::int16_t w9214, std::int16_t& made_for) {
+void build_tank_image(Blitter& out, ImageSlotTable& images, std::int16_t w9214, std::int16_t& made_for,
+                      int size_level) {
     DcId& dc = images[kSlotTank];
     if (dc != kDcNone) {  // [BYTES seg10:0x5667-0x5682]
         if (made_for == w9214) return;
@@ -228,11 +230,15 @@ void build_tank_image(Blitter& out, ImageSlotTable& images, std::int16_t w9214, 
     if (dc == kDcNone) return;
     out.pat_blt(dc, 0, 0, width, height, kBlackness);  // [BYTES seg10:0x575d-0x577d]
     const DcId gr = out.load_graphic(id, 0, -1);        // seg10:0x6c02(id, 0, -1) [BYTES seg10:0x5846-0x5856]
-    if (gr == kDcNone) return;
-    for (int k = 0; k < 5; ++k)  // [BYTES seg10:0x5782-0x57c2]
-        out.bit_blt(dc, (g + s) * k + g, g, s, s, gr, s * k, 0, kSrcCopy);
-    out.delete_image(gr);  // [BYTES seg10:0x580e-0x5836]
-    // seg10:0x6308(4, -1, -1, -1), the rescale at Size != 1 [OPEN] [BYTES seg10:0x58bb-0x58c4].
+    if (gr != kDcNone) {
+        for (int k = 0; k < 5; ++k)  // [BYTES seg10:0x5782-0x57c2]
+            out.bit_blt(dc, (g + s) * k + g, g, s, s, gr, s * k, 0, kSrcCopy);
+        out.delete_image(gr);  // [BYTES seg10:0x580e-0x5836]
+    }
+    // seg10:0x6308(4, -1, -1, -1) after the graphic loop [BYTES seg10:0x58bb-0x58c4] (M4 s8
+    // SIZE-SITES).
+    std::int16_t dg_740 = 0;  // slot 4 never sets it
+    rescale_image(out, images, kSlotTank, kDcNone, -1, size_level, dg_740);
 }
 
 }  // namespace is::world

@@ -45,7 +45,8 @@ struct SaveGlobals {
     // DGROUP:0xa14d / 0xa157 (header +0x174, +0x17e) and DGROUP:0xa161 (+0x188) are the World's
     // (ba14d, ba157, ba161, M4 s3 ROSTER).
     std::uint8_t a162 = 0;                 // DGROUP:0xa162 (header +0x189)
-    std::int16_t w92e2 = 0;                // DGROUP:0x92e2: 1 after a restore changed Size
+    // DGROUP:0x92e2 lives in world/rescale.h (SizeSession::dg_92e2), its one home (M4 s8 fixer,
+    // review L4).
     std::int16_t w951c = 0, w104c = 0, w104e = 0;  // cleared by a restore [BYTES seg6:0x98b9-0x98c4]
     // The granularity the game's file was read with; a new game's is 32 (ADR 0014 decision 1).
     fmt::save::Granularity granularity = fmt::save::kNewGameGranularity;

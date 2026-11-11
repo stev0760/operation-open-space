@@ -2,6 +2,7 @@
 #include "world/pods.h"
 
 #include "world/capture.h"
+#include "world/rescale.h"
 #include "world/update.h"
 
 namespace is::world {
@@ -199,7 +200,7 @@ std::int16_t pod_dissolve(World& w, int pool, int rec, const DissolveOut& d,
 }
 
 // seg10:0x42ee [BYTES seg10:0x42ee-0x440a]
-void build_pod_image(Blitter& out, ImageSlotTable& images) {
+void build_pod_image(Blitter& out, ImageSlotTable& images, int size_level) {
     DcId& dc = images[kSlotPod];
     if (dc != kDcNone) return;  // [BYTES seg10:0x42fb-0x4300]
     dc = out.create_image(0x59, 0x21);  // [BYTES seg10:0x434b-0x4365]
@@ -211,6 +212,9 @@ void build_pod_image(Blitter& out, ImageSlotTable& images) {
         out.bit_blt(dc, 0x1c * k + 5, 5, 0x17, 0x17, gr, 0, 0, kSrcCopy);
         out.delete_image(gr);
     }
+    // seg10:0x6308(0x1d, -1, -1, -1) [BYTES seg10:0x43fe-0x440a] (M4 s8 SIZE-SITES).
+    std::int16_t dg_740 = 0;  // slot 0x1d never sets it
+    rescale_image(out, images, kSlotPod, kDcNone, -1, size_level, dg_740);
 }
 
 }  // namespace is::world

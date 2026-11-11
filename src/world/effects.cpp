@@ -2,6 +2,8 @@
 // arithmetic is 16-bit where the original's is (ADR 0013 decision 7).
 #include "world/effects.h"
 
+#include "world/rescale.h"
+
 #include "world/missile.h"
 
 #include "world/collide.h"
@@ -63,14 +65,21 @@ const std::array<std::uint32_t, kEffectBrushes> kEffectBrushColours = {
     0xffc400u, 0x0000a0u, 0x0000c4u, 0x0020dfu, 0x0060ffu, 0x0080ffu};
 
 // seg10:0x5102 [BYTES seg10:0x5110-0x51f6]
-void build_effect_images(Blitter& out, ImageSlotTable& images, std::int16_t enhance) {
+void build_effect_images(Blitter& out, ImageSlotTable& images, std::int16_t enhance, int size_level) {
     if (images[ix(kSlotExplosion)] != kDcNone && images[ix(kSlotSnowball)] != kDcNone) return;
     // i = 0: slot 10, #170, mode 2 with `Enhance` else 0, arg 1 [BYTES seg10:0x51de-0x51f6
-    // seg10:0x5128 seg10:0x512d]; i = 1: slot 11, #175 (0, -1) [BYTES seg10:0x513a-0x5149].
-    if (images[ix(kSlotExplosion)] == kDcNone)  // [BYTES seg10:0x5163]
+    // seg10:0x5128 seg10:0x512d]; i = 1: slot 11, #175 (0, -1) [BYTES seg10:0x513a-0x5149]. Each
+    // load is followed by seg10:0x6308(slot, -1, -1, -1) [BYTES seg10:0x51b9-0x51c6], whose flag
+    // word DGROUP:0x740 these slots never set (M4 s8 SIZE-SITES).
+    std::int16_t dg_740 = 0;
+    if (images[ix(kSlotExplosion)] == kDcNone) {  // [BYTES seg10:0x5163]
         images[ix(kSlotExplosion)] = out.load_graphic(kGraphicExplosion, enhance != 0 ? 2 : 0, 1);
-    if (images[ix(kSlotSnowball)] == kDcNone)
+        rescale_image(out, images, kSlotExplosion, kDcNone, -1, size_level, dg_740);
+    }
+    if (images[ix(kSlotSnowball)] == kDcNone) {
         images[ix(kSlotSnowball)] = out.load_graphic(kGraphicSnowball, 0, -1);
+        rescale_image(out, images, kSlotSnowball, kDcNone, -1, size_level, dg_740);
+    }
 }
 
 bool in_play_area(std::int16_t x, std::int16_t y, std::int16_t W, std::int16_t H) {

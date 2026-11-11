@@ -58,6 +58,17 @@ VisitLayout visit_layout(int W, int client_h, int play_h) {
 
 VisitLayout visit_layout(int W, int H) { return visit_layout(W, H, H); }
 
+std::int16_t visit_strip_shift(const World& w) {
+    // mov cl, byte [0x959e]; imul si, [0x9646], 0x70; les bx, [0x1e30]; mov ax, es:[bx+si+0x22];
+    // shl ax, 3; sar ax, cl [BYTES seg16:0xe54 seg16:0x2059-0x206f seg16:0x2615-0x262b]
+    // The far pointer DGROUP:0x1e30 is pool 14's (DGROUP:0x1df8 + 4·14), read as such, not
+    // through DGROUP:0x9324 (pitfalls.md "The ship pool is DGROUP:0x9324").
+    constexpr int kPool14 = 14;
+    const int cl = static_cast<std::uint8_t>(ambulance_state().pickup_size) & 0x1f;
+    if (w.player < 0 || w.pools.records(kPool14) <= w.player) return 0;  // [DESIGN] storage bound
+    return sar16(shl16(w.pools.rec(kPool14, w.player).size, 3), cl);
+}
+
 bool visit_pace_gate(const VisitState& v) { return v.left_on != 0 && v.left_mode == 1; }
 bool visit_pace_slow(const VisitState& v) { return v.phase == 1 && v.descent == 0; }
 
@@ -567,8 +578,7 @@ void visit(VisitCtx& c, int repaint) {
         break;
     case 2: {  // [BYTES seg16:0xdc1-0xf55] (verified claims 7-8)
         const int x = idiv16(lo16(v.lay.W), 2) - idiv16(lo16(v.s4), 2);
-        const ObjectRecord& o = c.w.ship_object(c.w.player);
-        const int sh = static_cast<std::int16_t>(shl16(o.size, 3)) >> (c.w.size & 0x1f);  // DGROUP:0x959e [OPEN: Size at the pickup]
+        const int sh = visit_strip_shift(c.w);  // DGROUP:0x959e, the pickup's Size [BYTES seg16:0xe54] (M4 s8 SIZE-SITES)
         c.scr.ship_on_pad(v.lay, x, v.end_y + 2, v.s4, sh);
         v.strip_saved = true;
         fmt(c, 1184, served_d(c));  // "%D HAS LANDED.."

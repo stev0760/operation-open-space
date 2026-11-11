@@ -307,7 +307,9 @@ void read_inputs(World& w, bool new_entry) {
     w.H = static_cast<std::int16_t>(g.area.play_h);
     if (g.ini) {
         const auto& k = settings::kGameSection;
-        w.size = static_cast<std::int16_t>(g.ini->get_int(k, "Size", 1));       // DGROUP:0x9156
+        // DGROUP:0x9156 is not read here: its INI reads are the start-up's (seg6:0xaf8,
+        // dialogs/hooks.cpp) and the load's DGROUP:0x92e2 reread (state1, rescale.h
+        // load_size_reread) [BYTES seg6:0xaf8-0xb07 seg9:0x23e4-0x2418] (M4 s8 fixer, review H1).
         w.detail = static_cast<std::int16_t>(g.ini->get_int(k, "Detail", 3));   // DGROUP:0x9208
         w.complex = static_cast<std::int16_t>(g.ini->get_int(k, "Complex", 0)); // DGROUP:0x8ff8
         std::string path = g.ini->get_string(k, "Path", "", 100);               // DGROUP:0x8f7a
@@ -336,8 +338,6 @@ void read_inputs(World& w, bool new_entry) {
     // DGROUP:0x8ffe, the dissolve step of the same routine seg6:0xdaa (capture.h dissolve_step_for)
     // (M4 s2 CAPTURE) [BYTES seg6:0xe41 seg6:0xe4f seg6:0xe5d seg6:0xe6b-0xe78].
     w.w8ffe = dissolve_step_for(w.detail, w.w8ffe);
-    if (w.size < 0 || w.size > 2) w.size = 1;
-    w.shift = static_cast<std::int16_t>(4 - w.size);  // DGROUP:0x9150
     w.play_mode = static_cast<std::int16_t>(g.play_mode);
     w.w920c = static_cast<std::int16_t>(g.edition.edition);  // DGROUP:0x920c (shell.md "Editions")
     w.w11aa = static_cast<std::int16_t>(g.edition.plus);     // DGROUP:0x11aa (shell/edition.h)
@@ -485,6 +485,11 @@ void state1(shell::GameState&) {
     World& w = g_world;
     bolt_state().pending = 0;  // DGROUP:0x1016 = 0, not DGROUP:0x1036 (lightning.h, O13) [BYTES seg10:0x31] (M4 s7 RING)
     read_inputs(w, true);
+    // seg9:0x22b4(0)'s LOADING branch: the DGROUP:0x92e2 reread of INI `Size`, which frees the
+    // image table so the load's builders make every image at the new Size; without the flag the
+    // wave loads at the Size in force, and a pending DGROUP:0x103c rescales it in the first frame
+    // [BYTES seg9:0x22e9 seg9:0x23e4-0x2418] (M4 s8 fixer, review H1).
+    program_load_size_reread(g.ini ? g.ini->get_int(settings::kGameSection, "Size", 1) : 1);
     w.wave = static_cast<std::int16_t>(briefing::wave());
     auto h = make_host();
     state1_load(w, *h);
@@ -496,7 +501,13 @@ void briefing_entry() {
     World& w = g_world;
     read_inputs(w, false);
     w.wave = static_cast<std::int16_t>(briefing::wave());
-    if (g_loaded) new_game(w);  // seg9:0xc06 runs only on the state-change path
+    if (g_loaded) {
+        new_game(w);  // seg9:0xc06 runs only on the state-change path
+        // seg9:0xc06's tail: the logo strip made again at a Size other than 1 (slot 5, which the
+        // ambulance and the target picture read with Size-scaled words) [BYTES seg9:0xd38-0xd5c]
+        // (M4 s8 fixer, review H2).
+        program_new_game_logo();
+    }
     g_loaded = false;
     if (g_icons) g_icons->clear();
     auto h = make_host();
@@ -710,6 +721,7 @@ DeadlineResult run_wave_deadlines(shell::GameState& s) {
 }
 
 gfx::ImagePtr icon_strip() { return g_strip; }
+void rebuild_icon_strip() { build_strip(g_world); }
 
 }  // namespace is::world
 

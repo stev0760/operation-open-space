@@ -59,8 +59,9 @@ public:
     virtual void seg4_5e8e(int a, int b, int c, int d) { (void)a, (void)b, (void)c, (void)d; }
     virtual std::int16_t seg4_8d3a() { return -1; }  // the race's leading ship [OPEN M6]
     virtual void seg13_adbe(int ship, int a, int b) { (void)ship, (void)a, (void)b; }
-    // seg12:0xe5c(rec): the fuel tank's own dissolve step; its draw cases and the pool-4 mover
-    // that continues it are M4 stage 3 [OPEN] (s2-capture.md 4a, verified claim 32).
+    // seg12:0xe5c(rec): the fuel tank's own dissolve step, ported by tank.h tank_dissolve
+    // [BYTES seg12:0xe5c-0x129c]; the program's host (update.h CaptureForward) reaches it through
+    // UpdateHost::tank_dissolve, the default does nothing (s2-capture.md 4a, verified claim 32).
     virtual void seg12_e5c(int rec) { (void)rec; }
     // seg12:0x129e(pool, rec): the pod's and the pool-6 record's dissolve, ported by pods.h
     // pod_dissolve [BYTES seg12:0x129e-0x1774]; the program's host (update.h CaptureForward)

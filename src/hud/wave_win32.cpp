@@ -36,6 +36,8 @@
 #include "world/draw.h"
 #include "world/effects.h"
 #include "settings/settings.h"
+#include "world/damage.h"
+#include "world/design_words.h"
 #include "world/entry_effect.h"
 #include "world/flight_hooks.h"
 #include "world/hooks.h"
@@ -46,9 +48,12 @@
 #include "world/pods.h"
 #include "world/player_sheet.h"
 #include "world/purchases.h"
+#include "world/rescale.h"
 #include "world/roster.h"
 #include "world/rock_images.h"
 #include "world/setup.h"
+#include "world/shots.h"
+#include "world/smoke.h"
 #include "world/sprite.h"
 #include "world/tank.h"
 #include "world/tether.h"
@@ -72,6 +77,18 @@ StatusState g_status;
 gfx::ImagePtr g_strip;  // the strip image bound as g_draw.strip_dc
 std::set<std::string> g_logged;
 world::EntryTable g_entries;  // DGROUP:0x221c, the entry effects (world/entry_effect.h)
+// The player's last sheet build (seg16:0x3468 keeps the sheet of a later wave, build_player_sheet)
+// and the ship sheet of the rescale's ship block (ProgramRescaleHost::ship_sheet) [DESIGN].
+world::SheetBuild g_last_build;
+// Design word +0x04 (DGROUP:0x96d6 + 0xad·n) for designs 0 ... 7: seg14:0x0's store
+// (build_player_sheet) and the rescale's tail (world/rescale.h RescaleHost::design_word_04); the
+// flame anchors seg10:0x16ba read it [BYTES seg14:0xc42-0xc68 seg10:0xa015-0xa035] (M4 s8 integrate).
+std::array<std::int16_t, world::kShipCount> g_design_w04{};
+// DGROUP:0x8fe8, INI `Enhance` (default 1) as seg6:0xb3e reads it (formats.md) [DESIGN: read at
+// each use, as the port reads the other INI keys at the wave's entries].
+std::int16_t enhance_word() {
+    return static_cast<std::int16_t>(g.ini ? g.ini->get_int(settings::kGameSection, "Enhance", 1) : 1);
+}
 
 void todo_once(const std::string& what, const char* address) {
     if (g_logged.insert(what).second) app::log_todo(what, address);
@@ -426,9 +443,10 @@ void fill_weapon_words(const world::World& wd) {
 // DGROUP:0x39e8[k], then DeleteDC / DeleteObject of the graphic [BYTES seg10:0x45fd-0x4626]; the
 // palette restore at seg10:0x4602, which tests [bp-0xa] also with DGROUP:0x920e = 0, restores
 // nothing [DESIGN ADR 0016 decision 1]. The
-// original overwrites DGROUP:0x39e8[k]; the port frees the image it held [DESIGN]. seg10:0x6308(k,
-// -1, -1, -1) returns at once at `Size` 1 and is [OPEN] at the other sizes [BYTES seg10:0x463a].
-// player_sheet.h load_weapon_sheet calls it as its Anim4Renderer (M4 s5 WEAPONS).
+// original overwrites DGROUP:0x39e8[k]; the port frees the image it held [DESIGN].
+// seg10:0x6308(k, -1, -1, -1) [BYTES seg10:0x463a] runs in player_sheet.cpp load_weapon_sheet
+// after this renderer (M4 s8 SIZE-SITES). player_sheet.h load_weapon_sheet calls it as its
+// Anim4Renderer (M4 s5 WEAPONS).
 world::DcId anim4_sheet(int k, int pool, int id, int n) {
     if (!ready() || k < 0 || k >= world::kImageSlots) return world::kDcNone;
     const world::DcId graphic = g_blit->load_graphic(id, 3, -1);
@@ -441,7 +459,6 @@ world::DcId anim4_sheet(int k, int pool, int id, int n) {
     if (slot != world::kDcNone) g_blit->delete_image(slot);
     slot = render_anim4_sheet(*g_blit, graphic, plan);
     if (graphic != world::kDcNone) g_blit->delete_image(graphic);
-    if (w().size != 1) todo_once("seg10:0x6308 on the animation-4 sheet", "seg10:0x6308");
     app::log("hud: seg10:0x4412 sheet " + std::to_string(k) + " of graphic " + std::to_string(id) + ": h " +
              std::to_string(h) + ", n " + std::to_string(n) + ", " + std::to_string(plan.width) + " x " +
              std::to_string(plan.height) + ", gap " + std::to_string(plan.gap));
@@ -453,7 +470,7 @@ world::DcId anim4_sheet(int k, int pool, int id, int n) {
 // seg10:0x533a-0x5464].
 void weapon_image(int wpn) {
     if (!ready()) return;
-    const int quick = g.ini ? g.ini->get_int(settings::kGameSection, "Quick", 0) : 0;  // DGROUP:0x931e
+    const int quick = world::quick_word();  // DGROUP:0x931e (world/rescale.h) (M4 s8 integrate)
     const bool loaded = world::load_weapon_sheet(*g_blit, g_images, w().pools, world::missile_state().words, wpn,
                                                  world::weapon_sheet_sel(quick, g.game.state(), w().frames),
                                                  w().size, render_sheet, anim4_sheet);
@@ -493,7 +510,7 @@ void build_player_sheet(world::World& wd) {
     // Ship byte +0xe9 (the body's Shield bit) comes from the ship set-up's apply_flight_design
     // [BYTES seg14:0x21f2 seg14:0x21f6].
     req.mode = world::sheet_mode(s.has_flame, s.be9);
-    const int quick = g.ini ? g.ini->get_int(settings::kGameSection, "Quick", 0) : 0;  // DGROUP:0x931e
+    const int quick = world::quick_word();  // DGROUP:0x931e (world/rescale.h) (M4 s8 integrate)
     req.sel = world::sheet_sel(quick, g.game.state(), wd.frames, i, wd.player);
     req.scale = world::sheet_scale_flag(wd.size, 0, req.sel);
     req.size_level = wd.size;
@@ -501,7 +518,7 @@ void build_player_sheet(world::World& wd) {
     // (world.md Ship sheets, Path; C067) (M4 s4 fixer): a later wave without seg14:0x0's local
     // flag keeps the old sheet in the slot, and seg14:0x0's +0x5b and flame strip then read that
     // sheet, here the pixels of its last build [DESIGN].
-    static world::SheetBuild last;
+    world::SheetBuild& last = g_last_build;
     const bool has_dc = g_images[static_cast<std::size_t>(req.slot)] != world::kDcNone;
     const std::int16_t special =
         s.design_index >= 0 && s.design_index < world::kShipCount
@@ -532,14 +549,24 @@ void build_player_sheet(world::World& wd) {
              std::to_string(world::missile_state().words.word(world::kWeaponRadarMissiles, -4)));
     if (b.rendered) {
         s.anim_last = world::sheet_last_row(b.bm_height, o.size, o.gap);  // ship byte +0x5b
-        // The sheet's cell is ordinal 5's side << the scale flag; the object's size comes from
-        // seg14:0x0's step. They part at Size 0, where seg10:0x6308's rescale of the sheet is
-        // not ported (review M3) [OPEN].
         // seg10:0x5c42 + seg10:0x5d3c(i) [BYTES seg14:0xc7e seg10:0x5c80 seg10:0x7041-0x7051].
+        // Design word +0x04 (DGROUP:0x96d6 + 0xad·n), seg14:0x0's store from BOD +0x19 and the raw
+        // side [bp - 0x24], one more at Size 0 for an odd side [BYTES seg14:0xbb5-0xbc2
+        // seg14:0xc42-0xc68], which the rescale's tail rewrites (rescale.h design_word_04) (M4 s8
+        // integrate).
+        {
+            const std::int16_t side24 = (wd.size == 0 && (b.side & 1) != 0) ? static_cast<std::int16_t>(b.side + 1)
+                                                                            : static_cast<std::int16_t>(b.side);
+            if (s.design_index >= 0 && s.design_index < world::kShipCount)
+                g_design_w04[static_cast<std::size_t>(s.design_index)] = world::flame_radius_word(body.byte_19, side24);
+        }
         try {
             const int f = gfx::flame_cell(wd.size);
             const gfx::FlameHeadings fh = gfx::flame_headings(
-                gfx::flame_bitmap_for(g.store->sprite(gfx::kFlameGraphic), g.gfx->palettes(), g.gfx->palette()), f);
+                gfx::rescaled_flame_bitmap(
+                    gfx::flame_bitmap_for(g.store->sprite(gfx::kFlameGraphic), g.gfx->palettes(), g.gfx->palette()),
+                    wd.size),
+                f);
             world::ship_flame_after_sheet(*g_blit, fh, i, b, o, s,
                                           world::flame_design(shp.flags, body.flags, body.byte_19), wd.size);
             app::log("hud: seg10:0x5d3c flame strip for ship " + std::to_string(i) + ", f " + std::to_string(f) +
@@ -547,7 +574,11 @@ void build_player_sheet(world::World& wd) {
         } catch (const std::exception& x) {
             app::log(std::string("hud: flame strip: ") + x.what());
         }
-        const int cell = b.side << req.scale, cell_gap = b.gap << req.scale;
+        // The sheet's cell against seg14:0x0's size step of the object's words [BYTES
+        // seg14:0xbb5-0xbc5] (M4 s8 SIZE-SITES).
+        const bool odd0 = wd.size == 0 && (b.side & 1) != 0;
+        const int cell = world::size_scaled(static_cast<std::int16_t>(b.side + (odd0 ? 1 : 0)), wd.size);
+        const int cell_gap = world::size_scaled(static_cast<std::int16_t>(b.gap - (odd0 ? 1 : 0)), wd.size);
         if (cell != o.size || cell_gap != o.gap)
             todo_once("ship sheet cell " + std::to_string(cell) + " gap " + std::to_string(cell_gap) +
                           " against the object's size " + std::to_string(o.size) + " gap " +
@@ -592,15 +623,17 @@ world::DcId g_cracks = world::kDcNone;        // "CRACKS" (DGROUP:0xb8b)
 world::DcId g_piece = world::kDcNone;         // "piece" (DGROUP:0xb92)
 
 // seg7:0x233c's two BitBlts onto the strip DC [BYTES seg7:0x23cf-0x24a1]. seg10:0x6d38 loads
-// the graphic on each call; the port loads it once [DESIGN]. seg10:0x6308(-1, -1, bitmap) of the
-// amount != 0 path returns at once at Size 1 and is [OPEN] at the other sizes.
+// the graphic on each call; the port loads it once [DESIGN], and the amount != 0 path's
+// seg10:0x6308(-1, -1, bitmap, -1) rescales a fresh load [BYTES seg7:0x23ea-0x23ff] (M4 s8 SIZE-SITES).
 void icon_crack(const world::CrackPlan& p) {
     if (!ready()) return;
     if (g_cracks == world::kDcNone) g_cracks = g_blit->load_bitmap("CRACKS");
-    if (p.scaled && w().size != 1) todo_once("seg10:0x6308 on CRACKS", "seg10:0x6308");
+    world::DcId src = g_cracks;
+    if (p.scaled && w().size != 1) src = world::rescale_bitmap(*g_blit, g_blit->load_bitmap("CRACKS"), w().size);
     const world::DcId strip = strip_dc();
-    g_blit->bit_blt(strip, p.dest_x, p.dest_y, p.side, p.side, g_cracks, p.src_merge_x, 0, world::kRopMergePaint);
-    g_blit->bit_blt(strip, p.dest_x, p.dest_y, p.side, p.side, g_cracks, p.src_and_x, 0, world::kRopSrcAnd);
+    g_blit->bit_blt(strip, p.dest_x, p.dest_y, p.side, p.side, src, p.src_merge_x, 0, world::kRopMergePaint);
+    g_blit->bit_blt(strip, p.dest_x, p.dest_y, p.side, p.side, src, p.src_and_x, 0, world::kRopSrcAnd);
+    if (src != g_cracks) g_blit->delete_image(src);
 }
 
 // seg7:0x2768's CreateCompatibleBitmap(DGROUP:0x13dc, side, side) at DGROUP:0x4e94 + 2r [BYTES
@@ -612,12 +645,13 @@ void fragment_bitmap(int r, std::int16_t side) {
     d = g_blit->create_image(side, side);
 }
 
-// seg7:0x2768's pictures [BYTES seg7:0x2a20-0x2c82]; "piece" goes through seg10:0x6308(-1, -1),
-// which returns at once at Size 1 [OPEN: the other sizes].
+// seg7:0x2768's pictures [BYTES seg7:0x2a20-0x2c82]; "piece" goes through seg10:0x6308(-1, -1,
+// piece, -1) [BYTES seg7:0x29d0-0x29e9] (M4 s8 SIZE-SITES).
 void fragment_pictures(const world::FragmentPlan& p) {
     if (!ready()) return;
     if (g_piece == world::kDcNone) g_piece = g_blit->load_bitmap("piece");
-    if (w().size != 1) todo_once("seg10:0x6308 on piece", "seg10:0x6308");
+    const world::DcId piece =
+        w().size != 1 ? world::rescale_bitmap(*g_blit, g_blit->load_bitmap("piece"), w().size) : g_piece;
     const world::DcId strip = strip_dc();
     for (int q = 0; q < 4; ++q) {
         const int r = p.rec[static_cast<std::size_t>(q)];
@@ -625,10 +659,11 @@ void fragment_pictures(const world::FragmentPlan& p) {
         const world::DcId d = g_fragment_dc[static_cast<std::size_t>(r)];
         if (d == world::kDcNone) continue;
         g_blit->pat_blt(d, 0, 0, p.side, p.side, world::kBlackness);
-        g_blit->bit_blt(d, p.piece_at, p.piece_at, p.piece, p.piece, g_piece, 0, 0, world::kRopSrcCopy);
+        g_blit->bit_blt(d, p.piece_at, p.piece_at, p.piece, p.piece, piece, 0, 0, world::kRopSrcCopy);
         g_blit->bit_blt(d, p.quad_at, p.quad_at, p.quad, p.quad, strip, p.src_x[static_cast<std::size_t>(q)],
                         p.src_y[static_cast<std::size_t>(q)], world::kRopSrcCopy);
     }
+    if (piece != g_piece) g_blit->delete_image(piece);
 }
 
 }  // namespace
@@ -644,22 +679,37 @@ std::vector<std::pair<int, int>> wave_visible() {
 
 std::int16_t g_tank_made_for = -1;  // DGROUP:0x17c0, the DGROUP:0x9214 of slot 4's image
 
+namespace {
+
+// seg10:0x39a8(1), image slot 5 (DGROUP:0x39f2): the logo strip the ambulance and the target
+// picture draw their cells from (ambulance.cpp seg16:0xa2's head, hud/target.cpp). An empty slot
+// gets the renderer's strip (ordinal 2 into a CreateCompatibleDC) and then seg10:0x6308(5, -1, -1,
+// -1) at DGROUP:0x9156; a slot that holds an image returns at once, rescale included [BYTES
+// seg10:0x39b2-0x39b7 seg10:0x39dc-0x3a12 seg10:0x3a15-0x3a24] (shell.md "Strip") (M4 s3 fixer,
+// review M7; M4 s8 fixer, review H2).
+void make_logo_strip() {
+    if (!ready() || g_images[5] != world::kDcNone) return;
+    gfx::ImagePtr logo = g.gfx->logo_strip();
+    if (!logo) return;
+    g_images[5] = g_blit->bind(logo);
+    world::rescale_image(*g_blit, g_images, 5, world::kDcNone, -1, w().size, w().w740);
+}
+
+}  // namespace
+
 void load_wave_resources() {
     if (!ready()) return;
     // seg9:0x26f6's seg10:0x565a (the fuel tank, slot 4) and seg9:0x2733's seg10:0x42ee (the
     // pods, slot 0x1d) [BYTES seg9:0x26f6 seg9:0x2733] (M4 s3 FUEL).
-    world::build_tank_image(*g_blit, g_images, w().w9214, g_tank_made_for);
-    world::build_pod_image(*g_blit, g_images);
-    // Image slot 5 (DGROUP:0x39f2), the logo strip seg10:0x39a8 builds once: the ambulance draws
-    // its cell from it (ambulance.cpp seg16:0xa2's head) [BYTES seg10:0x39b2 seg10:0x3a24]
-    // (shell.md "Strip") (M4 s3 fixer, review M7).
-    if (g_images[5] == world::kDcNone) {
-        if (gfx::ImagePtr logo = g.gfx->logo_strip()) g_images[5] = g_blit->bind(logo);
-    }
+    world::build_tank_image(*g_blit, g_images, w().w9214, g_tank_made_for, w().size);
+    world::build_pod_image(*g_blit, g_images, w().size);
+    // seg9:0x2665's seg10:0x39a8(1), only while slot 12 (DGROUP:0x3a00) is empty, before the
+    // smoke strip fills it [BYTES seg9:0x265c-0x266a].
+    if (g_images[12] == world::kDcNone) make_logo_strip();
     // seg9:0x22b4's graphics chain: the rock images seg10:0x3a2e, the gate images seg10:0x3ea2
     // (seg9:0x26e5) and the wave's brushes [BYTES seg9:0x22b4 seg9:0x26e5] (M3 s4 fixer, review
     // H1).
-    world::build_wave_images(*g_blit, g_images, w().w740);
+    world::build_wave_images(*g_blit, g_images, w().w740, enhance_word(), w().size);
     // seg10:0x4b2e's tail, the rope pens DGROUP:0x3b44 ... 0x3b4a, and seg9:0x2722's
     // seg10:0x561a, the hook sheet IGRAPHIC 180 into image slot 3 (world/tether.h) (M4 s7 TETHER).
     world::make_rope_pens(*g_blit, world::tether_state());
@@ -672,8 +722,265 @@ void load_wave_resources() {
     }
 }
 
+namespace {
+
+// ---- the Size change's drawing side (world/rescale.h RescaleHost) (M4 s8 integrate)
+
+// Ship i's sheet slot 0x28 + i read back into the port's copy (world/player_sheet.h sheet_copy)
+// after a pass that changed the slot's image: the copy stands for the slot's DC as drawn, which
+// the flame strip seg10:0x5d3c and ordinal 15's cut read [DESIGN ADR 0016 decision 3].
+void resync_sheet_copy(int i) {
+    const world::SheetPixels* c = world::sheet_copy(i);
+    if (c == nullptr) return;
+    const world::DcId dc = g_images[static_cast<std::size_t>(world::kShipImageSlotBase + i)];
+    const std::shared_ptr<gfx::Surface> im = dc == world::kDcNone ? nullptr : g_blit->image(dc);
+    if (!im || im->empty()) return;
+    im->flush();
+    world::SheetPixels px;
+    px.w = im->width();
+    px.h = im->height();
+    px.source_height = c->source_height;
+    px.index.resize(static_cast<std::size_t>(px.w) * px.h);
+    for (int y = 0; y < px.h; ++y)
+        for (int x = 0; x < px.w; ++x) px.index[static_cast<std::size_t>(y) * px.w + x] = im->at(x, y);
+    world::set_sheet_copy(i, px);
+}
+
+// The "Resizing graphics" dialog DGROUP:0x934c: CreateDialog(ENG_LANG.DLL, DIALOG 101, main,
+// seg9:0x90fe), whose WM_INITDIALOG with DGROUP:0x9518 = 1 puts string 2269 into control 114 and
+// centres it on the screen [BYTES seg10:0x9a76-0x9a9a] [BYTES ENG_LANG.DLL DIALOG 101] [BYTES
+// ENG_LANG.DLL STRING 142] id 2269. Nothing pumps messages before the pass ends, as in the
+// original, so it may stay unpainted.
+HWND g_resize_dialog = nullptr;
+
+INT_PTR CALLBACK resize_dialog_proc(HWND h, UINT msg, WPARAM, LPARAM) {
+    if (msg != WM_INITDIALOG) return FALSE;
+    std::string text;
+    try {
+        if (g.store) text = g.store->find_string(2269).value_or("");
+    } catch (const std::exception&) {
+    }
+    SetDlgItemTextA(h, 114, text.c_str());
+    RECT r{};
+    GetWindowRect(h, &r);
+    const int x = (GetSystemMetrics(SM_CXSCREEN) - (r.right - r.left)) / 2;
+    const int y = (GetSystemMetrics(SM_CYSCREEN) - (r.bottom - r.top)) / 2;
+    SetWindowPos(h, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    return TRUE;
+}
+
+class ProgramRescaleHost final : public world::RescaleHost {
+public:
+    world::Blitter* blitter() override { return ready() ? g_blit.get() : nullptr; }
+    world::ImageSlotTable* images() override { return &g_images; }
+    std::int16_t screen_state() override { return static_cast<std::int16_t>(g.game.state()); }  // DGROUP:0x90f4
+    std::int16_t enhance() override { return enhance_word(); }                                 // DGROUP:0x8fe8
+    // DGROUP:0x103c = 1 (world/update.h FrameGlobals::size_reread).
+    void set_size_reread() override { world::frame_globals().size_reread = 1; }
+    void beep() override { MessageBeep(0); }  // [BYTES seg10:0x9a6c-0x9a6e]
+    bool open_dialog() override {
+        if (!g.store) return false;
+        try {
+            const std::vector<std::uint8_t> t = g.store->dialog_template(101, {}, DS_NOFAILCREATE);
+            g_resize_dialog = CreateDialogIndirectParamW(g.instance, reinterpret_cast<const DLGTEMPLATE*>(t.data()),
+                                                         g.main, resize_dialog_proc, 0);
+        } catch (const std::exception& x) {
+            app::log(std::string("hud: the Resizing graphics dialog: ") + x.what());
+            g_resize_dialog = nullptr;
+        }
+        return g_resize_dialog != nullptr;
+    }
+    void close_dialog() override {  // [BYTES seg10:0xa0c6-0xa0d0]
+        g.hud_dirty = false;  // DGROUP:0x8f64
+        if (g_resize_dialog) DestroyWindow(g_resize_dialog);
+        g_resize_dialog = nullptr;
+    }
+    void post_main(std::uint32_t msg) override {
+        if (!app::post(static_cast<UINT>(msg))) app::log("hud: the rescale's post failed");
+    }
+    void write_ini(const char* key, int value) override {  // [BYTES seg10:0xa07b-0xa0ba]
+        if (!g.ini) return;
+        g.ini->set_int(settings::kGameSection, key, value);
+        try {
+            g.ini->save();
+        } catch (const std::exception& x) {
+            app::log(std::string("INSPACE.INI: ") + x.what());
+        }
+    }
+    int ini_size() override { return g.ini ? g.ini->get_int(settings::kGameSection, "Size", 1) : 1; }  // [BYTES seg10:0x7fa0]
+    void images_changed() override {
+        // The strip DC DGROUP:0x3a02 is slot 13 (strip_dc keeps g_draw.strip_dc), the gate DC and
+        // the exit sign follow slot 1 and Size (rock_images.h refresh_wave_graphics), and each
+        // sheet copy its slot's image. DGROUP:0x3a38 is read from the table at every frame
+        // (draw_context) [DESIGN ADR 0016 decision 3].
+        g_draw.strip_dc = g_images[world::kIconStripSlot];
+        if (!ready()) return;
+        world::refresh_wave_graphics(*g_blit, g_images, world::wave_graphics(), w().size);
+        for (int i = 0; i < world::kShipCount; ++i) resync_sheet_copy(i);
+    }
+    // After the load's seg10:0x522(1) (world/rescale.h load_size_reread): the strip binding goes,
+    // so strip_dc() binds the briefing's new strip into slot 13, and the gate DC and the sheet
+    // copies follow the empty table [DESIGN ADR 0016 decision 3] (M4 s8 fixer, review H1).
+    void slots_freed() override {
+        g_strip = nullptr;
+        g_draw.strip_dc = world::kDcNone;
+        images_changed();
+    }
+    void todo(const std::string& what, const char* address) override { todo_once(what, address); }
+    world::DcId* fragment_word(int i) override {  // DGROUP:0x4e94 + 2i
+        return i >= 0 && i < static_cast<int>(g_fragment_dc.size()) ? &g_fragment_dc[static_cast<std::size_t>(i)]
+                                                                      : nullptr;
+    }
+    // seg10:0x5c42 after slot 0x22's free: the strip DGROUP:0x3a2c made again at f =
+    // gfx::flame_cell(Size) [BYTES seg10:0x5c4f-0x5cf2 seg10:0x9b95].
+    void flame_cells() override {
+        world::FlameStrip& st = world::flame_strip();
+        if (st.dc != world::kDcNone && g_blit) g_blit->delete_image(st.dc);
+        st.dc = world::kDcNone;
+        st.w = st.h = 0;  // the free: seg10:0x5c42 makes it again
+        world::flame_strip_create(st, gfx::flame_cell(w().size));
+    }
+    // seg14:0x11a8(i) into the freed slot 0x28 + i at the new Size with `Quick` 0 [BYTES
+    // seg10:0x9e0d-0x9e15]: ship i's kept request (player_sheet.h sheet_request) with the new
+    // `sel`, scale flag and Size, DGROUP:0x95a6 = 0 in a wave (globals.md), the object's or the
+    // roster's side and gap [BYTES seg14:0x12f5-0x134d] and the weapon images [BYTES
+    // seg14:0x13f3-0x1425]. The port renders the player's sheet only; another ship logs once (M5).
+    void ship_sheet(int i) override {
+        world::World& wd = w();
+        const world::SheetRequest* rq = world::sheet_request(i);
+        if (!ready() || rq == nullptr || i < 0 || i >= world::kShipCount || wd.pools.records(wd.roles.ships) <= i) {
+            todo_once("seg14:0x11a8 for a ship the port renders no sheet for (M5)", "seg10:0x9e10");
+            return;
+        }
+        world::SheetRequest req = *rq;
+        req.sel = world::sheet_sel(world::quick_word(), g.game.state(), wd.frames, i, wd.player);
+        req.scale = world::sheet_scale_flag(wd.size, 0, req.sel);
+        req.size_level = wd.size;
+        req.shp_loaded = false;
+        world::ShipRecord& s = wd.ship(i);
+        world::ObjectRecord& o = wd.ship_object(i);
+        const world::SheetBuild b = world::build_ship_sheet(*g_blit, g_images, s, i, req, render_sheet);
+        if (b.rendered) {
+            if (b.to_object) {
+                o.size = b.side;
+                o.gap = b.gap;
+            } else if (s.roster_index >= 0 && static_cast<std::size_t>(s.roster_index) < wd.roster.size()) {
+                world::RosterRecord& r = wd.roster[static_cast<std::size_t>(s.roster_index)];
+                r.size = static_cast<std::uint8_t>(b.side);
+                r.gap = static_cast<std::uint8_t>(b.gap);
+            }
+            if (i == wd.player) g_last_build = b;
+        }
+        world::build_weapon_sheets(*g_blit, g_images, wd.pools, world::missile_state().words, s,
+                                   world::weapon_sheet_sel(world::quick_word(), g.game.state(), wd.frames), wd.size,
+                                   render_sheet, anim4_sheet);
+        app::log("hud: seg10:0x9a2a's seg14:0x11a8 for ship " + std::to_string(i) + " at Size " +
+                 std::to_string(wd.size) + ": " + (b.rendered ? "rendered" : "none"));
+    }
+    // seg8:0x2cd8(i, wing) with DGROUP:0x92e4 = 1 (World::restored, set by the caller): the head
+    // (damage.h wing_tear_head) in a wave, where DGROUP:0x95a6 = 0, so design +0x3c is
+    // recomputed, no taunts, and ordinal 15 with flag 0, so no debris and no sound [BYTES
+    // seg8:0x2cea-0x2d27 seg8:0x2d96 seg8:0x343d-0x3482] (O5).
+    void wing_cut(int i, int wing) override {
+        world::World& wd = w();
+        if (i < 0 || i >= world::kShipCount || wd.pools.records(wd.roles.ships) <= i) return;
+        world::ShipRecord& S = wd.ship(i);
+        const int cut = world::wing_tear_head(S, wing, world::flight_globals().now, 0, wd.size);
+        const world::ObjectRecord& o = wd.ship_object(i);
+        world::wing_cut_ship(g_blit.get(), &g_images, i, cut != 0, o.size, world::design_words(S.design_index).w3c,
+                             o.gap, o.frame, false);
+    }
+    void weapon_image(int wpn) override { hud::weapon_image(wpn); }  // seg10:0x533a [BYTES seg10:0x9f28]
+    // ---- seg10:0x9568's builders after their slots' free, at Size 1 [BYTES seg10:0x9572-0x9668]
+    void gate_images() override {
+        if (ready()) world::build_gate_images(*g_blit, g_images, world::wave_graphics(), w().size);
+    }
+    // seg10:0x58ce(1), slot 0x16: the load builds it in a wave with pool-9 records (DGROUP:0x9418
+    // != 0) [BYTES seg9:0x2707-0x2710], which the port's load does not yet (the intro keeps its
+    // logo cells in its own canvas, intro/intro.h kCredits): logged once (ruling R3) (M4 s8 fixer,
+    // review L2).
+    void logo_cells() override { todo_once("the logo cells of slot 0x16 (no port builder)", "seg10:0x58ce"); }
+    void tank_image() override {
+        if (ready()) world::build_tank_image(*g_blit, g_images, w().w9214, g_tank_made_for, w().size);
+    }
+    void smoke_image() override {
+        if (ready()) world::build_smoke_image(*g_blit, g_images, w().size);
+    }
+    void logo_strip() override { make_logo_strip(); }  // seg10:0x39a8(1), slot 5
+    void rock_images() override {
+        if (ready()) world::build_rock_images(*g_blit, g_images, w().w740, w().size);
+    }
+    void effect_images() override {
+        if (ready()) world::build_effect_images(*g_blit, g_images, enhance_word(), w().size);
+    }
+    void pod_image() override {
+        if (ready()) world::build_pod_image(*g_blit, g_images, w().size);
+    }
+    void hook_sheet() override {
+        if (ready()) world::load_hook_sheet(*g_blit, g_images, w().pools, w().size, render_sheet);
+    }
+    // The rest of the reload path [BYTES seg10:0x9f68-0x9fd7]: seg10:0x5b30's strip unscaled, bound
+    // as slot 13 (strip_dc), then seg9:0x94ba and seg7:0x233c(0, i, 0) on the program's World.
+    void icon_strip() override {
+        world::rebuild_icon_strip();
+        if (ready()) strip_dc();
+    }
+    void icon_overlays() override { world::program_icon_overlays(); }
+    void icon_crack(int i) override { world::program_icon_crack(i); }
+    // ---- the design-word tail [BYTES seg10:0x9fd9-0xa078]
+    std::int16_t* design_word_04(int n) override {
+        return n >= 0 && n < world::kShipCount ? &g_design_w04[static_cast<std::size_t>(n)] : nullptr;
+    }
+    void barrel_table(int n) override {  // seg10:0x1502(n) (shots.h muzzle_1502)
+        world::muzzle_1502(world::shot_state(), n, world::design_words_from_world(w(), n));
+    }
+    // seg10:0x5d3c(i) from ship i's sheet as drawn, with design +0x2a and +0x04 (seg10:0x16ba)
+    // [BYTES seg10:0x5d3c-0x6263 seg10:0x5e30]; the flame bitmap seg10:0x7032 at the new Size
+    // [BYTES seg10:0x7071-0x708f]. The port draws the player's flame strip only; another ship
+    // logs once (M5).
+    void flame_strip(int i) override {
+        world::World& wd = w();
+        if (!ready()) return;
+        if (i != wd.player || i < 0 || i >= world::kShipCount || wd.pools.records(wd.roles.ships) <= i) {
+            todo_once("seg10:0x5d3c for a ship the port renders no sheet for (M5)", "seg10:0xa04c");
+            return;
+        }
+        const world::SheetPixels* c = world::sheet_copy(i);
+        fmt::ShipRecord shp;
+        fmt::BodyRecord body;
+        if (c == nullptr || !player_design_records(shp, body)) return;
+        const world::ShipRecord& s = wd.ship(i);
+        const world::ObjectRecord& o = wd.ship_object(i);
+        const int n = s.design_index;
+        if (n < 0 || n >= world::kShipCount) return;
+        try {
+            const int f = gfx::flame_cell(wd.size);
+            const gfx::FlameHeadings fh = gfx::flame_headings(
+                gfx::rescaled_flame_bitmap(
+                    gfx::flame_bitmap_for(g.store->sprite(gfx::kFlameGraphic), g.gfx->palettes(), g.gfx->palette()),
+                    wd.size),
+                f);
+            if (!fh.ok()) return;
+            world::FlameStrip& st = world::flame_strip();
+            world::flame_strip_create(st, fh.f);
+            const world::FlameAnchors a =
+                world::flame_anchors(world::design_words(n).w2a, g_design_w04[static_cast<std::size_t>(n)], wd.size);
+            world::build_flame_strip(st, fh, i, *c, o.size, o.gap,
+                                     world::flame_design(shp.flags, body.flags, body.byte_19), a, s.has_flame);
+            world::upload_flame_strip(*g_blit, st);
+        } catch (const std::exception& x) {
+            app::log(std::string("hud: the rescale's flame strip: ") + x.what());
+        }
+    }
+};
+ProgramRescaleHost g_rescale;
+
+}  // namespace
+
 void install_wave(app::App& app) {
     g_blit = std::make_unique<world::GdiBlitter>(*app.gfx);
+    // seg10:0x9a2a and seg10:0x7f88's drawing side (M4 s8 integrate).
+    world::set_rescale_host(&g_rescale);
     // The gate test's list DGROUP:0x507c / 0x50e0 is the program's one visibility list (M3 s4
     // fixer, review M7: a static, never a caller's local).
     world::set_last_visibility(&g_vis);
@@ -755,7 +1062,11 @@ void install_wave(app::App& app) {
     cl.icon_crack = icon_crack;
     // The icon effects' images: slots 14 + i and 32 of g_images (hud/icon_images.h) (M4 s5 ICONS).
     install_icon_images(*g_blit, g_images, [] { return strip_dc(); }, icon_crack, [] { return ready(); },
-                        [](const std::string& what, const char* address) { todo_once(what, address); });
+                        [](const std::string& what, const char* address) { todo_once(what, address); },
+                        [](world::DcId d) {  // seg9:0x5dae's new DC (M4 s8 SIZE-SITES)
+                            g_draw.strip_dc = d;
+                            g_images[world::kIconStripSlot] = d;
+                        });
     cl.fragment_bitmap = fragment_bitmap;
     cl.fragment_pictures = fragment_pictures;
     // DGROUP:0x4e94 + 2r for seg7:0x2e02's break-up source (world/effects.h EffectLinks) (M4 s5 EFFECTS).
@@ -779,7 +1090,9 @@ void install_wave(app::App& app) {
         if (graphic != world::kDcNone)
             if (const std::shared_ptr<gfx::Surface> im = g_blit->image(graphic)) h = im->height();
         world::render_fruit_image(*g_blit, g_images, graphic, h);
-        if (w().size != 1) todo_once("seg10:0x6308 on the fruit", "seg10:0x6308");
+        // seg11:0x9347's seg10:0x6308(DGROUP:0x37c0 = 0x39, -1, -1, -1) (M4 s8 SIZE-SITES).
+        std::int16_t f740 = 0;
+        world::rescale_image(*g_blit, g_images, 0x39, world::kDcNone, -1, w().size, f740);
         return static_cast<std::int16_t>(h);
     };
     // seg12:0x6d64's seg10:0x533a (world/weapon_load.h) (M4 s5 WEAPONS).

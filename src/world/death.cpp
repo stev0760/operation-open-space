@@ -2,6 +2,7 @@
 #include "world/death.h"
 
 #include "world/flight.h"
+#include "world/rock_images.h"
 
 namespace is::world {
 
@@ -25,7 +26,9 @@ void burn_ship_sheet(EffectCtx& c, int ship) {
     Blitter& out = *c.out;
     const int sl = w.size & 15;
     const std::int16_t p = sar16(shl16(0x20, sl), 1);  // [bp-0x1e] [BYTES seg13:0x4732-0x473d]
-    const DcId g = out.load_graphic(kGraphicFlames, 0, -1);  // [BYTES seg13:0x4749]
+    // Graphic 230, then seg10:0x6308(-1, -1, bitmap, -1) [BYTES seg13:0x4740-0x475e] (rock_images.h
+    // rescale_bitmap) (M4 s8 SIZE-SITES).
+    const DcId g = rescale_bitmap(out, out.load_graphic(kGraphicFlames, 0, -1), w.size);  // [BYTES seg13:0x4749]
     const DcId gm = out.create_mask(g);                        // seg10:0x6ec6 [BYTES seg13:0x4762]
     const DcId sm = out.create_mask(sheet);                    // [BYTES seg13:0x47cb]
     const ObjectRecord& o = w.pools.rec(w.roles.ships, ship);

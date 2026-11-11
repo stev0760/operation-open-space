@@ -22,6 +22,7 @@ void install_flight_hooks(App& app);
 namespace is::world {
 
 class World;
+class RescaleHost;
 
 // The wave's World (the set-up's owner binds it; nullptr unbinds). Binding copies the wave's
 // counts into the flight globals at the next frame.
@@ -94,6 +95,24 @@ CollideGlobals& collide_globals();
 RepairState& repair_state();
 // seg11:0x1d7c on the bound World, for the status tick's StatusHooks::seg11_1d7c (src/hud).
 void repair_tick();
+
+// The Size change on the program's World (world/rescale.h) (M4 s8 integrate): the program's
+// RescaleHost (src/hud/wave_win32.cpp, the image table, the Blitter and the builders); null:
+// Ctrl +/- and the reread log once. The key switch's Ctrl +/- (seg11:0x7207, seg11:0x7266) runs
+// seg10:0x9a2a through it, the wave frame's DGROUP:0x103c path (seg7:0xb7a) and the dialogs'
+// callers (seg10:0x7f58, seg10:0x8409) run seg10:0x7f88 through program_size_reread.
+void set_rescale_host(RescaleHost* host);
+void program_size_reread();
+// seg9:0x23e4-0x2418 (the load's DGROUP:0x92e2 reread) and seg9:0xd38-0xd5c (seg9:0xc06's logo
+// strip at Size != 1) on the program's World and RescaleHost (world/rescale.h load_size_reread,
+// new_game_logo); without a host the reread still sets Size and the shift from the INI (M4 s8
+// fixer, review H1, H2).
+void program_load_size_reread(int ini_size);
+void program_new_game_logo();
+// seg9:0x94ba and seg7:0x233c(0, i, 0) on the program's World with the flight role's collision
+// words, for the rescale's reload path [BYTES seg10:0x9fb3 seg10:0x9fbf-0x9fd7] (M4 s8 integrate).
+void program_icon_overlays();
+void program_icon_crack(int i);
 
 // The flight role's state, for the other roles' hooks.
 WaveGlobals& flight_globals();

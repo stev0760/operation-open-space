@@ -424,17 +424,22 @@ void WorldPurchaseHost::load_weapon(int ship, int w) {
     load_weapon_program(w_, ship, w);
 }
 void WorldPurchaseHost::rate(int ship) { rate_ship(w_, ship); }
+// seg16:0x3468(i, 3)'s seg14:0x11a8 [BYTES seg16:0x362b] and the slot word DGROUP:0x3a38 + 2i
+// it tests and stores [BYTES seg16:0x3477-0x34a9 seg16:0x3631-0x3645]: unless a slot overrides
+// them, the program's sheet side (player_sheet.h build_sheet_program, sheet_dc_program,
+// sheet_dc_word_program), the one port of seg14:0x11a8 after a visit's wing repair, which also
+// serves roster.cpp's unbound fallback (S3-9, A-3) (M4 s8 VISIT). Without the drawing side
+// build_sheet_program logs once and builds nothing.
 void WorldPurchaseHost::build_sheet(int ship) {
     if (on_build_sheet) return on_build_sheet(ship);
-    todo("the ship sheet rebuild", "seg14:0x11a8");
+    build_sheet_program(w_, ship);
 }
 bool WorldPurchaseHost::sheet_dc(int ship) {
     if (on_sheet_dc) return on_sheet_dc(ship);
-    return slot_image(kShipImageSlotBase + ship) != nullptr;
+    return sheet_dc_program(ship);
 }
 std::int16_t WorldPurchaseHost::sheet_dc_word(int ship) {
-    if (on_sheet_dc) return sheet_dc_word_program(ship);  // DGROUP:0x3a38 + 2i, the DC (M4 s5 SHEET)
-    return sheet_dc(ship) ? static_cast<std::int16_t>(kShipImageSlotBase + ship) : std::int16_t{0};
+    return sheet_dc_word_program(ship);  // DGROUP:0x3a38 + 2i, the DC (M4 s5 SHEET)
 }
 void WorldPurchaseHost::designs_begin() { todo("the design table recompute", "seg14:0x3eda"); }
 void WorldPurchaseHost::designs_end() { todo("the design table recompute", "seg14:0x4074"); }

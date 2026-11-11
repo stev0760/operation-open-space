@@ -3,6 +3,7 @@
 #include "world/smoke.h"
 
 #include "world/flight.h"
+#include "world/rescale.h"
 #include "world/shots.h"
 
 namespace is::world {
@@ -36,7 +37,7 @@ constexpr std::int16_t kBandOffset[6] = {0, 0, 6, 0x12, 0x24, 0x3c};
 }  // namespace
 
 // seg10:0x5202 [BYTES seg10:0x5210-0x532b]
-void build_smoke_image(Blitter& out, ImageSlotTable& images) {
+void build_smoke_image(Blitter& out, ImageSlotTable& images, int size_level) {
     DcId& slot = images[ix(kSlotSmoke)];
     if (slot != kDcNone) return;  // the chain's DGROUP:0x3a00 = 0 test [BYTES seg9:0x265c]
     // seg10:0x6c02(200, 0, -1) into a CreateCompatibleDC [BYTES seg10:0x5210-0x5236].
@@ -52,6 +53,9 @@ void build_smoke_image(Blitter& out, ImageSlotTable& images) {
         y = add16(y, h);                                                     // [BYTES seg10:0x52ea]
     }
     out.delete_image(src);  // SelectObject back, DeleteObject, DeleteDC [BYTES seg10:0x52f6-0x531d]
+    // seg10:0x6308(12, -1, -1, -1) [BYTES seg10:0x5322-0x532e] (M4 s8 SIZE-SITES).
+    std::int16_t dg_740 = 0;  // slot 12 never sets it
+    rescale_image(out, images, kSlotSmoke, kDcNone, -1, size_level, dg_740);
 }
 
 void smoke_place(SmokeRecords& t) {

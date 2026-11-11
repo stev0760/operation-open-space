@@ -9,6 +9,7 @@
 #include "world/icon_mover.h"
 #include "world/lightning.h"
 #include "world/missile.h"
+#include "world/player_tick.h"
 #include "world/pods.h"
 #include "world/tank.h"
 #include "world/tether.h"
@@ -553,17 +554,15 @@ void wave_frame(UpdateCtx& c) {
     if (g.game_frames % 300u == 0) h.seg13_b93a();
     // The player's sprite or the 1500 ms tick [BYTES seg7:0xd7d-0x117d]: with DGROUP:0x58a,
     // DGROUP:0x588 or ship byte +0xeb set and DGROUP:0x951a = 0, the sprite unless DGROUP:0x238c
-    // != 0 skips both; otherwise, DGROUP:0x951a != 0 included (seg7:0xd9d jumps to seg7:0xdaf),
-    // the tick once ship dword +0x156 has passed [BYTES seg7:0xd98-0xdac seg7:0xdaf-0xdca].
-    // The tick's body is [OPEN]: core-0010 shows a cloaked player at rest as a constant dithered
-    // ghost (the 0xfe mask of sprite.cpp) from 0.22 s after the vanish, which the port draws only
-    // when another caller of seg7:0x1208 runs; reading seg7:0xdce-0x117d (seg13:0x6716 first)
-    // and the other callers of seg7:0x1208 settles who draws it (compare D-3).
+    // != 0 skips both [BYTES seg7:0xd98-0xdac]; otherwise, DGROUP:0x951a != 0 included
+    // (seg7:0xd9d jumps to seg7:0xdaf), the tick path seg7:0xdaf-0x117d (player_tick.h): the
+    // tick once ship dword +0x156 has passed, whose seg13:0x6716 redraws the player every
+    // 1500 ms and so shows a cloaked ship's ghost at rest (M4 s8 TICK, compare D-3).
     const ShipRecord& ps = c.flight.ships[static_cast<std::size_t>(g.player)];
     if ((f.dg_58a != 0 || f.dg_588 != 0 || ps.beb != 0) && g.autopilot == 0) {
         if (g.dg_238c == 0) h.player_sprite();  // seg7:0xda9
-    } else if (!(ps.due156.get() > g.now)) {
-        h.player_tick();  // seg7:0xdce-0x117d [OPEN]
+    } else {
+        player_tick(c);  // seg7:0xdaf-0x117d
     }
     if (f.dg_9148 > 0) h.seg7_158e();  // [BYTES seg7:0x1182-0x118d]
     h.seg13_447a();

@@ -16,14 +16,14 @@ Operation: Open Space is a rewrite of v1.29.08 in C++17 on plain Win32 (GDI and 
 - **Bring your own copy.** The port contains none of the original's files. It installs from and reads your own copy of the game.
 
 ## Status
-**Early, and playable alone.** You can install, watch the intro, pick a directory and fly a wave: capture icons, shoot, take damage, call the ambulance, save and restore. The other ships and everything that depends on them are still ahead. There is no release build yet, and the port has not been run on real Windows.
+**Early, and playable alone.** You can install, watch the intro, pick a directory and fly a wave: capture icons, fire all 21 weapons, take damage, cloak or raise a shield, call the ambulance, zoom in and out, save and restore. The other ships and everything that depends on them are still ahead. There is no release build yet, and the port has not been run on real Windows.
 
 | Milestone | Status |
 |---|---|
 | M1 Foundations: readers for every original file format | Done |
 | M2 Shell: window, intro, dialogs, installer, launch scene | Done |
 | M3 World: Navigation, wave generation, flight, status display | In progress |
-| M4 Core loop: capture, damage, weapons, ambulance, saved games | Done, leftovers in progress |
+| M4 Core loop: capture, damage, weapons, ambulance, saved games | Done |
 | M5 Ships and AI: teams, enforcers, laws, hazards | In progress, the player's ship only |
 | M6 Specials: races, duels, Inner Demon | Not started |
 | M7 Audio: own mixer, MIDI through OPL3 or a SoundFont | Nearly done |
@@ -31,7 +31,7 @@ Operation: Open Space is a rewrite of v1.29.08 in C++17 on plain Win32 (GDI and 
 | M9 Release | Not started |
 | M10 Quality pass: the remaster | Not started |
 
-The feature checklist counts 255 of 662 rows ported. [`docs/PLAN.md`](docs/PLAN.md) holds each stage's results and open items, and [`docs/spec/checklist.md`](docs/spec/checklist.md) the status of every feature.
+The feature checklist counts 270 of 662 rows ported. [`docs/PLAN.md`](docs/PLAN.md) holds each stage's results and open items, and [`docs/spec/checklist.md`](docs/spec/checklist.md) the status of every feature.
 
 ## Screenshots
 All taken from the port.

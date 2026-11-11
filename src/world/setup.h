@@ -134,6 +134,13 @@ void state1_load(World& w, SetupHost& h);
 // [BYTES seg9:0x5cca seg9:0x5d3c seg9:0x5d66 seg9:0x5e58 seg9:0x5e5d seg9:0x5e60 seg9:0x5e9c
 // seg9:0x5ecd seg9:0x5fbf].
 void enter_briefing(World& w, SetupHost& h);
+// seg9:0x94ba, the icon overlays on the strip DGROUP:0x3a02 [BYTES seg9:0x94cd-0x954f]: for each
+// icon k < 8, seg7:0x2512(k, byte - 1) when directory byte +0x1c8 + k is non-zero, icon `flame`
+// byte +0x2f = 0x9c when it is 2 (ice), and in a kind-2 wave seg7:0x2512(k, 0) when DGROUP:0x9334
+// = 0 or, with DGROUP:0x9334 != 0, when rand() % 3 = 0 (x.rng). The briefing entry seg9:0x5cca
+// and the rescale's reload path seg10:0x9fb3 call it (M4 s8 integrate).
+struct CollideCtx;
+void icon_overlay_pass(CollideCtx& x);
 // seg9:0x60bc's world part: the ships at the wave start (world.md "Ships at wave start").
 void start_wave(World& w, SetupHost& h);
 // The seed of the wave start: seg9:0x60bc -> seg11:0x3cc2 -> seg11:0xafe, srand(GetCurrentTime)

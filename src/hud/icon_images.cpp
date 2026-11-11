@@ -6,6 +6,8 @@
 #include <type_traits>
 
 #include "world/icon_mover.h"
+#include "world/rescale.h"
+#include "world/rock_images.h"
 
 namespace is::hud {
 
@@ -36,16 +38,27 @@ void IconImages::draw(const world::IconPlan& p) {
                 backup_all(q);
             else if constexpr (std::is_same_v<T, world::IconOverlayPlan>)
                 overlay(q);
-            else if (crack)
-                crack(q);  // world::CrackPlan
+            else if constexpr (std::is_same_v<T, world::CrackPlan>) {
+                if (crack) crack(q);
+            } else {
+                // The briefing's strip rescale plan of seg9:0x5dae (world::IconStripRescalePlan
+                // once icon_effects.h holds it): strip_rescale [BYTES seg9:0x5da6-0x5db3] (M4 s8
+                // SIZE-SITES).
+                strip_rescale(q.level);
+            }
         },
         p);
 }
 
-// seg10:0x6308(-1, -1, h, -1) returns at once at Size 1 (ispace.md "seg10:0x6308"); the other
-// sizes' rescale is not ported [OPEN].
-void IconImages::rescale(std::int16_t level, const char* what) {
-    if (level != 1 && todo) todo(std::string("seg10:0x6308 on ") + what, "seg10:0x6308");
+// seg9:0x5cca's seg10:0x6308(0xd, -1, -1, -1) [BYTES seg9:0x5da6-0x5db3]
+void IconImages::strip_rescale(std::int16_t level) {
+    world::DcId& slot = images_[ix(world::kIconStripSlot)];
+    const world::DcId s = strip_dc();
+    if (s == world::kDcNone) return;  // no strip: the slot test of seg10:0x6316 returns 0
+    slot = s;
+    std::int16_t dg_740 = 0;  // slot 13 never sets it
+    world::rescale_image(out_, images_, world::kIconStripSlot, world::kDcNone, -1, level, dg_740);
+    if (slot != s && strip_rescaled) strip_rescaled(slot);
 }
 
 // seg7:0x4d86 [BYTES seg7:0x4e14-0x4ed1 seg7:0x4ee3-0x4fbf]
@@ -68,8 +81,9 @@ void IconImages::drip(const world::IconDripPlan& p) {
 // seg7:0x477e [BYTES seg7:0x47ba-0x49a8]
 void IconImages::flame(const world::IconFlamePlan& p) {
     if (p.icon < 0 || p.icon >= world::kIconRecords) return;  // [DESIGN] the table's 8 slots
-    const world::DcId gr = out_.load_graphic(world::kGraphicIconFlames, 0, -1);  // [BYTES seg7:0x47ba-0x47c3]
-    rescale(p.level, "the icon flames");
+    // seg10:0x6c02(0xe6, 0, -1), then seg10:0x6308(-1, -1, h, -1) [BYTES seg7:0x47ba-0x47d8].
+    const world::DcId gr =
+        world::rescale_bitmap(out_, out_.load_graphic(world::kGraphicIconFlames, 0, -1), p.level);
     const world::DcId mask = gr != world::kDcNone ? out_.create_mask(gr) : world::kDcNone;  // seg10:0x6ec6 [BYTES seg7:0x47dc]
     const int w = 5 * p.size + 6 * p.gap, h = 2 * p.gap + p.size;
     world::DcId& o = images_[ix(world::kIconOwnSlot + p.icon)];
@@ -116,9 +130,10 @@ void IconImages::backup_all(const world::IconBackupAllPlan& p) {
 void IconImages::overlay(const world::IconOverlayPlan& p) {
     const world::DcId s = strip_dc();
     if (s == world::kDcNone) return;
-    const world::DcId gr = out_.load_graphic(world::kGraphicIconOverlay, 0, -1);  // [BYTES seg7:0x255f-0x2562]
+    // seg10:0x6c02(0x168, 0, -1), then seg10:0x6308(-1, -1, h, -1) [BYTES seg7:0x255d-0x2577].
+    const world::DcId gr =
+        world::rescale_bitmap(out_, out_.load_graphic(world::kGraphicIconOverlay, 0, -1), p.level);
     if (gr == world::kDcNone) return;
-    rescale(p.level, "the icon overlay");
     const world::DcId mask = out_.create_mask(gr);
     if (mask != world::kDcNone) out_.bit_blt(s, p.x, p.gap, p.size, p.size, mask, p.size * p.cell, 0, world::kSrcAnd);  // [BYTES seg7:0x2584-0x25c0]
     out_.bit_blt(s, p.x, p.gap, p.size, p.size, gr, p.size * p.cell, 0, world::kSrcPaint);  // [BYTES seg7:0x25c5-0x25ec]
@@ -138,11 +153,13 @@ void IconImages::release() {
 void install_icon_images(world::Blitter& out, world::ImageSlotTable& images,
                          std::function<world::DcId()> strip,
                          std::function<void(const world::CrackPlan&)> crack, std::function<bool()> ready,
-                         std::function<void(const std::string&, const char*)> todo) {
+                         std::function<void(const std::string&, const char*)> todo,
+                         std::function<void(world::DcId)> strip_rescaled) {
     auto ii = std::make_shared<IconImages>(out, images);
     ii->strip = std::move(strip);
     ii->crack = std::move(crack);
     ii->todo = std::move(todo);
+    ii->strip_rescaled = std::move(strip_rescaled);
     world::IconEffectLinks& l = world::icon_effect_links();
     l.draw = [ii, ready](const world::IconPlan& p) {
         if (!ready || ready()) ii->draw(p);
