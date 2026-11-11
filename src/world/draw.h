@@ -151,7 +151,7 @@ class LinkHooks {
 public:
     virtual ~LinkHooks() = default;
     // seg12:0x7256(hdc, x0, y0, x1, y1) with BLACK_PEN (GetStockObject(7)) selected: the old
-    // line's erase [OPEN: seg12:0x7256 is not read].
+    // line's erase (seg12:0x7256 is world/line.h clip_line).
     virtual void line(DcId dc, std::int16_t x0, std::int16_t y0, std::int16_t x1, std::int16_t y1) {
         (void)dc, (void)x0, (void)y0, (void)x1, (void)y1;
     }

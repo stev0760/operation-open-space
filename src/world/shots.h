@@ -131,9 +131,9 @@ struct DesignWords {
 DesignWords design_words_from_world(const World& w, int n);
 // seg10:0x1460(n): entries 0 ... 15 [BYTES seg10:0x146f-0x14f7].
 void muzzle_1460(ShotState& s, int n, const DesignWords& d);
-// seg10:0x1620(n): entries 16 ... 31, the rear launch (seg11:0x7c12, seg7). The port's own
-// reading of seg10:0x1620-0x16b8 (r = design +0x02, a from 270, /127 and /-127), which no
-// verifier has checked [OPEN] [BYTES seg10:0x162f-0x16ae].
+// seg10:0x1620(n): entries 16 ... 31, the rear launch (seg11:0x7c12's seg11:0x881d, seg7): r =
+// design +0x02, a from 270, /127 and /-127 (verified, work/analysis/m4/s7-owed-verify.md S5-2)
+// [BYTES seg10:0x162f-0x16ae].
 void muzzle_1620(ShotState& s, int n, const DesignWords& d);
 // seg10:0x1502(n): entries 32 ... 63, two barrels [BYTES seg10:0x1511-0x1613].
 void muzzle_1502(ShotState& s, int n, const DesignWords& d);
@@ -208,6 +208,19 @@ void fire(ShotCtx& c, int ship);
 // seg8:0x764(k, j): screen point k of every barrel a < slot +0x78 from world point k
 // [BYTES seg8:0x764-0x7c6].
 void trail_point(ShotCtx& c, int k, int j);
+// seg13:0x1fc2(pool, rec), Pascal `retf 4`: one gun shot from an object, DEATH HEADS' fire
+// from seg12:0x64aa (work/analysis/m4/s7-launched.md 3.2; verified claims 30-33, Omission 8)
+// [BYTES seg13:0x1fc2-0x2187]. With `Detail` DGROUP:0x9208 > 0 (signed) it returns unless some
+// slot j < DGROUP:0x594, free or busy, has the player's owner words (DGROUP:0x9324,
+// DGROUP:0x9646) or two slots are free. The first free slot j: +0x76 = +0x7e = +0x80 = 0; for a
+// = 0, 1 trail point a of barrel 0 (+0x30 + 2a, +0x48 + 2a) = -100 and seg8:0x764(a, j), which
+// still sees the slot's previous barrel count; head +0x30 = extent / 2 + ((hx[frame] << 3) +
+// x), +0x48 alike (no wrap); owner (pool, rec); +0x78 = 1, +0x84 = 1, +0x82 = 0; velocity
+// lo16(3·heading[frame]) without the owner's; +0x74 = 20 (in a kind-6 wave 0x24, then
+// seg11:0x5626(j)), then seg5:0x110(+0x74 · max(W, H), 1000); seg10:0x754a(3, 0x1e, j, 2).
+// Not written: +0x86, +0x88 / +0x8a, dword +0x90, +0x68 / +0x6a, the other trail points
+// (verified claim 32). With no free slot, nothing.
+void object_shot(ShotCtx& c, int pool, int rec);
 // seg8:0x3aec(i, j): slot j's sub-step i; 0 when the slot is free and DGROUP:0x9136 is 0, else 1
 // [BYTES seg8:0x3aec-0x3fba].
 std::int16_t shot_update(ShotCtx& c, int i, int j);

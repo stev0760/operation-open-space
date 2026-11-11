@@ -88,7 +88,15 @@ void pod_destroyed(World& w, int pool, int rec, const PodDestroyOut& d) {
         const ScreenPoint p = d.to_screen(o.x, o.y);
         if (in_play_area(p.x, p.y, w.W, w.H) && d.erase) d.erase(o.scr_x, o.scr_y, o.size, o.size);
     }
-    // seg12:0x6ac5-0x6adc: pool 6's weapon slot [OPEN: the missile track's]
+    // Pool 6 (a WILDCARD fruit): the missile entry's age = W(its weapon)+0x1e, then its weapon
+    // -1, the weapon read before the store (work/analysis/m4/s7-fuel.md section 5, verified
+    // claim 43; the words are collide.h weapon_word's, the program's table) [BYTES
+    // seg12:0x6ac5-0x6adc] (M4 s7 FUEL).
+    if (pool == 6) {
+        MissileSlot& e = w.pools.missile(rec);
+        e.age = weapon_word(e.weapon, 0x1e);
+        e.weapon = -1;
+    }
     for (int k = 0; k < 5; ++k)  // [BYTES seg12:0x6ae2-0x6afe]
         if (d.puff) d.puff(pool, rec, 1);
     o.state = 1;  // [BYTES seg12:0x6b0e]

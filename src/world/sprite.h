@@ -49,6 +49,14 @@ constexpr BrushId kBrushNone = 0;
 constexpr BrushId kBrushStock = 0xff00;
 constexpr BrushId kBrushWhite = kBrushStock + 0;  // GetStockObject(WHITE_BRUSH) [BYTES seg11:0x3866]
 constexpr BrushId kBrushBlack = kBrushStock + 4;  // BLACK_BRUSH
+// A pen word: 0 is none. Stock pens have fixed ids (GetStockObject(n) = kPenStock + n); pens the
+// Blitter creates count up from 0x300 (M4 s7 TETHER) [DESIGN ADR 0013].
+using PenId = std::uint16_t;
+constexpr PenId kPenNone = 0;
+constexpr PenId kPenStock = 0xfe00;
+constexpr PenId kPenWhite = kPenStock + 6;  // GetStockObject(6) WHITE_PEN [BYTES seg8:0x25eb]
+constexpr PenId kPenBlack = kPenStock + 7;  // GetStockObject(7) BLACK_PEN [BYTES seg11:0x9d07]
+constexpr int kPsSolid = 0;                 // CreatePen style PS_SOLID [BYTES seg12:0x3289]
 
 // The raster operations the wave passes [REF Win16 SDK, ternary raster operations].
 constexpr std::uint32_t kSrcCopy = 0x00CC0020;    // SRCCOPY
@@ -115,6 +123,23 @@ public:
         (void)src;
         return kDcNone;
     }
+
+    // The pen and line calls of the ropes and seg12:0x7256 (M4 s7 TETHER): CreatePen(style,
+    // width, colorref), SelectObject(dc, pen) returning the pen that was selected,
+    // DeleteObject(pen), MoveTo and LineTo (LineTo leaves out its last pixel [REF Win16 SDK
+    // LineTo]). The colour goes through ADR 0007 as a brush's does. The defaults draw nothing,
+    // so the fakes that never draw a line need not know them.
+    virtual PenId create_pen(int style, int width, std::uint32_t colorref) {
+        (void)style, (void)width, (void)colorref;
+        return kPenNone;
+    }
+    virtual PenId select_pen(DcId dc, PenId pen) {
+        (void)dc, (void)pen;
+        return kPenNone;
+    }
+    virtual void delete_pen(PenId pen) { (void)pen; }
+    virtual void move_to(DcId dc, int x, int y) { (void)dc, (void)x, (void)y; }
+    virtual void line_to(DcId dc, int x, int y) { (void)dc, (void)x, (void)y; }
 };
 
 // The window's Blitter, the one the wave pass clips (GdiBlitter registers itself on
@@ -126,7 +151,12 @@ void set_wave_blitter(Blitter* b);
 
 // One recorded call (RecordingBlitter). Unused fields stay 0.
 struct BlitCall {
-    enum Op { kBitBlt, kPatBlt, kStretchBlt, kStretchMode, kSelectBrush, kSetPixel, kFrameRect };
+    enum Op {
+        kBitBlt, kPatBlt, kStretchBlt, kStretchMode, kSelectBrush, kSetPixel, kFrameRect,
+        // M4 s7 TETHER: kCreatePen (x = style, w = width, rop = colour, pen = the new id),
+        // kSelectPen (dst, pen), kDeletePen (pen), kMoveTo and kLineTo (dst, x, y).
+        kCreatePen, kSelectPen, kDeletePen, kMoveTo, kLineTo
+    };
     Op op = kBitBlt;
     DcId dst = 0;
     int x = 0, y = 0, w = 0, h = 0;
@@ -134,10 +164,11 @@ struct BlitCall {
     int sx = 0, sy = 0, sw = 0, sh = 0;
     std::uint32_t rop = 0;   // ROP; the mode for kStretchMode; the colour for kSetPixel
     BrushId brush = 0;       // kSelectBrush, kFrameRect
+    PenId pen = 0;           // kCreatePen, kSelectPen, kDeletePen
     bool operator==(const BlitCall& o) const {
         return op == o.op && dst == o.dst && x == o.x && y == o.y && w == o.w && h == o.h &&
                src == o.src && sx == o.sx && sy == o.sy && sw == o.sw && sh == o.sh &&
-               rop == o.rop && brush == o.brush;
+               rop == o.rop && brush == o.brush && pen == o.pen;
     }
 };
 // Shorthands for expected calls.
@@ -151,6 +182,32 @@ inline BlitCall bit_blt_call(DcId dst, int x, int y, int w, int h, DcId src, int
 inline BlitCall pat_blt_call(DcId dst, int x, int y, int w, int h, std::uint32_t rop) {
     BlitCall c;
     c.op = BlitCall::kPatBlt, c.dst = dst, c.x = x, c.y = y, c.w = w, c.h = h, c.rop = rop;
+    return c;
+}
+// M4 s7 TETHER: the pen and line calls.
+inline BlitCall create_pen_call(int style, int width, std::uint32_t colorref, PenId id) {
+    BlitCall c;
+    c.op = BlitCall::kCreatePen, c.x = style, c.w = width, c.rop = colorref, c.pen = id;
+    return c;
+}
+inline BlitCall select_pen_call(DcId dc, PenId pen) {
+    BlitCall c;
+    c.op = BlitCall::kSelectPen, c.dst = dc, c.pen = pen;
+    return c;
+}
+inline BlitCall delete_pen_call(PenId pen) {
+    BlitCall c;
+    c.op = BlitCall::kDeletePen, c.pen = pen;
+    return c;
+}
+inline BlitCall move_to_call(DcId dc, int x, int y) {
+    BlitCall c;
+    c.op = BlitCall::kMoveTo, c.dst = dc, c.x = x, c.y = y;
+    return c;
+}
+inline BlitCall line_to_call(DcId dc, int x, int y) {
+    BlitCall c;
+    c.op = BlitCall::kLineTo, c.dst = dc, c.x = x, c.y = y;
     return c;
 }
 
@@ -179,6 +236,31 @@ public:
     // Recorded as an image named "mask" whose `graphic` is the source id.
     DcId create_mask(DcId src) override;
 
+    // M4 s7 TETHER: pens get ids counting up from 0x300; select_pen tracks each DC's pen and
+    // returns the previous one (kPenNone at first).
+    PenId create_pen(int style, int width, std::uint32_t colorref) override {
+        const PenId id = next_pen_++;
+        calls.push_back(create_pen_call(style, width, colorref, id));
+        pens.push_back(Pen{id, colorref});
+        return id;
+    }
+    PenId select_pen(DcId dc, PenId pen) override {
+        calls.push_back(select_pen_call(dc, pen));
+        for (auto& [d, p] : selected_pen_)
+            if (d == dc) {
+                const PenId old = p;
+                p = pen;
+                return old;
+            }
+        selected_pen_.emplace_back(dc, pen);
+        return kPenNone;
+    }
+    void delete_pen(PenId pen) override { calls.push_back(delete_pen_call(pen)); }
+    void move_to(DcId dc, int x, int y) override { calls.push_back(move_to_call(dc, x, y)); }
+    void line_to(DcId dc, int x, int y) override { calls.push_back(line_to_call(dc, x, y)); }
+    struct Pen { PenId id; std::uint32_t colorref; };
+    std::vector<Pen> pens;
+
     // What the resource calls were given, by id. `pixels` holds create_image_from's indices.
     struct Image { DcId id; int w, h; std::string name; int graphic; std::vector<std::uint8_t> pixels{}; };
     std::vector<Image> images;
@@ -191,6 +273,8 @@ private:
     DcId next_dc_ = 0x100;
     BrushId next_brush_ = 0x200;
     std::vector<std::pair<DcId, BrushId>> selected_;
+    PenId next_pen_ = 0x300;                            // M4 s7 TETHER
+    std::vector<std::pair<DcId, PenId>> selected_pen_;  // M4 s7 TETHER
 };
 
 // A point in screen pixels.
@@ -287,9 +371,24 @@ public:
     DcId create_image_from(int w, int h, const std::vector<std::uint8_t>& index) override;
     void delete_image(DcId id) override;
     DcId create_mask(DcId src) override;
+    // M4 s7 TETHER: the pens (stock pens are GetStockObject(id - kPenStock)); the line calls on
+    // the window DC take the pass's clip as the blits do.
+    PenId create_pen(int style, int width, std::uint32_t colorref) override;
+    PenId select_pen(DcId dc, PenId pen) override;
+    void delete_pen(PenId pen) override;
+    void move_to(DcId dc, int x, int y) override;
+    void line_to(DcId dc, int x, int y) override;
 
 private:
     BrushId brush_id(HBRUSH h);
+    PenId pen_id(HPEN h);         // M4 s7 TETHER
+    HPEN hpen(PenId id) const;    // M4 s7 TETHER
+    PenId next_pen_ = 0x300;      // M4 s7 TETHER
+    struct Pen {                  // M4 s7 TETHER: the pens it created (owned, deleted with it)
+        HPEN h;                   // and the ones a DC held before (known, not owned)
+        bool owned;
+    };
+    std::map<PenId, Pen> pens_;
     // The window DC with the pass's clip applied (SaveDC + IntersectClipRect), undone by
     // unclip() (RestoreDC) [DESIGN ADR 0013].
     HDC clip(DcId id, HDC d) const;

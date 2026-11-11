@@ -5,10 +5,13 @@
 
 #include "world/damage.h"
 #include "world/fragments.h"
+#include "world/fuel_balls.h"
 #include "world/icon_mover.h"
+#include "world/lightning.h"
 #include "world/missile.h"
 #include "world/pods.h"
 #include "world/tank.h"
+#include "world/tether.h"
 
 namespace is::world {
 
@@ -488,7 +491,9 @@ void wave_frame(UpdateCtx& c) {
         if (h.seg16_33a2()) h.seg16_3306();
     }
     f.dg_5d2 = f.dg_5d2 == 0 ? 1 : 0;  // [BYTES seg7:0xc94-0xc9d]
-    if (f.dg_1016 != 0) h.seg11_a9ea(1);
+    // DGROUP:0x1016 is the bolt's word (lightning.h BoltState::pending) [BYTES seg7:0xca0-0xca9]
+    // (M4 s7 RING).
+    if (bolt_state().pending != 0) h.seg11_a9ea(1);
     h.sound_frame();  // seg7:0xcaf
     if (g.wave_kind == 6) h.seg12_4d8e();
     if (g.dg_913a != 0 || g.dg_913c != 0) h.seg18_d94();
@@ -509,7 +514,10 @@ void wave_frame(UpdateCtx& c) {
         move_fragments(c, *w);
     else
         h.mover(Mover::k7_32d0);
-    h.mover(Mover::k7_40c4);
+    if (World* w = h.frame_world(c.flight.pools))  // seg7:0x40c4, the pool-5 mover (fuel_balls.h) (M4 s7 FUEL)
+        move_pool5(c, *w);
+    else
+        h.mover(Mover::k7_40c4);
     if (World* w = h.frame_world(c.flight.pools))  // seg12:0x0, the pool-6 mover (missile.h) (M4 s2 fixer)
         move_missiles(*w, c);
     else
@@ -517,7 +525,10 @@ void wave_frame(UpdateCtx& c) {
     h.mover(Mover::k6_73f6);
     h.mover(Mover::k6_7c14);
     if (World* w = h.frame_world(c.flight.pools); w && w->w9456 > 0) h.mover(Mover::k7_5e04);
-    h.mover(Mover::k12_3148);
+    if (World* w = h.frame_world(c.flight.pools))  // seg12:0x3148, the pool-10 mover (tether.h) (M4 s7 TETHER)
+        move_hooks(c, *w);
+    else
+        h.mover(Mover::k12_3148);
     // seg12:0x6b1e (pool 11), seg12:0xae4 (pool 4) while DGROUP:0x9600 != 0, then seg12:0x3e98(0)
     // [BYTES seg7:0xd1b seg7:0xd20 seg7:0xd27 seg7:0xd2e] (s3-fuel-verify.md claim 58) (M4 s3 FUEL).
     // DGROUP:0x9600 has one writer, seg9:0x6833 (= 1), and nothing clears it: once a placement
@@ -540,10 +551,17 @@ void wave_frame(UpdateCtx& c) {
         g.dg_9130 == 0)
         h.music_due();
     if (g.game_frames % 300u == 0) h.seg13_b93a();
-    // The player's sprite or the 1500 ms tick [BYTES seg7:0xd7d-0x117d]
+    // The player's sprite or the 1500 ms tick [BYTES seg7:0xd7d-0x117d]: with DGROUP:0x58a,
+    // DGROUP:0x588 or ship byte +0xeb set and DGROUP:0x951a = 0, the sprite unless DGROUP:0x238c
+    // != 0 skips both; otherwise, DGROUP:0x951a != 0 included (seg7:0xd9d jumps to seg7:0xdaf),
+    // the tick once ship dword +0x156 has passed [BYTES seg7:0xd98-0xdac seg7:0xdaf-0xdca].
+    // The tick's body is [OPEN]: core-0010 shows a cloaked player at rest as a constant dithered
+    // ghost (the 0xfe mask of sprite.cpp) from 0.22 s after the vanish, which the port draws only
+    // when another caller of seg7:0x1208 runs; reading seg7:0xdce-0x117d (seg13:0x6716 first)
+    // and the other callers of seg7:0x1208 settles who draws it (compare D-3).
     const ShipRecord& ps = c.flight.ships[static_cast<std::size_t>(g.player)];
-    if (f.dg_58a != 0 || f.dg_588 != 0 || ps.beb != 0) {
-        if (g.autopilot == 0 && g.dg_238c == 0) h.player_sprite();  // seg7:0xda9
+    if ((f.dg_58a != 0 || f.dg_588 != 0 || ps.beb != 0) && g.autopilot == 0) {
+        if (g.dg_238c == 0) h.player_sprite();  // seg7:0xda9
     } else if (!(ps.due156.get() > g.now)) {
         h.player_tick();  // seg7:0xdce-0x117d [OPEN]
     }

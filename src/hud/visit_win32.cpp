@@ -408,9 +408,8 @@ void VisitGdi::panels(HDC s, const world::VisitLayout& l) {
 // seg15:0x454c: the room's walls between the panels, 2-px PatBlt columns from each panel's inner
 // edge toward the vanishing point (W/2, DGROUP:0x3ca2), grey 170 - 150·i/N, then four black 2-px
 // pen lines to it (read by the SCENE track, M4 stage 6) [BYTES seg15:0x454c-0x482c]. seg5:0x314
-// and seg5:0x110 are the long multiply and the truncating long divide. [OPEN: an implementer's
-// reading that no verifier has checked (shell.md "The landing scene"); the reviewer's spot check
-// agrees up to seg15:0x4689; a verify round on seg15:0x454c-0x482c settles it] (review M2).
+// and seg5:0x110 are the long multiply and the truncating long divide (verified,
+// work/analysis/m4/s7-owed-verify.md S6-3) (review M2).
 void VisitGdi::sloped_sides(HDC s, const world::VisitLayout& l) {
     using world::lo16;
     gfx::Gfx* g = gfx_();

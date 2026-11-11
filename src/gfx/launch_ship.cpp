@@ -39,9 +39,8 @@ void jet_frame0(int sz, int detail, int& w, int& h) {
     }
 }
 
-// seg15:0x1a42's table (launch_ship.h) [OPEN: read from the listing by the PAD track and spot-
-// checked by the reviewer, unchecked by a verifier (shell.md "The landing scene"); a verify round
-// on seg15:0x1a4f-0x1ca1 settles it] (review M2).
+// seg15:0x1a42's table (launch_ship.h) (verified outside state 9, work/analysis/m4/s7-owed-verify.md
+// S6-4) [BYTES seg15:0x1a4f-0x1ca1] (review M2).
 std::array<JetFrame, 16> jet_table(int sz, int detail) {
     std::array<JetFrame, 16> t{};
     int w0 = 0, h0 = 0;

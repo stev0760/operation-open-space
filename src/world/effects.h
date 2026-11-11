@@ -218,9 +218,10 @@ struct EffectLinks {
 EffectLinks& effect_links();
 // The wave teardown seg10:0x22e's release of the break-up sources [BYTES seg10:0x2cb-0x301]: for
 // e = 0 ... 3 with DGROUP:0x5e98 + 2e != 0, SelectObject(DC, DGROUP:0x5ea0 + 2e), DeleteDC, then 0.
-// The original deletes the source of any pool; the port deletes only the DCs it made (`owned`,
-// the pool-1 case, through EffectLinks::release) and leaves another pool's slot DC to the image
-// table, as seg7:0x2e02's release does [DESIGN] (M4 s5 fixer, review L17).
+// The original deletes the source of any pool, here and in seg7:0x2e02's release [BYTES
+// seg7:0x301a-0x3039]; the port deletes only the DCs it made (`owned`, the pool-1 case, through
+// EffectLinks::release) at both sites and leaves another pool's slot DC to the image table
+// [DESIGN: an ADR line is owed] (M4 s5 fixer, review L17).
 void release_piece_sources(EffectState& st);
 
 // seg8:0x3fbe(k) [BYTES seg8:0x3fbe-0x45db] (verified claims 1, 4-13):

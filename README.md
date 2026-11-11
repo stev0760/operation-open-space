@@ -31,7 +31,7 @@ Operation: Open Space is a rewrite of v1.29.08 in C++17 on plain Win32 (GDI and 
 | M9 Release | Not started |
 | M10 Quality pass: the remaster | Not started |
 
-The feature checklist counts 240 of 662 rows ported. [`docs/PLAN.md`](docs/PLAN.md) holds each stage's results and open items, and [`docs/spec/checklist.md`](docs/spec/checklist.md) the status of every feature.
+The feature checklist counts 255 of 662 rows ported. [`docs/PLAN.md`](docs/PLAN.md) holds each stage's results and open items, and [`docs/spec/checklist.md`](docs/spec/checklist.md) the status of every feature.
 
 ## Screenshots
 All taken from the port.

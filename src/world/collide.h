@@ -55,11 +55,27 @@ struct DamageDesign {
 DamageDesign design_from_world(const World& w, int n);
 
 // A pool-5 object's entry DGROUP:0x5a50 + 0x14·rec: its shooter and its last-hit object
-// [BYTES seg8:0x6015 seg8:0x549d seg8:0x5519] (structs.md). The port keeps 32 [OPEN: the
-// table's size and its owner, the pool-5 mover seg7:0x40c4].
+// [BYTES seg8:0x6015 seg8:0x549d seg8:0x5519] (structs.md). The original holds 11 (fuel_balls.h
+// kPool5Table); the port's creators never pass them [DESIGN ADR 0016 decisions 2 and 3].
 struct Pool5Entry {
     std::int16_t shooter_pool = 0, shooter_rec = 0;  // DGROUP:0x5a50, 0x5a52
     std::int16_t hit_pool = 0, hit_rec = 0;          // DGROUP:0x5a54, 0x5a56
+    // ---- M4 s7 FUEL: the rest of the entry E(r) = DGROUP:0x5a4c + 0x14·r and the record's
+    // trail T(r) = DGROUP:0x5eac + 0x24·r, both 11 entries in the original (fuel_balls.h
+    // kPool5Table) (work/analysis/m4/s7-fuel.md 0.1, 0.2; s7-fuel-verify.md claims 6, 7, 15,
+    // 33). They follow the first four words so the aggregate initialisers of those keep their
+    // meaning, and T(r) sits with E(r) because both are indexed by the record alone [DESIGN].
+    // BSS: 0 at start-up, as DGROUP is; nothing resets T(r) between waves or games (O4).
+    std::int16_t age = 0;    // +0x00 DGROUP:0x5a4c: passes, -1 free [BYTES seg13:0x1482 seg13:0x14a0 seg7:0x4643 seg7:0x46e9]
+    std::int16_t life = 0;   // +0x02 DGROUP:0x5a4e: the ball ends once age > life + 4 [BYTES seg13:0x1629 seg7:0x4647]
+    std::int16_t svx = 0;    // +0x0c DGROUP:0x5a58: `vx` before the pass's move [BYTES seg7:0x4385]
+    std::int16_t svy = 0;    // +0x0e DGROUP:0x5a5a: `vy` before the pass's move [BYTES seg7:0x4389]
+    std::int16_t w10 = 0;    // +0x10 DGROUP:0x5a5c: 0 at every take, no reader [BYTES seg13:0x14a4 seg12:0x2f70 seg7:0x58a0]
+    std::int16_t split = 0;  // +0x12 DGROUP:0x5a5e: 1 for both halves of a split SNOWBALL [BYTES seg7:0x58c0 seg7:0x5a0a seg7:0x571d]
+    // Tx[k] DGROUP:0x5eac, Ty[k] DGROUP:0x5eb8, Ts[k] DGROUP:0x5ec4 (+ 0x24·r + 2k), k = 0 ... 5:
+    // the screen corner and side of the picture drawn k passes ago [BYTES seg7:0x410d-0x413a
+    // seg7:0x41ab-0x41ba].
+    std::array<std::int16_t, 6> tx{}, ty{}, ts{};
 };
 // A missile's entry DGROUP:0x66e0 + 0x1c·rec (pool 6) is records.h MissileSlot, Pools::missile(rec)
 // [BYTES seg8:0x602d seg8:0x6c71].
@@ -125,7 +141,6 @@ struct CollideGlobals {
     Rect16 meet;    // DGROUP:0x5158, IntersectRect's output
     std::array<Pool5Entry, 32> pool5{};
     std::vector<DefenderEntry> defenders;  // DGROUP:0x940a of them
-    std::array<std::int16_t, kLinkSlots> link_65da{};  // DGROUP:0x65da + 0x20·s [OPEN: LinkSlot's word +0x0e]
     std::array<std::int16_t, 32> pool11_856a{};        // DGROUP:0x856a + 0x34·rec [OPEN]
     // The icon fragments of seg7:0x2768 (DGROUP:0x57c3, DGROUP:0x6038) are World's (IconRecord::
     // fragment, World::fragment_icon).

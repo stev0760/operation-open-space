@@ -145,10 +145,13 @@ struct SheetBuild {
 };
 
 // seg14:0x11a8(i) [BYTES seg14:0x11a8-0x1427]:
-//  - the shared sheet: ship word +0x50 != i and ship +0x50's bytes +0xad and +0xac both set
-//    copies another ship's sheet (seg10:0x86e2, seg10:0x5d3c) [OPEN: not ported; the wave
-//    set-up's seg14:0x0 sets +0x50 = i first, so the branch is dead there] [BYTES seg14:0x11cf
-//    seg14:0x11db seg14:0x11e2 seg14:0x11f7 seg14:0x1200];
+//  - the shared sheet: ship word +0x50 != i, ship +0x50's bytes +0xad and +0xac both set and
+//    design word +0x46 (DGROUP:0x9718) != 0: seg10:0x86e2(i) (slot 0x28 + i freed, ship +0x50's
+//    sheet BitBlt into a new (16 S + 17 g) x (S + 2 g) bitmap, g = word +0x24 of the ship pool's
+//    record 0) and seg10:0x5d3c(i); design +0x46 = 0 builds nothing; both jump to seg14:0x13e4
+//    [OPEN: not ported; +0x50's only writer seg14:0xd0a stores i before seg14:0xd32, so the
+//    branch is dead on the ported paths] [BYTES seg14:0x11cf-0x1206 seg10:0x86f0-0x87d1
+//    seg14:0xd0a];
 //  - already built: the slot holds a DC and bytes +0xac and +0xad are set [BYTES seg14:0x120e
 //    seg14:0x1219 seg14:0x1220];
 //  - otherwise seg10:0x6ee6: frees the slot's DC (seg10:0x552(slot, 0)), renders, and puts the

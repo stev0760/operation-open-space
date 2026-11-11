@@ -6,6 +6,7 @@
 #include "world/ambulance.h"
 #include "world/collide.h"
 #include "world/damage.h"
+#include "world/fuel_balls.h"
 #include "world/icon_effects.h"
 #include "world/purchases.h"
 #include "world/roster.h"
@@ -1697,7 +1698,9 @@ void place(World& w, SetupHost& h) {
     place_shot_slots(shot_state());
     clear_effects(w.effects);
     smoke_place(w.smoke);  // the smoke counters DGROUP:0x58cc + 0x14·k = -1 [BYTES seg9:0x6747-0x675d]
-    for (int i = 0; i < p.allocated(w.roles.pool5); ++i) p.rec(w.roles.pool5, i).state = 1;
+    // E(r)+0 = -1 and `state` 1 for every allocated pool-5 record (fuel_balls.h) [BYTES
+    // seg9:0x677b-0x67af] (M4 s7 FUEL).
+    pool5_wave_start(p, w.roles.pool5, pool5_tables());
     for (World::Particle& q : w.particles) {
         q.w08 = 0;
         q.x = -100;

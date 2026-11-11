@@ -14,9 +14,13 @@
 //
 // The missile entries DGROUP:0x66e0 are Pools::missiles (records.h), the weapon words
 // DGROUP:0x2f54 are MissileState::words. Calls into routines other parts of the port own go
-// through MissileHost, whose defaults do nothing; each names its address. The branches of the
-// weapons this stage does not port (M4-later, M6) reach MissileHost::unported with their
-// address.
+// through MissileHost, whose defaults do nothing; each names its address. M4 stage 7, track
+// LAUNCHED (work/analysis/m4/s7-launched.md with s7-launched-verify.md: claims 2, 7, 13, 21, 28
+// and 43 as corrected, Omissions 1-13) ports the other launched weapons (6, 9-12, 14, 16-22):
+// the rear launch, the kind-5 aim, the dodge, the fire from a missile, the ends, and names the
+// weapon system's other routines as MissileHost virtuals whose defaults log their address
+// through MissileHost::unported. What stays unported (the Noble weapons' particles and shock,
+// M6; seg13:0x2688's relation, M5) reaches `unported` or a default with its address.
 //
 // Portable, no Win32.
 #pragma once
@@ -30,6 +34,7 @@
 #include "world/records.h"
 #include "world/sprite.h"
 #include "world/update.h"
+#include "world/visibility.h"
 #include "world/world.h"
 
 namespace is::world {
@@ -46,7 +51,9 @@ constexpr int kThrust = 0x0c;
 constexpr int kClamp = 0x0e;      // the per-axis speed clamp
 constexpr int kMass = 0x10;
 constexpr int kSpin = 0x12;       // the mode-1 period
-constexpr int kW14 = 0x14;        // seg12:0x64aa when != 0; 1 skips pool DGROUP:0x9328 in the retarget
+constexpr int kW14 = 0x14;        // seg12:0x64aa when != 0; 1 skips pool DGROUP:0x9328 in the retarget;
+                                  // seg12:0x64aa's action: 1 FIREBALL, 2 SNOWBALL, 3 lightning, 4 a gun shot [BYTES seg12:0x668b]
+constexpr int kFireRule = 0x16;   // seg12:0x64aa's when: 1 always, 2 one in three, 3 facing a ship, 4 facing the target [BYTES seg12:0x64d8]
 constexpr int kSound = 0x18;      // the launch sound
 constexpr int kRecolourA = 0x1a, kRecolourB = 0x1c;
 constexpr int kLifetime = 0x1e;
@@ -119,6 +126,49 @@ public:
     virtual std::int16_t team(const World& w, int design) { return design_from_world(w, design).team; }
     // A branch of a weapon this stage does not port, by its address (M4-later or M6).
     virtual void unported(const char* address, int a, int b) { (void)address, (void)a, (void)b; }
+
+    // ---- M4 s7 LAUNCHED: the weapon system's switch [BYTES seg11:0xad38-0xadb5]. Each default
+    // logs once through `unported` with the routine's address; the other tracks' ports are bound
+    // by the program (flight_hooks.cpp bind_missile_links).
+    // seg11:0x8a42(pool, rec), RING OF DEATH, cdecl; the switch passes (DGROUP:0x9324,
+    // DGROUP:0x9646) [BYTES seg11:0xad5a-0xad66].
+    virtual void ring_of_death(int pool, int rec) { unported("seg11:0x8a42", pool, rec); }
+    // seg11:0x947a(pool, rec, w), cdecl: w 2 GRAPPLING HOOK, 0xf HANDCUFFS [BYTES seg11:0xad6b-0xad80].
+    virtual void tether_use(int pool, int rec, int w) { (void)rec, unported("seg11:0x947a", pool, w); }
+    // seg11:0x9fdc(pool, rec), LIGHTNING, cdecl: the switch's case 2 (DGROUP:0x9324,
+    // DGROUP:0x9646) [BYTES seg11:0xad82-0xad8e] and BATTERIES' action seg12:0x66e8 (6, m).
+    virtual void lightning(int pool, int rec) { unported("seg11:0x9fdc", pool, rec); }
+    // seg13:0x1318(pool, rec, life, kind), Pascal: kind 4 SNOWBALLS, 5 FIREBALLS, life 0x1e
+    // [BYTES seg11:0xad38-0xad58].
+    virtual void fuel_ball(int pool, int rec, int life, int kind) {
+        (void)rec, (void)life, unported("seg13:0x1318", pool, kind);
+    }
+    // seg11:0x9078(pool, rec), WILDCARD DEFENSE, cdecl [BYTES seg11:0xad9e-0xadaa].
+    virtual void wildcard(int pool, int rec) { unported("seg11:0x9078", pool, rec); }
+    // ---- M4 s7 LAUNCHED: the fire from a missile seg12:0x64aa [BYTES seg12:0x6681-0x66f7]
+    // seg12:0x2db6(pool, rec, heading, life, kind), Pascal `retf 0xa`: a pool-5 ball from an
+    // object (the FUEL track's spawn of seg12:0x2db6) [BYTES seg12:0x6691-0x66c1 seg12:0x3145].
+    virtual void pool5_shot(int pool, int rec, int heading, int life, int kind) {
+        (void)rec, (void)heading, (void)life, unported("seg12:0x2db6", pool, kind);
+    }
+    // seg6:0x84fc(a0, 0, 0, 0, 0, 0, 0, 0, a8, a9), the particle entry (M6) of ENLIGHTENMENT's
+    // launch, cdecl [BYTES seg11:0x80aa-0x80da]: a0 = (r % 2 + 1)·10, a8 = W+0x1e - 1, a9 = m.
+    // The default logs. Its port must draw seg6:0x8569's rand() only after it found a free
+    // entry (verify claim 7 as corrected: three early exits come first) [OPEN M6].
+    virtual void particle(int kind, int life, int m) { (void)life, unported("seg6:0x84fc", kind, m); }
+    // seg13:0x2688(s, rec), the ships' relation the kind-5 aim compares with 150, cdecl with s
+    // pushed last (M5; the default logs once through `unported` and returns 0, which never
+    // passes) [BYTES seg11:0x82c9-0x82dd].
+    virtual std::int16_t relation(int s, int rec) {
+        unported("seg13:0x2688", s, rec);
+        return 0;
+    }
+    // The visibility list DGROUP:0x507c / 0x50e0 with its count DGROUP:0x9146 (visibility.h), for
+    // the kind-5 aim; the default is the program's last_visibility() (null: an empty list).
+    virtual const VisibilityGlobals* visible() { return last_visibility(); }
+    // The rear muzzle entry (x, y) = DGROUP:0x7ba0 / 0x7ba2 + 4·(64n + f), entry 16 + f of design
+    // n (shots.h ShotState::mx / my); the default reads shot_state() [BYTES seg11:0x8856 seg11:0x88e3].
+    virtual Point16 muzzle(int n, int k);
 };
 
 // What the routines touch.
@@ -218,6 +268,58 @@ std::int16_t generic_on_damage(Pools& p, int pool, int rec, std::int16_t a, Miss
 // then entry weapon = -1 (effects.cpp object_destroyed calls it).
 void missile_destroyed(Pools& p, int m, const WeaponWords& words);
 
+// ---- M4 s7 LAUNCHED (work/analysis/m4/s7-launched.md with s7-launched-verify.md)
+
+// seg8:0x348e(P, R, TP, TR, V), cdecl [BYTES seg8:0x348e-0x35cf] (verified claims 17, 18): record
+// (P, R) gets the velocity that aims it at the centre of record (TP, TR) at speed V, plus the
+// target's velocity. Both corners go through seg8:0x29ea (`to_screen`) and are shifted left by
+// DGROUP:0x9150 (`shift`, 16-bit `shl`); only the target point gets + T.extent / 2 (toward
+// zero); dx = T - obj, dy alike (16-bit); d = seg8:0x35d0(dx, dy) (>= 1); vx = T.vx +
+// lo16((sext V · sext d) / sext dx) (32-bit `imul`, `cdq`, `idiv dword`: the divisor is dx, not
+// d) and vy = T.vy + lo16(seg5:0x110(sext dy · sext V, sext d)), both stored at the end
+// [BYTES seg8:0x3585-0x35c3]. The original has no test of dx and faults on dx = 0 (the kind-5
+// self-aim reaches it when M.extent / 2 is 0 after the shift, the hook's aim when the target is
+// straight above or below); the port skips the division and both stores, leaves the record's
+// velocity unchanged, logs once through guard_todo and returns false [DESIGN ADR 0016 decision 4] (ruling
+// R1). True when the velocity was stored.
+using AimToScreen = std::function<Point16(std::int16_t x, std::int16_t y)>;
+bool aim_at(World& w, const AimToScreen& to_screen, int shift, int P, int R, int TP, int TR,
+            std::int16_t V);
+// The same on the missile context: seg8:0x29ea is c.h.to_screen and DGROUP:0x9150 = 4 - Size
+// (c.g.size) [BYTES seg9:0x2408].
+bool aim_at(MissileCtx& c, int P, int R, int TP, int TR, std::int16_t V);
+
+// seg13:0x1076(pool, rec), Pascal `retf 4` [BYTES seg13:0x1076-0x1315] (verified claims 22-25):
+// "the most urgent object on a collision course" of object (pool, rec). The goal is the entry
+// target (+0x00/+0x02) with goal mode 2 for pool 6, ship words +0x32/+0x34 with mode +0x38 for
+// the ship pool (M5 caller seg4:0x4fc8); any other pool leaves both uninitialised in the
+// original, where the port takes no goal [DESIGN ADR 0016 decision 1]. The scan runs i <
+// DGROUP:0x9318 + DGROUP:0x9146: the visibility list, then pool-12 record 2(i - DGROUP:0x9146)
+// + 1. Skips: the object itself, pools 2, 9 and 4, and with goal mode 2 the goal and pool 0.
+// d = seg8:0x285a(self, cand) (cand - self, cells), 0 < d < 300; dv = self.v - cand.v (16-bit);
+// q = (sext dx · sext dvx + sext dy · sext dvy) / sext d (32-bit) > 0; score = d -
+// lo16(seg5:0x110(3q, 2)); kept below the best (from 20000) when < 60, or for pool 8 with rec <
+// 2·DGROUP:0x9318 and score < 120; a kind-6 wave with byte DGROUP:0x9eb5 = 0 rejects pool 8.
+// seg8:0x35d0(dvx, dvy) is computed and never read (no state, not called). Returns (pool << 8)
+// | (rec & 0xff), or 0xffff. No rand().
+std::uint16_t threat(MissileCtx& c, const VisibilityGlobals* vis, int pool, int rec);
+
+// seg4:0x5514(m), Pascal `retf 2` [BYTES seg4:0x5514-0x5650] (verified claim 21 as corrected):
+// the dodge of a weapon with W+0x38 != 0 (6 TARGETTING MISSILES, 9 DEATH HEADS), called by the
+// mover every 4 passes. Mode 2 off screen or with no threat; else the threat goes to entry
+// +0x10/+0x12 (stored before the launcher test), mode 2 when it is the launcher, else mode 4 for
+// dx·dvy - dy·dvx > 0 (32-bit, target minus missile) and mode 3 otherwise.
+void dodge(MissileCtx& c, const VisibilityGlobals* vis, int m);
+
+// seg12:0x64aa(m, id), Pascal `retf 4` [BYTES seg12:0x64aa-0x6701] (verified claims 27-29, 28
+// as corrected): the fire from a missile at ages 16, 20, ... (age & 3 = 0, age >= 13). W+0x16
+// decides: 1 always, 2 rand() % 3 = 0 (the one rand()), 3 the on-screen missile's frame within
+// one of the heading to an on-screen ship k <= DGROUP:0x9316 in state 0 (signed range, no wrap),
+// 4 the same for the entry target (no table weapon). W+0x14 acts: 1 pool5_shot(6, m, frame, 0xb,
+// 5), 2 (…, 4), 3 lightning(6, m) when signed byte +0x50 > 0x19, 4 shots.h object_shot(6, m)
+// through `gun` (null: nothing).
+void missile_fire(MissileCtx& c, int m, int id, const std::function<void(int pool, int rec)>& gun);
+
 // ---- the program's links (the glue, src/world/flight_hooks.cpp, fills them; an empty slot does
 // nothing)
 struct MissileLinks {
@@ -231,6 +333,15 @@ struct MissileLinks {
     std::function<void(int ship, std::int16_t pr)> touch;            // seg13:0x16ac
     std::function<void(int ship)> ship_touched;                      // seg13:0x6716
     std::function<void(const char* address, int a, int b)> unported; // a TODO log
+    // M4 s7 LAUNCHED: the other tracks' routines (empty: MissileHost's logging default).
+    std::function<void(int pool, int rec)> ring_of_death;             // seg11:0x8a42
+    std::function<void(int pool, int rec, int w)> tether_use;        // seg11:0x947a
+    std::function<void(int pool, int rec)> lightning;                 // seg11:0x9fdc
+    std::function<void(int pool, int rec, int life, int kind)> fuel_ball;  // seg13:0x1318
+    std::function<void(int pool, int rec)> wildcard;                  // seg11:0x9078
+    std::function<void(int pool, int rec, int heading, int life, int kind)> pool5_shot;  // seg12:0x2db6
+    std::function<void(int kind, int life, int m)> particle;          // seg6:0x84fc (M6)
+    std::function<std::int16_t(int s, int rec)> relation;             // seg13:0x2688 (M5)
 };
 MissileLinks& missile_links();
 // The MissileHost over missile_links().

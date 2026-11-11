@@ -150,7 +150,7 @@ SheetBuild build_ship_sheet(Blitter& out, ImageSlotTable& images, ShipRecord& sh
     const auto byte = [](const ShipRecord& s, int off) {
         return static_cast<std::uint8_t>(sbyte_at(s, off));
     };
-    // The shared sheet of ship +0x50 [BYTES seg14:0x11cf seg14:0x11db seg14:0x11e2]: not ported
+    // The shared sheet of ship +0x50 [BYTES seg14:0x11cf seg14:0x11db seg14:0x11e2 seg14:0x11ed]: not ported
     // [OPEN] (dead in the wave set-up).
     (void)i;
     // Already built [BYTES seg14:0x120e seg14:0x1219 seg14:0x1220].

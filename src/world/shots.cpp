@@ -214,6 +214,60 @@ void trail_point(ShotCtx& c, int k, int j) {
     }
 }
 
+// ---- seg13:0x1fc2 (M4 s7 LAUNCHED)
+
+void object_shot(ShotCtx& c, int pool, int rec) {
+    World& w = c.x.w;
+    WaveGlobals& g = c.x.g;
+    ShotState& s = c.s;
+    const std::int16_t e = obj(w, pool, rec).extent;  // [bp-0xa] [BYTES seg13:0x1fd1-0x1fe3]
+    if (g.detail > 0) {  // signed `jle` [BYTES seg13:0x1fe6-0x1feb]
+        bool owned = false;
+        int free_count = 0;
+        for (int j = 0; j < s.dg_594; ++j) {  // [BYTES seg13:0x1ffa-0x202e]
+            // The player's owner words, free slots too [BYTES seg13:0x1ffa-0x2011]
+            if (s.word(j, shot::kOwnerPool) == g.ship_pool && s.word(j, shot::kOwnerRec) == g.player) owned = true;
+            if (s.word(j, shot::kAge) == -1) ++free_count;  // [BYTES seg13:0x2016-0x2022]
+        }
+        if (!owned && free_count < 2) return;  // [BYTES seg13:0x2030-0x203a]
+    }
+    int j = 0;
+    for (; j < s.dg_594; ++j)
+        if (s.word(j, shot::kAge) == -1) break;  // [BYTES seg13:0x2157-0x2169]
+    if (j >= s.dg_594) return;                   // [BYTES seg13:0x215d]
+    s.word(j, shot::kAge) = 0;                   // [BYTES seg13:0x216b-0x2175]
+    s.word(j, shot::kHits) = 0;
+    s.word(j, shot::kW80) = 0;
+    // Trail points 0 and 1 of barrel 0, then seg8:0x764(a, j) with the slot's previous +0x78
+    // [BYTES seg13:0x2046-0x206a]
+    for (int a = 0; a < 2; ++a) {
+        s.word(j, shot::kWorldX + 2 * a) = -100;
+        s.word(j, shot::kWorldY + 2 * a) = -100;
+        trail_point(c, a, j);
+    }
+    const ObjectRecord& O = obj(w, pool, rec);
+    const int f = O.frame & 0xf;  // the table's 16 entries [DESIGN: the index guard]
+    // The head: extent / 2 + ((heading << 3) + position), 16-bit, no wrap [BYTES seg13:0x206c-0x20b7]
+    s.word(j, shot::kWorldX) = add16(half(e), add16(shl16(heading_dx(f), 3), O.x));
+    s.word(j, shot::kWorldY) = add16(half(e), add16(shl16(heading_dy(f), 3), O.y));
+    s.word(j, shot::kOwnerPool) = static_cast<std::int16_t>(pool);  // [BYTES seg13:0x20bb-0x20c5]
+    s.word(j, shot::kOwnerRec) = static_cast<std::int16_t>(rec);
+    s.word(j, shot::kBarrels) = 1;  // [BYTES seg13:0x20cc]
+    s.word(j, shot::kAlive) = 1;    // [BYTES seg13:0x20d0]
+    s.word(j, shot::kNoSkip) = 0;   // [BYTES seg13:0x20d4]
+    s.word(j, shot::kVx) = mul16(heading_dx(f), 3);  // `imul ax, word, 3` [BYTES seg13:0x20e1-0x20e6]
+    s.word(j, shot::kVy) = mul16(heading_dy(f), 3);  // [BYTES seg13:0x20f1-0x20f6]
+    s.word(j, shot::kLife) = 0x14;                    // [BYTES seg13:0x20fa]
+    if (g.wave_kind == 6) {                            // [BYTES seg13:0x2100-0x2115]
+        s.word(j, shot::kLife) = 0x24;
+        c.h.race_5626(j);  // seg11:0x5626(j) (M6)
+    }
+    // seg5:0x110(sext(+0x74) · max(W, H) as `imul cx`, 1000) [BYTES seg13:0x2116-0x213d]
+    const std::int16_t big = w.W >= w.H ? w.W : w.H;  // signed `jge` [BYTES seg13:0x2124-0x212e]
+    s.word(j, shot::kLife) = lo16(div32(static_cast<std::int32_t>(s.word(j, shot::kLife)) * big, 1000));
+    c.x.h.sound(3, 0x1e, j, 2);  // seg10:0x754a(3, 0x1e, j, 2), ONE_SHOT [BYTES seg13:0x2141-0x214f]
+}
+
 // ---- seg11:0x4e0a
 
 void fire(ShotCtx& c, int ship) {

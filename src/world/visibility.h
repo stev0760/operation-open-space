@@ -2,8 +2,10 @@
 // writes object word +0x1a (1 inside, -1 for one frame after leaving, then 0 with the screen
 // position parked at (-1000, -1000)), clears +0x1c of the objects it lists, lists them in the
 // byte tables DGROUP:0x507c (pool) and DGROUP:0x50e0 (record) counted by DGROUP:0x9146, and on
-// one frame in nine (rand() % 9 = 0) calls seg11:0x9fdc for each listed object with byte
-// +0x50 != 0 outside the ship pool when another listed object is live.
+// one frame in nine (rand() % 9 = 0) calls seg11:0x9fdc, LIGHTNING's search (src/world/
+// lightning.h), for each listed object with byte +0x50 != 0 outside the ship pool when another
+// listed object is live: the discharge of a charged object (work/analysis/m4/s7-ring-verify.md
+// claim 27 and Omission O7).
 //
 // world.md "Visibility pass (seg8:0x4e14)" and structs.md object +0x1a, +0x1c (M3 s3 fixer,
 // C043-C046) [BYTES seg8:0x4e14-0x50a8]; the player's +0x1a = 0 case stays [OPEN On-screen flag].
@@ -40,11 +42,17 @@ struct VisibilityHost {
     // Word DGROUP:0x3d80 + 0x34·rec of the pool-8 table: a pool-8 record whose word is 4 is
     // skipped [BYTES seg8:0x4f3e-0x4f4c].
     std::function<std::int16_t(int rec)> pool8_3d80;
-    // seg11:0x9fdc(pool, rec) [OPEN].
+    // seg11:0x9fdc(pool, rec), cdecl: LIGHTNING's search (lightning.h lightning_search) with
+    // the listed object as the user [BYTES seg8:0x5049-0x505d]; an empty slot calls nothing.
     std::function<void(int pool, int rec)> seg11_9fdc;
 };
 
-// seg8:0x4e14 [BYTES seg8:0x4e14-0x50a8]: one rand() per call (seg5:0xdc at seg8:0x4ffb).
+// seg8:0x4e14 [BYTES seg8:0x4e14-0x50a8]: one rand() per call (seg5:0xdc at seg8:0x4ffb),
+// drawn after the listing on both paths. The discharge loop (O7) runs only when that rand() % 9
+// is 0 (`cwd; idiv 9`); for each listed index i < DGROUP:0x9146 (re-read every turn) whose
+// object has byte +0x50 != 0 (any kind: a struck rock, a tank's wobble rate, a virus, a battery
+// missile) and whose pool is not DGROUP:0x9324, the first listed j != i whose object has `state`
+// 0 lets it call seg11:0x9fdc(pool[i], rec[i]) once; none, no call [BYTES seg8:0x4ffb-0x50a0].
 void visibility(Pools& pools, const ViewState& view, VisibilityGlobals& g, shell::Rng& rng,
                 const VisibilityHost& host);
 

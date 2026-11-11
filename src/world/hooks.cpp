@@ -83,9 +83,12 @@ DeadlineResult run_wave_deadlines(shell::GameState& s) {
 #include "world/draw.h"
 #include "world/effects.h"
 #include "world/flight_hooks.h"
+#include "world/fuel_balls.h"
 #include "world/icon_effects.h"
+#include "world/lightning.h"
 #include "world/missile.h"
 #include "world/roster.h"
+#include "world/tether.h"
 #include "world/setup.h"
 #include "world/update.h"
 #include "world/visit.h"
@@ -248,7 +251,8 @@ void ship_setup_player(World& w) {
         // above comes from the roster (core-0001's
         // 39, 9, 39, 1) [ORACLE core-0001].
         // It runs before the cell sizes: seg14:0x0's iteration calls seg16:0x3784 at seg14:0xd32
-        // and reaches the size step seg14:0xbcb-0xc04 only after it (seg14:0xd75 -> seg14:0xb86),
+        // and reaches the size step seg14:0xbcb-0xc04 only after it (seg14:0xd75 -> seg14:0xb86
+        // without a roster record, seg14:0xd79-0xd9d -> seg14:0xbb1 with one),
         // so seg16:0x35ec's ship word +0x20 = object `size` - 2 reads the record before any size
         // is written: -2, with +0x22 = 1, as core-0001, core-0005 and core-0006 read through the
         // wave (structs.md Ship records +0x20) [BYTES seg14:0xd32 seg14:0xd75 seg14:0xbe5
@@ -479,6 +483,7 @@ void build_strip(const World& w) {
 // seg10:0x0's load (seg9:0x22b4(0)) after the briefing's state-1 set-up (the greeting).
 void state1(shell::GameState&) {
     World& w = g_world;
+    bolt_state().pending = 0;  // DGROUP:0x1016 = 0, not DGROUP:0x1036 (lightning.h, O13) [BYTES seg10:0x31] (M4 s7 RING)
     read_inputs(w, true);
     w.wave = static_cast<std::int16_t>(briefing::wave());
     auto h = make_host();
@@ -496,6 +501,7 @@ void briefing_entry() {
     if (g_icons) g_icons->clear();
     auto h = make_host();
     enter_briefing(w, *h);
+    bolt_state().pending = 0;  // DGROUP:0x1016 = 0, not DGROUP:0x1036 (lightning.h, O13) [BYTES seg9:0x5ddc] (M4 s7 RING)
     // seg9:0x6624's seg14:0x0(-1) builds the sheets (seg16:0x3784 -> seg16:0x3468 ->
     // seg14:0x11a8, only under World::sheet_due and roster.h placement_rebuilds_sheet's tests)
     // and the flame strips (seg10:0x5d3c) inside the briefing entry, before the text [BYTES
@@ -547,9 +553,8 @@ class ProgramGateHost final : public GateExitHost {
 public:
     void sound(int id, int pool, int rec, int arg) override { play_object(id, pool, rec, arg); }
     void destroy(int pool, int rec) override { destroy_object(pool, rec); }  // seg12:0x274a
-    void pool5_slot(int rec) override {
-        todo_once("pool-5 slot words of record " + std::to_string(rec), "seg12:0x22cf");
-    }
+    // seg12:0x22cf-0x22d6 (fuel_balls.h pool5_gate) (M4 s7 FUEL).
+    void pool5_slot(int rec) override { pool5_gate(collide_globals(), rec); }
     void removed(int pool, int rec) override {
         if (pool == 0 || pool == 14) return;  // a no-op for pools 0 and 14 (s1-end.md 1c.6)
         // seg7:0x2080 on the program's World (missile.h recount_in_use): the in-use count drops
@@ -576,7 +581,8 @@ public:
         if (wave_end_links().message) return wave_end_links().message(ship, id);
         todo_once("message " + std::to_string(id), "seg3:0x6ec");
     }
-    void lines() override { todo_once("the link lines after a vanish", "seg12:0x3778"); }
+    // The vanish's seg7:0x19d6 -> seg12:0x3778 (draw.h draw_lines with tether.h's hooks) (M4 s7 TETHER).
+    void lines() override { draw_lines(current(), current().roles.ships, kDcWindow, program_link_hooks()); }
     void menu_refresh() override { todo_once("menu state after the vanish", "seg2:0x170e"); }
     // W(weapon)+0x1e from the program's weapon words (collide.h weapon_word) [BYTES seg7:0x1988].
     std::int16_t weapon_word_1e(int weapon) override { return weapon_word(weapon, 0x1e); }

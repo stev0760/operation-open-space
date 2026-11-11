@@ -79,20 +79,30 @@ void visibility(Pools& pools, const ViewState& view, VisibilityGlobals& g, shell
             }
         }
     }
-    // rand() % 9 = 0: the pairs [BYTES seg8:0x4ffb-0x50a0].
+    // The discharge loop (s7-ring-verify.md O7): rand() % 9 = 0 (`cwd; idiv 9`, `or dx, dx`)
+    // [BYTES seg8:0x4ffb-0x500a].
     if (rng.rand() % 9 != 0) return;
+    // i < DGROUP:0x9146, re-read each turn: the strike cannot change the list [BYTES
+    // seg8:0x5060-0x5069]. The bytes are sign-extended (`cbw`); the port bounds the list and the
+    // records [DESIGN].
     const int n = g.count < kVisibleMax ? g.count : kVisibleMax;
     for (int a = 0; a < n; ++a) {
         const int pa = static_cast<std::int8_t>(g.pool[static_cast<std::size_t>(a)]);
         const int ra = static_cast<std::int8_t>(g.rec[static_cast<std::size_t>(a)]);
         if (pa < 0 || pa >= kPoolCount || ra < 0 || ra >= pools.records(pa)) continue;
-        if (pools.rec(pa, ra).b50 == 0 || pa == g.ship_pool) continue;  // [BYTES seg8:0x508b-0x5096]
+        // Byte +0x50 != 0 and pool != DGROUP:0x9324, no kind filter (claim 27) [BYTES
+        // seg8:0x508b-0x5096].
+        if (pools.rec(pa, ra).b50 == 0 || pa == g.ship_pool) continue;
+        // j from 0: the first listed j != i whose object has `state` 0 (the test reads the
+        // state before the index) [BYTES seg8:0x5098 seg8:0x5012-0x5047].
         for (int b = 0; b < n; ++b) {
             const int pb = static_cast<std::int8_t>(g.pool[static_cast<std::size_t>(b)]);
             const int rb = static_cast<std::int8_t>(g.rec[static_cast<std::size_t>(b)]);
             if (pb < 0 || pb >= kPoolCount || rb < 0 || rb >= pools.records(pb)) continue;
             if (pools.rec(pb, rb).state != 0 || b == a) continue;  // [BYTES seg8:0x503d-0x5047]
-            if (host.seg11_9fdc) host.seg11_9fdc(pa, ra);           // [BYTES seg8:0x5058]
+            // seg11:0x9fdc(pool[i], rec[i]), cdecl (`push rec; push pool`, `add sp, 4`), once per
+            // qualifying i [BYTES seg8:0x5049-0x505d].
+            if (host.seg11_9fdc) host.seg11_9fdc(pa, ra);
             break;
         }
     }

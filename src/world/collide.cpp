@@ -7,6 +7,7 @@
 #include "world/damage.h"
 #include "world/design_words.h"
 #include "world/effects.h"
+#include "world/fuel_balls.h"
 #include "world/missile.h"
 #include "world/pods.h"
 #include "world/tank.h"
@@ -458,6 +459,7 @@ std::int16_t call_on_damage(CollideCtx& x, int pool, int rec, std::int16_t a) {
     if (id == kDamageRock) return rock_damage(x, pool, rec, a);
     if (id == kDamageIcon) return icon_damage(x, pool, rec, a);  // seg7:0x233c (M4 s2 GUN)
     if (id == kDamagePool4) return tank_damage(x, pool, rec, a);  // seg12:0xdc4 (M4 s3 FUEL)
+    if (id == kDamagePool5) return pool5_on_damage(x, pool, rec, a);  // seg7:0x570a (M4 s7 FUEL)
     // seg7:0x2652, the generic handler of the missiles and the other generic records (missile.h
     // generic_on_damage); its far call through +0x66 is CollideHost::on_destroy (M4 s2 fixer).
     if (id == kDamageGeneric) {
@@ -539,11 +541,18 @@ std::int16_t dispatch(CollideCtx& x, int tp, int tr, int xp, int xr, std::int16_
                 cr = T.owner_rec;
             }
         }
-        // A tethered target [BYTES seg8:0x5f3e-0x5fe2]
+        // A tethered target [BYTES seg8:0x5f3e-0x5fe2] (s7-tether.md section 8, verified claims
+        // 57-59, Omission G): s = signed byte T+0x30, the slot of the tether holding T (a hook
+        // record dispatched as T reads its never-written 0, slot 0); X.mass + 100 > T.mass toggles
+        // the slot's swing direction +0x0e (DGROUP:0x65da + 0x20·s), which seg8:0x1e32 reads
+        // (tether.h tether_follow); one rand() always; a hard hit on a held ship makes the holder
+        // let go through seg11:0x947a(holder, 2), which passes the release's gates and pays W(2)'s
+        // 25 fuel even for HANDCUFFS (M4 s7 TETHER).
         if (obj(w, tp, tr).owner_pool != -1) {
             const int s = static_cast<std::int8_t>(obj(w, tp, tr).w30 & 0xff);
-            std::int16_t& tw = entry(c.link_65da, s, g_scratch_word);
-            if (add16(mX, 100) > mT) tw = tw != 0 ? 0 : 1;
+            std::int16_t& tw = s >= 0 && s < kLinkSlots ? w.links[static_cast<std::size_t>(s)].swing
+                                                        : (g_scratch_word = 0);
+            if (add16(mX, 100) > mT) tw = tw != 0 ? 0 : 1;  // [BYTES seg8:0x5f6d-0x5f94]
             const std::int16_t r = static_cast<std::int16_t>(x.rng.rand());
             if (add16(imod16(r, 12), 30) < a && a != 100 && tp == ships && s >= 0 && s < kLinkSlots) {
                 const LinkSlot& l = w.links[static_cast<std::size_t>(s)];
@@ -648,6 +657,9 @@ std::int16_t dispatch(CollideCtx& x, int tp, int tr, int xp, int xr, std::int16_
         }
         res = 0;
         if (xp == 10) {
+            // A hook as the attacker: seg12:0x3498(T pool, T rec, X rec), the attach of
+            // tether.h hook_meets through the host, and no damage handler [BYTES seg8:0x640e-0x6425]
+            // (s7-tether-verify.md Omission B; M4 s7 TETHER).
             x.h.seg12_3498(tp, tr, xr);
             disp = 0;
         }

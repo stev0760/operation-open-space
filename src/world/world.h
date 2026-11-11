@@ -213,10 +213,19 @@ struct LinkSlot {
     std::int16_t pool_a = -1, rec_a = 0;  // DGROUP:0x65cc, 0x65ce: end A, pool -1 = none
     std::int16_t pool_b = -1, rec_b = 0;  // DGROUP:0x65d0, 0x65d2: end B
     std::int16_t w08 = 0;                 // DGROUP:0x65d4
+    // ---- M4 s7 TETHER: words +0x0a ... +0x0e (work/analysis/m4/s7-tether.md 1.1, tether.h)
+    // +0x0a DGROUP:0x65d6: the weapon, 2 GRAPPLING HOOK or 15 HANDCUFFS [BYTES seg11:0x957a
+    // seg8:0x1e6d seg13:0x74d]; +0x0c DGROUP:0x65d8: no instruction references it; +0x0e
+    // DGROUP:0x65da: the hook's swing direction 0/1, toggled by the hit dispatcher and read by
+    // seg8:0x1e32, zero at load and never reset [BYTES seg8:0x5f74 seg8:0x5f94 seg8:0x23ee].
+    std::int16_t weapon = 0;
+    std::int16_t w0c = 0;
+    std::int16_t swing = 0;
+    // ---- end M4 s7 TETHER
     // DGROUP:0x65dc ... 0x65ea: the line's coordinate words, by offset (0x65dc + 2k).
     std::array<std::int16_t, 8> line{};
 };
-constexpr int kLinkSlots = 8;  // the port's bound on DGROUP:0x9300 [DESIGN]
+constexpr int kLinkSlots = 3;  // DGROUP:0x9300, pool 10's allocated count from the load [BYTES seg9:0x2508] (ruling R3)
 
 // A star of seg8:0x158a's moving pass is the Star above; its table and words:
 //   the current count DGROUP:0x9152 (World::star_count), the wanted count DGROUP:0x9154

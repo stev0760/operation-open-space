@@ -72,7 +72,7 @@ The file is an array of 44-byte (0x2c) records with no header. Every reader take
 | 0x08 | 309 Thrust Behind Ship | design word +0x48 (DGROUP:0x971a + 0xad·n) = 1. seg10:0x5d3c then draws the ship over the flame; with the word 0 it draws the flame over the ship [BYTES seg14:0x1d55 seg14:0x1d5c] [BYTES seg10:0x5ecc-0x5f9b seg10:0x5fa2-0x6019] |
 | 0x40 | none | DGROUP:0x9774 + 0xad·n = 1 [BYTES seg14:0x1f71] |
 
-- The special-ability word is DGROUP:0x96fa + 0xad·n: 3 for bit 0x04, else 4 for the SHP cloak bit, else 5 for bit 0x02, else 0xffff. [BYTES seg14:0x1d8c seg14:0x1da8 seg14:0x1dc9 seg14:0x1dd6]
+- The word DGROUP:0x96fa + 0xad·n names only the fourth lamp's row: 3 for bit 0x04, else 4 for the SHP cloak bit, else 5 for bit 0x02, else 0xffff. The abilities themselves combine: the body's wing flag 0x04 with the SHP cloak flag 0x08 on 32 ships, and with the body's shield flag 0x02 on the three TRANSFORMER-body ships. No ship in MASTER.SHP has both cloak and shield, and CapsLock tests the shield first. [BYTES seg14:0x1d8c seg14:0x1da8 seg14:0x1dc9 seg14:0x1dd6 seg11:0x6df1 seg11:0x6dfc]
 
 ## MASTER.SHP: ships
 

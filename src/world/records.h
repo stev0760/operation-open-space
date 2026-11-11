@@ -189,8 +189,10 @@ constexpr std::size_t kEffectEntrySize = 0x14;
 constexpr int kEffectCount = 45;
 constexpr std::uint16_t kDgEffectTable = 0x1e90;  // DGROUP:0x1e90
 constexpr std::uint16_t kEffectFree = 0xffff;
-// The type word 0xff06 (-250) of seg11:0x9007: no blackout on its last frame, and its blast
-// hits its own source [BYTES seg8:0x407b seg11:0x9007].
+// The type word 0xff06 (-250) of seg11:0x9007 (RING OF DEATH's two centre entries, ring.h): no
+// fireball (type <= -1), no blackout on its last frame (it goes straight to the advance), and
+// its blast skips its own source (s7-ring-verify.md claims 8, 9) [BYTES seg8:0x41bc seg8:0x407b
+// seg8:0x4083 seg8:0x5ce3-0x5cf8 seg11:0x9007].
 constexpr std::int16_t kEffectTypeFF06 = static_cast<std::int16_t>(-250);
 using EffectTable = std::array<EffectEntry, kEffectCount>;
 // seg18:0x8bc and the placement seg9:0x6624 mark all 45 entries free [BYTES seg18:0x9b2 seg9:0x6624].
@@ -349,7 +351,7 @@ struct MissileSlot {
     std::int16_t launcher_rec = 0;  // +0x0a DGROUP:0x66ea [BYTES seg11:0x89d2]
     std::int16_t age = 0;           // +0x0c DGROUP:0x66ec, mover passes [BYTES seg11:0x8981 seg12:0x445 seg9:0x66a0]
     std::int16_t steer_delay = 0;   // +0x0e DGROUP:0x66ee, kind 1 steers once age > it [BYTES seg12:0x156]
-    std::int16_t alt_pool = 0;      // +0x10 DGROUP:0x66f0, the target of modes != 2 (seg4:0x5514, M4-later)
+    std::int16_t alt_pool = 0;      // +0x10 DGROUP:0x66f0, the target of modes != 2 (seg4:0x5514, missile.cpp dodge)
     std::int16_t alt_rec = 0;       // +0x12 DGROUP:0x66f2
     std::int16_t mode = 0;          // +0x14 DGROUP:0x66f4, the steering mode, 2 at launch [BYTES seg11:0x7ec4]
     std::int16_t anim = 0;          // +0x16 DGROUP:0x66f6, the animation counter [BYTES seg11:0x7ec0 seg12:0x23]

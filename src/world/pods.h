@@ -47,8 +47,9 @@ struct PodDestroyOut {
     std::function<ScreenPoint(std::int16_t x, std::int16_t y)> to_screen;  // seg8:0x29ea
 };
 // seg12:0x6a60(pool, rec), cdecl [BYTES seg12:0x6a60-0x6b1c] (verified claim 54): the square
-// blacked when seg8:0x7ba8 accepts the record's world point on screen, (pool 6: the weapon slot's
-// reset [OPEN: not this track's]), five smoke puffs seg7:0x5b68(pool, rec, 1), `state` = 1.
+// blacked when seg8:0x7ba8 accepts the record's world point on screen, for pool 6 the missile
+// entry's age = W(weapon)+0x1e and weapon -1 [BYTES seg12:0x6ac5-0x6adc], five smoke puffs
+// seg7:0x5b68(pool, rec, 1), `state` = 1.
 void pod_destroyed(World& w, int pool, int rec, const PodDestroyOut& d);
 
 // seg12:0x129e(pool, rec), cdecl [BYTES seg12:0x129e-0x1774]: the pickup dissolve of a pod (pool

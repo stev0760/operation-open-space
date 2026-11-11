@@ -28,11 +28,17 @@
 #include "world/aggression.h"
 #include "world/ambulance.h"
 #include "world/capture.h"
+#include "world/fuel_balls.h"
+#include "world/icon_effects.h"
+#include "world/lightning.h"
 #include "world/missile.h"
+#include "world/ring.h"
 #include "world/shots.h"
 #include "world/smoke.h"
 #include "world/tank.h"
+#include "world/tether.h"
 #include "world/visibility.h"
+#include "world/wildcard.h"
 #include "world/world.h"
 
 namespace is::world {
@@ -169,6 +175,15 @@ public:
     // player word +0x58, 2) while DGROUP:0x9608 != 0, else seg7:0x119c(2, 0).
     void speed_display_end_3_6ec() override;
     void speed_display_end_7_119c() override;
+    // ---- M4 s7: the tethers and the bolt on the program's World
+    // seg8:0x1e32(pool, rec) from the integrator seg8:0x1b54 (tether.h tether_follow) (M4 s7 TETHER).
+    void follow_owner(int pool, int rec) override { tether_follow_program(pool, rec); }
+    // seg13:0x6e5-0xa57, the throw (tether.h tether_throw) (M4 s7 TETHER).
+    void seg13_6e5(int ship) override { tether_throw_program(ship); }
+    // seg12:0x3778's erase and recount at seg7:0xbed (tether.h TetherLinkHooks) (M4 s7 TETHER).
+    LinkHooks* link_hooks() override { return program_link_hooks(); }
+    // seg11:0xa9ea(arg), the bolt's frame call (lightning.h bolt_frame) (M4 s7 RING).
+    void seg11_a9ea(int arg) override;
 };
 
 CollideLinks g_collide_links;
@@ -203,7 +218,12 @@ public:
         if (Blitter* out = u->blitter()) out->pat_blt(kDcWindow, x, y, w, h, kBlackness);
     }
     void seg13_b6f2(int, int) override { todo_once("pilot goal", "seg13:0xb6f2"); }
-    void seg11_947a(int, int, int) override { todo_once("tether end", "seg11:0x947a"); }
+    // seg8:0x5fdd: the holder of a hard-hit held ship lets go, seg11:0x947a(holder, 2) (tether.h)
+    // (M4 s7 TETHER).
+    void seg11_947a(int pool, int rec, int arg) override { tether_use_program(pool, rec, arg); }
+    // seg8:0x641d: a pool-10 attacker meets its target, seg12:0x3498 (tether.h hook_meets)
+    // (M4 s7 TETHER).
+    void seg12_3498(int tp, int tr, int xr) override { hook_meets_program(tp, tr, xr); }
     void wing_taunts(int, int) override { todo_once("wing taunts", "seg8:0x2da6"); }
     // ---- M4 s2 fixer: the icon's on_damage seg7:0x233c and its shatter (damage.h)
     // seg7:0x5ae8(rec, arg) on the program's World (capture.h icon_counted).
@@ -357,6 +377,63 @@ void bind_missile_links() {
         ship_touched(c.flight, ship);
     };
     l.unported = [](const char* address, int, int) { todo_once("missile branch", address); };
+    // ---- M4 s7: the weapon system's other routines (MissileHost's named calls); particle (M6)
+    // and relation (M5) stay unbound.
+    // seg11:0x8a42, RING OF DEATH (the weapon system's case 0) [BYTES seg11:0xad5a-0xad66] (M4 s7 RING).
+    l.ring_of_death = [](int pool, int rec) {
+        Runtime& r = rt();
+        if (r.world) ring_of_death(*r.world, effect_state().sides, r.g.now, pool, rec);
+    };
+    // seg11:0x947a, cases 1 and 14 with (DGROUP:0x9324, DGROUP:0x9646, 2 or 0xf) (tether.h)
+    // (M4 s7 TETHER).
+    l.tether_use = [](int pool, int rec, int w) { tether_use_program(pool, rec, w); };
+    // seg11:0x9fdc, LIGHTNING (case 2) and BATTERIES' seg12:0x66e3 (6, m) [BYTES seg11:0xad82-0xad8e]
+    // (M4 s7 RING).
+    l.lightning = [](int pool, int rec) {
+        Runtime& r = rt();
+        if (r.world) lightning_search_on(*r.world, r.g.now, pool, rec);
+    };
+    // seg13:0x1318 (fuel_balls.h) (M4 s7 FUEL).
+    l.fuel_ball = [](int pool, int rec, int life, int kind) {
+        Runtime& r = rt();
+        if (!r.world) return;
+        SoundFuelHost fh([](int id, int p, int q, int m) { rt().h().sound(id, p, q, m); });
+        FuelCtx fc{*r.world, r.g, r.h().collide_globals(), fh};
+        launch_fuel_ball(fc, pool, rec, lo16(life), lo16(kind));
+    };
+    // seg12:0x2db6, FIRE DEMONS' fire (fuel_balls.h) (M4 s7 FUEL).
+    l.pool5_shot = [](int pool, int rec, int heading, int life, int kind) {
+        Runtime& r = rt();
+        if (!r.world) return;
+        SoundFuelHost fh([](int id, int p, int q, int m) { rt().h().sound(id, p, q, m); });
+        FuelCtx fc{*r.world, r.g, r.h().collide_globals(), fh};
+        spawn_fuel_ball(fc, pool, rec, lo16(heading), lo16(life), lo16(kind));
+    };
+    // seg11:0x9078, WILDCARD DEFENSE (wildcard.h); its run-time W(27) stores go to
+    // missile_state().words, the copy the pool-6 mover reads (M4 s7 FUEL, LAUNCHED binding 3).
+    l.wildcard = [](int pool, int rec) {
+        Runtime& r = rt();
+        if (!r.world) return;
+        wildcard(*r.world, r.g, missile_state().words, shell::game_rng(), linked_wildcard_host(), pool, rec);
+    };
+}
+
+// The tethers' calls (tether.h TetherLinks) on the program's World (M4 s7 TETHER).
+void bind_tether_links() {
+    TetherLinks& t = tether_links();
+    t.world = [] { return rt_world(); };
+    t.globals = [] { return &rt().g; };
+    t.play_size = [] { return std::make_pair(rt().view.play_w, rt().view.play_h); };
+    t.sound = [](int id, int pool, int rec, int mode) { rt().h().sound(id, pool, rec, mode); };  // seg10:0x754a
+    t.command = [](int id) { rt().h().play(id); };                                                // seg10:0x744c
+    t.to_screen = [](std::int16_t x, std::int16_t y) {                                            // seg8:0x29ea
+        const ScreenPoint p = flight_to_screen(x, y);
+        return Point16{p.x, p.y};
+    };
+    t.blitter = [] { return rt().h().blitter(); };
+    t.player_sprite = [] { rt().h().player_sprite(); };  // seg7:0x1208
+    t.weapon_word = [](int w, int off) { return rt().h().weapon_word(w, off); };
+    t.visible = [] { return rt().h().visible_list(); };  // DGROUP:0x507c
 }
 
 UpdateCtx make_ctx(Runtime& r);
@@ -433,14 +510,14 @@ Point16 effect_to_screen(std::int16_t x, std::int16_t y) {
 }
 
 // Runs f on the effects' context of the program's World: the image table from the HUD's link,
-// the wave Blitter, DGROUP:0x1e50, DGROUP:0x951a and DGROUP:0x1318 (0 in the image, its writer
-// [OPEN]) [BYTES DGROUP:0x1318].
+// the wave Blitter, DGROUP:0x1e50, DGROUP:0x951a and DGROUP:0x1318 (the World's word, the
+// blast gate seg8:0x5aec reads it) [BYTES DGROUP:0x1318 seg8:0x5aec] (M4 s7 RING).
 template <typename F>
 void with_effects(F f) {
     Runtime& r = rt();
     if (!r.world) return;
     r.collide_host.u = &r.h();
-    const EffectWords in{r.g.now, r.g.autopilot, 0};
+    const EffectWords in{r.g.now, r.g.autopilot, r.world->w1318};
     EffectCtx c{*r.world,         effect_state(),
                 in,               g_effect_host,
                 shell::game_rng(), wave_blitter(),
@@ -550,8 +627,44 @@ void bind_effect_links() {
     };
 }
 
+// The LIGHTNING routines' calls out (lightning.h LightningLinks) on the program's World
+// (M4 s7 RING).
+void bind_lightning_links() {
+    LightningLinks& l = lightning_links();
+    l.sound = [](int id, int a, int b, int mode) { rt().h().sound(id, a, b, mode); };  // seg10:0x754a
+    l.dispatch = [](int tp, int tr, int xp, int xr, std::int16_t a) -> std::int16_t {  // seg8:0x5df2
+        Runtime& r = rt();
+        if (!r.world) return 0;
+        r.collide_host.u = &r.h();
+        CollideCtx x = program_collide_ctx(r);
+        return dispatch(x, tp, tr, xp, xr, a);
+    };
+    l.icon_overlay = [](int icon, int k) {  // seg7:0x2512 (icon_effects.h)
+        Runtime& r = rt();
+        if (!r.world) return;
+        r.collide_host.u = &r.h();
+        CollideCtx x = program_collide_ctx(r);
+        icon_overlay(x, icon, k);
+    };
+    l.to_screen = effect_to_screen;  // seg8:0x29ea
+    l.team = [](int design) -> std::int16_t {  // DGROUP:0x970a + 0xad·n, as the dispatcher reads it
+        Runtime& r = rt();
+        return r.world ? r.h().collide_host().design(*r.world, design).team : std::int16_t{0};
+    };
+    l.dg_943a = &rt().f.dg_943a;  // the words program_collide_ctx hands the dispatcher
+    l.dg_943c = &rt().f.dg_943c;
+    // USER.15 GetCurrentTime at the strike, the program's clock app::now_tick, which seeds the
+    // bolt's srand [BYTES seg11:0xa4b5-0xa4bb] (lightning.h current_time; review L5).
+    l.current_time = [] { return static_cast<std::uint32_t>(app::now_tick()); };
+}
+
 void ProgramEffectHost::destroy(int pool, int rec) {
     with_effects([&](EffectCtx& c) { call_on_destroy(c, pool, rec); });
+}
+
+void DefaultHost::seg11_a9ea(int arg) {
+    Runtime& r = rt();
+    if (r.world) bolt_frame_on(*r.world, r.g.now, arg);
 }
 
 void DefaultHost::effect(int k) {
@@ -997,6 +1110,10 @@ void install_flight_hooks(App& app) {
     Runtime& r = rt();
     r.default_host.prev_frame = h.frame[shell::kWave];
     bind_missile_links();
+    bind_tether_links();     // M4 s7 TETHER
+    bind_lightning_links();  // M4 s7 RING
+    // The program's pool-5 tables for the set-up's seg9:0x6624 (fuel_balls.h) (M4 s7 FUEL).
+    set_pool5_tables([]() -> CollideGlobals* { return &rt().h().collide_globals(); });
     bind_effect_links();
     h.frame[shell::kWave] = [](shell::GameState& s) {
         rt().default_host.state = &s;

@@ -8,6 +8,7 @@
 #include "gfx/gfx.h"
 #include "world/rock_images.h"
 #include "world/sprite.h"
+#include "world/tether.h"
 
 namespace is::world {
 
@@ -19,6 +20,7 @@ GdiBlitter::~GdiBlitter() {
         // The brush and image ids of wave_graphics() are this Blitter's: none outlives it
         // (M3 s4 fixer, review L4).
         wave_graphics() = WaveGraphics{};
+        tether_state().pens = {};  // the rope pens' ids too (M4 s7 TETHER)
     }
     // An owned brush may still be selected into the surface DC (the radar callbacks leave theirs
     // selected, as the original does): a stock brush goes back first (M3 s2 fixer, review L2).
@@ -27,6 +29,12 @@ GdiBlitter::~GdiBlitter() {
         if (img && img->hdc()) SelectObject(img->hdc(), GetStockObject(WHITE_BRUSH));
     for (auto& [id, b] : brushes_)
         if (b.owned && b.h) DeleteObject(b.h);
+    // A created pen may still be selected: the stock black pen goes back first (M4 s7 TETHER).
+    if (HDC d = gfx_.dc()) SelectObject(d, GetStockObject(BLACK_PEN));
+    for (auto& [id, img] : images_)
+        if (img && img->hdc()) SelectObject(img->hdc(), GetStockObject(BLACK_PEN));
+    for (auto& [id, p] : pens_)
+        if (p.owned && p.h) DeleteObject(p.h);
 }
 
 HDC GdiBlitter::clip(DcId id, HDC d) const {
@@ -204,6 +212,64 @@ BrushId GdiBlitter::create_pattern_brush(const std::uint8_t (&rows)[8]) {
     const BrushId id = next_brush_++;
     brushes_[id] = Brush{h, true};
     return id;
+}
+
+// --- Pens and lines (M4 s7 TETHER) -------------------------------------------------------------
+// CreatePen(style, width, c) with c through Gfx::dc_colour, as create_solid_brush does (ADR
+// 0007): the ropes' RGB COLORREFs reach the 8-bit surface by its colour rule [BYTES
+// seg12:0x3289 seg10:0x4db2-0x4df3].
+PenId GdiBlitter::create_pen(int style, int width, std::uint32_t colorref) {
+    HPEN h = CreatePen(style, width, gfx_.dc_colour(colorref));
+    if (!h) return kPenNone;
+    const PenId id = next_pen_++;
+    pens_[id] = Pen{h, true};
+    return id;
+}
+
+HPEN GdiBlitter::hpen(PenId id) const {
+    if (id >= kPenStock + WHITE_PEN && id <= kPenStock + NULL_PEN)
+        return static_cast<HPEN>(GetStockObject(id - kPenStock));
+    const auto it = pens_.find(id);
+    return it == pens_.end() ? nullptr : it->second.h;
+}
+
+PenId GdiBlitter::pen_id(HPEN h) {
+    if (!h) return kPenNone;
+    for (int s = WHITE_PEN; s <= NULL_PEN; ++s)
+        if (GetStockObject(s) == h) return static_cast<PenId>(kPenStock + s);
+    for (const auto& [id, p] : pens_)
+        if (p.h == h) return id;
+    const PenId id = next_pen_++;  // a pen the DC held before: known from now on, not owned
+    pens_[id] = Pen{h, false};
+    return id;
+}
+
+PenId GdiBlitter::select_pen(DcId dc, PenId pen) {
+    HDC d = hdc(dc);
+    HPEN p = hpen(pen);
+    if (!d || !p) return kPenNone;
+    return pen_id(static_cast<HPEN>(SelectObject(d, p)));
+}
+
+// DeleteObject(pen): the original deletes a pen after it selected the old one back
+// [BYTES seg12:0x32c8]; a stock pen is never deleted.
+void GdiBlitter::delete_pen(PenId pen) {
+    const auto it = pens_.find(pen);
+    if (it == pens_.end() || !it->second.owned) return;
+    if (it->second.h) DeleteObject(it->second.h);
+    pens_.erase(it);
+}
+
+void GdiBlitter::move_to(DcId dc, int x, int y) {
+    if (HDC d = hdc(dc)) MoveToEx(d, x, y, nullptr);  // GDI.20 MoveTo
+}
+
+void GdiBlitter::line_to(DcId dc, int x, int y) {
+    HDC d = hdc(dc);
+    if (!d) return;
+    clip(dc, d);
+    LineTo(d, x, y);  // GDI.19 LineTo
+    unclip(dc, d);
 }
 
 }  // namespace is::world

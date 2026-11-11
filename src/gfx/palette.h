@@ -269,9 +269,8 @@ QuickColourMap quick_colour_map(PaletteManager& pm, PalHandle pal, const std::ve
 // Its four class counters and the words DGROUP:0x1670 / 0x1672 it leaves have no reader in
 // ISPACE.DLL [BYTES ISPACE.DLL seg6:0x8162-0x8174 seg6:0x81fe-0x8252]; they are not kept. A DIB of
 // another depth is left alone [DESIGN: the bytes rewrite it as 4 bpp; no graphic reaches that].
-// core-0008's far boxes of the landing corridor show the colours this gives [ORACLE core-0008];
-// the reading is the M4 s6 fixer's [OPEN: unchecked by a verifier; docs/re keeps seg6:0x7fc8
-// open until a verify round on seg6:0x7fc8-0x8264].
+// core-0008's far boxes of the landing corridor show the colours this gives [ORACLE core-0008]
+// (verified, work/analysis/m4/s7-owed-verify.md S6-1).
 void fixed_set_remap(fmt::Dib& dib);
 
 }  // namespace is::gfx

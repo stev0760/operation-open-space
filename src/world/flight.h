@@ -148,7 +148,7 @@ public:
     virtual void seg13_tail(int ship) { (void)ship; }   // seg13:0x6e5-0xcf9: the rest of the ship step
     virtual void seg11_ai(int ship) { (void)ship; }     // seg11:0x5cd7-0x5f11, 0x62fc-0x63a8
     virtual void seg13_head_tail(int ship) { (void)ship; }  // seg13:0x3e3-0x533 [OPEN]
-    // seg8:0x1e32(rec, pool): an owned object follows its owner [OPEN].
+    // seg8:0x1e32(pool, rec): an owned object follows its owner (tether.h tether_follow).
     virtual void follow_owner(int pool, int rec) { (void)pool, (void)rec; }
     // The signed byte +0x33 of roster record n (far DGROUP:0x6e24 + 0x7c n) [BYTES seg11:0x6644].
     virtual std::int16_t roster_byte_33(int roster) { return (void)roster, 0; }

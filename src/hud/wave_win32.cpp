@@ -41,6 +41,7 @@
 #include "world/hooks.h"
 #include "world/icon_mover.h"
 #include "world/input.h"
+#include "world/lightning.h"
 #include "world/missile.h"
 #include "world/pods.h"
 #include "world/player_sheet.h"
@@ -50,8 +51,10 @@
 #include "world/setup.h"
 #include "world/sprite.h"
 #include "world/tank.h"
+#include "world/tether.h"
 #include "world/visibility.h"
 #include "world/weapon_load.h"
+#include "world/wildcard.h"
 #include "world/world.h"
 
 namespace is::hud {
@@ -233,7 +236,10 @@ void visibility() {
         return rec >= 0 && rec < world::kPool8Max ? w().pool8[static_cast<std::size_t>(rec)].at(0x30)
                                                  : std::int16_t{0};
     };
-    vh.seg11_9fdc = [](int, int) { todo_once("seg11:0x9fdc from the visibility pass", "seg11:0x9fdc"); };
+    // The discharge seg11:0x9fdc (world/lightning.h) [BYTES seg8:0x5049-0x505d] (M4 s7 RING).
+    vh.seg11_9fdc = [](int pool, int rec) {
+        world::lightning_search_on(w(), world::flight_globals().now, pool, rec);
+    };
     world::visibility(w().pools, world::flight_view(), g_vis, shell::game_rng(), vh);
     world::frame_globals().dg_9146 = g_vis.count;
 }
@@ -654,6 +660,10 @@ void load_wave_resources() {
     // (seg9:0x26e5) and the wave's brushes [BYTES seg9:0x22b4 seg9:0x26e5] (M3 s4 fixer, review
     // H1).
     world::build_wave_images(*g_blit, g_images, w().w740);
+    // seg10:0x4b2e's tail, the rope pens DGROUP:0x3b44 ... 0x3b4a, and seg9:0x2722's
+    // seg10:0x561a, the hook sheet IGRAPHIC 180 into image slot 3 (world/tether.h) (M4 s7 TETHER).
+    world::make_rope_pens(*g_blit, world::tether_state());
+    world::load_hook_sheet(*g_blit, g_images, w().pools, w().size, render_sheet);
     // seg11:0x0's radar part: DGROUP:0x90f0 = 1 on the port's surface (ADR 0007) [BYTES seg11:0xd].
     if (!g_radar.created()) {
         const world::BrushId metal = g_blit->bind_brush(metal_brush());
@@ -760,6 +770,18 @@ void install_wave(app::App& app) {
     });
     // The launcher's PostMessage(DGROUP:0xa7e, WM_PAINT) [BYTES seg11:0x7e9a-0x7ea6].
     world::missile_links().paint_weapons = [] { weapon_panel_repaint(); };
+    // seg11:0x9146-0x9347: slot 0x39's fruit, the graphic's bmHeight back to seg11:0x9078
+    // (world/wildcard.h) (M4 s7 FUEL).
+    world::wildcard_links().fruit_image = [](int id) -> std::int16_t {
+        if (!ready()) return 0;
+        const world::DcId graphic = g_blit->load_graphic(id, 0, -1);  // seg10:0x6c02(id, 0, -1)
+        int h = 0;
+        if (graphic != world::kDcNone)
+            if (const std::shared_ptr<gfx::Surface> im = g_blit->image(graphic)) h = im->height();
+        world::render_fruit_image(*g_blit, g_images, graphic, h);
+        if (w().size != 1) todo_once("seg10:0x6308 on the fruit", "seg10:0x6308");
+        return static_cast<std::int16_t>(h);
+    };
     // seg12:0x6d64's seg10:0x533a (world/weapon_load.h) (M4 s5 WEAPONS).
     world::set_weapon_image(weapon_image);
     Links& k = links();

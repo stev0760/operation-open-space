@@ -794,8 +794,7 @@ struct Drawer {
     }
 
     // The pins of a side face (s6-scene.md 1.4) [BYTES ISPACE.DLL seg8:0x2d9d-0x3064 (right)
-    // seg8:0x30d8-0x33b0 (left)]. [OPEN: the extents are the analyst's reading, unchecked by a
-    // verifier (ispace.md ordinal 32); a verify round on s6-scene.md 1.4 settles them] (review M2).
+    // seg8:0x30d8-0x33b0 (left)] (verified, work/analysis/m4/s7-owed-verify.md S6-5) (review M2).
     void pins(i32 X, i32 Y, i32 SY, i32 SX, i32 Z, i32 SZ, int n, bool right) {
         for (int i = 0; i < n; ++i) {
             const i32 yi = ldiv(mul(i, SY), n) + Y;
