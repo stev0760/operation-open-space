@@ -6,6 +6,7 @@ A map of this directory. Each topic has one file; the others link to it. [DESIGN
 - [`PLAN.md`](PLAN.md): the milestones, each stage's results and its open items.
 - [`spec/checklist.md`](spec/checklist.md): every feature of the original with its evidence and its status in the port.
 - [`re/pitfalls.md`](re/pitfalls.md): the traps in reading this game's code.
+- [`status.html`](status.html): the status page with its charts, updated after each milestone. [DESIGN]
 
 ## Reverse-engineering reference (`re/`)
 What the original's code does, each claim tagged with its evidence and confirmed by an independent verifier. [DESIGN]

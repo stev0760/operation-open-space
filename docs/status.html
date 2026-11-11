@@ -1,0 +1,113 @@
+<title>Open Space Status</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+/* Layout: one reading column; a headline bar, then the same bar repeated per feature area, then milestones and pace. */
+:root{
+  --bg:#f6f8fb; --panel:#ffffff; --fg:#16202e; --muted:#5b6b80; --line:#dbe2ec;
+  --verified:#0b3c6f; --done:#2f7fd1; --wip:#a9cdf2; --todo:#e3e9f1;
+  --ok:#1f7a4d; --warn:#9a6200;
+  --display:"Space Grotesk","Segoe UI",system-ui,sans-serif; --body:Inter,"Segoe UI",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0c1320; --panel:#131d2e; --fg:#e6edf7; --muted:#93a3b8; --line:#26344a;
+  --verified:#cfe6ff; --done:#4f9be6; --wip:#2a5688; --todo:#1c2a3f; --ok:#5fd09a; --warn:#e6b455; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#0c1320; --panel:#131d2e; --fg:#e6edf7; --muted:#93a3b8; --line:#26344a;
+  --verified:#cfe6ff; --done:#4f9be6; --wip:#2a5688; --todo:#1c2a3f; --ok:#5fd09a; --warn:#e6b455; color-scheme:dark }
+body{background:var(--bg);color:var(--fg);font:15px/1.55 var(--body);padding-block:28px 48px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+main{max-width:860px;margin:0 auto;display:flex;flex-direction:column;gap:36px}
+h1{font:700 30px/1.15 var(--display);margin:0;text-wrap:balance}
+h2{font:700 19px/1.2 var(--display);margin:0 0 4px}
+p{margin:0;max-width:65ch} .muted{color:var(--muted)} .sub{color:var(--muted);margin-bottom:14px}
+section{display:flex;flex-direction:column}
+.bar{display:flex;gap:2px;height:14px;border-radius:4px;overflow:hidden;background:var(--bg)}
+.bar.big{height:30px}
+.bar i{display:block;min-width:0} .v{background:var(--verified)} .d{background:var(--done)} .w{background:var(--wip)} .t{background:var(--todo)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:10px;font-size:13px;color:var(--muted)}
+.legend b{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.legend span strong{color:var(--fg);font-weight:600;font-variant-numeric:tabular-nums}
+.areas{display:grid;grid-template-columns:minmax(0,13.5em) minmax(0,1fr) 4.2em;gap:9px 12px;align-items:center}
+.areas .n{font-size:13px;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+.areas .lab{font-size:14px;overflow-wrap:anywhere}
+@media (max-width:520px){.areas{grid-template-columns:minmax(0,1fr) 4.2em}.areas .lab{grid-column:1/-1;margin-bottom:-6px}}
+table{border-collapse:collapse;width:100%;font-size:14px} td{padding:8px 8px 8px 0;border-top:1px solid var(--line);vertical-align:top}
+td:last-child{white-space:nowrap;text-align:right;padding-right:0}
+.pill{font-size:12px;font-weight:600;padding:2px 9px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+.pill.ok{color:var(--ok);border-color:var(--ok)} .pill.part{color:var(--warn);border-color:var(--warn)}
+.cols{display:flex;align-items:flex-end;gap:4px;height:130px;border-bottom:1px solid var(--line)}
+.cols div{flex:1;min-width:0;background:var(--done);border-radius:4px 4px 0 0;position:relative}
+.cols div span{position:absolute;top:-18px;left:0;right:0;text-align:center;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.xl{display:flex;gap:4px;font-size:11px;color:var(--muted);margin-top:4px} .xl span{flex:1;min-width:0;text-align:center}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px 24px}
+.facts div b{display:block;font:700 22px var(--display);font-variant-numeric:tabular-nums}
+.facts div span{font-size:13px;color:var(--muted)}
+ul{margin:0;padding-left:1.2em;max-width:65ch} li{margin:3px 0}
+</style>
+<main>
+<header>
+  <h1>Operation: Open Space, status on 11 November 2026</h1>
+  <p class="muted" style="margin-top:8px">The core loop milestone (M4) is closed. You can fly a wave alone with all 21 weapons, cloak or shield, visit the ambulance, zoom in and out, and save. The other ships come next.</p>
+</header>
+
+<section>
+  <h2>Feature checklist: 270 of 662 rows ported</h2>
+  <p class="sub">Each row is one behaviour of the original. "Verified" means compared against the original running under Wine.</p>
+  <div class="bar big" id="total"></div>
+  <div class="legend">
+    <span><b class="v"></b>Verified <strong>60</strong></span><span><b class="d"></b>Done <strong>210</strong></span>
+    <span><b class="w"></b>In progress <strong>56</strong></span><span><b class="t" style="outline:1px solid var(--line)"></b>Not started <strong>336</strong></span>
+  </div>
+</section>
+
+<section>
+  <h2>By feature area</h2>
+  <p class="sub">Bars are each area's own rows, so every bar is full width. The count on the right is ported rows out of the area's total.</p>
+  <div class="areas" id="areas"></div>
+</section>
+
+<section>
+  <h2>Milestones</h2>
+  <table id="ms"></table>
+</section>
+
+<section>
+  <h2>Commits per working day</h2>
+  <p class="sub">89 commits since 23 October. Days without commits are left out.</p>
+  <div class="cols" id="cols"></div><div class="xl" id="xl"></div>
+</section>
+
+<section>
+  <h2>Size of the work</h2>
+  <div class="facts">
+    <div><b>84,000</b><span>lines of port source</span></div>
+    <div><b>1,364</b><span>port test cases, all passing under Wine</span></div>
+    <div><b>1,441</b><span>fact tests pinning the original's bytes</span></div>
+    <div><b>28</b><span>recordings of the original (digests)</span></div>
+    <div><b>17</b><span>design decision records</span></div>
+  </div>
+</section>
+
+<section>
+  <h2>What is next</h2>
+  <ul>
+    <li><strong>M5, the other ships:</strong> teams, Enforcers and their handcuff arrests, laws and hazards. This is the largest block of rows still not started.</li>
+    <li><strong>First run on real Windows:</strong> nothing has been run outside Wine yet.</li>
+    <li><strong>Still waiting:</strong> the missing ship sets from Software Dynamics.</li>
+  </ul>
+</section>
+</main>
+<script>
+const A=[["Key bindings and mouse",4,30,5,46],["Windows, dialogs and panels",11,28,1,19],["Navigation and waves",11,7,3,2],["Flight model",0,13,2,2],["Weapons",2,25,2,1],["Hazards",0,2,1,17],["Ship systems and powerups",3,10,3,6],["Teams and attitudes",0,1,0,17],["Laws and Enforcers",0,0,0,24],["Ambulance, credit and fuel",8,12,3,0],["Computer ships",0,0,0,12],["Races and duels",0,0,1,19],["Inner Demon and Noble Weapons",0,0,0,13],["Settings dialogs",0,2,0,31],["INI keys",11,53,28,51],["Sound and music",5,7,1,0],["Ship Factory",0,0,0,29],["Screen savers",0,0,0,15],["Modes, demo and sessions",3,7,4,14],["Install, protection and help",2,13,2,18]];
+const K=["v","d","w","t"],N=["verified","done","in progress","not started"];
+const bar=(c)=>c.map((n,i)=>n?`<i class="${K[i]}" style="flex:${n}" title="${n} ${N[i]}"></i>`:"").join("");
+document.getElementById("total").innerHTML=bar([60,210,56,336]);
+document.getElementById("areas").innerHTML=A.map(([l,...c])=>{const t=c[0]+c[1]+c[2]+c[3];
+  return `<div class="lab">${l}</div><div class="bar">${bar(c)}</div><div class="n">${c[0]+c[1]} / ${t}</div>`}).join("");
+const M=[["M1 Foundations: readers for every original file format","Done","ok"],["M2 Shell: window, intro, dialogs, installer","Done","ok"],["M3 World: Navigation, wave generation, flight, status display","In progress","part"],["M4 Core loop: capture, damage, weapons, ambulance, saved games","Done","ok"],["M5 Ships and AI: teams, Enforcers, laws, hazards","Player's ship only","part"],["M6 Specials: races, duels, Inner Demon","Not started",""],["M7 Audio: own mixer, MIDI through OPL3 or a SoundFont","Nearly done","part"],["M8 Extras: Ship Factory, screen savers","Not started",""],["M9 Release","Not started",""],["M10 Quality pass: the remaster","Not started",""]];
+document.getElementById("ms").innerHTML=M.map(m=>`<tr><td>${m[0]}</td><td><span class="pill ${m[2]}">${m[1]}</span></td></tr>`).join("");
+const C=[["Oct 23",3],["24",23],["25",14],["26",7],["27",6],["28",4],["Nov 1",7],["2",4],["5",1],["6",4],["8",4],["9",3],["10",4],["11",5]];
+document.getElementById("cols").innerHTML=C.map(c=>`<div style="height:${c[1]/23*100}%" title="${c[0]}: ${c[1]} commits"><span>${c[1]}</span></div>`).join("");
+document.getElementById("xl").innerHTML=C.map(c=>`<span>${c[0]}</span>`).join("");
+</script>
