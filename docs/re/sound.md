@@ -219,7 +219,7 @@ Ordinal 9 (ISPACE.DLL seg9:0xc42) plays id `id` with position `p`, hold flag `q`
    | 4 | (a, b) |
    | 5 | (−11111, b): ordinal 9 loads the slot and plays nothing |
 
-4. Modes 1–3 pass p through seg8:0x29ea and, when DGROUP:0x9156 ≠ 1 and DGROUP:0x9130 = 0, move it to ship + ((2 · (p − ship)) >> DGROUP:0x9156) per axis (arithmetic shift). [BYTES seg10:0x778b seg10:0x77c1]
+4. Modes 1–3 pass p through seg8:0x29ea and, when DGROUP:0x9156 ≠ 1 and DGROUP:0x9130 = 0, move it to ship + ((2 · (p − ship)) >> DGROUP:0x9156) per axis (arithmetic shift, `add ax, ax; sar ax, cl` in 16 bits), where "ship" is the player's object words +0x00 and +0x02 (`scr_x`, `scr_y`) of record DGROUP:0x9646 and the shift runs for every 4th argument other than 0, 4 and 5 ([shell.md](shell.md#size-entry-points)). [BYTES seg10:0x778b seg10:0x77c1 seg10:0x77a7-0x77b7 seg10:0x77d2-0x781d]
 5. q from seg10:0x7896 is 1 for mode 0, mode 4 or DGROUP:0x9130 ≠ 0. Otherwise the signed distance seg8:0x285a(ship, p) decides: above 800 gives −1, and seg10:0x754a then plays nothing and clears the pending follow-up (DGROUP:0x3c88, DGROUP:0x9216, DGROUP:0x9292); 341–800 gives 0; up to 340 gives 1. The `PtInRect` loop over the DGROUP:0x9158 rectangles at DGROUP:0x23e0 runs only in the ≤ 340 case and never changes the result. [BYTES seg10:0x78a9 seg10:0x78b5 seg10:0x78bc seg10:0x78e5 seg10:0x78ed seg10:0x78f7 seg10:0x78fa seg10:0x7905 seg10:0x792b seg10:0x7795]
 6. A successful play stores id, a, b and mode in DGROUP:0x921c, DGROUP:0x928c, DGROUP:0x928e and DGROUP:0x9290, p in DGROUP:0x3b98 and q in DGROUP:0x9226. [BYTES seg10:0x786f seg10:0x7b22]
 

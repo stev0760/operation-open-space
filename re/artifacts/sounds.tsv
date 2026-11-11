@@ -24,7 +24,7 @@ id	module	resource	flag	same_as	ms	transcript	hold	meaning	call_sites
 0x16	SND_FX.DLL	122	2	DEFBOOM.WAV	374			DEFBOOM; seg8:0x92a0, seg18:0x4dc4	P:seg8:0x92c5 in seg8:0x92a0(2,[bp + 8],1) C:seg18:0x4f8a in seg18:0x4dc4
 0x17	SND_FX.DLL	123	2	BUBBLE.WAV	1285			BUBBLE; seg8:0x9564; slot of id 0x6f	P:seg8:0x95ad in seg8:0x9564(0,[bp - 4],1)
 0x18	SND_FX.DLL	124	2	NEW_DEF.WAV	180			NEW_DEF; seg8:0x9464	P:seg8:0x94b3 in seg8:0x9464(0,[bp - 4],1)
-0x19	SND_FX.DLL	125	2	FIRE1.WAV	439			FIRE1; seg12:0x2db6	P:seg12:0x3111 in seg12:0x2db6([0x9328],[bp - 8],1)
+0x19	SND_FX.DLL	125	2	FIRE1.WAV	439			FIRE1; seg12:0x2db6; seg13:0x1318 when the life is 24 or less (pushed at seg13:0x1687, shared call at seg13:0x1676)	P:seg12:0x3111 in seg12:0x2db6([0x9328],[bp - 8],1) P:seg13:0x1676 in seg13:0x1318(5,[bp - 4],1)
 0x1a	SND_FX.DLL	126	2	FLANGE.WAV	712			FLANGE; sequence 0x72 (twice, 200 ms apart); seg7:0x2e02 for pools 1 and 8 and pool-6 records of end kind 6 (pushed at seg7:0x3074, call at seg7:0x2ec2)	P:seg7:0x2ec2 in seg7:0x2e02(lo([bp + 6]),hi([bp + 6]),1)
 0x1b	SND_FX.DLL	127	2	FIREBALL.WAV	1223			FIREBALL; seg6:0x84fc when rand()%3 = 0 (else 0x4e); seg13:0x1318	P:seg13:0x1676 in seg13:0x1318(5,[bp - 4],1)
 0x1c	SND_FX.DLL	128	2	MISSILE.WAV	1305			MISSILE; desk scene seg15:0x0, seg15:0x3caa, seg13:0x3748, seg18:0x66e0; with one channel ordinal 9 then sets ISPACE.DLL DGROUP:0xcf6 = now + 1200	P:seg13:0x3b77 in seg13:0x3748(7,0,1) C:seg15:0x185 in seg15:0x0 C:seg15:0x3cf9 in seg15:0x3caa P:seg18:0x6c56 in seg18:0x66e0([0x934a],[bp - 0xc],ax)
