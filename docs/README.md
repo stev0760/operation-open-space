@@ -17,6 +17,9 @@ What the original's code does, each claim tagged with its evidence and confirmed
 | [`nav.md`](re/nav.md) | The Navigation window, the directory tree and the filesystem walk |
 | [`world.md`](re/world.md) | The wave: set-up, world, flight and drawing |
 | [`core.md`](re/core.md) | Collisions, damage, capture, the wave end, weapons and the economy |
+| [`ships.md`](re/ships.md) | Computer ships: roster, entry, pictures and perspective shifting |
+| [`pilots.md`](re/pilots.md) | Computer pilots: the tick's ship calls, the flight AI, the laws and the arrest |
+| [`ship-contact.md`](re/ship-contact.md) | Computer ships in contact: damage, death, capture and defenders |
 | [`sound.md`](re/sound.md) | Sound and music |
 | [`ispace.md`](re/ispace.md) | ISPACE.DLL: palette, bitmaps, sound and dialogs |
 | [`palette-tables.md`](re/palette-tables.md) | ISPACE.DLL's colour tables |

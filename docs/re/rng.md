@@ -57,6 +57,7 @@ The probe run's raw memory dumps confirm the generator and the seed source. Step
 ## Callers and range mapping
 - INSPACE has 382 call sites of `rand()` in 101 functions. By segment there are 107 in seg9, 41 in seg12, 39 in seg6, 28 each in seg4 and seg8, 24 in seg15, 22 in seg18, 21 in seg14, 19 in seg11, 16 in seg13, 14 in seg7, 13 in seg10, 8 in seg16, and one each in seg2 and seg3. [BYTES seg5:0xdc]
 - The sound wrappers seg10:0x754a and seg10:0x7944 draw none. So the sound settings do not change INSPACE's sequence. [BYTES seg10:0x754a] [BYTES seg10:0x7944]
+- **The ship roster's draws.** One call of seg14:0x2300 draws one `rand()` at entry (result overwritten), then one `% 30` per scored teammate record, one per team-7 record with the matching class for the Terminator and Interceptor picks, and for other teams one `% 80` only for a record of the asked-for team and one `% 30` per scored record; seg14:0x3274 draws one at entry and one per scored record (`% 30` or `% 40`); seg14:0xdd6 draws two per new record; the call-in seg13:0xae68 draws the gate `rand()` % DGROUP:0x9318 after seg14:0x0 (three in Demon's Gate); seg4:0x7e2a draws at most one per tick in each of its three blocks, and seg4:0x2f98 draws one per ship first, in ascending order ([ships.md](ships.md#the-best-new-design-seg140x2300), [pilots.md](pilots.md)). seg4:0x7636 and the pilot's decision steps draw only where [pilots.md](pilots.md) lists them.
 - The results are used in these ways:
 
   | Use | Sites | Code |
