@@ -47,12 +47,16 @@ enum class Img : int {
     // source of seg13:0x5c22's pool-0 picture for slots 14 ... 21 (hud/icon_images.h) [BYTES
     // seg13:0x5d5b-0x5d9b] (M4 s5 ICONS).
     kIconOwn,
+    // DGROUP:0x39e8 + 2·(+0x50 + 0x28): a target ship's own sprite sheet, the source of
+    // seg13:0x5c22's ship-pool picture [BYTES seg13:0x5cdd-0x5ce9 seg13:0x60c8-0x60cd] (M5 s3
+    // fixer).
+    kShipSprite,
     kCount
 };
 
 // A brush selected for a PatBlt or a ROP that uses the pattern.
 struct Brush {
-    enum class Kind { kNone, kSolid, kStock, kMetal };
+    enum class Kind { kNone, kSolid, kStock, kMetal, kChecker };
     Kind kind = Kind::kNone;
     Colour colour = 0;  // kSolid: CreateSolidBrush(colour)
     int stock = 0;      // kStock: GetStockObject(stock): LTGRAY_BRUSH 1, NULL_BRUSH 5
@@ -60,6 +64,7 @@ struct Brush {
     static Brush solid(Colour c) { return {Kind::kSolid, c, 0}; }
     static Brush stock_object(int s) { return {Kind::kStock, 0, s}; }
     static Brush metal() { return {Kind::kMetal, 0, 0}; }  // DGROUP:0x500a
+    static Brush checker() { return {Kind::kChecker, 0, 0}; }  // DGROUP:0x5eaa (gfx/launch_ship.h)
 };
 
 // A 1-pixel pen: CreatePen(PS_SOLID, 1, colour), or a stock pen (WHITE_PEN 6, BLACK_PEN 7).

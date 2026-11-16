@@ -26,6 +26,7 @@
 #include "nav/enter.h"
 #include "nav/nav.h"
 #include "nav/pilot.h"
+#include "world/roster_build.h"
 #include "shell/edition.h"
 #include "shell/rng.h"
 #include "world/flight_hooks.h"
@@ -231,6 +232,11 @@ public:
             if (!g.store) return;
             g_session.table = g.store->table5600().rows;
             g_session.table_loaded = true;
+            // DGROUP:0x3824's one home (world/roster_build.h RosterWords::team_table) (M5 s3
+            // integrate).
+            auto& t = world::roster_words().team_table;
+            for (std::size_t i = 0; i < 8; ++i)
+                for (std::size_t j = 0; j < 8; ++j) t[8 * i + j] = g_session.table[i][j];
             app::log("ISPACE.DLL #5600 135 copied to DGROUP:0x3824");
         } catch (const std::exception& x) {
             app::log(std::string("ISPACE.DLL #5600 135: ") + x.what());

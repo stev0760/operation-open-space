@@ -3,6 +3,7 @@
 #include "world/flight.h"
 
 #include "world/input.h"
+#include "world/world.h"
 
 namespace is::world {
 
@@ -25,6 +26,22 @@ std::int16_t fold360(std::int16_t a) { return imod16(add16(a, 360), 360); }
 
 // A dword compare `hi ja / jb, lo ja` as the original writes it: d > now, unsigned 32-bit.
 bool after(const Dword& d, std::uint32_t now) { return d.get() > now; }
+
+// `cwd; and dx, 3; add ax, dx; sar ax, 2`: a 16-bit quarter toward zero [BYTES seg11:0x5e1f-0x5e25].
+std::int16_t quarter(std::int16_t v) { return sar16(add16(v, v < 0 ? 3 : 0), 2); }
+
+// A pool record by its index words; an index outside the pools reads a zeroed scratch record,
+// where the original reads past its block (the goal words of a computer ship are the pilot's,
+// so the flight model cannot vouch for them) [DESIGN ADR 0016 decision 2].
+const ObjectRecord& goal_object(const Pools& p, int pool, int rec) {
+    if (pool < 0 || pool >= kPoolCount || rec < 0 || rec >= p.records(pool)) {
+        static bool once = false;
+        guard_todo(once, "a goal object outside its pool reads a zeroed record", "seg11:0x6343");
+        static const ObjectRecord none{};
+        return none;
+    }
+    return p.rec(pool, rec);
+}
 
 }  // namespace
 
@@ -320,10 +337,10 @@ void thrust(FlightCtx& c, std::int16_t mode, int ship) {
         if ((ctrl_hit || g.dg_952a != 0) && s.fuel >= 30) {
             if (o.on_screen != 0) {
                 c.host.sound(0x29, g.ship_pool, ship, 1);
-                for (BurstEntry& e : g.burst) {  // 10 x 4 entries, stride 0x16
-                    e.w8 = 0;
-                    e.w0 = -100;
-                    e.w2 = -100;
+                for (BurstEntry& e : g.burst) {  // 10 x 4 entries, stride 0x16 [BYTES seg11:0x64dd-0x64ef]
+                    e.age = 0;  // DGROUP:0x5b34
+                    e.ex = -100;  // dword DGROUP:0x5b2c = 0xff9cff9c
+                    e.ey = -100;
                 }
                 g.burst_pool = g.ship_pool;
                 g.burst_rec = static_cast<std::int16_t>(ship);
@@ -425,7 +442,7 @@ void thrust_step(FlightCtx& c, std::int16_t mode, int ship) {
         if (g.wave_kind != 6 && s.drag != 0)
             s.laps = idiv16(mul16(s.thrust, 19), s.drag);  // +0xda [BYTES seg11:0x5cc1-0x5cd0]
     } else {
-        c.host.seg11_ai(ship);  // seg11:0x5cd7-0x5f11, the computer ships' speed cap (M5)
+        computer_cap(c, ship, mode, no_thrust);  // [BYTES seg11:0x5cd7-0x5f11]
     }
     if (auto_flag) {  // [BYTES seg11:0x5f1d-0x5f75]
         std::int16_t v = idiv16(s.laps, 2);
@@ -438,19 +455,25 @@ void thrust_step(FlightCtx& c, std::int16_t mode, int ship) {
     const bool down = c.keys.test(kVkDown, kMaskDownOrPressed);
     if ((down && g.play_mode == 0 && ship == g.player && go) || (mode == 5 && go)) {
         brake(c, ship);
-        return;  // jmp seg11:0x62ed, which returns for the action player
+        escort_slowdown(c, ship);  // jmp seg11:0x62ed [BYTES seg11:0x5faf]
+        return;
     }
     const bool up = c.keys.test(kVkUp, kMaskDownOrPressed) || g.joy_thrust != 0;
     if (up && g.play_mode == 0 && mode == 4 && go && !no_thrust) {
         thrust(c, mode, ship);
+        escort_slowdown(c, ship);  // jmp seg11:0x62ed [BYTES seg11:0x5fe6]
         return;
     }
     if (((s.thrusting != 0 && mode == 3) || mode == 1) && go && !no_thrust) {
         thrust(c, mode, ship);
+        escort_slowdown(c, ship);  // seg11:0x600b jumps to seg11:0x5fde [BYTES seg11:0x5fe6]
         return;
     }
     // Drift and drag [BYTES seg11:0x600d-0x62e9]
-    if (s.be2 != 0 && g.dg_9130 == 0) return;
+    if (s.be2 != 0 && g.dg_9130 == 0) {
+        escort_slowdown(c, ship);  // je seg11:0x62ed [BYTES seg11:0x601e]
+        return;
+    }
     if (s.thrusting != 0) {
         s.thrusting = 0;
         flame(c, 0, ship);
@@ -482,8 +505,87 @@ void thrust_step(FlightCtx& c, std::int16_t mode, int ship) {
     }
     o.vx = add16(o.vx, dv.dx);
     o.vy = add16(o.vy, dv.dy);
-    // seg11:0x62ed: the escort slow-down for ships other than the action player (M5).
-    if (!action && s.w3a == 2 && s.w38 == 3) c.host.seg11_ai(ship);
+    escort_slowdown(c, ship);  // falls through to seg11:0x62ed [BYTES seg11:0x62e9]
+}
+
+// seg11:0x5cd7-0x5f11 [BYTES seg11:0x5cd7-0x5f11]
+void computer_cap(FlightCtx& c, int ship, std::int16_t& mode, bool& no_thrust) {
+    WaveGlobals& g = c.g;
+    ShipRecord& s = c.ships[static_cast<std::size_t>(ship)];
+    ObjectRecord& o = c.ship_obj(ship);  // DGROUP:0x1df8 + 4·DGROUP:0x9324 [BYTES seg11:0x5d34]
+    // +0xda = 120 for team 5 (SPEED DEMONS), else 90 [BYTES seg11:0x5cdc-0x5cf6]
+    s.laps = c.host.design_kind(s.design_index) == 5 ? 120 : 90;
+    if (g.detail > 1) {
+        // The special places' rings [BYTES seg11:0x5d03-0x5de9] (s3-tick-verify.md Omission):
+        // the first k whose ring the ship is near scales the cap once, then the loop ends.
+        const std::int16_t n = c.host.special_places();
+        for (std::int16_t k = 0; k < n; ++k) {
+            const RingPlace pl = c.host.special_place(k);
+            std::int16_t dx = 0, dy = 0;
+            // seg8:0x285a(own position, place's DGROUP:0x4f36 dword): the place pushed last
+            // [BYTES seg11:0x5d9f-0x5db1]
+            const std::int16_t d = distance_cells(pl.x, pl.y, o.x, o.y, dx, dy);
+            const std::int16_t r = sar16(pl.radius, 3);  // [BYTES seg11:0x5db9-0x5dbd]
+            if (!(add16(r, 100) > d)) continue;           // `jle` next [BYTES seg11:0x5dc5-0x5dc8]
+            if (sub16(r, 40) < d && add16(r, 40) > d)     // [BYTES seg11:0x5dcc-0x5dda]
+                s.laps = idiv16(mul16(s.laps, 7), 3);     // [BYTES seg11:0x5de4 seg11:0x5d15-0x5d1b]
+            else
+                s.laps = idiv16(add16(s.laps, s.laps), 3);  // [BYTES seg11:0x5d0f-0x5d1b]
+            break;
+        }
+    }
+    // seg11:0x5d1f: the Action-mode player leaves here; thrust_step never sends it [BYTES seg11:0x5d1f-0x5d2c]
+    if (c.action_player(ship)) return;
+    // |vx| + |vy| against the cap [BYTES seg11:0x5d30-0x5d68]
+    const std::int16_t sum = add16(abs16(o.vx), abs16(o.vy));
+    if (!(sum > s.laps)) return;
+    if (g.dg_94e2 < 30) {                                       // [BYTES seg11:0x5d6c-0x5d78]
+        s.laps = quarter(mul16(s.laps, 5));
+    } else if (g.dg_94e2 > 70 && g.dg_94e2 < 100) {             // [BYTES seg11:0x5dec-0x5e0c]
+        s.laps = idiv16(shl16(s.laps, 2), 5);
+    } else if (!(g.dg_94e2 < 100)) {                            // [BYTES seg11:0x5e0e-0x5e28]
+        s.laps = quarter(mul16(s.laps, 3));
+    }
+    s.laps = quarter(mul16(s.laps, 3));                         // [BYTES seg11:0x5e2c-0x5e3f]
+    if (g.size == 2) {
+        s.laps = idiv16(shl16(s.laps, 2), 5);                   // [BYTES seg11:0x5e43-0x5e53]
+    } else if (g.size == 0) {
+        s.laps = quarter(mul16(s.laps, 5));                     // [BYTES seg11:0x5e55-0x5e6f]
+    }
+    if (s.turn > 30)                                            // [BYTES seg11:0x5e73-0x5e8e]
+        s.laps = idiv16(mul16(s.laps, 35), add16(s.turn, 10));
+    // sp = seg8:0x35d0(vx, vy), cdecl with sign-extended dwords [BYTES seg11:0x5e92-0x5ebd]
+    const std::int16_t sp = magnitude(o.vx, o.vy);
+    if (s.laps >= sp) return;  // `jge` [BYTES seg11:0x5ec5-0x5ec9]
+    // seg8:0x19b0(den = vx, num = vy) [BYTES seg11:0x5ed8-0x5ee2]
+    const std::int16_t h = direction16(o.vy, o.vx);
+    if (o.frame == h) {
+        // (3·sp) / 2 toward zero, a 16-bit product: above it only for sp >= 10923, where the
+        // product wraps (s3-tick-verify.md claim 42) [BYTES seg11:0x5efb-0x5f0f]
+        const std::int16_t p = mul16(sp, 3);
+        const std::int16_t half = sar16(sub16(p, p < 0 ? -1 : 0), 1);
+        if (s.laps > half) {
+            no_thrust = true;  // [bp-0x1a] = 1
+            return;
+        }
+    }
+    mode = 5;  // [bp+6] = 5: the brake [BYTES seg11:0x5f11]
+}
+
+// seg11:0x62ed [BYTES seg11:0x62ed-0x63a4]
+void escort_slowdown(FlightCtx& c, int ship) {
+    if (c.action_player(ship)) return;  // [BYTES seg11:0x62ed-0x62fa]
+    const ShipRecord& s = c.ships[static_cast<std::size_t>(ship)];
+    if (s.w3a != 2 || s.w38 != 3) return;   // [BYTES seg11:0x6301-0x630d]
+    if (s.w52 != 0 && s.w52 != 2) return;   // [BYTES seg11:0x6312-0x631e]
+    ObjectRecord& o = c.ship_obj(ship);
+    const ObjectRecord& t = goal_object(c.pools, s.w32, s.w34);
+    std::int16_t dx = 0, dy = 0;
+    // seg8:0x285a(goal position, own position): own pushed last [BYTES seg11:0x6349-0x6364]
+    const std::int16_t d = distance_cells(o.x, o.y, t.x, t.y, dx, dy);
+    if (!(d < 400)) return;  // `jge` [BYTES seg11:0x6369-0x636c]
+    o.vx = quarter(mul16(o.vx, 3));  // [BYTES seg11:0x6379-0x6387]
+    o.vy = quarter(mul16(o.vy, 3));  // [BYTES seg11:0x6396-0x63a4]
 }
 
 // seg13:0x0 [BYTES seg13:0x0-0xd67]
@@ -611,7 +713,16 @@ void move_ships(FlightCtx& c) {
             const std::int16_t div1 = sub16(10, d2 < 5 ? 5 : d2);
             const std::int16_t div2 = sub16(18, shl16(g.detail, 2));
             bool run = false;
-            const bool rem1 = div1 == 0 || imod16(g.dg_134e, div1) != 0;  // /0 traps [OPEN]
+            // `Detail` 5 makes div1 0, an INT 0 at seg13:0x3fa in the original (only a
+            // hand-edited INSPACE.INI holds it); the port skips that division and goes on to the
+            // second test, as for a remainder other than 0 [DESIGN ADR 0016 decision 4]
+            // [BYTES seg13:0x3e3-0x3fa].
+            if (div1 == 0) {
+                static bool once = false;
+                guard_todo(once, "Detail 5 divides by 0 in the ships' think cadence; the first test is skipped",
+                           "seg13:0x3fa");
+            }
+            const bool rem1 = div1 == 0 || imod16(g.dg_134e, div1) != 0;
             if (!rem1 && o.on_screen != 0) {
                 run = true;
             } else {

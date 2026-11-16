@@ -6,7 +6,11 @@
 // Ported from the bytes for M4 stage 1 (track SCREENS): the head seg3:0x6ec-0x83e, the switch
 // seg3:0x1346-0x1351, the cases of codes 10-13, 82-84, 91, 94 and 112 (and, M4 stage 2 track
 // DISPLAY, the capture's 0x48, 0x55, 0x56 and 0x6f; M4 stage 3 track AMBFLIGHT, the ambulance's
-// replies 7, 8 and 132 and the low-fuel warning 9), the tail seg3:0x14d6,
+// replies 7, 8 and 132 and the low-fuel warning 9; M5 stage 3 track CONTACT, the wing taunts
+// 0x19 ... 0x1e, the death lines 0x5f ... 0x63 and 0x89, the break-off 0x8a, the attack
+// reaction's lines 0x29 ... 0x2f, 0x3b, 0x41, 0x43, 0x5c, 0xbe, the attitudes' 0x51, the rivals'
+// 0x20, 0x49 and 0x4a, and the law's lines 0x44, 0x45, 0x46, 0x5d, 0x65, 0x6e, 0x72, 0x86, 0xb9,
+// 0xc0 that stage 4's crime report raises), the tail seg3:0x14d6,
 // seg10:0xa332's %S %s %d %? %R %< %> and its mode-2 split, and seg3:0x3498. Every other case of
 // the 192 is [OPEN]: the dispatcher shows the sender and switches the display, as the original's
 // head does, and leaves the two lines as they were; MessageHost::todo names the code.
@@ -58,6 +62,12 @@ public:
     // test [BYTES seg3:0x718-0x729].
     virtual int ship_goal_pool(int /*rec*/) const { return -1; }
     virtual int ship_word_06(int /*rec*/) const { return -1; }
+    // Ship word +off (DGROUP:0x7090 + 0x15a·rec + off) of ship `rec`, -1 outside the ships: the
+    // killer words +0x06 / +0x08 seg4:0x7636 writes, which the death lines 0x60 ... 0x62 name
+    // [BYTES seg3:0x10c3-0x10f5]; the goal +0x32 / +0x34 of code 0x49 [BYTES seg3:0xfef-0xff4];
+    // the order words +0x54 / +0x56 the head keeps in [bp-0x70] / [bp-0x72] for a pool-14 sender
+    // [BYTES seg3:0x73b-0x74f] (M5 s3 CONTACT).
+    virtual int ship_word(int /*rec*/, int /*off*/) const { return -1; }
     // DGROUP:0x6e70 = rec, DGROUP:0x6e72 = pool: direction mark 1's object [BYTES seg3:0x731
     // seg3:0x737].
     virtual void set_sender(int /*pool*/, int /*rec*/) {}
@@ -81,8 +91,25 @@ public:
     // hundredths, and DGROUP:0x9602, the defenders that passed over [BYTES seg3:0xe21-0xe35].
     virtual int capture_value() const { return 0; }
     virtual int capture_defenders() const { return 0; }
+    // seg10:0xa754's %D: seg3:0x1542(upper, pool, rec, buf, code) with upper = 1 for codes 0, 2,
+    // 4 and 7 (shell.md "%# and %D"). The default upper-cases name(pool, rec) for those codes
+    // [DESIGN: what seg3:0x1542's flag does for each pool is the names' owner's; the program's
+    // host may override] (M5 s3 CONTACT). Inline like every other member, so no translation
+    // unit owns the vtable: an out-of-line key function made the linker take the vtable from the
+    // first archive member holding it (hud/hooks.cpp) and pull the program's hooks into the tests.
+    virtual std::string object_name(int pool, int rec, int code) {
+        std::string n = name(pool, rec);
+        if (code == 0 || code == 2 || code == 4 || code == 7)  // upper = 1 [BYTES seg10:0xa754-0xa787]
+            for (char& ch : n)
+                if (ch >= 'a' && ch <= 'z') ch = static_cast<char>(ch - 0x20);
+        return n;
+    }
     // seg13:0x218a(design word DGROUP:0x970a of ship rec): the team name (M5) [OPEN].
     virtual std::string team_name(int /*ship*/) { return {}; }
+    // seg13:0x2688(a, b), the attitude read (world/relations.h relation).
+    virtual int attitude(int /*a*/, int /*b*/) const { return 0; }
+    // DGROUP:0x8d38: the revenge taunt seg4:0x702e formats (world/pilot.h PilotGlobals::taunt).
+    virtual std::string taunt() const { return {}; }
     // A case of the switch the port does not carry yet [OPEN].
     virtual void todo(int /*code*/) {}
 };

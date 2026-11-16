@@ -36,14 +36,14 @@ constexpr std::uint32_t kDestroyShip = handler(16, 0x8e4);   // on_destroy seg16
 // The design-record words the collision and damage routines read, DGROUP:0x96d2 + 0xad·n +
 // offset (structs.md "Design records"; n = ship word +0x4e).
 struct DamageDesign {
-    std::array<std::int16_t, 4> shot_div{};  // +0x08 ... +0x0e (DGROUP:0x96da): a shot's divisors [OPEN: their writer]
+    std::array<std::int16_t, 4> shot_div{};  // +0x08 ... +0x0e (DGROUP:0x96da): a shot's divisors, s/4, s/4, s/5, s/5 [BYTES seg14:0x1cae-0x1cde]
     std::array<std::int16_t, 4> hit_div{};   // +0x10 ... +0x16 (DGROUP:0x96e2): SHP +2 / 4, / 5, / 4, / 5 [BYTES seg14:0x1ce2-0x1d0e]
     std::array<std::int16_t, 4> lamp_row{{0, 1, 2, -1}};  // +0x22 ... +0x28 (DGROUP:0x96f4) [BYTES seg14:0x1d3b-0x1dd6]
     // +0x2a (DGROUP:0x96fc), the wings' +0x20 base: the body's unscaled cell side h, written
     // after the sheet build (design_words.h DesignWordSet::w2a) [BYTES seg14:0xba9 seg14:0xd94].
     std::int16_t w2a = 0;
     std::int16_t hit_sound = 0;  // +0x2e (DGROUP:0x9700): SHP +0x1f [BYTES seg14:0x1e18 seg14:0x1e2d]
-    std::int16_t team = 0;       // +0x38 (DGROUP:0x970a) [OPEN: its writer]
+    std::int16_t team = 0;       // +0x38 (DGROUP:0x970a), written by seg14:0x1430 [BYTES seg14:0x14ca] (rating.h DesignRating::team)
     // +0x3c (DGROUP:0x970e): D, the band ordinal 15 keeps at a wing tear (design_words.h
     // design_band) [BYTES seg14:0x2070-0x208b].
     std::int16_t w3c = 0;
@@ -209,19 +209,35 @@ public:
     }
     // seg3:0x6ec(ship, pool, rec, code): a message (the HUD's message display).
     virtual void message(int ship, int pool, int rec, int code) { (void)ship, (void)pool, (void)rec, (void)code; }
-    // The computer pilots' routines of M5 [OPEN].
+    // seg10:0x744c(id): seg10:0x754a(0x69, 0, 0, 0), then seg10:0x754a(id, 0, 0, 0) unless id is
+    // 0x69 (sound.md) [BYTES seg10:0x745f seg10:0x7465 seg10:0x7475].
+    virtual void play(int id) {
+        sound(0x69, 0, 0, 0);
+        if (id != 0x69) sound(id, 0, 0, 0);
+    }
+    // ---- M5 s3 CONTACT: the calls of the attack reaction and the death bookkeeping that other
+    // parts of the port own. The attitude routines themselves are ported (relations.h,
+    // ship_react.h) and the contact code calls them directly.
+    // seg13:0xb6f2(ship, crime), the crime report: stage 4's law (ruling R3); the program's
+    // host logs it once.
     virtual void seg13_b6f2(int ship, int code) { (void)ship, (void)code; }
-    virtual void seg13_2714(int a, int b, int c, int d, int e, int f) { (void)a, (void)b, (void)c, (void)d, (void)e, (void)f; }
-    virtual std::int16_t seg13_2688(int a, int b) { return (void)a, (void)b, 0; }
-    // seg13:0x2e60(j, cr, 4) in declaration order (Pascal, `retf 6`, the 4 at [bp+6]) [BYTES
-    // seg8:0x6827 seg13:0x2f2c] (M4 s4 fixer, C024).
-    virtual void seg13_2e60(int ship, int killer, int code) { (void)ship, (void)killer, (void)code; }
-    virtual void seg4_5e8e(int a, int b, int c, int d) { (void)a, (void)b, (void)c, (void)d; }
-    virtual void seg4_7d36(int a, int b, int c) { (void)a, (void)b, (void)c; }
-    virtual void seg4_7636(int rec, int cp, int cr, int kill) { (void)rec, (void)cp, (void)cr, (void)kill; }
+    // seg13:0xadbe(ship, kind, msg), the call-in (callin.h call_in_program): the AX word the
+    // callers test with `or ax, ax`; the default refuses (0).
+    virtual std::int16_t seg13_adbe(int ship, int kind, int msg) { return (void)ship, (void)kind, (void)msg, 0; }
+    // seg3:0xf4(ship, pool, rec): (pool, rec) becomes the ship's target (+0x3e/+0x40), the
+    // player's with its notice (hud/program.h set_target).
+    virtual void seg3_f4(int ship, int pool, int rec) { (void)ship, (void)pool, (void)rec; }
+    // seg13:0x915c(ship) (519 instructions, also from the key handler seg11:0x6ff7): the ship's
+    // answer to its new target, the commands' subject (stage 4) [OPEN].
+    virtual void seg13_915c(int ship) { (void)ship; }
+    // DGROUP:0x2384 = t, the music's hold (update.h FrameGlobals::music_due) [BYTES seg4:0x7649-0x7653].
+    virtual void music_hold(std::uint32_t t) { (void)t; }
+    // DGROUP:0xa76 and PostMessage(DGROUP:0xa7c, WM_PAINT, 0, 0L): seg13:0x2714's repaint of
+    // the info display while it shows the ship that changed (relations.h AttitudeOut).
+    virtual std::int16_t info_mode() { return 0; }
+    virtual void info_paint() {}
     virtual void seg8_9028(int k, int code, int pool, int rec) { (void)k, (void)code, (void)pool, (void)rec; }
     virtual void seg8_81f8(int pool, int rec) { (void)pool, (void)rec; }
-    virtual void seg8_7ce0(int pool, int rec, int a, int res) { (void)pool, (void)rec, (void)a, (void)res; }
     virtual void seg11_947a(int pool, int rec, int arg) { (void)pool, (void)rec, (void)arg; }
     virtual void seg12_3498(int tpool, int trec, int xrec) { (void)tpool, (void)trec, (void)xrec; }
     virtual void seg18_633c() {}
@@ -241,8 +257,6 @@ public:
     virtual void ship_destroyed(int pool, int ship) { (void)pool, (void)ship; }
     // PatBlt(DGROUP:0x13dc, x, y, w, h, BLACKNESS) of seg7:0x51f9.
     virtual void erase(int x, int y, int w, int h) { (void)x, (void)y, (void)w, (void)h; }
-    // seg8:0x2cd8's taunts seg3:0x6ec(j, 14, ship, 0x19 ... 0x1e) (M5) [OPEN].
-    virtual void wing_taunts(int ship, int side) { (void)ship, (void)side; }
     // seg8:0x2cd8's picture part, run once per tear (work/analysis/m4/s5-sheet.md 1.2-1.4,
     // verified claims 2, 6-10): with `make_debris` (DGROUP:0x92e4 = 0) the first entry of the
     // table DGROUP:0x9176 whose counter is 0 gets the torn wing's strip and ordinal 15 runs with

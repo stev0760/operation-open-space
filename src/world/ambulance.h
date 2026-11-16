@@ -219,6 +219,9 @@ AmbulanceHost& linked_ambulance_host();
 // [DESIGN]; the frame's sync_in must copy World::w952e, ambulance_state().served_alive and
 // ambulance_state().reentry_due in as it copies w9e49 (the fixer's request).
 int ambulance_key_program(World& w, std::uint32_t now, bool ctrl, bool alt);
+// seg16:0xb4e(ship) on the program's World and AmbulanceHost, for a computer pilot's call
+// (pilot_think.h PilotHost::ambulance_call) (M5 s3 integrate).
+std::int16_t ambulance_call_program(World& w, std::uint32_t now, int ship);
 void ambulance_frame(UpdateCtx& u, World& w);
 bool ambulance_reentry_clear_program(World& w, std::uint32_t now);
 void ambulance_reentry_program(World& w, WaveGlobals& g, FrameGlobals& f);

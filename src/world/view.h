@@ -12,6 +12,8 @@
 namespace is::world {
 
 struct WaveGlobals;
+class World;
+class ShiftHost;
 
 // A RECT of 16-bit coordinates (left, top, right, bottom), as DGROUP:0x23e0 holds them.
 struct ViewRect {
@@ -32,22 +34,51 @@ struct ViewState {
     std::array<ViewRect, 4> active{};  // the activity rectangles DGROUP:0x23e0
     std::int16_t active_count = 1;  // DGROUP:0x9158
     std::int16_t shake_x = 0, shake_y = 0;  // DGROUP:0x2390, 0x2392
-    std::int16_t cam_x = 0, cam_y = 0;      // DGROUP:0x6b50, 0x6b52 (the 0x951a camera)
+    std::int16_t cam_x = 0, cam_y = 0;      // DGROUP:0x6b50, 0x6b52, the pan point (DGROUP:0x951a)
+    // DGROUP:0x2394, 0x2396: the pan's last step, (lo16(12 d) / dist) << 3 per axis, written only
+    // on the frames that still pan [BYTES seg8:0x186-0x1a1] (the stars read them, draw.h).
+    std::int16_t pan_dx = 0, pan_dy = 0;
 };
 
-// The pass of seg8:0x0 that runs while DGROUP:0x951a = 0, with no screen shake
-// (DGROUP:0x238c = 0) [BYTES seg8:0x14-0x62 seg8:0x248 seg8:0x3a7-0x757]: the origin from the
-// player's (x, y), the far corner, the activity rectangles, the sign-extended copies.
-// The 0x951a camera (seg8:0x65-0x247) and the shake (seg8:0x251-0x3a5, which draws rand() and
-// plays sounds) are [OPEN]: `shake` reports that the shake path was due and not run.
+// seg8:0x0 with no screen shake (DGROUP:0x238c = 0) [BYTES seg8:0x14-0x62 seg8:0x248
+// seg8:0x3a7-0x757]: the origin from the player's (x, y) while DGROUP:0x951a = 0, or the pan of
+// a perspective shift (pan_view) while it is set; then the far corner, the activity rectangles
+// round the player or, while DGROUP:0x951a is still set after the pan, round the pan point
+// [BYTES seg8:0x3c4-0x3ef], and the sign-extended copies. The shake (seg8:0x251-0x3a5, which
+// draws rand() and plays sounds) is [OPEN]: `shake` reports that the shake path was due and not
+// run. Without `world` and `shift` the DGROUP:0x951a case centres the pan point and does not
+// move it (the frame's stand-in before the shift's binding) [DESIGN].
 struct ViewInputs {
     std::int16_t player_x = 0, player_y = 0;
     std::int16_t autopilot = 0;     // DGROUP:0x951a
     std::int16_t shake = 0;         // DGROUP:0x238c
     std::int16_t wave_kind = 0;     // DGROUP:0x9320
     std::uint8_t dg_9eb5 = 0;       // DGROUP:0x9eb5
+    // The pan's words and calls (shift.h): the program's World, its ShiftHost, the frame's copies
+    // of DGROUP:0x9646 / 0x9134 / 0x95bc / 0x951a (nullable) and DGROUP:0x1e50.
+    World* world = nullptr;
+    ShiftHost* shift = nullptr;
+    WaveGlobals* frame = nullptr;
+    std::uint32_t now = 0;
 };
 void recentre(ViewState& v, const ViewInputs& in);
+
+// seg8:0x65-0x247, the pan while DGROUP:0x951a != 0 [BYTES seg8:0x65-0x247] (ships.md "The pan"):
+//  1. the player's object out of play (`state` != 0) or dead (+0xec = 0): seg11:0xaece again
+//     (shift.h perspective_shift) [BYTES seg8:0x65-0x89];
+//  2. d = seg8:0x285a(player (x, y), DGROUP:0x6b50 (x, y), &dx, &dy) in 1/8-unit cells
+//     (world.h distance_cells), dx and dy toward the player [BYTES seg8:0x8e-0xc5];
+//  3. d < 16: the origin centres the player, PatBlt BLACKNESS over its cell (object +0x00, +0x02,
+//     `size`), seg7:0x11cc, PlayMode 2 -> 0 and 3 -> 1 with DGROUP:0x95bc = 1, 4 -> 1, then
+//     PlayMode = DGROUP:0x9378 in every case, DGROUP:0x951a = 0, seg7:0x1208, DGROUP:0xa76 = 2 and
+//     WM_PAINT to DGROUP:0xa7c [BYTES seg8:0xc8-0x170];
+//  4. d >= 16: DGROUP:0x2394 = (lo16(dx 12) / d) << 3, DGROUP:0x2396 likewise (signed 16-bit
+//     idiv), the pan point moves by them, wrapped into 0 ... 8 DGROUP:0x5a0 (x first by the sign
+//     of its add, then y), the origin centres the pan point, and with the player's object not in
+//     `state` 0 DGROUP:0x1e80 = now + 2000, for `state` 1 also DGROUP:0x1e84 = now + 1500 [BYTES
+//     seg8:0x186-0x244].
+// Returns DGROUP:0x951a after the pan, so the caller picks the activity rectangles' point.
+std::int16_t pan_view(ViewState& v, World& w, ShiftHost& h, WaveGlobals* frame, std::uint32_t now);
 
 // The activity rectangles alone, from the origin, far corner and player (seg8:0x3f2-0x741), and
 // their count; separated for tests.

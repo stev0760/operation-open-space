@@ -6,6 +6,7 @@
 
 #include "formats/bytes.h"
 #include "gfx/font.h"
+#include "gfx/launch_ship.h"
 #include "gfx/ship_sheet.h"
 
 namespace is::hud {
@@ -94,6 +95,9 @@ HBRUSH GdiCanvas::make_brush(const Brush& b, bool* owned) const {
         if (b.stock == kLtGrayBrush) return CreateSolidBrush(gfx_.dc_colour(RGB(0xc0, 0xc0, 0xc0)));
         return CreateSolidBrush(gfx_.dc_colour(RGB(0, 0, 0)));
     case Brush::Kind::kMetal: return metal_;
+    case Brush::Kind::kChecker:  // DGROUP:0x5eaa, made at each use as gfx/launch_ship.h does [DESIGN]
+        *owned = true;
+        return gfx::checker_brush();
     case Brush::Kind::kNone: break;
     }
     return nullptr;

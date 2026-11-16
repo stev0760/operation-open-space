@@ -22,7 +22,9 @@
 #include "settings/settings.h"
 #include "world/flight_hooks.h"
 #include "world/hooks.h"
+#include "world/relations.h"
 #include "world/roster.h"
+#include "world/roster_build.h"
 #include "world/world.h"
 
 namespace is::dialogs {
@@ -178,7 +180,22 @@ struct ProgramCtx {
         s.game_id = q.game_id;
         s.game_date = q.game_date;
         s.pilot = q.pilot;
-        s.table = q.table;
+        // DGROUP:0x3824's one home is world/roster_build.h RosterWords::team_table, which
+        // seg13:0x2714 moves during a wave; the session keeps a copy (M5 s3 integrate, CONTACT
+        // binding 9).
+        const auto& t = world::roster_words().team_table;
+        for (std::size_t i = 0; i < 8; ++i)
+            for (std::size_t j = 0; j < 8; ++j) s.table[i][j] = t[8 * i + j];
+        // DGROUP:0x4fd0, 0x6b10 and 0x6b40 (header +0xe6, +0x116, +0x146): their one home is
+        // world/relations.h ContactWords (seg4:0x7636 writes them); DGROUP:0x5000, its
+        // w4fd0[24], is not saved.
+        save::SaveGlobals& sg = save::globals();
+        const world::ContactWords& cw = world::contact_words();
+        for (std::size_t k = 0; k < 24; ++k) {
+            sg.w4fd0[k] = cw.w4fd0[k];
+            sg.w6b10[k] = cw.w6b10[k];
+        }
+        for (std::size_t k = 0; k < 8; ++k) sg.w6b40[k] = cw.w6b10[24 + k];
         s.size = q.size;
         s.drive = q.drive;
         s.play_mode = g.play_mode;
@@ -191,6 +208,16 @@ struct ProgramCtx {
         q.game_date = s.game_date;
         q.pilot = s.pilot;
         q.table = s.table;
+        auto& t = world::roster_words().team_table;
+        for (std::size_t i = 0; i < 8; ++i)
+            for (std::size_t j = 0; j < 8; ++j) t[8 * i + j] = s.table[i][j];
+        const save::SaveGlobals& sg = save::globals();
+        world::ContactWords& cw = world::contact_words();
+        for (std::size_t k = 0; k < 24; ++k) {
+            cw.w4fd0[k] = sg.w4fd0[k];
+            cw.w6b10[k] = sg.w6b10[k];
+        }
+        for (std::size_t k = 0; k < 8; ++k) cw.w6b10[24 + k] = sg.w6b40[k];
         q.size = s.size;
         q.drive = s.drive;
         g.play_mode = s.play_mode;

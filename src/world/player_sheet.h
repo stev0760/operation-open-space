@@ -242,6 +242,70 @@ std::uint8_t sheet_last_row(std::int16_t bm_height, std::int16_t size, std::int1
 SheetPixels* sheet_copy(int i);
 void set_sheet_copy(int i, const SheetPixels& px);
 void clear_sheet_copies();
+// The placement's last build of ship i's slot (null for none), kept with the slot: a later wave
+// whose seg16:0x3468 does not build reads it again, as the original reads the sheet still in the
+// slot (ship_entry.h place_ship_sheet) [DESIGN] (M5 s3 ENTRY).
+const SheetBuild* last_build(int i);
+void set_last_build(int i, const SheetBuild& b);
+
+// ---- the ships' image slots across waves: seg14:0x0's cache (docs/re/ships.md "Pictures", The
+// cache across waves; s3-roster-verify.md claims 56, 57, O14) (M5 s3 ENTRY). The slot table is
+// the DC word of slot 0x28 + j; the port's copies (sheet_copy, sheet_request, last_build) go with
+// the slot's words [DESIGN].
+struct ShipSlotSnapshot {
+    bool taken = false;
+    std::array<std::uint16_t, 8> dc{};  // DGROUP:0x3a38 + 2j as seg14:0x0 saved it [BYTES seg14:0x1f9-0x223]
+    std::array<SheetPixels, 8> px{};
+    std::array<bool, 8> has{};
+    std::array<SheetRequest, 8> req{};
+    std::array<bool, 8> has_req{};
+    std::array<SheetBuild, 8> last{};
+    std::array<bool, 8> has_last{};
+};
+// The words of slots 0x28 ... 0x2f and the port's copies, at seg14:0x0's entry.
+ShipSlotSnapshot snapshot_ship_slots(const ImageSlotTable& images);
+// seg14:0x9a0-0x9c7: slot 0x28 + `to` takes the saved four words of slot 0x28 + `from` (the
+// ship kept its roster index and moves to a new slot); the copies follow.
+void take_ship_slot(ImageSlotTable& images, const ShipSlotSnapshot& saved, int to, int from);
+// seg14:0x9d1-0x9df: slot 0x28 + j's words zeroed without a free (its DC moved to another slot).
+void zero_ship_slot(ImageSlotTable& images, int j);
+// seg10:0x1eb6(j, ...): slot 0x28 + j freed when its DC word is not 0; it reads only its first
+// argument [BYTES seg10:0x1eb6-0x1f2e] (claim 57).
+void free_ship_slot(Blitter& out, ImageSlotTable& images, int j);
+
+// The image-slot side of roster_build.h RosterHost over the program's image table, in the order
+// roster_build.cpp's seg14:0x0 calls it: slot_words(j) for every old slot at its entry
+// (seg14:0x1f9-0x223) and again at seg14:0x9cb, set_slot_words(k, saved words of old slot m)
+// (seg14:0x9a0-0x9c7), set_slot_words(m, {}) (seg14:0x9d1-0x9df) and slot_free(j) (seg10:0x1eb6).
+// The original moves only the four words, and the bitmap goes with its DC; the port's copies of a
+// slot (sheet_copy, sheet_request, last_build) are kept under the DC id each slot_words read
+// returns, so a later set_words(k, dc) gives slot k the copies of the DC it takes [DESIGN: the
+// invariant is that slot j's copies always belong to slot j's present DC]. The port's one image
+// id stands for the DC and its bitmap, so the other three words are 0 [DESIGN ADR 0013].
+class ShipSlotCache {
+public:
+    std::uint16_t words(const ImageSlotTable& images, int j);
+    void set_words(ImageSlotTable& images, int k, std::uint16_t dc);
+    void free(Blitter& out, ImageSlotTable& images, int j);
+    void clear();
+
+private:
+    struct Copies {
+        std::uint16_t dc = 0;
+        SheetPixels px;
+        bool has = false;
+        SheetRequest req;
+        bool has_req = false;
+        SheetBuild last;
+        bool has_last = false;
+    };
+    std::vector<Copies> by_dc_;
+    Copies* find(std::uint16_t dc);
+};
+// The program's one cache (the integrator's RosterHost binds slot_words / set_slot_words /
+// slot_free to it).
+ShipSlotCache& ship_slot_cache();
+
 // The request of ship i's last build (null for none): the same graphic id, file and scheme bytes
 // seg11:0x4b00 passes to the quick renderer and seg16:0x3468(i, 3) renders again with [BYTES
 // seg11:0x4be4-0x4c37 seg14:0x129c-0x12d0] (s5-sheet-verify.md claim 22) [DESIGN: kept from the

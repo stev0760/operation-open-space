@@ -348,6 +348,13 @@ void Info::target_picture(int flag) {
     if (p.picture && p.slot == 0xd)
         c_.stretch_blt(Img::kScreen, p.dx, p.dy, p.dw, p.dh, Img::kIconStrip, p.sx, p.sy, p.sw, p.sh,
                        kSrcCopy);
+    // A target ship's own sprite sheet, slot +0x50 + 0x28, and for a cloaked ship the
+    // checkerboard over it [BYTES seg13:0x5cdd-0x5cfa seg13:0x60bd-0x612c] (M5 s3 fixer).
+    if (p.picture && p.ship) {
+        c_.stretch_blt(Img::kScreen, p.dx, p.dy, p.dw, p.dh, Img::kShipSprite, p.sx, p.sy, p.sw, p.sh,
+                       kSrcCopy);
+        if (p.cloak) c_.pat_blt(Img::kScreen, p.dx, p.dy, p.dw, p.dh, CellPlan::kCloakRop, Brush::checker());
+    }
     // A burning icon's own image, slot 14 + r [BYTES seg13:0x5d5b-0x5d9b] (M4 s5 ICONS).
     if (p.picture && p.slot >= world::kIconOwnSlot && p.slot < world::kIconOwnSlot + world::kIconRecords)
         c_.stretch_blt(Img::kScreen, p.dx, p.dy, p.dw, p.dh, Img::kIconOwn, p.sx, p.sy, p.sw, p.sh, kSrcCopy);

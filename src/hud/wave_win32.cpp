@@ -33,6 +33,7 @@
 #include "hud/weapons.h"
 #include "shell/rng.h"
 #include "world/ambulance.h"
+#include "world/callin.h"
 #include "world/draw.h"
 #include "world/effects.h"
 #include "settings/settings.h"
@@ -50,8 +51,11 @@
 #include "world/purchases.h"
 #include "world/rescale.h"
 #include "world/roster.h"
+#include "world/roster_build.h"
 #include "world/rock_images.h"
 #include "world/setup.h"
+#include "world/shift.h"
+#include "world/ship_entry.h"
 #include "world/shots.h"
 #include "world/smoke.h"
 #include "world/sprite.h"
@@ -592,6 +596,229 @@ void build_player_sheet(world::World& wd) {
                          : std::string("none")));
 }
 
+// ---- seg14:0x0's program side (world/roster_build.h RosterHost), M5 s3 integrate
+//
+// The wave's ships are built by build_wave_roster (seg14:0x0) on this host: MASTER.SHP and
+// MASTER.BOD from the ship path (seg14:0x3eda), rand(), the INI keys, the image slots 0x28 + j
+// through world/player_sheet.h ShipSlotCache, the design fill (roster_build.h
+// design_fill_portable and the sheet source of ship_entry.h), seg16:0x3784(i, 1) with its
+// seg16:0x3468(i, 3) sheet (ship_entry.h ship_sheet_build), and the per-ship tail (ship_tail_sizes,
+// ship_sheet_flame, player_sheet.h placement_tail). The player's own sheet goes the same way.
+
+// Inside seg14:0x0's per-ship loop: the purchase host's seg14:0x11a8 (hud/hooks.cpp
+// ProgramPurchaseHost::on_build_sheet) is ship_entry.h ship_sheet_build, which the host's
+// purchases() runs right after the pass, so the pass builds nothing itself [DESIGN].
+bool g_roster_building = false;
+
+// seg10:0x546e(k) [BYTES seg10:0x546e-0x5583] (read for the integration; no verifier has checked
+// it): the image slot s = W(k)-4 of weapon k is freed unless a live ship j <= DGROUP:0x9316
+// (+0xec != 0) holds in one of its slots 0 ... sbyte(+0xcb) - 1 a weapon whose W-4 is s
+// [BYTES seg10:0x547c-0x54d1], or a pool-8 record r <= DGROUP:0x9416 (the pool-8 in-use count,
+// `jg`, so one past) with word +0x1c = 2 holds in +0x0a such a weapon [BYTES seg10:0x54d1-0x5501],
+// or k is 0x16, or s < 0, or the slot's DC is 0 [BYTES seg10:0x5503-0x5521]. The free:
+// SelectPalette back when the palette word is set, the old bitmap back, DeleteDC, the DC word 0,
+// W(k)-4 = 0 (not -1), DeleteObject of the bitmap word and that word 0 [BYTES seg10:0x5523-0x557c].
+// The port's one image id stands for the DC and its bitmap [DESIGN ADR 0013].
+void free_weapon_image(world::World& wd, int k) {
+    world::WeaponWords& words = world::missile_state().words;
+    const std::int16_t s = words.word(k, -4);
+    for (int j = 0; j <= wd.last_ship && j < world::kShipCount; ++j) {
+        const world::ShipRecord& S = wd.ship(j);
+        if (S.bec == 0) continue;
+        const int n = world::sbyte_at(S, 0xcb);
+        for (int m = 0; m < n && m < 10; ++m)
+            if (words.word(world::sbyte_at(S, 0xb8 + m), -4) == s) return;
+    }
+    for (int r = 0; r <= wd.pools.in_use(world::kPoolGatePosts) && r < world::kPool8Max; ++r) {
+        const world::Pool8Entry& p = wd.pool8[static_cast<std::size_t>(r)];
+        if (p.at(0x1c) == 2 && words.word(p.at(0x0a), -4) == s) return;
+    }
+    if (k == 0x16 || s < 0 || s >= world::kImageSlots) return;
+    world::DcId& dc = g_images[static_cast<std::size_t>(s)];
+    if (dc == world::kDcNone) return;
+    if (g_blit) g_blit->delete_image(dc);
+    dc = world::kDcNone;
+    words.set_word(k, -4, 0);
+}
+
+class ProgramRosterHost final : public world::RosterHost {
+public:
+    explicit ProgramRosterHost(const assets::Ships& s) : s_(s) {}
+    const fmt::MasterShp& ships() override { return s_.ships; }
+    const fmt::MasterBod& bodies() override { return s_.bodies; }
+    shell::Rng& rng() override { return shell::game_rng(); }  // seg5:0xdc
+    // GetPrivateProfileString("Inner Space", "MainShip", "EAGLE", buf, 20) [BYTES seg14:0x23a8].
+    std::string main_ship() override {
+        return g.ini ? g.ini->get_string(settings::kGameSection, "MainShip", "EAGLE", 20) : std::string("EAGLE");
+    }
+    // seg14:0x2300's `MainShip=TRANSFORMER` [BYTES seg14:0x240a seg14:0x2420].
+    void main_ship_rewritten() override {
+        if (!g.ini) return;
+        g.ini->set(settings::kGameSection, "MainShip", "TRANSFORMER");
+        try {
+            g.ini->save();
+        } catch (const std::exception& x) {
+            app::log(std::string("INSPACE.INI: ") + x.what());
+        }
+    }
+    // DGROUP:0x380c: INI ThePlayer, 12 bytes [BYTES seg10:0x8c].
+    std::string pilot() override {
+        return g.ini ? g.ini->get_string(settings::kGameSection, "ThePlayer", "", 12) : std::string();
+    }
+    // seg13:0x218a(team, buf): GetPrivateProfileString("Teams", "Team<team + 1>", "", buf, 20)
+    // [BYTES seg13:0x2197-0x21fa] [BYTES ENG_LANG.DLL STRING 11] id 175.
+    std::string team_name(int team) override {
+        return g.ini ? g.ini->get_string("Teams", "Team" + std::to_string(team + 1), "", 20) : std::string();
+    }
+    void beep() override { MessageBeep(0); }  // [BYTES seg14:0xe69-0xe76]
+    // DGROUP:0x95a8 (effects.h EffectState::dg_95a8) [BYTES seg14:0x10-0x4c].
+    std::int16_t demo_death() override { return world::effect_state().dg_95a8; }
+    void clear_demo_death() override { world::effect_state().dg_95a8 = 0; }
+    world::SlotWords slot_words(int j) override {
+        return world::SlotWords{world::ship_slot_cache().words(g_images, j), 0, 0, 0};
+    }
+    void set_slot_words(int j, const world::SlotWords& v) override {
+        world::ship_slot_cache().set_words(g_images, j, v.dc);
+    }
+    void slot_free(int j) override {  // seg10:0x1eb6(j, ...) [BYTES seg10:0x1eb6-0x1f2e]
+        if (g_blit) world::ship_slot_cache().free(*g_blit, g_images, j);
+    }
+    // seg14:0x1b84(i, n, R, s): the design words, the object's and the flight words
+    // (design_fill_portable), and the words the sheet build and the flame read (design +0x36,
+    // +0x84, bytes +0x18 / +0x1a, the flame words, BOD +0x19), registered per design for
+    // ship_entry.h [BYTES seg14:0x129c-0x12d0 seg14:0x1c7f-0x1c88 seg14:0x1d55-0x1d69
+    // seg14:0x1ed6-0x1f09].
+    void design_fill(world::World& w, int i, int s) override {
+        if (s < 0 || s >= static_cast<int>(s_.ships.records.size())) {
+            todo_once("seg14:0x1b84 for an SHP index outside MASTER.SHP", "seg14:0x1b84");
+            return;
+        }
+        const fmt::ShipRecord& shp = s_.ships.records[static_cast<std::size_t>(s)];
+        world::design_fill_portable(w, i, shp, s_.bodies, static_cast<std::uint32_t>(app::now_tick()), this);
+        // Design +0x70 = SHP +0x0a, the ship's name [BYTES seg14:0x208f-0x209e].
+        if (i >= 0 && i < world::kShipCount && w.ship(i).design_index >= 0 && w.ship(i).design_index < world::kShipCount)
+            w.design_names[static_cast<std::size_t>(w.ship(i).design_index)] = shp.name;
+        world::DesignSheetSource src;
+        src.colour_a = shp.byte_07;  // design byte +0x18
+        src.colour_b = shp.byte_08;  // design byte +0x1a
+        if (const fmt::BodyRecord* body = s_.body(shp)) {
+            src.graphic_id = body->bitmap_id;  // design +0x36 = BOD +0x21
+            src.file = body->bitmap_file;      // design +0x84 = BOD +0x23
+            src.flame = world::flame_design(shp.flags, body->flags, body->byte_19);
+            src.bod_19 = body->byte_19;
+        }
+        if (i >= 0 && i < world::kShipCount) world::set_design_sheet_source(w.ship(i).design_index, src);
+    }
+    // seg16:0x3784(i, 1) [BYTES seg14:0xd32] and its seg16:0x3468(i, 3) sheet (ship_entry.h).
+    void purchases(world::World& w, int i) override {
+        world::purchase_pass(w, i, 1);
+        if (!ready()) {
+            todo_once("seg14:0x11a8 for a ship without the surface", "seg14:0x11a8");
+            return;
+        }
+        world::PlaceSheetCtx c = ctx(w);
+        const world::PlacedSheet p = world::ship_sheet_build(c, i, true);
+        app::log("hud: seg16:0x3468 ship " + std::to_string(i) + ": " +
+                 (p.rebuilt ? (p.build.rendered ? "sheet rendered, side " + std::to_string(p.build.side) + " gap " +
+                                                      std::to_string(p.build.gap)
+                                                : std::string("no sheet"))
+                            : std::string("sheet kept")) +
+                 ", " + std::to_string(p.weapon_sheets) + " weapon sheets");
+    }
+    // seg14:0xb86-0xcf9 for ship i: the sizes and +0x5b (roster_build.h ship_tail_sizes on the
+    // slot's sheet height), design +0x04 and seg10:0x5c42 + seg10:0x5d3c(i) (ship_entry.h
+    // ship_sheet_flame), then the restored game's wing cut and the muzzle tables
+    // (player_sheet.h placement_tail) [BYTES seg14:0xc42-0xcf6].
+    void ship_tail(world::World& w, int i) override {
+        if (i < 0 || i >= world::kShipCount || w.pools.records(w.roles.ships) <= i) return;
+        const world::ShipRecord& S = w.ship(i);
+        const std::int16_t raw = w.ship_object(i).size;  // object +0x22 before the size step [BYTES seg14:0xb97]
+        world::ship_tail_sizes(w, i, world::ship_sheet_height(i));
+        if (ready()) {
+            world::PlaceSheetCtx c = ctx(w);
+            const world::PlacedSheet p = world::ship_sheet_flame(c, i);
+            if (p.has_w04 && S.design_index >= 0 && S.design_index < world::kShipCount)
+                g_design_w04[static_cast<std::size_t>(S.design_index)] = p.w04;
+        }
+        world::placement_tail(w, i, raw, world::shot_state());
+    }
+    // seg10:0x546e(k), k = 0 ... 0x1b [BYTES seg14:0xda0-0xdb4].
+    void weapon_images() override {
+        for (int k = 0; k <= 0x1b; ++k) free_weapon_image(world::current(), k);
+    }
+    void preload_sound(int id) override { is::sound::play_at(id, 0, 0, 5); }  // seg10:0x754a(id, 0, 0, 5)
+    void todo(const std::string& what, const char* address) override { todo_once(what, address); }
+
+private:
+    world::PlaceSheetCtx ctx(world::World& w) {
+        world::PlaceSheetCtx c{*g_blit, g_images, w, world::missile_state().words, render_sheet, anim4_sheet};
+        c.flame = flame_ok_ ? &flame_ : nullptr;
+        c.quick = world::quick_word();  // DGROUP:0x931e
+        c.state = g.game.state();       // DGROUP:0x90f4
+        c.new_body = world::shop().new_body;
+        return c;
+    }
+    const assets::Ships& s_;
+
+public:
+    // seg10:0x7032's 16 headings on the palette in force, made once per seg14:0x0 call (each
+    // seg10:0x5c42 makes the same) [BYTES seg10:0x5c80 seg10:0x7041-0x7051] [DESIGN].
+    void make_flame(int size_level) {
+        flame_ok_ = false;
+        try {
+            const int f = gfx::flame_cell(size_level);
+            flame_ = gfx::flame_headings(
+                gfx::rescaled_flame_bitmap(
+                    gfx::flame_bitmap_for(g.store->sprite(gfx::kFlameGraphic), g.gfx->palettes(), g.gfx->palette()),
+                    size_level),
+                f);
+            flame_ok_ = flame_.ok();
+        } catch (const std::exception& x) {
+            app::log(std::string("hud: the ships' flame headings: ") + x.what());
+        }
+    }
+
+private:
+    gfx::FlameHeadings flame_;
+    bool flame_ok_ = false;
+};
+
+// seg14:0x3eda, seg14:0x0(mode), seg14:0x4074 on the program's World (world/hooks.h
+// on_roster_build): the placement's mode -1 [BYTES seg9:0x6883-0x6890] and a call-in's kind or
+// team [BYTES seg13:0xb3fa seg13:0xb45c seg13:0xb467].
+void roster_build(world::World& wd, int mode) {
+    if (!g.store) return;
+    try {
+        const assets::Ships ships = g.store->ships(world::program_ship_dir());  // seg14:0x3eda
+        ProgramRosterHost rh(ships);
+        if (ready()) rh.make_flame(wd.size);
+        fill_weapon_words(wd);
+        g_roster_building = true;
+        const world::RosterBuild b = world::build_wave_roster(wd, rh, mode);
+        g_roster_building = false;
+        // World::sheet_due stands for the player's slot flag [bp-0x54] (C067) [DESIGN].
+        if (wd.player >= 0 && wd.player < 8) wd.sheet_due = b.fresh[static_cast<std::size_t>(wd.player)] != 0 || wd.wave == 1;
+        std::string line = "hud: seg14:0x0(" + std::to_string(mode) + ") wave " + std::to_string(wd.wave) + ": " +
+                           std::to_string(b.count) + " ships";
+        for (int i = 0; i <= wd.last_ship && i < world::kShipCount; ++i) {
+            const world::ShipRecord& S = wd.ship(i);
+            const int shp = S.roster_index >= 0 && static_cast<std::size_t>(S.roster_index) < wd.roster.size()
+                                ? wd.roster[static_cast<std::size_t>(S.roster_index)].shp
+                                : world::roster_words().enforcer_shp[static_cast<std::size_t>(world::sbyte_at(S, 0x5e) & 3)];
+            const std::string design =
+                shp >= 0 && shp < static_cast<int>(ships.ships.records.size()) ? ships.ships.records[static_cast<std::size_t>(shp)].name
+                                                                             : std::string("?");
+            line += "; " + std::to_string(i) + ": " + design + " roster " + std::to_string(S.roster_index) + " design " +
+                    std::to_string(S.design_index) + " team " + std::to_string(world::design_team(wd, S.design_index)) +
+                    (b.fresh[static_cast<std::size_t>(i)] != 0 ? " fresh" : " kept");
+        }
+        app::log(line);
+    } catch (const std::exception& x) {
+        g_roster_building = false;
+        app::log(std::string("hud: seg14:0x0: ") + x.what());
+    }
+}
+
 // The effect's calls outside the drawing (world/entry_effect.h): the sounds through M7's
 // seg10:0x754a and the vanish's end (world/gate_exit.h vanish_end) (M4 s1 fixer); seg2:0x170e's
 // menu state is the shell's [OPEN].
@@ -678,6 +905,8 @@ std::vector<std::pair<int, int>> wave_visible() {
 }
 
 std::int16_t g_tank_made_for = -1;  // DGROUP:0x17c0, the DGROUP:0x9214 of slot 4's image
+
+bool roster_building() { return g_roster_building; }
 
 namespace {
 
@@ -849,7 +1078,7 @@ public:
         world::World& wd = w();
         const world::SheetRequest* rq = world::sheet_request(i);
         if (!ready() || rq == nullptr || i < 0 || i >= world::kShipCount || wd.pools.records(wd.roles.ships) <= i) {
-            todo_once("seg14:0x11a8 for a ship the port renders no sheet for (M5)", "seg10:0x9e10");
+            todo_once("seg14:0x11a8 for a ship without a sheet request", "seg10:0x9e10");
             return;
         }
         world::SheetRequest req = *rq;
@@ -870,6 +1099,9 @@ public:
                 r.gap = static_cast<std::uint8_t>(b.gap);
             }
             if (i == wd.player) g_last_build = b;
+            // The slot's last build for the next placement's kept path and the tail's height
+            // and flame (ship_entry.h) [DESIGN] (M5 s3 integrate, ENTRY binding 11).
+            world::set_last_build(i, b);
         }
         world::build_weapon_sheets(*g_blit, g_images, wd.pools, world::missile_state().words, s,
                                    world::weapon_sheet_sel(world::quick_word(), g.game.state(), wd.frames), wd.size,
@@ -936,23 +1168,28 @@ public:
     }
     // seg10:0x5d3c(i) from ship i's sheet as drawn, with design +0x2a and +0x04 (seg10:0x16ba)
     // [BYTES seg10:0x5d3c-0x6263 seg10:0x5e30]; the flame bitmap seg10:0x7032 at the new Size
-    // [BYTES seg10:0x7071-0x708f]. The port draws the player's flame strip only; another ship
-    // logs once (M5).
+    // [BYTES seg10:0x7071-0x708f]. The flame words of ship i's design are the design fill's
+    // (ship_entry.h design_sheet_source), the player's design records without one (M5 s3
+    // integrate).
     void flame_strip(int i) override {
         world::World& wd = w();
         if (!ready()) return;
-        if (i != wd.player || i < 0 || i >= world::kShipCount || wd.pools.records(wd.roles.ships) <= i) {
-            todo_once("seg10:0x5d3c for a ship the port renders no sheet for (M5)", "seg10:0xa04c");
-            return;
-        }
+        if (i < 0 || i >= world::kShipCount || wd.pools.records(wd.roles.ships) <= i) return;
         const world::SheetPixels* c = world::sheet_copy(i);
-        fmt::ShipRecord shp;
-        fmt::BodyRecord body;
-        if (c == nullptr || !player_design_records(shp, body)) return;
+        if (c == nullptr) return;
         const world::ShipRecord& s = wd.ship(i);
         const world::ObjectRecord& o = wd.ship_object(i);
         const int n = s.design_index;
         if (n < 0 || n >= world::kShipCount) return;
+        world::FlameDesign fd;
+        if (const world::DesignSheetSource* src = world::design_sheet_source(n)) {
+            fd = src->flame;
+        } else {
+            fmt::ShipRecord shp;
+            fmt::BodyRecord body;
+            if (i != wd.player || !player_design_records(shp, body)) return;
+            fd = world::flame_design(shp.flags, body.flags, body.byte_19);
+        }
         try {
             const int f = gfx::flame_cell(wd.size);
             const gfx::FlameHeadings fh = gfx::flame_headings(
@@ -965,8 +1202,7 @@ public:
             world::flame_strip_create(st, fh.f);
             const world::FlameAnchors a =
                 world::flame_anchors(world::design_words(n).w2a, g_design_w04[static_cast<std::size_t>(n)], wd.size);
-            world::build_flame_strip(st, fh, i, *c, o.size, o.gap,
-                                     world::flame_design(shp.flags, body.flags, body.byte_19), a, s.has_flame);
+            world::build_flame_strip(st, fh, i, *c, o.size, o.gap, fd, a, s.has_flame);
             world::upload_flame_strip(*g_blit, st);
         } catch (const std::exception& x) {
             app::log(std::string("hud: the rescale's flame strip: ") + x.what());
@@ -1219,8 +1455,24 @@ void install_wave(app::App& app) {
     // flame pastes stay in the sheet [BYTES seg9:0x60bc] (s2-briefing.md, "Flame pastes").
     world::on_briefing_placement([](world::World& wd) {
         refresh_player_design();
-        build_player_sheet(wd);    // seg14:0x11a8 for the player (M5 s1 SPRITE)
+        // seg14:0x11a8 for the player (M5 s1 SPRITE) when the placement ran the player-only
+        // set-up; seg14:0x0(-1) on the RosterHost built every ship's sheet (M5 s3 integrate).
+        if (!world::roster_placed()) build_player_sheet(wd);
     });
+    // seg14:0x0(mode) on the program's RosterHost (world/hooks.h on_roster_build) (M5 s3 integrate).
+    world::on_roster_build([](world::World& wd, int mode) { roster_build(wd, mode); });
+    // seg13:0xae68's seg14:0x3eda / seg14:0x0(kind or team) / seg14:0x4074 (world/callin.h, M5 s3
+    // integrate, ENTRY binding 1).
+    world::callin_links().build_roster = [](int mode) { roster_build(w(), mode); };
+    // seg8:0x0's pan: PatBlt BLACKNESS over the player's last cell, seg7:0x11cc and seg7:0x1208
+    // (world/shift.h ShiftLinks) [BYTES seg8:0x10c-0x123 seg8:0x130 seg8:0x16b] (M5 s3 integrate,
+    // ENTRY binding 1; the HUD's calls are bound in src/hud/hooks.cpp).
+    world::ShiftLinks& shl = world::shift_links();
+    shl.black_cell = [](int x, int y, int cw, int ch) {
+        if (g_blit) g_blit->pat_blt(world::kDcWindow, x, y, cw, ch, world::kBlackness);
+    };
+    shl.pin_player = k.pin_player;
+    shl.draw_player = player_sprite;
     world::on_wave_start([](world::World& wd) {
         refresh_player_design();  // the design words the panels read (M3 stage 4)
         clear_entries(g_entries);  // [DESIGN] (world/entry_effect.h)

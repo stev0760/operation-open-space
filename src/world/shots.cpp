@@ -4,6 +4,8 @@
 #include "world/bounce.h"
 #include "world/damage.h"
 #include "world/design_words.h"
+#include "world/relations.h"
+#include "world/ship_react.h"
 
 namespace is::world {
 
@@ -769,11 +771,12 @@ std::int16_t shot_hit_object(ShotCtx& c, int pool, int rec, int j) {
             for (int i = 0; i <= w.last_ship && i < kShipCount; ++i) {
                 if (i == orr) continue;
                 const ShipRecord& I = ship_of(w, i);
-                if (I.bec != 0 && I.w32 == pool && I.w34 == rec && I.w38 == 1) ch.seg13_2714(i, orr, 5, 10, 0, -1);
+                if (I.bec != 0 && I.w32 == pool && I.w34 == rec && I.w38 == 1)
+                    attitude_change(w, attitude_out(c.x), i, orr, 5, 10, 0, -1);  // seg13:0x2714 (relations.h, M5 s3)
             }
         }
         // 2. [BYTES seg8:0x75d9-0x75f0]
-        if (op == ships && pool == ships) ch.seg4_7d36(orr, rec, cg.dA);
+        if (op == ships && pool == ships) fight_record(w, contact_words(), orr, rec, cg.dA);  // seg4:0x7d36 (relations.h, M5 s3)
         // 3. The player's target and DGROUP:0x9432 (claim 48) [BYTES seg8:0x7603-0x768b]
         if (op == ships && orr == g.player && !(pool == ships && rec == g.player)) {
             cg.hit_rec = static_cast<std::int16_t>(rec);
@@ -807,11 +810,11 @@ std::int16_t shot_hit_object(ShotCtx& c, int pool, int rec, int j) {
                     bool said = false;
                     if (pool == 9) {
                         ch.message(orr, ships, S.w58, 0x75);
-                        ch.seg13_2714(S.w58, orr, 15, 0x2d, 0, 6);
+                        attitude_change(w, attitude_out(c.x), S.w58, orr, 15, 0x2d, 0, 6);  // seg13:0x2714
                         said = true;
                     } else if (S.w56 == rec) {
                         ch.message(orr, ships, S.w58, 0x76);
-                        ch.seg13_2714(S.w58, orr, 0x28, 0x5a, 0, 6);
+                        attitude_change(w, attitude_out(c.x), S.w58, orr, 0x28, 0x5a, 0, 6);
                         said = true;
                     }
                     if (said) {  // [BYTES seg8:0x77ff-0x7820]
@@ -825,7 +828,7 @@ std::int16_t shot_hit_object(ShotCtx& c, int pool, int rec, int j) {
                     const ShipRecord& T = ship_of(w, rec);
                     if (T.w32 == ships && S.w58 == T.w34 && T.w38 == 1) {
                         ch.message(orr, ships, S.w58, 0x77);
-                        ch.seg13_2714(S.w58, orr, 0x3c, 0x78, 0, 8);
+                        attitude_change(w, attitude_out(c.x), S.w58, orr, 0x3c, 0x78, 0, 8);
                         flag = 1;
                     }
                 } else {  // [BYTES seg8:0x78c8-0x792d]
@@ -833,7 +836,7 @@ std::int16_t shot_hit_object(ShotCtx& c, int pool, int rec, int j) {
                         if (i == orr) continue;
                         const ShipRecord& I = ship_of(w, i);
                         if (I.bec != 0 && I.w32 == pool && I.w34 == rec && I.w38 == 1) {
-                            ch.seg13_2714(i, orr, 0x19, 0x28, 0, 6);
+                            attitude_change(w, attitude_out(c.x), i, orr, 0x19, 0x28, 0, 6);
                             ch.message(orr, ships, i, 0x77);
                         }
                     }
@@ -853,7 +856,7 @@ std::int16_t shot_hit_object(ShotCtx& c, int pool, int rec, int j) {
         }
         // 11. [BYTES seg8:0x79e7-0x7a19]
         if (res_od != 0 && pool == ships) {
-            ch.seg4_7636(rec, op, orr, flag);
+            ship_killed(c.x, rec, op, orr, flag);  // seg4:0x7636 (ship_react.h, M5 s3)
             if (op == ships && orr == g.player) w.w9432 = add16(w.w9432, 200);
         }
         // 12. (claim 52) [BYTES seg8:0x7a1f-0x7a3c]

@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "formats/icon_source.h"
+#include "world/pilot.h"
 #include "world/rating.h"
 #include "world/records.h"
 
@@ -516,6 +517,16 @@ public:
     std::array<LinkSlot, kLinkSlots> links{};
     std::array<Pool8Entry, kPool8Max> pool8{};
     std::array<SpecialPlace, 10> places{};
+    // The computer pilots' DGROUP words World had no field for (pilot.h PilotGlobals): the
+    // call-in deadlines DGROUP:0x1d0a / 0x1d0e / 0x1d12, DGROUP:0x8e2c, the estimate's outputs
+    // DGROUP:0x9686 / 0x9688 / 0x968a, DGROUP:0x964c and the greed level DGROUP:0x967e. Their
+    // one home; callin.h and roster_build.h read them through the program's links (M5 s3
+    // integrate, THINK binding 5). DGROUP:0x9648's home is relations.h ContactWords::w9648.
+    PilotGlobals pilot;
+    // DGROUP:0x9742 + 0xad·n, design +0x70: the SHP name seg14:0x1b84 copies from MASTER.SHP +0x0a
+    // [BYTES seg14:0x208f-0x209e]; seg3:0x1542 names a ship by it [BYTES seg3:0x1588-0x159c]
+    // (M5 s3 integrate).
+    std::array<std::string, kShipCount> design_names{};
 
     // ---- placement (world.md "Placement")
     std::int16_t placed = 0;      // DGROUP:0x93b0 latch

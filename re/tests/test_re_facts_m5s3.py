@@ -376,3 +376,86 @@ def test_shift_latch_references(ins):
 def test_warrant_references(ins):
     """s3-roster.md 1.3 and s3-tick.md 3.7: DGROUP:0x9346 (the arrest warrant) has 15 code references."""
     assert len([i for i in ins.refs(0x9346, 0x9347) if i.seg != 19]) == 15
+
+
+# ------------------------------------------------------------------ PART B FIX: readings the reviewer confirmed
+
+def test_goal_choice_draw_per_ship(ins):
+    """pilots.md, the goal choice item 4: the per-ship draw is the loop head seg4:0x3683 (`call far seg5:0xdc`,
+    rand()), after the loop test at seg4:0x367b; seg4:0x3114-0x3130 is the seg4:0x6700 call and message 0xb7."""
+    assert str(ins.at("seg4:0x3683").text).startswith("call far seg5:0xdc")
+    assert str(ins.at("seg4:0x367b").text).startswith("mov ax, word ptr [0x9316]")
+    assert str(ins.at("seg4:0x3116").text).startswith("call seg4:0x6700")
+
+
+def test_goal_choice_hazard_table_by_pool_number(ins):
+    """pilots.md, the goal choice item 5: the pool-8 hazard cost indexes DGROUP:0x3d50 + 0x34·r with [bp-4], the
+    pool number, at seg4:0x3823 and seg4:0x3845 (words +0x1c and +0x0a)."""
+    for a, disp in (("seg4:0x3823", "0x3d6c"), ("seg4:0x3845", "0x3d5a")):
+        assert str(ins.at(a).text).startswith("imul bx, word ptr [bp - 4], 0x34")
+        assert disp in str(ins.step(ins.at(a), 1).text)
+
+
+def test_steer_counter_references(ins):
+    """pilots.md, the steer step 1: DGROUP:0x1cb8 has two code references, the steer's `inc` and the race test."""
+    hits = sorted((i.addr for i in ins.insns if "+ 0x1cb8]" in str(i.text) or "[0x1cb8]" in str(i.text)), key=A)
+    assert hits == ["seg4:0xc0a", "seg4:0xc39"]
+
+
+def test_callin_deadline_writers(ins):
+    """pilots.md, seg4:0x7e2a: every store to DGROUP:0x1d0a, 0x1d0e and 0x1d12 lies inside seg4:0x7e68-0x8282."""
+    for lo in (0x1d0a, 0x1d0e, 0x1d12):
+        ws = [i for i in ins.writers(lo, lo + 3) if i.seg != 19]
+        assert ws, hex(lo)
+        assert all(i.seg == 4 and 0x7e68 <= i.off <= 0x8282 for i in ws), [i.addr for i in ws]
+
+
+def test_shift_words_writers(ins):
+    """ships.md 4.3: DGROUP:0x951a's writers are seg9:0x5dd9, seg11:0xb077 and seg8:0x14e; DGROUP:0x9378's are
+    seg9:0x698a and seg11:0x6db7."""
+    assert sorted((i.addr for i in ins.writers(0x951a, 0x951b) if i.seg != 19), key=A) == \
+        ["seg8:0x14e", "seg9:0x5dd9", "seg11:0xb077"]
+    assert sorted((i.addr for i in ins.writers(0x9378, 0x9379) if i.seg != 19), key=A) == ["seg9:0x698a", "seg11:0x6db7"]
+
+
+def test_message_case_f61(ins):
+    """ship-contact.md: seg3:0xf61 draws rand() (seg5:0xdc) % 4 and adds 0x1eb to the code; the switch seg3:0x1351
+    sends cases 58-62, 64-67, 86 and 87 there."""
+    assert str(ins.at("seg3:0xf61").text).startswith("call far seg5:0xdc")
+    assert str(ins.at("seg3:0xf66").text) == "mov cx, 4"
+    assert str(ins.at("seg3:0xf87").text) == "add ax, 0x1eb"
+    sw = ins.switches["seg3:0x1351"]
+    cases = sorted(int(c) for c, t in sw["cases"].items() if t == "seg3:0xf61") if isinstance(sw.get("cases"), dict) \
+        else None
+    if cases is not None:
+        assert cases == [58, 59, 60, 61, 62, 64, 65, 66, 67, 86, 87]
+
+
+FIX_BYTES = _facts("""
+seg8:0x11f 6a 00 6a 42
+seg13:0x7b4a 6a 03
+seg13:0x7b4f 6a 0e
+seg13:0x7b76 83 bf e4 70 09
+seg13:0x7b7d 6a 06 6a 00 6a 16 6a 0a
+seg13:0x7b87 6a 08 6a 01 6a 41 6a 0f
+seg13:0x5ce6 05 28 00
+seg13:0x5cf5 c7 46 ec 01 00
+seg13:0x611b 66 68 c9 00 a0 00
+seg7:0x3769 83 3e 10 95 32
+seg7:0x3775 03 c0 05 03 00
+seg11:0x64ef 66 c7 87 2c 5b 9c ff 9c ff
+""")
+
+
+@pytest.mark.parametrize("addr,hexs", FIX_BYTES, ids=[f"{a}:{h[:14]}" for a, h in FIX_BYTES])
+def test_fix_bytes(ins, addr, hexs):
+    """The bytes the part B fix rests on: the pan's BLACKNESS rop (seg8:0x10c-0x123), seg13:0x7b40's pushes, the
+    ship-pool picture of seg13:0x5c22 (slot +0x28, the cloak flag, ROP 0x00A000C9), seg7:0x375a's gate and its group
+    count 2·Detail + 3, and the OverThruster's erase point (-100, -100)."""
+    assert _bytes_fact(addr, hexs), f"{addr}: {hexs}"
+
+
+def test_pending_report_writers(ins):
+    """seg13:0xa65a acts only on a pending report: DGROUP:0x885c is written at seg13:0xa647 (in seg13:0xa5c2, the
+    commands' report) and cleared at seg13:0xa6ac only."""
+    assert sorted((i.addr for i in ins.writers(0x885c, 0x885f) if i.seg != 19), key=A) == ["seg13:0xa647", "seg13:0xa6ac"]

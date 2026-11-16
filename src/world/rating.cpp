@@ -21,6 +21,12 @@ DesignRating design_rating(const fmt::ShipRecord& shp, const fmt::BodyRecord& bo
     DesignRating d;
     // `idiv bl` / `idiv cl` of the sign-extended armor byte [BYTES seg14:0x1cae-0x1d0e].
     const std::int16_t armor = static_cast<std::int8_t>(shp.armor);
+    // The shot row: +0x0a = s/4, +0x0c = s/5, +0x0e = s/5, +0x08 = s/4 (M5 s3)
+    // [BYTES seg14:0x1cae-0x1cde].
+    d.shot_div = {idiv16(armor, 4), idiv16(armor, 4), idiv16(armor, 5), idiv16(armor, 5)};
+    d.armor = static_cast<std::int8_t>(shp.armor);  // +0xa6 [BYTES seg14:0x1d16]
+    // +0x2e = SHP word +0x1f [BYTES seg14:0x1e18 seg14:0x1e1e].
+    d.hit_sound = to_i16(shp.hit_sound);
     d.armor4a = idiv16(armor, 4);
     d.armor5a = idiv16(armor, 5);
     d.armor4b = idiv16(armor, 4);
@@ -38,6 +44,8 @@ DesignRating design_rating(const fmt::ShipRecord& shp, const fmt::BodyRecord& bo
     d.cloak = (shp.flags & fmt::kShipCloak) ? 1 : 0;
     d.repair = (shp.flags & fmt::kShipRepair) ? 1 : 0;
     d.shield = (body.flags & fmt::kBodyShield) ? 1 : 0;
+    d.wrap = (body.flags & fmt::kBodyFlag40) ? 1 : 0;           // [BYTES seg14:0x1f71-0x1f89]
+    d.b_a3 = (body.flags & fmt::kBodyPullOffWings) ? 6 : 0;     // [BYTES seg14:0x1f1f-0x1f2b]
     return d;
 }
 

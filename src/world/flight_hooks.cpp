@@ -11,6 +11,7 @@
 #include <mmsystem.h>
 
 #include <cstdio>
+#include <cstring>
 #include <exception>
 #include <memory>
 #include <set>
@@ -27,14 +28,25 @@
 #include "world/player_sheet.h"
 #include "world/aggression.h"
 #include "world/ambulance.h"
+#include "world/callin.h"
 #include "world/capture.h"
 #include "world/fuel_balls.h"
 #include "world/icon_effects.h"
 #include "world/lightning.h"
 #include "world/missile.h"
+#include "world/pilot.h"
+#include "world/pilot_orders.h"
+#include "world/pilot_steer.h"
+#include "world/pilot_think.h"
+#include "world/pilot_tick.h"
+#include "world/player_tick.h"
+#include "world/relations.h"
 #include "world/rescale.h"
 #include "world/ring.h"
+#include "world/roster_build.h"
 #include "world/setup.h"
+#include "world/shift.h"
+#include "world/ship_react.h"
 #include "world/shots.h"
 #include "world/smoke.h"
 #include "world/tank.h"
@@ -93,11 +105,26 @@ public:
     }
     // seg11:0x4e0a and seg8:0x3aec are UpdateHost's defaults on the program's World (shots.h)
     // (M4 s2 fixer).
-    // seg13:0x675e at the ship mover's head: the HUD's part (hud/wave.h pictures_tick) [BYTES
-    // seg13:0x15].
-    void seg13_675e() override {
-        if (g_links.pictures) g_links.pictures();
-    }
+    // seg13:0x675e at the ship mover's head: the ship loop and the All Ships notice
+    // (pilot_tick.h watch_refresh), whose tail calls the HUD's part (hud/wave.h pictures_tick)
+    // through PilotHost::watch_tail [BYTES seg13:0x15 seg13:0x675e-0x688d] (M5 s3 integrate,
+    // THINK binding 1).
+    void seg13_675e() override;
+    // ---- M5 s3 integrate: the computer ship's body in the ship mover seg13:0x0 (flight.cpp)
+    // seg4:0xbde(i), the steer (pilot_steer.h), STEER binding B1.
+    void seg4_bde(int ship) override;
+    // seg4:0x78(i), the think, and seg4:0x6e70(i), the weapon choice (pilot_think.h), THINK
+    // binding 1.
+    void seg4_78(int ship) override;
+    void seg4_6e70(int ship) override;
+    // The design team word DGROUP:0x970a + 0xad·n (roster_build.h design_team): the speed cap's
+    // SPEED DEMONS, the entry's Enforcers, the death and the captures read it [BYTES seg11:0x5ce2
+    // seg7:0x1d89] (STEER B3, CONTACT binding 2).
+    std::int16_t design_kind(int design) override;
+    // DGROUP:0x9344 and the special places DGROUP:0x4f2c + 0x10·k (World::places) for the
+    // computer speed cap [BYTES seg11:0x5d7e seg11:0x5daa seg11:0x5db9] (STEER B5).
+    std::int16_t special_places() override;
+    RingPlace special_place(int k) override;
     // seg7:0x1208 through the HUD's link; the link clears the frame's DGROUP:0x58a
     // (FrameGlobals::dg_58a, which seg7:0x5e04 sets) when the sprite is drawn [BYTES seg7:0x13a2]
     // (src/hud/wave_win32.cpp player_sprite) (M4 s5 EFFECTS).
@@ -192,6 +219,7 @@ public:
 };
 
 CollideLinks g_collide_links;
+PilotLinks g_pilot_links;  // M5 s3 integrate
 World* rt_world();
 
 // The program's collision calls out (M4 s1 COLLIDE).
@@ -222,14 +250,27 @@ public:
     void erase(int x, int y, int w, int h) override {
         if (Blitter* out = u->blitter()) out->pat_blt(kDcWindow, x, y, w, h, kBlackness);
     }
-    void seg13_b6f2(int, int) override { todo_once("pilot goal", "seg13:0xb6f2"); }
+    // seg13:0xb6f2(ship, crime), the crime report: the law, stage 4 (ruling R3).
+    void seg13_b6f2(int, int) override { todo_once("the crime report (the law, stage 4)", "seg13:0xb6f2"); }
+    // ---- M5 s3 integrate: the contact routines' calls (CONTACT binding 1)
+    std::int16_t seg13_adbe(int ship, int kind, int msg) override {  // seg13:0xadbe (callin.h)
+        return rt_world() ? call_in_program(*rt_world(), ship, kind, msg) : std::int16_t{0};
+    }
+    void seg3_f4(int ship, int pool, int rec) override;  // seg3:0xf4
+    // seg13:0x915c(ship): the ship's answer to its new target, the commands' subject (a later
+    // stage) [OPEN].
+    void seg13_915c(int) override { todo_once("the ship's answer to its new target (the commands)", "seg13:0x915c"); }
+    void music_hold(std::uint32_t t) override;  // DGROUP:0x2384 (FrameGlobals::music_due)
+    std::int16_t info_mode() override;          // DGROUP:0xa76, the frame's copy
+    void info_paint() override {                // PostMessage(DGROUP:0xa7c, WM_PAINT, 0, 0L)
+        if (g_pilot_links.info_paint) g_pilot_links.info_paint();
+    }
     // seg8:0x5fdd: the holder of a hard-hit held ship lets go, seg11:0x947a(holder, 2) (tether.h)
     // (M4 s7 TETHER).
     void seg11_947a(int pool, int rec, int arg) override { tether_use_program(pool, rec, arg); }
     // seg8:0x641d: a pool-10 attacker meets its target, seg12:0x3498 (tether.h hook_meets)
     // (M4 s7 TETHER).
     void seg12_3498(int tp, int tr, int xr) override { hook_meets_program(tp, tr, xr); }
-    void wing_taunts(int, int) override { todo_once("wing taunts", "seg8:0x2da6"); }
     // ---- M4 s2 fixer: the icon's on_damage seg7:0x233c and its shatter (damage.h)
     // seg7:0x5ae8(rec, arg) on the program's World (capture.h icon_counted).
     void icon_gone(int rec, int arg) override;
@@ -443,6 +484,389 @@ void bind_tether_links() {
 
 UpdateCtx make_ctx(Runtime& r);
 
+// ---- M5 s3 integrate: the computer pilots on the program's World (pilot_think.h, pilot_tick.h,
+// pilot_steer.h), the bindings of work/world/m5s3/think-report.md, steer-report.md and
+// contact-report.md
+
+// f(FlightCtx&) on the frame's flight context while the frame runs (UpdateHost::frame_ctx), else
+// on one over the Runtime's words; r.world must be set.
+template <typename F>
+auto with_flight(F f) {
+    Runtime& r = rt();
+    UpdateHost& h = r.h();
+    if (h.frame_ctx) return f(h.frame_ctx->flight);
+    UpdateCtx local = make_ctx(r);
+    return f(local.flight);
+}
+
+std::string hex_word(int v) {
+    char b[16];
+    std::snprintf(b, sizeof b, "%x", v & 0xffff);
+    return b;
+}
+
+class ProgramSteerHost;
+SteerHost& program_steer_host();
+
+// The pilot's calls out on the program (pilot_think.h PilotHost); the subjects of later stages
+// (the law, the commands, the reactions, Demon's Gate, duels) keep PilotHost's logged-once
+// defaults (ruling R3).
+class ProgramPilotHost final : public PilotHost {
+public:
+    // DGROUP:0x96d2 + 0xad·n + off: the words of rating.h DesignRating (World::design_ratings).
+    std::int16_t design_word(int n, int off) override {
+        const World* w = rt().world;
+        if (!w || n < 0 || n >= kShipCount) return 0;  // [DESIGN ADR 0016 decision 2]
+        const DesignRating& d = w->design_ratings[static_cast<std::size_t>(n)];
+        switch (off) {
+        case 0x10: return d.armor4a;   // DGROUP:0x96e2
+        case 0x1e: return d.tank;      // DGROUP:0x96f0
+        case 0x28: return d.special;   // DGROUP:0x96fa
+        case 0x32: return d.mass;      // DGROUP:0x9704
+        case 0x38: return d.team;      // DGROUP:0x970a
+        case 0x42: return d.captures;  // DGROUP:0x9714
+        case 0x4a: return d.cloak;     // DGROUP:0x971c
+        case 0x4c: return d.repair;    // DGROUP:0x971e
+        default:
+            todo_once("the pilot's design word +0x" + hex_word(off), "DGROUP:0x96d2");
+            return 0;
+        }
+    }
+    std::int16_t relation(int a, int b) override {  // seg13:0x2688 (relations.h)
+        return rt().world ? ::is::world::relation(*rt().world, a, b) : std::int16_t{0};
+    }
+    std::int16_t strength(int a, int b) override {  // seg4:0x5d9c (relations.h)
+        return rt().world ? strength_ratio(*rt().world, a, b) : std::int16_t{100};
+    }
+    std::int16_t team_word(int x, int y) override { return ::is::world::team_word(x, y); }  // DGROUP:0x3824
+    void message(int recipient, int pool, int rec, int code) override {  // seg3:0x6ec
+        rt().collide_host.message(recipient, pool, rec, code);
+    }
+    void target(int ship, int pool, int rec) override {  // seg3:0xf4
+        if (g_pilot_links.set_target) return g_pilot_links.set_target(ship, pool, rec);
+        if (World* w = rt().world; w && ship >= 0 && ship < kShipCount) {
+            w->ship(ship).target_pool = static_cast<std::int16_t>(pool);  // +0x3e [BYTES seg3:0x10a]
+            w->ship(ship).target_rec = static_cast<std::int16_t>(rec);    // +0x40 [BYTES seg3:0x111]
+        }
+    }
+    std::int16_t visible(int pool, int rec) override {  // seg3:0x0
+        return g_pilot_links.visible && g_pilot_links.visible(pool, rec) ? std::int16_t{1} : std::int16_t{0};
+    }
+    // seg13:0x9a18(i, pool, rec) [BYTES seg13:0x9a18-0x9ae6] on the defender table (collide.h
+    // CollideGlobals::defenders). The entry's word -8 (DGROUP:0x52f6 + 0x24k), which the
+    // defender mover reads, has no home in the port until that mover is ported (stage 4)
+    // [BYTES seg13:0x9ab1].
+    void send_defenders(int i, int pool, int rec) override {
+        World* w = rt().world;
+        if (!w) return;
+        if (rec < 0 || !(rec < w->pools.in_use(pool))) return;  // [BYTES seg13:0x9a26-0x9a38]
+        if (w->pools.rec(pool, rec).state != 0) return;          // [BYTES seg13:0x9a3a-0x9a4c]
+        auto& d = rt().h().collide_globals().defenders;
+        int last = -1;  // [bp-8]
+        for (int k = 0; k < w->pools.in_use(2) && k < static_cast<int>(d.size()); ++k) {  // [BYTES seg13:0x9a5d-0x9ac6]
+            DefenderEntry& e = d[static_cast<std::size_t>(k)];
+            if (e.owner_pool != 14 || e.owner_rec != i) continue;
+            if (e.killer_pool == pool && e.killer_rec == rec && e.w00 == 15) continue;
+            if (w->pools.rec(2, k).state != 0) continue;
+            e.w00 = 15;
+            e.killer_pool = static_cast<std::int16_t>(pool);
+            e.killer_rec = static_cast<std::int16_t>(rec);
+            last = k;
+        }
+        if (last >= 0) rt().h().sound(0x15, 2, last, 1);  // seg10:0x754a(0x15, 2, k, 1) [BYTES seg13:0x9ace-0x9ad7]
+    }
+    // seg11:0x4c72 / seg11:0x4b00 / seg3:0x332e inside the frame (update.h UpdateHost).
+    std::int16_t cloak_toggle(int i) override { return rt().h().seg11_4c72(i); }
+    std::int16_t shield_toggle(int i) override { return rt().h().seg11_4b00(i); }
+    void notice(std::uint32_t ids) override { rt().h().seg3_332e(ids); }
+    void sound(int id, int pool, int rec, int mode) override { rt().h().sound(id, pool, rec, mode); }  // seg10:0x754a
+    std::string lang(int id) override { return g_pilot_links.lang ? g_pilot_links.lang(id) : std::string{}; }
+    std::string pilot_name() override { return g_pilot_links.pilot ? g_pilot_links.pilot() : std::string{}; }
+    std::string shp_name(int n) override { return g_pilot_links.shp_name ? g_pilot_links.shp_name(n) : std::string{}; }
+    std::int16_t weapon_system(int i) override {  // seg4:0x5654 (pilot_steer.h)
+        World* w = rt().world;
+        if (!w) return 0;
+        return with_flight([&](FlightCtx& f) { return weapon_decision_frame(*w, f, program_steer_host(), i); });
+    }
+    void weapon_use(int k, int s, int life) override {  // seg4:0x584c (pilot_steer.h)
+        World* w = rt().world;
+        if (!w) return;
+        with_flight([&](FlightCtx& f) { use_weapon_frame(*w, f, program_steer_host(), k, s, life); });
+    }
+    void thrust(int i, int mode) override {  // seg11:0x5ab6(mode, i) (flight.h)
+        if (!rt().world) return;
+        with_flight([&](FlightCtx& f) { thrust_step(f, static_cast<std::int16_t>(mode), i); });
+    }
+    void gun(int i) override { rt().h().fire(i); }  // seg11:0x4e0a (shots.h through UpdateHost)
+    std::int16_t call_in(int s, int kind, int msg) override {  // seg13:0xadbe (callin.h)
+        return rt().world ? call_in_program(*rt().world, s, kind, msg) : std::int16_t{0};
+    }
+    void through_gate(int pool, int rec) override { run_gate_exit(pool, rec, rt().g.now); }  // seg12:0x2288
+    std::int16_t ambulance_call(int i) override {  // seg16:0xb4e (ambulance.h)
+        Runtime& r = rt();
+        if (!r.world) return 0;
+        const std::int16_t v = ambulance_call_program(*r.world, r.g.now, i);
+        // The frame's copies of DGROUP:0x9e49 / 0x952e / 0x9e5b, as ambulance_frame keeps them [DESIGN].
+        r.g.dg_9e49 = r.world->w9e49;
+        r.g.dg_952e = r.world->w952e;
+        r.g.dg_9e5b = ambulance_state().served_alive;
+        return v;
+    }
+    void touched(int i) override {  // seg13:0x6716 (flight.h)
+        if (!rt().world) return;
+        with_flight([&](FlightCtx& f) { ship_touched(f, i); });
+    }
+    void weapon_display() override {  // seg11:0x2f8c
+        if (g_pilot_links.weapon_display) g_pilot_links.weapon_display();
+    }
+    void set_manual_target() override {  // DGROUP:0xa62 = 1 [BYTES seg4:0x62b]
+        if (g_pilot_links.manual_target) g_pilot_links.manual_target();
+    }
+    // DGROUP:0x8560 + 0x34·rec + off (effects.h PodRecord, the original's 0x34 bytes).
+    std::int16_t pod_word(int rec, int off) override {
+        if (rec < 0 || rec >= kPodRecords || off < 0 || off + 2 > 0x34) return 0;  // [DESIGN ADR 0016 decision 2]
+        const PodRecord& p = effect_state().pods[static_cast<std::size_t>(rec)];
+        std::int16_t v = 0;
+        std::memcpy(&v, reinterpret_cast<const std::uint8_t*>(&p) + off, sizeof v);
+        return v;
+    }
+    void clear_tallies() override {  // DGROUP:0x9680, 0x9682, 0x8e00, 0x8e04 [BYTES seg4:0x41f9-0x4213]
+        ContactWords& c = contact_words();
+        c.w9680 = c.w9682 = 0;
+        c.d8e00 = c.d8e04 = 0;
+    }
+    std::int16_t weapon_word(int w, int off) override { return missile_state().words.word(w, off); }  // DGROUP:0x2f54
+    // DGROUP:0x52fe + 0x24·k + off (collide.h CollideGlobals::defenders).
+    std::int16_t defender_word(int k, int off) override {
+        const auto& d = rt().h().collide_globals().defenders;
+        if (k < 0 || k >= static_cast<int>(d.size())) return 0;  // [DESIGN ADR 0016 decision 2]
+        const DefenderEntry& e = d[static_cast<std::size_t>(k)];
+        switch (off) {
+        case 0x00: return e.w00;
+        case 0x06: return e.owner_pool;
+        case 0x08: return e.owner_rec;
+        case 0x0a: return e.killer_pool;
+        case 0x0c: return e.killer_rec;
+        default: todo_once("the defender word +0x" + hex_word(off), "DGROUP:0x52fe"); return 0;
+        }
+    }
+    // DGROUP:0x9146 and the bytes DGROUP:0x507c / 0x50e0 of the last visibility pass.
+    int visible_count() override {
+        const VisibilityGlobals* v = last_visibility();
+        return v ? v->count : 0;
+    }
+    void visible_entry(int k, std::int8_t& pool, std::int8_t& rec) override {
+        const VisibilityGlobals* v = last_visibility();
+        if (!v || k < 0 || k >= kVisibleMax) {
+            pool = -1;
+            rec = 0;
+            return;
+        }
+        pool = static_cast<std::int8_t>(v->pool[static_cast<std::size_t>(k)]);
+        rec = static_cast<std::int8_t>(v->rec[static_cast<std::size_t>(k)]);
+    }
+    void mark_6e52(std::int16_t& pool, std::int16_t& rec) override {  // DGROUP:0x6e54 / 0x6e52
+        pool = -1;
+        rec = -1;
+        if (g_pilot_links.mark0) g_pilot_links.mark0(pool, rec);
+    }
+    void watch_ship(int i) override {  // seg13:0x6890(i) [BYTES seg13:0x6890-0x68ff]
+        if (g_pilot_links.watch_ship) g_pilot_links.watch_ship(i);
+    }
+    // seg13:0x50b0(0, 0), seg13:0x58dc(0, 0), seg7:0x64ac(0, 0, -1) [BYTES seg13:0x67f2-0x6821]:
+    // seg13:0x50b0 returns at once while the right display DGROUP:0x95fc is not shown [BYTES
+    // seg13:0x50be-0x50c3], and the HUD's pictures_tick (WaveLinks::pictures) is the other two.
+    void watch_tail() override {
+        if (rt().f.dg_95fc != 0) todo_once("the right display's picture", "seg13:0x50b0");
+        if (g_links.pictures) g_links.pictures();
+    }
+    // DGROUP:0x8f74 (INI SmWnd) and DGROUP:0x131c (INI ShipAnim, default 1) [BYTES seg6:0x13e
+    // seg6:0xd0a]; the IS_SMART window DGROUP:0x95fe is not ported, so smart_window() is false.
+    std::int16_t smwnd() override { return static_cast<std::int16_t>(g.keys.sm_wnd); }
+    std::int16_t ship_anim() override {
+        return static_cast<std::int16_t>(g.ini ? g.ini->get_int(settings::kGameSection, "ShipAnim", 1) : 1);
+    }
+    // DGROUP:0x95fa = n and PostMessage(main, 0x9b4): the IS_SMART window's open is not ported [OPEN].
+    void all_ships_notice(int n) override {
+        if (n != 0) todo_once("the All Ships window 0x9b4 (IS_SMART)", "seg13:0x6881");
+    }
+};
+ProgramPilotHost g_pilot_host;
+
+// The pilot's context on the program's World (pilot_think.h PilotCtx): the World's pools and
+// ships, the flight globals (the frame's own, make_ctx), the wave's PilotGlobals, rand() and the
+// host. r.world must be set.
+PilotCtx program_pilot_ctx(Runtime& r) {
+    World& w = *r.world;
+    return PilotCtx{w.pools, w.ships, r.g, w, w.pilot, shell::game_rng(), g_pilot_host};
+}
+
+// The steer's calls into the think (pilot_steer.h SteerHost, STEER binding B1); the touch, the
+// view and the launchers keep SteerHost's MissileLinks defaults.
+class ProgramSteerHost final : public SteerHost {
+public:
+    void think(int ship) override {  // seg4:0x78
+        Runtime& r = rt();
+        if (!r.world) return;
+        PilotCtx c = program_pilot_ctx(r);
+        ::is::world::think(c, ship);
+    }
+    void hazard_step(int ship) override {  // seg4:0x4fc8
+        Runtime& r = rt();
+        if (!r.world) return;
+        PilotCtx c = program_pilot_ctx(r);
+        ::is::world::hazard_step(c, ship);
+    }
+    void weapon_choice(int ship) override {  // seg4:0x6e70
+        Runtime& r = rt();
+        if (!r.world) return;
+        PilotCtx c = program_pilot_ctx(r);
+        choose_weapon(c, ship);
+    }
+};
+SteerHost& program_steer_host() {
+    static ProgramSteerHost h;
+    return h;
+}
+
+// The player's 1500 ms tick calls (player_tick.h PlayerTickLinks), the attitude change's calls
+// out (relations.h AttitudeOut) and the MISSILE kind-5 aim's relation (missile.h MissileLinks)
+// on the program's World (THINK binding 3, CONTACT bindings 6-8).
+void bind_pilot_links() {
+    PlayerTickLinks& t = player_tick_links();
+    t.seg4_59bc = []() -> std::int16_t {  // seg4:0x59bc
+        Runtime& r = rt();
+        if (!r.world) return 0;
+        PilotCtx c = program_pilot_ctx(r);
+        return player_estimate(c);
+    };
+    t.seg4_6700 = [](int ship) {  // seg4:0x6700
+        Runtime& r = rt();
+        if (!r.world) return;
+        PilotCtx c = program_pilot_ctx(r);
+        rivals(c, ship);
+    };
+    t.seg13_3302 = [] {  // seg13:0x3302
+        Runtime& r = rt();
+        if (!r.world) return;
+        PilotCtx c = program_pilot_ctx(r);
+        claim_reset(c);
+    };
+    t.seg4_7e2a = [] {  // seg4:0x7e2a
+        Runtime& r = rt();
+        if (!r.world) return;
+        PilotCtx c = program_pilot_ctx(r);
+        // DGROUP:0x9648's one home is relations.h ContactWords::w9648 (the attack reaction adds
+        // to it); the pilot's copy follows it before the read [DESIGN] (THINK binding 5).
+        c.pg.crimes_wave = contact_words().w9648;
+        callins(c);
+    };
+    t.seg4_83ae = [] {  // seg4:0x83ae
+        Runtime& r = rt();
+        if (!r.world) return;
+        PilotCtx c = program_pilot_ctx(r);
+        cloak_guess(c);
+    };
+    t.seg13_7b40 = [](int k) {  // seg13:0x7b40 (pilot_orders.h) [BYTES seg7:0xfae-0xfb4]
+        Runtime& r = rt();
+        if (!r.world) return;
+        PilotCtx c = program_pilot_ctx(r);
+        bidding_report(c, k);
+    };
+    t.seg13_2714 = [](int a, int b, int dt, int ds, int prop, int kind) {  // seg13:0x2714
+        if (rt().world) attitude_change(*rt().world, a, b, dt, ds, prop, kind);
+    };
+    AttitudeOut& ao = attitude_links();
+    ao.message = [](int recipient, int pool, int rec, int code) {  // seg3:0x6ec
+        Runtime& r = rt();
+        r.collide_host.u = &r.h();
+        r.collide_host.message(recipient, pool, rec, code);
+    };
+    ao.info_mode = [] { return rt().f.info_mode; };  // DGROUP:0xa76
+    ao.info_paint = [] {
+        if (g_pilot_links.info_paint) g_pilot_links.info_paint();
+    };
+    missile_links().relation = [](int s, int rec) -> std::int16_t {  // seg13:0x2688
+        return rt().world ? ::is::world::relation(*rt().world, s, rec) : std::int16_t{0};
+    };
+}
+
+// seg13:0xadbe's program side (callin.h CallInLinks, ENTRY binding 1): the sounds, the music, the
+// messages, the team words, DGROUP:0x3824, 0x2384, 0x1e50, 0x1e68, 0xa163 and the pilots' one
+// DGROUP:0x964c / 0x8e2c (pilot.h PilotGlobals). The roster build is the drawing side's
+// (src/hud/wave_win32.cpp).
+void bind_callin_links() {
+    CallInLinks& cl = callin_links();
+    cl.play = [](int id) { rt().h().play(id); };                                                  // seg10:0x744c
+    cl.sound = [](int id, int pool, int rec, int mode) { rt().h().sound(id, pool, rec, mode); };  // seg10:0x754a
+    cl.music = [](int track, int flag) { is::sound::music(track, flag); };                        // seg10:0x7480
+    cl.message = [](int recipient, int pool, int rec, int code) {                                 // seg3:0x6ec
+        Runtime& r = rt();
+        r.collide_host.u = &r.h();
+        r.collide_host.message(recipient, pool, rec, code);
+    };
+    cl.team = [](int design) { return rt().world ? design_team(*rt().world, design) : std::int16_t{0}; };
+    cl.team_table = [] { return roster_words().team_table.data(); };  // DGROUP:0x3824
+    cl.dg_a163 = [] { return std::int16_t{contact_words().ba163}; };  // DGROUP:0xa163
+    cl.music_due = [] { return &rt().f.music_due; };                  // DGROUP:0x2384
+    cl.now = [] { return rt().g.now; };                               // DGROUP:0x1e50
+    cl.frames = [] { return rt().g.game_frames; };                    // DGROUP:0x1e68
+    cl.called_in = [] { return &current().pilot.called_in; };         // DGROUP:0x964c (World::pilot)
+    cl.callin_frame = [] { return &current().pilot.callin_frame; };   // DGROUP:0x8e2c
+    cl.todo = [](const std::string& what, const char* address) { todo_once(what, address); };
+}
+
+void DefaultHost::seg13_675e() {
+    Runtime& r = rt();
+    if (!r.world) {
+        if (g_links.pictures) g_links.pictures();
+        return;
+    }
+    PilotCtx c = program_pilot_ctx(r);
+    watch_refresh(c);  // seg13:0x675e [BYTES seg13:0x675e-0x688d]
+}
+
+void DefaultHost::seg4_bde(int ship) {
+    Runtime& r = rt();
+    if (!r.world) return;
+    with_flight([&](FlightCtx& f) { steer_frame(*r.world, f, program_steer_host(), ship); });  // seg4:0xbde(i)
+}
+
+void DefaultHost::seg4_78(int ship) {
+    Runtime& r = rt();
+    if (!r.world) return;
+    PilotCtx c = program_pilot_ctx(r);
+    think(c, ship);  // seg4:0x78(i)
+}
+
+void DefaultHost::seg4_6e70(int ship) {
+    Runtime& r = rt();
+    if (!r.world) return;
+    PilotCtx c = program_pilot_ctx(r);
+    choose_weapon(c, ship);  // seg4:0x6e70(i)
+}
+
+std::int16_t DefaultHost::design_kind(int design) {
+    const World* w = rt().world;
+    return w ? design_team(*w, design) : std::int16_t{0};  // DGROUP:0x970a + 0xad·n
+}
+
+std::int16_t DefaultHost::special_places() {
+    const World* w = rt().world;
+    return w ? w->w9344 : std::int16_t{0};  // DGROUP:0x9344
+}
+
+RingPlace DefaultHost::special_place(int k) {
+    const World* w = rt().world;
+    if (!w || k < 0 || k >= static_cast<int>(w->places.size())) return RingPlace{};  // [DESIGN ADR 0016 decision 2]
+    const SpecialPlace& p = w->places[static_cast<std::size_t>(k)];
+    return RingPlace{p.radius, p.x, p.y};  // DGROUP:0x4f30, 0x4f36 + 0x10·k
+}
+
+void ProgramCollideHost::seg3_f4(int ship, int pool, int rec) { g_pilot_host.target(ship, pool, rec); }
+void ProgramCollideHost::music_hold(std::uint32_t t) { rt().f.music_due = t; }
+std::int16_t ProgramCollideHost::info_mode() { return rt().f.info_mode; }
+
 CollideHost& DefaultHost::collide_host() {
     Runtime& r = rt();
     r.collide_host.u = &r.h();
@@ -502,6 +926,12 @@ public:
         dispatch(x, pool, rec, sp, sr, amount);
     }
     std::int16_t design_kind(int design) override { return rt().h().design_kind(design); }
+    // seg11:0xaece at the demo player's death (shift.h perspective_shift) [BYTES seg16:0xb2b]
+    // (M5 s3 integrate, ENTRY binding 6).
+    void seg11_aece() override {
+        Runtime& r = rt();
+        if (r.world) perspective_shift(*r.world, r.view, linked_shift_host(), &r.g);
+    }
     void destroy(int pool, int rec) override;
     void seg7_2080(int pool, int arg) override { rt().collide_host.seg7_2080(pool, arg); }
 };
@@ -789,6 +1219,9 @@ void sync_in(Runtime& r, shell::GameState& s) {
     r.f.dg_6da8 = ambulance_state().reentry_due;
     gl.dg_9eb4 = static_cast<std::uint8_t>(w.w9eb4);
     gl.dg_94e2 = w.w94e2;
+    // DGROUP:0x951a: the World's word is the one copy; seg11:0xaece and the pan write both
+    // (shift.h, view.h) [DESIGN] (M5 s3 integrate, ENTRY binding 6).
+    gl.autopilot = w.w951a;
     gl.game_frames = w.frames;
     gl.burst_count = w.w9510;
     r.f.race = w.handover.race;
@@ -1147,6 +1580,7 @@ void program_icon_crack(int i) {
     icon_damage(x, 0, i, 0);  // seg7:0x233c(0, i, 0): no sound, no rand() [BYTES seg10:0x9fbf-0x9fd7]
 }
 WaveLinks& wave_links() { return g_links; }
+PilotLinks& pilot_links() { return g_pilot_links; }
 void set_zoom_source(std::function<std::int32_t()> zoom) { rt().zoom = std::move(zoom); }
 void wave_started() {
     Runtime& r = rt();
@@ -1187,6 +1621,11 @@ void recentre_view(World& w) {
     vi.shake = r.g.dg_238c;
     vi.wave_kind = w.kind;
     vi.dg_9eb5 = r.g.dg_9eb5;
+    // The pan's words (shift.h, view.h pan_view) (M5 s3 integrate, ENTRY binding 4).
+    vi.world = &w;
+    vi.shift = &linked_shift_host();
+    vi.frame = &r.g;
+    vi.now = r.g.now;
     recentre(r.view, vi);
 }
 
@@ -1222,6 +1661,8 @@ void install_flight_hooks(App& app) {
     // The program's pool-5 tables for the set-up's seg9:0x6624 (fuel_balls.h) (M4 s7 FUEL).
     set_pool5_tables([]() -> CollideGlobals* { return &rt().h().collide_globals(); });
     bind_effect_links();
+    bind_pilot_links();   // M5 s3 integrate
+    bind_callin_links();  // M5 s3 integrate
     h.frame[shell::kWave] = [](shell::GameState& s) {
         rt().default_host.state = &s;
         wave_hook(s);

@@ -2,6 +2,7 @@
 #include "world/damage.h"
 
 #include "world/design_words.h"
+#include "world/ship_react.h"
 
 namespace is::world {
 
@@ -82,7 +83,9 @@ std::int16_t ship_damage(CollideCtx& x, int pool, int ship, std::int16_t d) {
         const ShotSlotView sh = x.h.shot(x.dg_943c);
         avx = sh.vx, avy = sh.vy, ax = sh.x, ay = sh.y;
         akind = 2;
-        if (sh.owner_pool == ships && sh.owner_rec != ship) x.h.seg4_5e8e(ships, sh.owner_rec, d, 1);
+        // seg4:0x5e8e(damaged ship [bp+8], owner, d, 1): the damaged ship first, pushed from AX =
+        // [bp+8] (s3-contact-verify.md claim 4) [BYTES seg8:0x47d1-0x47e4] (M5 s3 CONTACT, D1).
+        if (sh.owner_pool == ships && sh.owner_rec != ship) attack_reaction(x, ship, sh.owner_rec, d, 1);
         if (sh.owner_pool == ships && sh.owner_rec == g.player && g.play_mode == 0 && ship != g.player) {
             c.hit_pool = static_cast<std::int16_t>(ships);
             c.hit_rec = static_cast<std::int16_t>(ship);
@@ -231,7 +234,8 @@ void tear_wing(CollideCtx& x, int ship, int side) {
     ShipRecord& S = ship_at(w, ship);
     const int cut = wing_tear_head(S, side, x.g.now, x.c.w95a6, x.g.size);
     const bool make_debris = w.restored == 0;  // DGROUP:0x92e4 [BYTES seg8:0x2d96]
-    if (make_debris) x.h.wing_taunts(ship, side);  // [BYTES seg8:0x2da6-0x2e57] (M5) [OPEN]
+    (void)side;
+    if (make_debris) wing_taunts(x, ship);  // [BYTES seg8:0x2d96-0x2e5b] (ship_react.h, M5 s3 CONTACT)
     // The picture: the debris entry with ordinal 15's flag set, or the cut alone; sound 0x6a
     // only after a debris entry [BYTES seg8:0x2e5d seg8:0x33c2 seg8:0x33cd seg8:0x343d-0x3482]
     // (s5-sheet-verify.md claims 2, 10).

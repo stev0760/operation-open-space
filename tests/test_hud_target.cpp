@@ -351,3 +351,41 @@ TEST_CASE("hud target: seg13:0x58dc returns the message display to the target di
     r.info.target_picture_now();
     CHECK(r.info.mode() == kModeMessage);
 }
+
+TEST_CASE("hud target: seg13:0x5c22's ship pool, slot +0x50 + 0x28 and the cloak") {
+    CellInputs in;
+    in.x = 2;
+    in.y = 17;
+    in.pool = 14;
+    in.ship_pool = 14;
+    in.rec = 2;
+    in.flag = 1;
+    in.obj.extent = 256;  // a = 256 >> 3 = 32
+    in.obj.src_y = 6;
+    in.ship_slot = 2;
+    int glint = 0;
+    CellPlan p = plan_cell(in, glint);
+    REQUIRE(p.picture);
+    CHECK(p.ship);
+    CHECK(!p.other_pool);
+    CHECK(!p.cloak);
+    CHECK(p.slot == 0x2a);  // +0x50 + 0x28 [BYTES seg13:0x5ce2-0x5ce9]
+    CHECK(p.sx == 6);       // the gap while DGROUP:0x131c = 0 [BYTES seg13:0x5c5f-0x5c71]
+    CHECK(p.sy == 6);
+    CHECK(p.sw == 32);
+    CHECK(p.dx == 7);  // (43 - 32) / 2 + 2
+    CHECK(p.dy == 22);
+    CHECK(p.dw == 32);
+    // DGROUP:0x131c != 0: column +0x28 of the sheet; a cloaked ship gets the checkerboard
+    in.dg_131c = 1;
+    in.obj_w28 = 3;
+    in.cloaked = 1;
+    p = plan_cell(in, glint);
+    CHECK(p.sx == 3 * 38 + 6);  // [BYTES seg13:0x5c73-0x5c8d]
+    CHECK(p.cloak);             // [bp-0x14] = 1 [BYTES seg13:0x5cec-0x5cf5]
+    CHECK(CellPlan::kCloakRop == 0x00A000C9u);
+    // an unflagged call draws no ship [BYTES seg13:0x5b35-0x5bdd]
+    in.flag = 0;
+    p = plan_cell(in, glint);
+    CHECK(!p.picture);
+}

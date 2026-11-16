@@ -4,6 +4,8 @@
 #include "world/bounce.h"
 #include "world/damage.h"
 #include "world/effects.h"
+#include "world/relations.h"
+#include "world/ship_react.h"
 
 namespace is::world {
 
@@ -191,7 +193,7 @@ bool capture_icon(CaptureCtx& c, int ship, std::int16_t pr) {
     // 3. A race (kind 6) [BYTES seg13:0x1863-0x18a5] (M6)
     if (g.wave_kind == 6 && c.h.seg4_8d3a() != ship) {
         c.h.seg13_b6f2(ship, 8);
-        for (int k = 0; k < 2; ++k) c.h.seg13_2714(c.h.seg4_8d3a(), ship, -50, -80, 1, 2);
+        for (int k = 0; k < 2; ++k) attitude_change(w, attitude_out(c.x), c.h.seg4_8d3a(), ship, -50, -80, 1, 2);
     }
     icon_counted(w, rec, 1, g.ship_pool);  // 4. seg7:0x5ae8(rec, 1) [BYTES seg13:0x18ac]
     c.h.dissolve(rec);                     // 5. seg7:0x3a42(rec) [BYTES seg13:0x18b7]
@@ -370,9 +372,9 @@ void rivals(CaptureCtx& c, std::int16_t pr, int ship) {
             // The same word +0x06 against the pool and then the record (verified claim 17).
             if (K.w06 != pool || K.w06 != rec || K.w36 != 2 || !alive_in_play(k)) continue;
             c.h.message(ship, g.ship_pool, k, 0x49);
-            c.h.seg13_2714(k, S.w58, -5, -20, 0, -1);
+            attitude_change(w, attitude_out(c.x), k, S.w58, -5, -20, 0, -1);  // seg13:0x2714 (relations.h)
             c.h.message(S.w58, g.ship_pool, k, 0x4a);
-            c.h.seg4_5e8e(k, ship, 90, 2);
+            attack_reaction(c.x, k, ship, 90, 2);  // seg4:0x5e8e (ship_react.h)
         }
     } else {
         // 2. The ships whose goal it was [BYTES seg13:0x3132-0x3216] (M5: computer ships)
@@ -389,7 +391,7 @@ void rivals(CaptureCtx& c, std::int16_t pr, int ship) {
             if (pool != 0 && pool != 11) continue;
             c.h.message(ship, g.ship_pool, k, 0x49);  // "Hey, I Wanted That %D!" (M5)
             // 50 for pool 4 is dead code here: the pool is 0 or 11 [BYTES seg13:0x3172]
-            c.h.seg4_5e8e(k, ship, pool == 4 ? 50 : 90, 2);
+            attack_reaction(c.x, k, ship, pool == 4 ? 50 : 90, 2);  // seg4:0x5e8e, which turns 90 into 50
         }
     }
     // 3. A computer ship's call for help (M5) [BYTES seg13:0x3219-0x32f5]; the player draws no rand().
@@ -400,7 +402,8 @@ void rivals(CaptureCtx& c, std::int16_t pr, int ship) {
     if (team == 3) return;
     if (!(add16(w.w992, 20) < w.budget)) return;
     std::int16_t n = div16(sub16(S.resources(), 200), 50);
-    n = add16(n, div16(c.h.team_3854(team), -100));
+    // DGROUP:0x3854 + 2·team is the team table's T(3, team) (relations.h team_word) (M5 s3 CONTACT)
+    n = add16(n, div16(team_word(3, team), -100));
     n = sub16(n, half(w.last_ship));
     n = add16(n, half(w.score_level));
     n = add16(n, 2);

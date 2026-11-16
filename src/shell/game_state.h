@@ -76,6 +76,9 @@ public:
         Hook play_area;         // the play-area and clip recomputation of seg2:0x1ac8
         Hook open_navigation;   // seg6:0x1c72(1): create or show IS_NAV
         Hook save_scores;       // seg6:0x626c, at the end of state 5 [BYTES seg7:0x43c]
+        // seg9:0xd6c's work after its state test, which runs with or without a pending request:
+        // the designs 0 ... 9 get +0x4e = +0x38 = 0 [BYTES seg9:0xdaf-0xdca] (M5 s3 integrate).
+        Hook game_over;
         // The input handlers the shell does not own: state 0 seg11:0x7902, state 1 the router
         // seg11:0x6aa8, state 6 seg11:0x785e [BYTES seg11:0x6ab2-0x6b60].
         InputHook route_input;

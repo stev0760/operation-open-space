@@ -30,6 +30,9 @@ struct ShipSheets {
     std::array<bool, kShipCount> has{};
     std::array<SheetRequest, kShipCount> req{};
     std::array<bool, kShipCount> has_req{};
+    // The placement's last build of each slot (last_build; M5 s3 ENTRY) [DESIGN].
+    std::array<SheetBuild, kShipCount> last{};
+    std::array<bool, kShipCount> has_last{};
 };
 ShipSheets& ship_sheets() {
     static ShipSheets s;
@@ -604,6 +607,152 @@ void set_sheet_copy(int i, const SheetPixels& px) {
 }
 
 void clear_sheet_copies() { ship_sheets() = ShipSheets{}; }
+
+const SheetBuild* last_build(int i) {
+    if (!ship_ok(i) || !ship_sheets().has_last[static_cast<std::size_t>(i)]) return nullptr;
+    return &ship_sheets().last[static_cast<std::size_t>(i)];
+}
+
+void set_last_build(int i, const SheetBuild& b) {
+    if (!ship_ok(i)) return;
+    ship_sheets().last[static_cast<std::size_t>(i)] = b;
+    ship_sheets().has_last[static_cast<std::size_t>(i)] = true;
+}
+
+// ---- the ships' image slots across waves (M5 s3 ENTRY)
+
+ShipSlotSnapshot snapshot_ship_slots(const ImageSlotTable& images) {
+    ShipSlotSnapshot sn;
+    const ShipSheets& sh = ship_sheets();
+    for (int j = 0; j < kShipCount; ++j) {
+        const auto u = static_cast<std::size_t>(j);
+        sn.dc[u] = images[static_cast<std::size_t>(kShipImageSlotBase + j)];
+        sn.px[u] = sh.px[u];
+        sn.has[u] = sh.has[u];
+        sn.req[u] = sh.req[u];
+        sn.has_req[u] = sh.has_req[u];
+        sn.last[u] = sh.last[u];
+        sn.has_last[u] = sh.has_last[u];
+    }
+    sn.taken = true;
+    return sn;
+}
+
+void take_ship_slot(ImageSlotTable& images, const ShipSlotSnapshot& saved, int to, int from) {
+    if (!ship_ok(to) || !ship_ok(from)) return;
+    const auto t = static_cast<std::size_t>(to), f = static_cast<std::size_t>(from);
+    // [BYTES seg14:0x9a0-0x9c7]: DGROUP:0x39e8, 0x3ad0, 0x3974 and 0x3a5c + 2·(0x28 + to), from
+    // the words seg14:0x0 saved at its entry ([bp-0xb8], [bp-0xc8], [bp-0xd8], [bp-0xe8]).
+    images[static_cast<std::size_t>(kShipImageSlotBase + to)] = saved.dc[f];
+    ShipSheets& sh = ship_sheets();
+    sh.px[t] = saved.px[f];
+    sh.has[t] = saved.has[f];
+    sh.req[t] = saved.req[f];
+    sh.req[t].slot = kShipImageSlotBase + to;
+    sh.has_req[t] = saved.has_req[f];
+    sh.last[t] = saved.last[f];
+    sh.has_last[t] = saved.has_last[f];
+}
+
+void zero_ship_slot(ImageSlotTable& images, int j) {
+    if (!ship_ok(j)) return;
+    // [BYTES seg14:0x9d1-0x9df]: the four words 0, nothing deleted.
+    images[static_cast<std::size_t>(kShipImageSlotBase + j)] = kDcNone;
+    ShipSheets& sh = ship_sheets();
+    const auto u = static_cast<std::size_t>(j);
+    sh.has[u] = false;
+    sh.has_req[u] = false;
+    sh.has_last[u] = false;
+}
+
+void free_ship_slot(Blitter& out, ImageSlotTable& images, int j) {
+    if (!ship_ok(j)) return;
+    std::uint16_t& dc = images[static_cast<std::size_t>(kShipImageSlotBase + j)];
+    // [BYTES seg10:0x1ec4-0x1f27]: nothing when the DC word is 0; else the palette and the old
+    // object back, DeleteDC, the DC word 0, DeleteObject of a bitmap word != 0 and that word 0.
+    // The port's one id stands for the DC and its bitmap [DESIGN ADR 0013].
+    if (dc == kDcNone) return;
+    out.delete_image(dc);
+    dc = kDcNone;
+    ShipSheets& sh = ship_sheets();
+    const auto u = static_cast<std::size_t>(j);
+    sh.has[u] = false;
+    sh.has_req[u] = false;
+    sh.has_last[u] = false;
+}
+
+ShipSlotCache::Copies* ShipSlotCache::find(std::uint16_t dc) {
+    for (Copies& c : by_dc_)
+        if (c.dc == dc) return &c;
+    return nullptr;
+}
+
+std::uint16_t ShipSlotCache::words(const ImageSlotTable& images, int j) {
+    if (!ship_ok(j)) return kDcNone;
+    const std::uint16_t dc = images[static_cast<std::size_t>(kShipImageSlotBase + j)];
+    if (dc == kDcNone) return dc;
+    // DGROUP:0x39e8 + 2·(0x28 + j) [BYTES seg14:0x1f9-0x223 seg14:0x9cb]; the copies of slot j go
+    // under its DC [DESIGN].
+    Copies* c = find(dc);
+    if (!c) {
+        by_dc_.push_back(Copies{});
+        c = &by_dc_.back();
+        c->dc = dc;
+    }
+    const ShipSheets& sh = ship_sheets();
+    const auto u = static_cast<std::size_t>(j);
+    c->px = sh.px[u];
+    c->has = sh.has[u];
+    c->req = sh.req[u];
+    c->has_req = sh.has_req[u];
+    c->last = sh.last[u];
+    c->has_last = sh.has_last[u];
+    return dc;
+}
+
+void ShipSlotCache::set_words(ImageSlotTable& images, int k, std::uint16_t dc) {
+    if (!ship_ok(k)) return;
+    if (dc == kDcNone) {
+        zero_ship_slot(images, k);  // [BYTES seg14:0x9d1-0x9df]
+        return;
+    }
+    // [BYTES seg14:0x9a0-0x9c7]: the four words of the old slot into slot k.
+    images[static_cast<std::size_t>(kShipImageSlotBase + k)] = dc;
+    ShipSheets& sh = ship_sheets();
+    const auto u = static_cast<std::size_t>(k);
+    if (const Copies* c = find(dc)) {
+        sh.px[u] = c->px;
+        sh.has[u] = c->has;
+        sh.req[u] = c->req;
+        sh.req[u].slot = kShipImageSlotBase + k;
+        sh.has_req[u] = c->has_req;
+        sh.last[u] = c->last;
+        sh.has_last[u] = c->has_last;
+    } else {
+        sh.has[u] = false;
+        sh.has_req[u] = false;
+        sh.has_last[u] = false;
+    }
+}
+
+void ShipSlotCache::free(Blitter& out, ImageSlotTable& images, int j) {
+    if (!ship_ok(j)) return;
+    const std::uint16_t dc = images[static_cast<std::size_t>(kShipImageSlotBase + j)];
+    free_ship_slot(out, images, j);  // seg10:0x1eb6 [BYTES seg10:0x1eb6-0x1f2e]
+    if (dc == kDcNone) return;
+    for (std::size_t n = 0; n < by_dc_.size(); ++n)
+        if (by_dc_[n].dc == dc) {
+            by_dc_.erase(by_dc_.begin() + static_cast<std::ptrdiff_t>(n));
+            break;
+        }
+}
+
+void ShipSlotCache::clear() { by_dc_.clear(); }
+
+ShipSlotCache& ship_slot_cache() {
+    static ShipSlotCache c;
+    return c;
+}
 
 const SheetRequest* sheet_request(int i) {
     if (!ship_ok(i) || !ship_sheets().has_req[static_cast<std::size_t>(i)]) return nullptr;

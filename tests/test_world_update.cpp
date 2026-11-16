@@ -24,7 +24,6 @@ public:
     void radar_refresh() override { calls.push_back("3396"); }
     void fire(int) override { ++fires; }
     std::int16_t beam(int, int) override { return static_cast<std::int16_t>(++beams); }
-    void burst() override { calls.push_back("375a"); }
     void stars(int) override { calls.push_back("158a"); }
     void visibility() override { calls.push_back("4e14"); }
     void lines() override { calls.push_back("3778"); }
@@ -87,13 +86,15 @@ std::size_t index_of(const std::vector<std::string>& v, const std::string& s) {
 TEST_CASE("update: the pass and the frame in address order") {
     Rig r;
     const std::uint32_t passes = r.host.shots().dg_5cc;
+    r.g.burst_count = 49;  // the burst's last step: no group starts (seg7:0x3801-0x3809)
+    r.g.burst_pool = -1;
     wave_pass(r.c, false);
     wave_frame(r.c);
     const auto& c = r.host.calls;
     // The pass: the turn follow-up and the radar before a due frame, then the burst.
     CHECK(index_of(c, "1bcc") < index_of(c, "894"));
     CHECK(index_of(c, "894") < index_of(c, "3396"));
-    CHECK(index_of(c, "3396") < index_of(c, "375a"));
+    CHECK(r.g.burst_count == 50);  // seg7:0x375a ran once at the pass's end [BYTES seg7:0x993 seg7:0x3a29]
     // 5 x (3 + 2) beam calls (world.md step 4)
     CHECK(r.host.beams == 25);
     CHECK(r.host.shots().dg_5cc - passes == 5);  // DGROUP:0x5cc, shots.h ShotState
@@ -265,4 +266,60 @@ TEST_CASE("update: rocks on and off screen") {
     wave_frame(r.c);  // 9142 = 3: three steps
     CHECK(b.x == 2015);
     CHECK(b.y == 2015);
+}
+
+TEST_CASE("update: seg7:0x375a, the OverThruster's burst starts a group and turns its steps") {
+    Rig r;
+    r.g.detail = 3;  // groups 2·3 + 3 = 9, life (3 + 7)·4 = 40
+    r.g.burst_count = 0;
+    r.g.burst_pool = kPoolShips;
+    r.g.burst_rec = 0;
+    r.ships[0].design_index = 1;
+    ObjectRecord& o = r.pools.rec(kPoolShips, 0);
+    o.x = 1000;
+    o.y = 2000;
+    o.frame = 4;                          // heading (16, 0) of DGROUP:0x1050
+    r.host.shots().mx(1, 16 + 4) = 2;     // the rear muzzle entry 16 + frame of design 1
+    r.host.shots().my(1, 16 + 4) = -1;
+    particle_burst(r.c);
+    CHECK(r.g.burst_count == 1);
+    const BurstEntry* e = &r.g.burst[0];
+    // start: x = 1000 + (2 << 3), y = 2000 + (-1 << 3); step -(16 << 2), -(0 << 2); age 0, then
+    // the move: x += vx, age 1 [BYTES seg7:0x382b-0x38a5 seg7:0x3951-0x396d]
+    CHECK(e[0].x == 1016 - 64);
+    CHECK(e[0].y == 1992);
+    CHECK(e[0].age == 1);
+    // age 1 < 40 / 3: the quarter / eighth turn [BYTES seg7:0x39b4-0x3a20]
+    CHECK(e[0].vx == -64);
+    CHECK(e[0].vy == -16);  // 0 + (-64 sar 2)
+    CHECK(e[1].vy == -8);   // 0 + (-64 sar 3)
+    CHECK(e[2].vy == 8);    // 0 - (-64 sar 3)
+    CHECK(e[3].vy == 16);   // 0 - (-64 sar 2)
+    // group 1 is not started yet; the second call starts it and moves both
+    CHECK(r.g.burst[4].age == 0);
+    particle_burst(r.c);
+    CHECK(r.g.burst_count == 2);
+    CHECK(r.g.burst[4].age == 1);
+    CHECK(e[0].age == 2);
+    // at age >= 40 / 3 the full / half turn: particle 0's (vx, vy) -> (vx - vy, vy + vx)
+    for (int k = 0; k < 4; ++k) r.g.burst[static_cast<std::size_t>(k)].age = 13;
+    r.g.burst[0].vx = 8;
+    r.g.burst[0].vy = 2;
+    r.g.burst[1].vx = 8;
+    r.g.burst[1].vy = 2;
+    r.g.burst_count = 9;  // no start; groups 0 ... 9 below 40 + 9 + 1 move
+    particle_burst(r.c);
+    CHECK(r.g.burst[0].vx == 6);   // 8 - 2 [BYTES seg7:0x3790-0x37a6]
+    CHECK(r.g.burst[0].vy == 10);  // 2 + 8
+    CHECK(r.g.burst[1].vx == 7);   // 8 - (2 sar 1) [BYTES seg7:0x37aa-0x37c0]
+    CHECK(r.g.burst[1].vy == 6);   // 2 + (8 sar 1)
+    // the last step frees the source: DGROUP:0x9512 = -1 at life + groups [BYTES seg7:0x3a2d-0x3a33]
+    r.g.burst_count = 48;
+    particle_burst(r.c);
+    CHECK(r.g.burst_count == 49);
+    CHECK(r.g.burst_pool == -1);
+    particle_burst(r.c);
+    CHECK(r.g.burst_count == 50);
+    particle_burst(r.c);  // >= 50: nothing [BYTES seg7:0x3769-0x376e]
+    CHECK(r.g.burst_count == 50);
 }

@@ -9,7 +9,9 @@
 #include "world/fuel_balls.h"
 #include "world/icon_effects.h"
 #include "world/purchases.h"
+#include "world/relations.h"
 #include "world/roster.h"
+#include "world/shift.h"
 #include "world/smoke.h"
 
 #include "world/shots.h"
@@ -82,7 +84,7 @@ int16_t random_coord(shell::Rng& rng, int16_t cells) {
 bool in_place_range(const SpecialPlace& p, int k) { return p.first <= k && k < p.end; }
 
 // The special place's words by index 0..7 (+0x0 ... +0xe of the 0x10-byte entry).
-int16_t& pw(SpecialPlace& p, int i) {
+int16_t& place_word(SpecialPlace& p, int i) {
     switch (i) {
     case 0: return p.first;
     case 1: return p.end;
@@ -94,7 +96,7 @@ int16_t& pw(SpecialPlace& p, int i) {
     default: return p.we;
     }
 }
-int16_t pw(const SpecialPlace& p, int i) { return pw(const_cast<SpecialPlace&>(p), i); }
+int16_t place_word(const SpecialPlace& p, int i) { return place_word(const_cast<SpecialPlace&>(p), i); }
 
 constexpr int kDgPool8 = 0x3d50;  // DGROUP:0x3d50, the pool-8 table's base
 
@@ -218,6 +220,7 @@ void generate(World& w, shell::Rng& rng) {
     int16_t weight[5] = {1, 1, 3, 5, 5};
     level_from_score(w);  // seg9:0x484c
     w.w9344 = 0;
+    w.pilot.greed = 100;  // DGROUP:0x967e [BYTES seg9:0x3234] (M5 s3 integrate)
     read_budget(w);  // seg6:0x11ec
     ShipRecord& me = w.ships[static_cast<std::size_t>(w.player)];
 
@@ -395,6 +398,7 @@ void generate(World& w, shell::Rng& rng) {
         const int16_t racers = static_cast<int16_t>(rmod(rng.rand(), 3) + 1);
         w.handover.laps = static_cast<int16_t>(((rng.rand() & 1) + 1) * 5);
         if (w.handover.laps == 10 && rmod(rng.rand(), 5) == 3) w.handover.laps = 1;
+        w.w9eb4 = 0;  // byte DGROUP:0x9eb4 = 0 (M5 s3 ROSTER) [BYTES seg9:0x3b03]
         w.handover.race = static_cast<int16_t>(course * 4 + racers + 1);
         int16_t& aa = w.handover.opponent;  // DGROUP:0x94aa
         const int16_t lv = w.score_level, bl = w.w9000, n = w.w967c;
@@ -465,6 +469,7 @@ void generate(World& w, shell::Rng& rng) {
         w.opponents = imod16(v, 4);
         w.course = idiv16(v, 4);
         // seg10:0x320a, the race course set-up, is M6 [OPEN].
+        w.w9eb4 = 0;  // byte DGROUP:0x9eb4 = 0 (M5 s3 ROSTER) [BYTES seg9:0x3dee]
         w.w9336 = 0;
     }
     if (w.handover.duel != 0) {  // [BYTES seg9:0x3e00-0x3e10]
@@ -511,14 +516,14 @@ void generate(World& w, shell::Rng& rng) {
                 d.at(0x232 + k) = d.b[static_cast<std::size_t>(0x23c + k)];
             }
             SpecialPlace& p = w.places[static_cast<std::size_t>(k)];
-            pw(p, 0) = d.s8(0x232 + k);
-            pw(p, 1) = d.s8(0x23c + k);
-            pw(p, 2) = static_cast<int16_t>(d.s8(0x246 + k) * 80);
-            pw(p, 3) = d.s8(0x250 + k);
-            pw(p, 4) = d.s8(0x25a + k);
-            pw(p, 5) = d.w(0x26f + 4 * k);
-            pw(p, 6) = d.w(0x271 + 4 * k);
-            pw(p, 7) = d.s8(0x265 + k);
+            place_word(p, 0) = d.s8(0x232 + k);
+            place_word(p, 1) = d.s8(0x23c + k);
+            place_word(p, 2) = static_cast<int16_t>(d.s8(0x246 + k) * 80);
+            place_word(p, 3) = d.s8(0x250 + k);
+            place_word(p, 4) = d.s8(0x25a + k);
+            place_word(p, 5) = d.w(0x26f + 4 * k);
+            place_word(p, 6) = d.w(0x271 + 4 * k);
+            place_word(p, 7) = d.s8(0x265 + k);
         }
         w.w9344 = d.s8(0x264);
         w.gates = d.s8(0xad);
@@ -1339,14 +1344,14 @@ void special_places(World& w, SetupHost& h) {
     DirView d = dv(w);
     for (int k = 0; k < 10; ++k) {
         const SpecialPlace& p = w.places[static_cast<std::size_t>(k)];
-        d.at(0x232 + k) = static_cast<std::uint8_t>(pw(p, 0));
-        d.at(0x23c + k) = static_cast<std::uint8_t>(pw(p, 1));
-        d.at(0x246 + k) = static_cast<std::uint8_t>(pw(p, 2) / 80);
-        d.at(0x250 + k) = static_cast<std::uint8_t>(pw(p, 3));
-        d.at(0x25a + k) = static_cast<std::uint8_t>(pw(p, 4));
-        d.set_w(0x26f + 4 * k, pw(p, 5));
-        d.set_w(0x271 + 4 * k, pw(p, 6));
-        d.at(0x265 + k) = static_cast<std::uint8_t>(pw(p, 7));
+        d.at(0x232 + k) = static_cast<std::uint8_t>(place_word(p, 0));
+        d.at(0x23c + k) = static_cast<std::uint8_t>(place_word(p, 1));
+        d.at(0x246 + k) = static_cast<std::uint8_t>(place_word(p, 2) / 80);
+        d.at(0x250 + k) = static_cast<std::uint8_t>(place_word(p, 3));
+        d.at(0x25a + k) = static_cast<std::uint8_t>(place_word(p, 4));
+        d.set_w(0x26f + 4 * k, place_word(p, 5));
+        d.set_w(0x271 + 4 * k, place_word(p, 6));
+        d.at(0x265 + k) = static_cast<std::uint8_t>(place_word(p, 7));
     }
     d.at(0x264) = 0;
 }
@@ -1499,8 +1504,8 @@ void place_gates(World& w, SetupHost& h) {
                         }
                         for (int q = 0; q < w.w9344; ++q) {
                             const SpecialPlace& pl = w.places[static_cast<std::size_t>(q)];
-                            if (distance_cells(pw(pl, 5), pw(pl, 6), x, y, dx, dy, cells_x, cells_y) <
-                                add16(sar16(pw(pl, 2), 3), 200))
+                            if (distance_cells(place_word(pl, 5), place_word(pl, 6), x, y, dx, dy, cells_x, cells_y) <
+                                add16(sar16(place_word(pl, 2), 3), 200))
                                 ok = false;
                         }
                         for (int q = 0; q < k; ++q) {
@@ -1607,18 +1612,18 @@ void place_gates(World& w, SetupHost& h) {
     for (int q = 0; q < w.w9344; ++q) {
         const SpecialPlace& pl = w.places[static_cast<std::size_t>(q)];
         const bool first = q == 0;
-        if (first || (pw(w.places[static_cast<std::size_t>(q - 1)], 5) != pw(pl, 5) &&
-                      pw(w.places[static_cast<std::size_t>(q - 1)], 6) != pw(pl, 6))) {
+        if (first || (place_word(w.places[static_cast<std::size_t>(q - 1)], 5) != place_word(pl, 5) &&
+                      place_word(w.places[static_cast<std::size_t>(q - 1)], 6) != place_word(pl, 6))) {
             if (slot < p.records(kPoolIcons)) {
                 ObjectRecord& o = p.rec(kPoolIcons, slot);
                 o.b54 = 1;
                 o.vy = 0;
                 o.vx = o.vy;
-                o.x = sub16(pw(pl, 5), 0x80);
-                o.y = sub16(pw(pl, 6), 0x80);
+                o.x = sub16(place_word(pl, 5), 0x80);
+                o.y = sub16(place_word(pl, 6), 0x80);
             }
             slot = add16(slot, 1);
-            w.w992 = add16(w.w992, mul16(add16(sub16(pw(pl, 1), pw(pl, 0)), 5), 2));
+            w.w992 = add16(w.w992, mul16(add16(sub16(place_word(pl, 1), place_word(pl, 0)), 5), 2));
         }
     }
     if (w.kind == 6 && p.in_use(kPoolIcons) != 0) {  // the race lines the icons up (M6)
@@ -1751,6 +1756,11 @@ void place(World& w, SetupHost& h) {
     // the program runs them at the wave start (src/hud/wave_win32.cpp) [BYTES seg9:0x6951
     // seg9:0x6958 seg9:0x695c seg9:0x695e seg9:0x6963] (M3 s4 fixer, review M6).
     w.picture_due = w.wave == 1 || w.restored != 0;
+    // DGROUP:0x8e2c = 0 [BYTES seg9:0x6968-0x696b] (World::pilot, callin.h) and DGROUP:0x9378 =
+    // PlayMode [BYTES seg9:0x6987-0x698a] (shift.h ShiftWords::saved_mode) (M5 s3 integrate, ENTRY
+    // binding 7).
+    w.pilot.callin_frame = 0;
+    shift_words().saved_mode = w.play_mode;
     // DGROUP:0x92e4 stays set through the restored first wave: seg9:0x6cc4 clears it at the
     // debriefing entry (wave_end.cpp debrief_entry) [BYTES seg9:0x6ceb] (M4 s3 ROSTER).
     say(h, "world: placement seg9:0x6624 wave " + std::to_string(w.wave) + ", gate 0 at (" +
@@ -1843,6 +1853,7 @@ void enter_briefing(World& w, SetupHost& h) {
     w.w913a = 0;
     w.w913c = 0;
     w.w9434 = 0;
+    w.w951a = 0;  // [BYTES seg9:0x5dd9] (M5 s3 integrate, ENTRY binding 7)
     int16_t live = 0;
     for (int k = 0; k < kIconRecords; ++k)
         if (w.pools.rec(kPoolIcons, k).state == 0) ++live;
@@ -1965,6 +1976,9 @@ void start_wave(World& w, SetupHost& h) {
     // seg3:0x45a(2) and seg11:0x3cc2(player, 0) (the HUD, whose seg11:0xafe seeds rand) follow
     // [BYTES seg9:0x64ae seg9:0x64ba]: hud::wave_start() runs seg3:0x45a(2) (M3 s3 fixer).
     w.w0a76 = 2;
+    // DGROUP:0x9648 = 0, the wave's crime count (relations.h ContactWords, its one home) [BYTES
+    // seg9:0x64c8] (M5 s3 integrate).
+    contact_words().w9648 = 0;
     // The player's +0x5d / +0x5e / +0xd0 / +0xd2 reset while DGROUP:0x91f8 <= 1, the first two
     // waves (structs.md +0x5d, +0x5e; C071) [BYTES seg9:0x64ce seg9:0x64d3 seg9:0x64e3 seg9:0x64f9
     // seg9:0x64fd].
@@ -1980,6 +1994,7 @@ void start_wave(World& w, SetupHost& h) {
     w.w9370 = ship_word(me, 0xd2);
     w.w9372 = ship_word(me, 0xd0);
     w.w934e = 0;  // [BYTES seg9:0x6524]
+    w.pilot.called_in = 0;  // DGROUP:0x964c [BYTES seg9:0x6527] (M5 s3 integrate)
     say(h, "world: wave start seg9:0x60bc wave " + std::to_string(w.wave) + ", player at (" +
                std::to_string(p.rec(kPoolShips, w.player).x) + ", " +
                std::to_string(p.rec(kPoolShips, w.player).y) + ") heading " +

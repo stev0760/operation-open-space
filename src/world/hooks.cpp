@@ -17,13 +17,21 @@ namespace {
 World g_world;
 std::function<void(World&)> g_on_wave_start;
 std::function<void(World&)> g_on_placement;
-std::array<std::int16_t, kShipCount> g_design_mass{};  // DGROUP:0x9704 + 0xad·design [OPEN]
+std::function<void(World&, int)> g_roster_build;
 }  // namespace
 World& current() { return g_world; }
 void on_wave_start(std::function<void(World&)> f) { g_on_wave_start = std::move(f); }
 void on_briefing_placement(std::function<void(World&)> f) { g_on_placement = std::move(f); }
+void on_roster_build(std::function<void(World&, int)> f) { g_roster_build = std::move(f); }
+bool run_roster_build(World& w, int mode) {
+    if (!g_roster_build) return false;
+    g_roster_build(w, mode);
+    return true;
+}
+// DGROUP:0x9704 + 0xad·n, design word +0x32 [BYTES seg14:0x1e35-0x1e8f] (roster_build.h
+// design_fill_portable) (M5 s3 integrate, STEER B4).
 std::int16_t design_mass(int design) {
-    return design >= 0 && design < kShipCount ? g_design_mass[static_cast<std::size_t>(design)]
+    return design >= 0 && design < kShipCount ? g_world.design_ratings[static_cast<std::size_t>(design)].mass
                                               : std::int16_t{0};
 }
 WaveEndLinks& wave_end_links() {
@@ -88,6 +96,7 @@ DeadlineResult run_wave_deadlines(shell::GameState& s) {
 #include "world/lightning.h"
 #include "world/missile.h"
 #include "world/roster.h"
+#include "world/roster_build.h"
 #include "world/tether.h"
 #include "world/setup.h"
 #include "world/update.h"
@@ -165,9 +174,28 @@ std::filesystem::path ship_dir() {
 // seg14:0x0(-1) at the briefing entry: the drawing side builds it in its on_briefing_placement
 // hook (briefing_entry) [BYTES seg9:0x688a seg14:0xd32]. seg11:0xae94's weapon slot +0x18 runs
 // at the wave start (src/hud/wave_win32.cpp, World::picture_due) [BYTES seg9:0x6951].
+// The placement's seg14:0x0(-1) ran on the drawing side's RosterHost (M5 s3 integrate): every
+// ship's design, sheet, flame strip and tail are made inside it, so the briefing entry's player-only
+// sheet and tail below are skipped.
+bool g_roster_placed = false;
+
+void ship_setup_player_only(World& w);
+
+// seg14:0x3eda, seg14:0x0(-1), seg14:0x4074 at seg9:0x6624 [BYTES seg9:0x6883 seg9:0x688a
+// seg9:0x6890]: the whole roster through the program's RosterHost (src/hud wave_win32.cpp,
+// roster_build.h build_wave_roster) (M5 s3 integrate, ROSTER binding 1). Without the drawing side
+// or the game files, the player alone as before (ship_setup_player_only).
 void ship_setup_player(World& w) {
+    g_roster_placed = false;
+    if (g.store && run_roster_build(w, -1)) {
+        g_roster_placed = true;
+        return;
+    }
+    ship_setup_player_only(w);
+}
+
+void ship_setup_player_only(World& w) {
     ship_setup_minimal(w);
-    g_design_mass.fill(0);
     ShipRecord& s = w.ship(w.player);
     ObjectRecord& o = w.ship_object(w.player);
     // seg14 gives a ship record radar_draw seg11:0x37a0 and the radar brush of design word
@@ -217,7 +245,6 @@ void ship_setup_player(World& w) {
                                              body->byte_1c, body->byte_1d, body->flags, shp->flags);
         apply_flight_design(s, o, d, w.player_game != 0, static_cast<std::uint32_t>(app::now_tick()),
                             r ? std::int16_t{r->b33[0]} : std::int16_t{0});
-        g_design_mass[0] = d.mass;
         // seg14:0x1b84 stores SHP word +0x1f, the ship's hit sound, in the design word +0x2e
         // (DGROUP:0x9700 + 0xad n) and in object word +0x42. seg8:0x45e0 plays the design word
         // through seg10:0x7944 on every hit, since DGROUP:0xb0a stays 0, and does not read +0x42
@@ -228,6 +255,8 @@ void ship_setup_player(World& w) {
         // The design words of seg13:0x33d6 (rating.h) (M5 s2 BRIEFING).
         const int dn = s.design_index >= 0 && s.design_index < kShipCount ? s.design_index : 0;
         w.design_ratings[static_cast<std::size_t>(dn)] = design_rating(*shp, *body);
+        w.design_ratings[static_cast<std::size_t>(dn)].mass = d.mass;  // +0x32 [BYTES seg14:0x1e8f]
+        w.design_names[static_cast<std::size_t>(dn)] = shp->name;     // +0x70 [BYTES seg14:0x209e]
         // seg14:0x1b84's D, design +0x3c, from BOD +0x1a [BYTES seg14:0x2055-0x208b], and the body
         // bytes seg14:0x11a8's design tail and seg8:0x2cd8's recompute read (design_words.h)
         // (M4 s5 SHEET; s5-sheet-verify.md claim 4).
@@ -297,6 +326,8 @@ std::unique_ptr<SetupHost> make_host() {
     h->log = [](const std::string& s) { log(s); };
     h->recentre = [](World& w) { recentre_view(w); };  // seg8:0x0 (flight role)
     h->ship_setup = [](World& w) { ship_setup_player(w); };  // seg14 (M3 s2 fixer)
+    // The design team word DGROUP:0x970a + 0xad·n (roster_build.h design_team) (M5 s3 integrate).
+    h->design_type = [](int design) { return design_team(g_world, design); };
     return h;
 }
 
@@ -520,8 +551,9 @@ void briefing_entry() {
     // that work here (M5 s2 BRIEFING; world.md Ship sheets, Path, C067).
     if (g_on_placement) g_on_placement(w);
     // seg14:0x0's per-ship tail for the player (player_sheet.h placement_tail) [BYTES seg14:0xd86-0xd94
-    // seg14:0xb97-0xba9 seg14:0xc42-0xc54 seg14:0xc84 seg14:0xcdc].
-    placement_tail(w, w.player, g_raw_side, shot_state());
+    // seg14:0xb97-0xba9 seg14:0xc42-0xc54 seg14:0xc84 seg14:0xcdc]; the RosterHost's ship_tail ran
+    // it for every ship inside seg14:0x0(-1) (M5 s3 integrate).
+    if (!g_roster_placed) placement_tail(w, w.player, g_raw_side, shot_state());
     build_strip(w);
     flush_icon_plans();  // seg10:0x506c, seg7:0x233c(0, k, 0) and seg9:0x94ba on the new strip (world/icon_effects.h)
     bind_flight_world(&w);
@@ -722,6 +754,8 @@ DeadlineResult run_wave_deadlines(shell::GameState& s) {
 
 gfx::ImagePtr icon_strip() { return g_strip; }
 void rebuild_icon_strip() { build_strip(g_world); }
+bool roster_placed() { return g_roster_placed; }
+std::filesystem::path program_ship_dir() { return ship_dir(); }
 
 }  // namespace is::world
 
@@ -770,6 +804,13 @@ void install_world_hooks(App& app) {
         briefing_entry();
         if (prev_brief) prev_brief(s);
         play_region(g_world);
+    };
+    // seg9:0xd6c's design clear (roster_build.h game_over_designs) [BYTES seg9:0xdb4-0xdca]
+    // (M5 s3 integrate, ROSTER binding 3).
+    auto prev_over = h.game_over;
+    h.game_over = [prev_over](shell::GameState& s) {
+        if (prev_over) prev_over(s);
+        game_over_designs(g_world);
     };
     auto prev_teardown = h.teardown;
     h.teardown = [prev_teardown](shell::GameState& s) {

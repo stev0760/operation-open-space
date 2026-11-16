@@ -734,6 +734,11 @@ int ambulance_key_program(World& w, std::uint32_t now, bool ctrl, bool alt) {
     return ambulance_key(c, ctrl, alt);
 }
 
+std::int16_t ambulance_call_program(World& w, std::uint32_t now, int ship) {
+    AmbulanceCtx c{w, ambulance_state(), now, g_linked};
+    return ambulance_call(c, ship);  // [BYTES seg16:0xb4e-0xcf4]
+}
+
 void ambulance_frame(UpdateCtx& u, World& w) {
     AmbulanceState& a = ambulance_state();
     AmbulanceCtx c{w, a, u.flight.g.now, g_linked};

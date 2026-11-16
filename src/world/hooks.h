@@ -13,6 +13,8 @@
 #include "world/world.h"
 
 #ifdef _WIN32
+#include <filesystem>
+
 #include "gfx/gfx.h"
 #endif
 
@@ -36,6 +38,11 @@ gfx::ImagePtr icon_strip();
 // seg10:0x5b30 again on the program's World, the strip unscaled and blacked with each slot's
 // icon or placeholder, for the rescale's reload path [BYTES seg10:0x9f7f-0x9f83] (M4 s8 integrate).
 void rebuild_icon_strip();
+// The last placement's seg14:0x0(-1) ran on the drawing side's RosterHost (on_roster_build), so
+// every ship's sheet is made; false: the player-only set-up, whose sheet the placement hook builds.
+bool roster_placed();
+// INI ShipPath as ADR 0004 decision 4 resolves it (the directory of MASTER.SHP and MASTER.BOD).
+std::filesystem::path program_ship_dir();
 #endif
 
 // seg9:0x60bc's calls after the ships (seg11:0x3cc2(player) and the HUD repaint): src/hud sets
@@ -46,9 +53,18 @@ void on_wave_start(std::function<void(World&)> f);
 // of the briefing draws from [BYTES seg9:0x688a seg14:0xc7e seg14:0xd32]. src/hud sets it; the
 // world hooks run it after enter_briefing's placement (M5 s2 BRIEFING).
 void on_briefing_placement(std::function<void(World&)> f);
-// The design mass DGROUP:0x9704 + 0xad·design of the ship set-up, for seg11:0x1bcc (0 for a
-// design the set-up did not make) (M3 s2 fixer).
+// The design mass DGROUP:0x9704 + 0xad·design of the ship set-up, for seg11:0x1bcc: design word
+// +0x32 of World::design_ratings, which seg14:0x1b84 fills for every ship (roster_build.h
+// design_fill_portable) (0 for a design outside 0 ... 7) (M3 s2 fixer; M5 s3 integrate, STEER B4).
 std::int16_t design_mass(int design);
+// seg14:0x0(mode) with the program's RosterHost (roster_build.h build_wave_roster), bracketed by
+// seg14:0x3eda / seg14:0x4074: mode -1 at the placement seg9:0x6624 [BYTES seg9:0x6883
+// seg9:0x688a seg9:0x6890], a call-in's kind or team from seg13:0xae68 [BYTES seg13:0xb3fa
+// seg13:0xb45c seg13:0xb467]. src/hud (wave_win32.cpp) sets it, since the RosterHost builds the
+// ships' sheets; unset, the placement runs the player-only set-up (M5 s3 integrate).
+void on_roster_build(std::function<void(World&, int mode)> f);
+// Runs it; false when no drawing side set it.
+bool run_roster_build(World& w, int mode);
 
 // ---- M4 stage 1, track END: the gate exit and the wave end on the program's World
 // The calls to other parts these need; an empty slot logs a TODO once. The program fills them

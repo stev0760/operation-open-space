@@ -2,6 +2,7 @@
 #include "world/update.h"
 
 #include "world/rock_images.h"
+#include "world/shift.h"
 
 #include "world/damage.h"
 #include "world/fragments.h"
@@ -327,7 +328,9 @@ void frame_stars(UpdateCtx& c, int arg) {
     in.shake_x = c.view.shake_x;  // DGROUP:0x2390
     in.shake_y = c.view.shake_y;  // DGROUP:0x2392
     in.demons_gate = g.demons_gate;
-    // DGROUP:0x2394 / 0x2396, the 0x951a motion, have no port yet [OPEN].
+    // DGROUP:0x2394 / 0x2396, the pan's step (view.h pan_view) (M5 s3 integrate, ENTRY binding 5).
+    in.auto_vx = c.view.pan_dx;
+    in.auto_vy = c.view.pan_dy;
     draw_stars(*w, in, wave_graphics(), *out, c.flight.rng, arg,
                [&h](int a) { h.bright_stars(a); });
 }
@@ -350,6 +353,9 @@ void wave_pass(UpdateCtx& c, bool max_rate) {
     WaveGlobals& g = c.flight.g;
     FrameGlobals& f = c.f;
     UpdateHost& h = c.host;
+    // seg7:0x7d5-0x7dc: the 'P' latch DGROUP:0x1032 calls seg11:0xaece before the DGROUP:0x58c
+    // block and step 1 (shift.h) (M5 s3 integrate, ENTRY binding 3).
+    if (World* w = h.frame_world(c.flight.pools)) shift_pass(*w, c.view, linked_shift_host(), &g);
     // 1. Turn follow-up and radar. The pass that precedes a due frame stands for the original's
     // counter >= threshold [DESIGN ADR 0001]; with threshold 0 (FrameRateSet > 1000) the test is
     // dword DGROUP:0x5a8 % 3 = 0 [BYTES seg7:0x7fe-0x83d].
@@ -403,7 +409,111 @@ void wave_pass(UpdateCtx& c, bool max_rate) {
     // (s1-death.md 1) [BYTES seg7:0x972 seg7:0x98b]. Both words are the World's.
     if (World* w = h.frame_world(c.flight.pools); w && w->w9430 > 0)
         for (int k = 0; k <= w->w9434 && k < kEffectCount; ++k) h.effect(k);
-    h.burst();
+    particle_burst(c);  // seg7:0x375a [BYTES seg7:0x993]
+}
+
+// seg7:0x375a [BYTES seg7:0x3769-0x3a33] with seg8:0x83e(n, k) [BYTES seg8:0x84c-0x897] (M5 s3
+// fixer, comparison D7).
+void particle_burst(UpdateCtx& c) {
+    WaveGlobals& g = c.flight.g;
+    if (g.burst_count >= 50) return;  // [BYTES seg7:0x3769-0x376e]
+    UpdateHost& h = c.host;
+    Blitter* out = h.blitter();
+    WaveGraphics& wg = wave_graphics();
+    if (out) create_wave_brushes(*out, wg);
+    const std::int16_t groups = add16(add16(g.detail, g.detail), 3);  // [bp-0xe] [BYTES seg7:0x3772-0x377a]
+    const std::int16_t life = shl16(add16(g.detail, 7), 2);          // [bp-0x10] [BYTES seg7:0x377d-0x3786]
+    const auto entry = [&g](int n, int k) -> BurstEntry* {
+        const int ix = 4 * n + k;  // stride 0x16, group stride 0x58
+        return ix >= 0 && ix < static_cast<int>(g.burst.size()) ? &g.burst[static_cast<std::size_t>(ix)] : nullptr;
+    };
+    const bool ship_ok = g.burst_rec >= 0 && g.burst_rec < kShipCount;
+    for (std::int16_t n = 0; n < groups; n = add16(n, 1)) {  // [bp-4] [BYTES seg7:0x37f7-0x37fd]
+        // Group n = DGROUP:0x9510 starts at the burst's ship while DGROUP:0x9510 < groups - 1: the
+        // object's position plus its rear muzzle entry 16 + frame of design +0x4e (<< 3), the step
+        // -4·the heading's (dx, dy), age 0 [BYTES seg7:0x3801-0x38b2].
+        if (sub16(groups, 1) > g.burst_count && n == g.burst_count) {
+            const bool obj_ok = g.burst_pool >= 0 && g.burst_pool < kPoolCount &&
+                                g.burst_rec >= 0 && g.burst_rec < c.flight.pools.records(g.burst_pool);
+            if (!obj_ok) {
+                static bool once = false;
+                guard_todo(once, "the particle burst of an object outside the pools", "seg7:0x3819");
+            }
+            for (int k = 0; k < 4; ++k) {
+                BurstEntry* e = entry(g.burst_count, k);
+                if (!e || !obj_ok) continue;
+                const ObjectRecord& o = c.flight.pools.rec(g.burst_pool, g.burst_rec);
+                const int hd = o.frame & 15;
+                const int dn = ship_ok ? c.flight.ships[static_cast<std::size_t>(g.burst_rec)].design_index : 0;
+                e->x = add16(o.x, shl16(h.shots().mx(dn, 16 + hd), 3));  // [BYTES seg7:0x382b-0x3865]
+                e->y = add16(o.y, shl16(h.shots().my(dn, 16 + hd), 3));  // [BYTES seg7:0x3869-0x3879]
+                e->vx = sub16(0, shl16(heading_dx(hd), 2));                // [BYTES seg7:0x387d-0x388d]
+                e->vy = sub16(0, shl16(heading_dy(hd), 2));                // [BYTES seg7:0x3891-0x38a1]
+                e->age = 0;                                                 // [BYTES seg7:0x38a5]
+            }
+        }
+        // [BYTES seg7:0x38b6-0x38c9]
+        if (!(add16(add16(life, groups), 1) > g.burst_count) || n > g.burst_count) continue;
+        for (int k = 0; k < 4; ++k) {  // [bp-6]
+            BurstEntry* e = entry(n, k);
+            if (!e) continue;
+            if (e->age < life && e->age > 0) {  // [BYTES seg7:0x38e2-0x38ed]
+                // seg8:0x83e(n, k): the screen point by seg8:0x29ea; the old one becomes the point
+                // to erase [BYTES seg8:0x858-0x897].
+                const ScreenPoint sp = world_to_screen(c.view, e->x, e->y, g.wave_kind, g.dg_9eb5, g.dg_9130);
+                e->sx = sp.x;
+                e->sy = sp.y;
+                e->ex = e->lx;
+                e->ey = e->ly;
+                e->lx = e->sx;
+                e->ly = e->sy;
+                // Brush DGROUP:0x3b4c[age sar 2 + 10·sbyte +0xe3]; indices 20 ... read the heat
+                // brushes that follow (DGROUP:0x3b74 + 2n); a 0 word selects nothing and the DC
+                // keeps its brush, as SelectObject(hdc, 0) does. The brush stays selected
+                // [BYTES seg7:0x38fa-0x3919].
+                const std::int8_t row = ship_ok ? static_cast<std::int8_t>(c.flight.ships[static_cast<std::size_t>(g.burst_rec)].be3) : std::int8_t{0};
+                const int bi = sar16(e->age, 2) + 10 * row;
+                BrushId b = kBrushNone;
+                if (bi >= 0 && bi < static_cast<int>(wg.star.size()))
+                    b = wg.star[static_cast<std::size_t>(bi)];
+                else if (bi >= 20 && bi - 20 < static_cast<int>(wg.heat.size()))
+                    b = wg.heat[static_cast<std::size_t>(bi - 20)];
+                if (out) {
+                    if (b != kBrushNone) out->select_brush(kDcWindow, b);
+                    out->pat_blt(kDcWindow, e->sx, e->sy, 2, 2, kPatCopy);    // [BYTES seg7:0x391e-0x3933]
+                    out->pat_blt(kDcWindow, e->ex, e->ey, 2, 2, kBlackness);  // [BYTES seg7:0x3938-0x394c]
+                }
+            }
+            e->x = add16(e->x, e->vx);  // [BYTES seg7:0x3951-0x3969]
+            e->y = add16(e->y, e->vy);
+            e->age = add16(e->age, 1);  // [BYTES seg7:0x396d]
+            if (e->age >= sub16(life, 1) && out)  // [BYTES seg7:0x3971-0x398f]
+                out->pat_blt(kDcWindow, e->sx, e->sy, 2, 2, kBlackness);
+        }
+        // The group's four steps turn: by the full and half step while particle 0's age >= life / 3,
+        // else by the quarter and eighth [BYTES seg7:0x399f-0x3a20 seg7:0x3790-0x37f0].
+        BurstEntry* e0 = entry(n, 0);
+        BurstEntry* e1 = entry(n, 1);
+        BurstEntry* e2 = entry(n, 2);
+        BurstEntry* e3 = entry(n, 3);
+        if (!e0 || !e1 || !e2 || !e3) continue;
+        const bool late = e0->age >= idiv16(life, 3);
+        const int a = late ? 0 : 2, b = late ? 1 : 3;  // the shifts of particles 0 / 3 and 1 / 2
+        std::int16_t t = e0->vx;
+        e0->vx = sub16(e0->vx, sar16(e0->vy, a));
+        e0->vy = add16(e0->vy, sar16(t, a));
+        t = e1->vx;
+        e1->vx = sub16(e1->vx, sar16(e1->vy, b));
+        e1->vy = add16(e1->vy, sar16(t, b));
+        t = e2->vx;
+        e2->vx = add16(e2->vx, sar16(e2->vy, b));
+        e2->vy = sub16(e2->vy, sar16(t, b));
+        t = e3->vx;
+        e3->vx = add16(e3->vx, sar16(e3->vy, a));
+        e3->vy = sub16(e3->vy, sar16(t, a));
+    }
+    g.burst_count = add16(g.burst_count, 1);  // [BYTES seg7:0x3a23-0x3a29]
+    if (add16(life, groups) == g.burst_count) g.burst_pool = -1;  // [BYTES seg7:0x3a2d-0x3a33]
 }
 
 // seg7:0x9ce-0x118d [BYTES seg7:0x9d6-0x118d]
@@ -458,6 +568,11 @@ void wave_frame(UpdateCtx& c) {
         vi.shake = g.dg_238c;
         vi.wave_kind = g.wave_kind;
         vi.dg_9eb5 = g.dg_9eb5;
+        // The pan's words (shift.h, view.h pan_view) (M5 s3 integrate, ENTRY binding 4).
+        vi.world = h.frame_world(c.flight.pools);
+        vi.shift = &linked_shift_host();
+        vi.frame = &g;
+        vi.now = g.now;
         recentre(c.view, vi);
     }
     if (f.entry_pending != 0) ship_entry(c);  // [BYTES seg7:0xb91-0xb99]
@@ -616,6 +731,10 @@ void ship_entry(UpdateCtx& c) {
             vi.shake = g.dg_238c;
             vi.wave_kind = g.wave_kind;
             vi.dg_9eb5 = g.dg_9eb5;
+            vi.world = c.host.frame_world(pools);  // the pan's words (M5 s3 integrate)
+            vi.shift = &linked_shift_host();
+            vi.frame = &g;
+            vi.now = g.now;
             recentre(c.view, vi);
         }
         c.flight.host.sound(0x27, 0x0e, i, 1);  // seg10:0x754a(0x27, 14, i, 1)

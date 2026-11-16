@@ -46,7 +46,10 @@
 #include "world/player_sheet.h"
 #include "world/missile.h"
 #include "world/purchases.h"
+#include "world/relations.h"
 #include "world/roster.h"
+#include "world/roster_build.h"
+#include "world/shift.h"
 #include "world/visit.h"
 #include "world/world.h"
 #include "dialogs/ambulance_options.h"
@@ -162,6 +165,68 @@ std::string lang_text(int id) {
     return {};
 }
 
+// ---- M5 s3 integrate: the names of the wave's ships
+
+// seg3:0x1542(0, 14, i, buf, 0) for a ship: lstrcpy(buf, design +0x70 of ship i's design), the
+// SHP name (World::design_names) [BYTES seg3:0x1582-0x159c]; mode 0 adds no article [BYTES
+// seg3:0x19b8-0x1a1d] (read for the integration; no verifier has checked it).
+std::string ship_design_name(int i) {
+    world::World& wd = world::current();
+    if (i < 0 || i >= world::kShipCount) return {};
+    const int n = wd.ship(i).design_index;
+    return n >= 0 && n < world::kShipCount ? wd.design_names[static_cast<std::size_t>(n)] : std::string();
+}
+
+// seg17:0x8e60(i, buf) [BYTES seg17:0x8e60-0x8f1c] (read for the integration; no verifier has
+// checked it): a ship with a roster record (+0xd6 >= 0, signed) gets its record's string +0x65
+// (the pilot for the player, "<team> <index>" for the others, seg9:0x5be0); a ship without one
+// (an Enforcer) string 788 "Officer", DGROUP:0xced " " and the decimal of
+// lo16(2·lo16(lo16(lo16((2i + 3)·(c + 2))·(i + 6))·(i + 7))) / (c + 3) + 956 with c = sbyte
+// +0x5e (16-bit `imul` low words, CWD, `idiv`) [BYTES seg17:0x8ebd-0x8ee5]. A zero divisor (c =
+// -3, which no class byte holds) gives 0 [DESIGN ADR 0016].
+std::string ship_name_8e60(int i) {
+    world::World& wd = world::current();
+    if (i < 0 || i >= world::kShipCount) return {};
+    const world::ShipRecord& S = wd.ship(i);
+    if (S.roster_index >= 0) {
+        if (static_cast<std::size_t>(S.roster_index) >= wd.roster.size()) return {};  // [DESIGN ADR 0016]
+        const auto& n = wd.roster[static_cast<std::size_t>(S.roster_index)].name;
+        std::string s;
+        for (char c : n) {
+            if (c == 0) break;
+            s += c;
+        }
+        return s;
+    }
+    using world::add16;
+    using world::mul16;
+    const std::int16_t c = world::sbyte_at(S, 0x5e);
+    const std::int16_t ii = static_cast<std::int16_t>(i);
+    std::int16_t ax = add16(add16(ii, ii), 3);
+    ax = mul16(ax, add16(c, 2));
+    ax = mul16(ax, add16(ii, 6));
+    ax = mul16(ax, add16(ii, 7));
+    ax = add16(ax, ax);
+    const std::int16_t d = add16(c, 3);
+    std::int16_t q = 0;
+    if (d != 0) {
+        q = world::idiv16(ax, d);
+    } else {
+        static bool once = false;
+        world::guard_todo(once, "seg17:0x8e60's divisor c + 3 = 0 gives 0", "seg17:0x8ee3");
+    }
+    return lang_text(788) + " " + std::to_string(add16(q, 0x3bc));
+}
+
+// seg13:0x218a(team, buf): INI [Teams] Team<team + 1>, 20 bytes [BYTES seg13:0x2197-0x21fa].
+std::string team_name_218a(int team) {
+    try {
+        if (g.ini) return g.ini->get_string("Teams", "Team" + std::to_string(team + 1), "", 20);
+    } catch (const std::exception&) {
+    }
+    return {};
+}
+
 // seg3:0x6ec's surroundings for the program (messages.h): the World, the flight role's frame
 // words DGROUP:0x870c / 0x9608 / 0xa76, the left IS_INFO panel and the sound engine.
 class AppMessageHost final : public MessageHost {
@@ -187,6 +252,11 @@ public:
     int ship_word_06(int rec) const override {
         return rec >= 0 && rec < world::kShipCount ? world::word_at(w().ship(rec), 0x06) : -1;
     }
+    // A ship's word (the death lines' killer, 0x49's goal, 0x20's order words) (M5 s3 integrate,
+    // CONTACT binding 5).
+    int ship_word(int rec, int off) const override {
+        return rec >= 0 && rec < world::kShipCount ? world::word_at(w().ship(rec), off) : -1;
+    }
     void set_sender(int pool, int rec) override {  // DGROUP:0x6e70 / 0x6e72
         if (Hud* h = hud()) {
             h->info().mark(1).rec = rec;
@@ -206,7 +276,36 @@ public:
     std::string name(int pool, int rec) override {
         if (pool == 7) return cut_name_code(lang_text(0x15b));
         if (pool == 2) return cut_name_code(lang_text(0x9a));
-        app::log_todo("seg3:0x1542 for a ship sender " + std::to_string(rec), "seg3:0x1542");
+        if (pool == world::kPoolShips) return ship_design_name(rec);  // [BYTES seg3:0x1582-0x159c] (M5 s3 integrate)
+        // The other pools of %D (core.md "Names"): 152 "Icon" cut by 2 and the index for pool 0,
+        // 892 for pool 1, 153 "Rock" for pool 3, 170 "Virus" for pool 9, 585 "Exit Gate" for pool
+        // 12; the articles of seg3:0x1542's mode argument are not added [OPEN] [BYTES seg3:0x15ce
+        // seg3:0x15e4 seg3:0x16ab seg3:0x16c6 seg3:0x16e6 seg3:0x16f8 seg3:0x1747 seg3:0x1772]
+        // (M5 s3 integrate).
+        if (pool == 0) return icon_label(lang_text(0x98), rec);
+        if (pool == 1) return cut_name_code(lang_text(kStringIconFragment));
+        if (pool == 3) return cut_name_code(lang_text(0x99));
+        if (pool == 9) return cut_name_code(lang_text(0xaa));
+        if (pool == 12) return gate_label(lang_text(kStringExitGate));
+        // Pool 4 by DGROUP:0x9214: 155 "Fuel Tank", 235, 236, then by the record's word +0x26
+        // 237 / 238 and 241 / 242; another value names nothing [BYTES seg3:0x1777-0x1815]
+        // (read for the integration; no verifier has checked it).
+        if (pool == 4) {
+            const int v = w().w9214;
+            const bool a0 = rec >= 0 && rec < w().pools.records(4) && w().pools.rec(4, rec).angle == 0;
+            const int id = v == 0 ? 0x9b : v == 1 ? 0xeb : v == 2 ? 0xec : v == 3 ? (a0 ? 0xed : 0xee)
+                                                                           : v == 4 ? (a0 ? 0xf1 : 0xf2) : -1;
+            return id < 0 ? std::string() : cut_name_code(lang_text(id));
+        }
+        // Pool 8 of kind +0x1c = 3: 362, kind 1: 363 [BYTES seg3:0x186c-0x189c]; kind 2, the
+        // hazard classes' names DGROUP:0x4da2 + 0x14·class, is the hazards' (ruling R3).
+        if (pool == 8 && rec >= 0 && rec < world::kPool8Max) {
+            const int kind = w().pool8[static_cast<std::size_t>(rec)].at(0x1c);
+            if (kind == 3) return cut_name_code(lang_text(0x16a));
+            if (kind == 1) return cut_name_code(lang_text(0x16b));
+        }
+        if (logged_.insert(1000 + pool).second)
+            app::log_todo("seg3:0x1542 for a name of pool " + std::to_string(pool), "seg3:0x1542");
         return {};
     }
     void set_end(std::uint32_t t) override {
@@ -221,11 +320,14 @@ public:
     // DGROUP:0x9604 / 0x9602 and seg13:0x218a, the capture's (links(), M4 s2 DISPLAY).
     int capture_value() const override { return call(links().capture_value, 0); }
     int capture_defenders() const override { return call(links().capture_defenders, 0); }
+    // seg13:0x218a(design word DGROUP:0x970a of ship rec) (M5 s3 integrate).
     std::string team_name(int ship) override {
         if (links().team_name) return links().team_name(ship);
-        app::log_todo("seg13:0x218a, the team name of message 0x6f", "seg13:0x218a");
-        return {};
+        if (ship < 0 || ship >= world::kShipCount) return {};
+        return team_name_218a(world::design_team(w(), w().ship(ship).design_index));
     }
+    int attitude(int a, int b) const override { return world::relation(w(), a, b); }  // seg13:0x2688
+    std::string taunt() const override { return w().pilot.taunt; }                  // DGROUP:0x8d38
     void todo(int code) override {
         if (logged_.insert(code).second)
             app::log_todo("message code " + std::to_string(code) + " of seg3:0x1351", "seg3:0x1351");
@@ -342,7 +444,11 @@ public:
     // seg11:0x3f2e's attitude is not ported: attitude 0 [OPEN]. seg3:0x0 and seg13:0x371c run on
     // the World (hud/target.h target_valid, target_kind_371c; core.md "Target validity") (M4 s2
     // DISPLAY): a captured or destroyed icon (`state` 1) fails, and the 280 ms retarget moves on.
-    int attitude(int a, int b) const override { return call(links().attitude, 0, a, b); }
+    // seg13:0x2688(a, b) on the World (relations.h) (M5 s3 integrate).
+    int attitude(int a, int b) const override {
+        if (links().attitude) return links().attitude(a, b);
+        return a >= 0 && a < world::kShipCount && b >= 0 && b < world::kShipCount ? world::relation(w(), a, b) : 0;
+    }
     bool target_ok(int p, int r) const override {
         if (links().target_ok) return links().target_ok(p, r);
         return target_valid(validity(), p, r);
@@ -410,11 +516,21 @@ public:
         // Pool 7: record 0's word +0x10 (seg13:0x5d2f) and the logo strip DGROUP:0x39e8[5]
         // (M4 s1 SCREENS).
         if (p == 7 && w().pools.records(7) > 0) out.pool7_w10 = world::word_at(w().pools.rec(7, 0), 0x10);
+        // The ship pool: ship words +0x50 and +0xe8, object word +0x28 (seg13:0x5c22 case 14)
+        // (M5 s3 fixer).
+        const bool ship = p == w().roles.ships && r < world::kShipCount;
+        if (ship) {
+            const world::ShipRecord& s = w().ships[static_cast<std::size_t>(r)];
+            out.ship_slot = s.sprite_slot;
+            out.cloaked = s.be8;
+            out.obj_w28 = world::word_at(o, 0x28);
+        }
         if (g_canvas) {
             g_canvas->set_image(Img::kIconStrip, world::icon_strip());
             // Slot 14 + r, the icon's own image (hud/icon_images.h) (M4 s5 ICONS).
             if (p == 0 && r < world::kIconRecords)
                 g_canvas->set_image(Img::kIconOwn, world::slot_image(world::kIconOwnSlot + r));
+            if (ship) g_canvas->set_image(Img::kShipSprite, world::slot_image(out.ship_slot + 0x28));
             // The wave's slot 5 when the world holds one, else the renderer's seg10:0x39a8 strip
             // (650 x 52, 14 logo cells), as the briefing's canvas takes it [DESIGN].
             if (p == 7) {
@@ -514,6 +630,22 @@ public:
                         // -1 fails both target checks above (structs.md target_pool; C081)
             t9628_ = lang(0x89d);
             t8718_ = lang(0x89e);
+        } else if (p == world::kPoolShips && r >= 0 && r < world::kShipCount) {
+            // seg3:0x1cb-0x256 (the literal 14): the design name seg3:0x1542(0, 14, r, buf, 0)
+            // into DGROUP:0x8718 at the tail [BYTES seg3:0x1d3-0x1e4 seg3:0x41f-0x428]; DGROUP:0x960a
+            // = string 2207 in Demon's Gate, 322 for a ship of the player's design team, else
+            // seg13:0x218a(its team) [BYTES seg3:0x1e7-0x244]; DGROUP:0x9628 = seg17:0x8e60(r)
+            // [BYTES seg3:0x247-0x253] (M5 s3 integrate; read for the integration, no verifier
+            // has checked it).
+            t8718_ = ship_design_name(r);
+            const int tr = world::design_team(w(), w().ship(r).design_index);
+            if (w().handover.demons_gate != 0)
+                t960a_ = lang(0x89f);
+            else if (tr == world::design_team(w(), w().ship(w().player).design_index))
+                t960a_ = lang(0x142);
+            else
+                t960a_ = team_name_218a(tr);
+            t9628_ = ship_name_8e60(r);
         } else if (p == 0 && r >= 0 && r < world::kIconRecords) {
             // seg3:0x259-0x2c6: the icon's file name (DGROUP:0x57b4 + 0x23·rec), then
             // seg3:0x1542(0, 0, rec, buf, 0) "Icon N" and string 2208 or 2209 by byte +0x53
@@ -860,6 +992,13 @@ bool weapon_keys(const shell::GameState& s, const shell::Input& in) {
         remap = world::KeyRemap::from_strings(lang_text(2900), lang_text(2901));
     }
     const std::uint16_t key = remap.map(static_cast<std::uint16_t>(in.wparam));  // seg11:0x6aa8
+    // WM_KEYUP 'P' after the remap: seg11:0x6d19 + seg11:0x6d44 -> seg11:0x6dc4, the latch
+    // DGROUP:0x1032 (world/shift.h); the key gate lets it through the lock-out (input.cpp) [BYTES
+    // seg11:0x6d44-0x6d46 seg11:0x6dc4-0x6dd3] (M5 s3 integrate, ENTRY binding 2).
+    if (in.msg == shell::kWmKeyUp && key == 'P') {
+        world::shift_key_up(wd);
+        return true;
+    }
     const int p = wd.player;
     if (p < 0 || p >= world::kShipCount) return false;
     WeaponKeyState ks;
@@ -907,6 +1046,71 @@ void close_hud() {
 }  // namespace
 
 
+// ---- M5 s3 integrate: the HUD's calls of the computer pilots, the contact routines and the
+// perspective shift (world/flight_hooks.h PilotLinks, world/shift.h ShiftLinks)
+namespace {
+
+void bind_pilot_hud() {
+    world::PilotLinks& pl = world::pilot_links();
+    pl.set_target = [](int s, int p, int r) { g_host.set_target(s, p, r); };  // seg3:0xf4
+    pl.visible = [](int p, int r) { return g_host.target_ok(p, r); };         // seg3:0x0
+    pl.weapon_display = [] { weapon_picture_refresh(); };                     // seg11:0x2f8c
+    pl.manual_target = [] {                                                   // DGROUP:0xa62 = 1
+        if (g_hud) g_hud->info().set_manual(true);
+    };
+    pl.info_paint = [] {  // PostMessage(DGROUP:0xa7c, WM_PAINT, 0, 0L)
+        if (g_hud) g_hud->info().invalidate(kInfoTarget);
+    };
+    pl.mark0 = [](std::int16_t& pool, std::int16_t& rec) {  // DGROUP:0x6e54 / 0x6e52
+        if (!g_hud) return;
+        pool = static_cast<std::int16_t>(g_hud->info().mark(0).pool);
+        rec = static_cast<std::int16_t>(g_hud->info().mark(0).rec);
+    };
+    // seg13:0x6890(i)'s left display: seg13:0x58dc(0, 2) when DGROUP:0x6e18 / 0x6e16 +
+    // 0x1e·DGROUP:0xa76 is (ship pool, i); seg13:0x58dc returns outside modes 2 and 3 [BYTES
+    // seg13:0x68da-0x68f6].
+    pl.watch_ship = [](int i) {
+        if (!g_hud) return;
+        const int m = g_host.info_mode();
+        if (m != kModeTarget && m != kModeMessage) return;
+        const Mark& k = g_hud->info().mark(m - 2);
+        if (k.pool == world::current().roles.ships && k.rec == i) g_hud->info().target_picture_now(2);
+    };
+    // seg4:0x702e's text (world/pilot_orders.h): ENG_LANG strings, the pilot name DGROUP:0x380c
+    // (INI ThePlayer, as AppMessageHost::pilot) and MASTER.SHP's name +0x0a, read from the ship
+    // path as seg14:0x3eda loads it [BYTES seg4:0x713d seg4:0x71de seg4:0x722a-0x7262].
+    pl.lang = [](int id) { return lang_text(id); };
+    pl.pilot = [] { return g_msg_host.pilot(); };
+    pl.shp_name = [](int n) -> std::string {
+        if (!g.store) return {};
+        try {
+            const assets::Ships ships = g.store->ships(world::program_ship_dir());
+            if (n < 0 || n >= static_cast<int>(ships.ships.records.size())) return {};  // [DESIGN ADR 0016 decision 2]
+            return ships.ships.records[static_cast<std::size_t>(n)].name;
+        } catch (const std::exception&) {
+            return {};
+        }
+    };
+    world::ShiftLinks& sh = world::shift_links();
+    sh.message = [](int r, int p, int k, int c) { post_message(r, p, k, c); };  // seg3:0x6ec
+    sh.next_target = [] { return g_host.next_target(); };                       // seg13:0x2206
+    sh.set_target = [](int s, int p, int r) { g_host.set_target(s, p, r); };    // seg3:0xf4
+    sh.lamps = [](int s, int) {                                                 // seg11:0x3cc2(s, 1)
+        if (g_hud) g_hud->lamp_repaint(s);
+    };
+    sh.weapon_slot = [] {  // seg11:0xae94 (hud/weapons.h wave_start_slot)
+        world::World& wd = world::current();
+        if (wd.player < 0 || wd.player >= world::kShipCount) return;
+        world::ShipRecord& r = wd.ship(wd.player);
+        r.weapon_slot = static_cast<std::int16_t>(wave_start_slot(r.weapon_slot, r.slots_cb(), wd.restored));
+    };
+    sh.weapon_picture = [] { weapon_picture_refresh(); };  // seg11:0x2f8c
+    sh.info_mode = [](int m) { info_mode_119c(m); };       // DGROUP:0xa76 = m and WM_PAINT
+    sh.todo = [](const std::string& what, const char* address) { app::log_todo(what, address); };
+}
+
+}  // namespace
+
 // ---- M4 stage 3, track VISIT: state 6, the ambulance visit ---------------------------------------
 namespace {
 
@@ -937,14 +1141,21 @@ public:
         on_ini_main_ship = [] {
             return g.ini ? g.ini->get_string(settings::kGameSection, "MainShip", "EAGLE", 20) : std::string("EAGLE");
         };
-        // The design name DGROUP:0x9742: the player's design is INI MainShip's record (the
-        // ship set-up, src/world/hooks.cpp) [OPEN: the 0xad-byte design table is M5].
-        on_design_name = [](int) {
+        // The design name DGROUP:0x9742 + 0xad·n, design +0x70 (World::design_names, which
+        // seg14:0x1b84 fills); INI MainShip before any placement (M5 s3 integrate).
+        on_design_name = [](int n) {
+            const world::World& wd = world::current();
+            if (n >= 0 && n < world::kShipCount && !wd.design_names[static_cast<std::size_t>(n)].empty())
+                return wd.design_names[static_cast<std::size_t>(n)];
             return g.ini ? g.ini->get_string(settings::kGameSection, "MainShip", "EAGLE", 20) : std::string();
         };
         // seg16:0x3468(i, 3)'s seg14:0x11a8 and DGROUP:0x3a38 + 2i on the program's sheet side
         // (world/player_sheet.h) (M4 s5 SHEET).
-        on_build_sheet = [](int ship) { world::build_sheet_program(world::current(), ship); };
+        // Inside seg14:0x0's loop the RosterHost's purchases() builds the sheet right after the
+        // pass (ship_entry.h ship_sheet_build), so the pass builds nothing (M5 s3 integrate).
+        on_build_sheet = [](int ship) {
+            if (!roster_building()) world::build_sheet_program(world::current(), ship);
+        };
         on_sheet_dc = [](int ship) { return world::sheet_dc_program(ship); };
         // PostMessage(DGROUP:0xa7e / 0xa7c, WM_PAINT): the IS_INFO panels due (ADR 0013 decision 4).
         on_post_info_paint = [] {
@@ -1339,6 +1550,7 @@ void install_hud_hooks(App& app) {
     app::icon_watch() = app::WatchToggle{[] { return icon_column_exists(); }, [] { icon_column_create(); },
                                          [] { icon_column_destroy(); }};
     install_wave(app);  // the wave's integration, src/hud/wave_win32.cpp (M3 s2 fixer)
+    bind_pilot_hud();    // the computer ships' HUD calls (M5 s3 integrate)
     install_visit(app);  // state 6, the ambulance visit (M4 s3 VISIT)
     // The palette message's InvalidateRect(main, NULL, TRUE) reaches the IS_INFO children too
     // (src/app/wndproc.cpp palette_message): both panels are due and paint after the next frame.

@@ -223,9 +223,15 @@ std::int16_t powerup(PurchaseCtx& c, int ship, int k) {
 void computer_shop(PurchaseCtx& c, int ship, int mode) {
     Shop& s = c.s;
     ShipRecord& S = c.w.ship(ship);
-    if (mode != 2) {  // the clears of seg16:0x5b24 [BYTES seg16:0x3b26]
-        s.basic = s.wing = s.refuel = s.double_guns = s.new_body = s.unify = 0;
-        s.bought.fill(0);
+    if (mode != 2) {
+        // 0x9563, 0x9541, 0x953f, 0x9540, 0x953e; 0x9542 + w and 0x9564 + w for w = 1 ... 26;
+        // 0x955d + k for k = 0 ... 5. UNIFY 0x957f is not cleared here (M5 s3 ROSTER, read again)
+        // [BYTES seg16:0x3b26-0x3b6c].
+        s.basic = s.wing = s.refuel = s.double_guns = s.new_body = 0;
+        for (int w = 1; w <= kShopWeapons; ++w) {
+            s.bought[static_cast<std::size_t>(w)] = 0;
+            s.sold[static_cast<std::size_t>(w)] = 0;
+        }
         s.powerup.fill(0);
     }
     if (c.restored != 0 && ship == c.w.player) return;

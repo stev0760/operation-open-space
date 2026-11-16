@@ -10,6 +10,8 @@
 #include "world/fuel_balls.h"
 #include "world/missile.h"
 #include "world/pods.h"
+#include "world/relations.h"
+#include "world/ship_react.h"
 #include "world/tank.h"
 
 namespace is::world {
@@ -92,8 +94,16 @@ DamageDesign design_from_world(const World& w, int n) {
     DamageDesign d;
     if (n < 0 || n >= kShipCount) return d;
     const DesignRating& r = w.design_ratings[static_cast<std::size_t>(n)];
+    // The shot divisors +0x08 ... +0x0e (s/4, s/4, s/5, s/5 by lamp) that seg14:0x1b84 writes
+    // [BYTES seg14:0x1cae-0x1cde], seg8:0x45e0's selector-2 row [BYTES seg8:0x4a1e]
+    // (s3-contact.md D2, verified claims 5, 6) (M5 s3 CONTACT).
+    d.shot_div = r.shot_div;
     d.hit_div = {r.armor4a, r.armor5a, r.armor4b, r.armor5b};
     d.lamp_row = {0, 1, 2, r.special};
+    // +0x2e, the hit sound SHP word +0x1f [BYTES seg14:0x1e18 seg14:0x1e1e] (D3), and +0x38, the
+    // team word the roster's seg14:0x1430 writes (relations.h design_team_of) (D4) (M5 s3 CONTACT).
+    d.hit_sound = r.hit_sound;
+    d.team = design_team_of(w, n);
     d.captures = r.captures;
     d.repair = r.repair;
     // Design words +0x2a (the body's unscaled cell side) and +0x3c (D) as the sheet build and the
@@ -460,6 +470,9 @@ std::int16_t call_on_damage(CollideCtx& x, int pool, int rec, std::int16_t a) {
     if (id == kDamageIcon) return icon_damage(x, pool, rec, a);  // seg7:0x233c (M4 s2 GUN)
     if (id == kDamagePool4) return tank_damage(x, pool, rec, a);  // seg12:0xdc4 (M4 s3 FUEL)
     if (id == kDamagePool5) return pool5_on_damage(x, pool, rec, a);  // seg7:0x570a (M4 s7 FUEL)
+    // seg16:0x85e, the ambulance's: `xor ax, ax` between the prologue and the epilogue, no
+    // write (s3-contact-verify.md claim 1) [BYTES seg16:0x868] (M5 s3 CONTACT, D5).
+    if (id == kDamagePool7) return 0;
     // seg7:0x2652, the generic handler of the missiles and the other generic records (missile.h
     // generic_on_damage); its far call through +0x66 is CollideHost::on_destroy (M4 s2 fixer).
     if (id == kDamageGeneric) {
@@ -604,7 +617,7 @@ std::int16_t dispatch(CollideCtx& x, int tp, int tr, int xp, int xr, std::int16_
                     if (j == cr) continue;
                     const ShipRecord& js = ship_at(w, j);
                     if (js.bec != 0 && js.w32 == tp && js.w34 == tr && js.w38 == 1)
-                        x.h.seg13_2714(j, cr, 5, 10, 0, -1);
+                        attitude_change(w, attitude_out(x), j, cr, 5, 10, 0, -1);  // seg13:0x2714
                 }
             }
             if ((tp == ships || tp == 0) && c.w0b0c != 0) {
@@ -615,10 +628,10 @@ std::int16_t dispatch(CollideCtx& x, int tp, int tr, int xp, int xr, std::int16_
                         if (d.owner_pool == tp && d.owner_rec == tr) x.h.seg8_9028(k, 10, cp, cr);
                     }
                     if (cp == ships && tp == ships) {
-                        if (!(xp == ships && big == 0)) x.h.seg4_5e8e(tr, cr, a, 1);
+                        if (!(xp == ships && big == 0)) attack_reaction(x, tr, cr, a, 1);  // seg4:0x5e8e
                         const ShipRecord& ts = ship_at(w, tr);
                         if (cr == g.player && ts.w38 == 4 && ts.w34 == cr) w.w9432 = add16(w.w9432, a);
-                        x.h.seg4_7d36(cr, tr, a);
+                        fight_record(w, contact_words(), cr, tr, a);  // seg4:0x7d36
                     }
                     if (cp == ships && cr == g.player && xp != 10 && tp != ships) x.h.seg8_81f8(tp, tr);
                 }
@@ -672,7 +685,7 @@ std::int16_t dispatch(CollideCtx& x, int tp, int tr, int xp, int xr, std::int16_
         if (by_player && !(tp == ships && tr == g.player)) kill_score(x, tp, tr, a, res);  // [BYTES seg8:0x6486-0x64ae]
         if (res != 0) {
             // 1.5 the target destroyed [BYTES seg8:0x64bd-0x686a]
-            if (!by_player && !(tp == ships && tr == g.player)) x.h.seg8_7ce0(tp, tr, a, res);
+            if (!by_player && !(tp == ships && tr == g.player)) assist_score(x, tp, tr, a, res);  // seg8:0x7ce0
             int kill = 0;
             if (cp == ships) {
                 ShipRecord& cs = ship_at(w, cr);
@@ -689,11 +702,11 @@ std::int16_t dispatch(CollideCtx& x, int tp, int tr, int xp, int xr, std::int16_
                     bool said = false;
                     if (tp == 9) {
                         x.h.message(cr, ships, cs.w58, 0x75);
-                        x.h.seg13_2714(cs.w58, cr, 15, 40, 0, 6);
+                        attitude_change(w, attitude_out(x), cs.w58, cr, 15, 40, 0, 6);  // seg13:0x2714
                         said = true;
                     } else if (cs.w56 == tr) {
                         x.h.message(cr, ships, cs.w58, 0x76);
-                        x.h.seg13_2714(cs.w58, cr, 50, 90, 0, 6);
+                        attitude_change(w, attitude_out(x), cs.w58, cr, 50, 90, 0, 6);
                         said = true;
                     }
                     if (said) {
@@ -706,7 +719,7 @@ std::int16_t dispatch(CollideCtx& x, int tp, int tr, int xp, int xr, std::int16_
                         const ShipRecord& ts = ship_at(w, tr);
                         if (ts.w32 == ships && ts.w34 == cs.w58 && ts.w38 == 1) {
                             x.h.message(cr, ships, cs.w58, 0x77);
-                            x.h.seg13_2714(cs.w58, cr, 60, 120, 0, 8);
+                            attitude_change(w, attitude_out(x), cs.w58, cr, 60, 120, 0, 8);
                             kill = 1;
                         }
                     } else {  // [BYTES seg8:0x6683-0x66e8]
@@ -714,7 +727,7 @@ std::int16_t dispatch(CollideCtx& x, int tp, int tr, int xp, int xr, std::int16_
                             if (j == cr) continue;
                             const ShipRecord& js = ship_at(w, j);
                             if (js.bec != 0 && js.w32 == tp && js.w34 == tr && js.w38 == 1) {
-                                x.h.seg13_2714(j, cr, 30, 50, 0, 6);
+                                attitude_change(w, attitude_out(x), j, cr, 30, 50, 0, 6);
                                 x.h.message(cr, ships, j, 0x77);
                             }
                         }
@@ -738,13 +751,13 @@ std::int16_t dispatch(CollideCtx& x, int tp, int tr, int xp, int xr, std::int16_
             x.h.seg7_2080(tp, tr);  // [BYTES seg8:0x67cc]
             if (cp == ships && tp == ships) {  // a ship kill [BYTES seg8:0x67d4-0x6835] (C024)
                 if (cr == g.player) w.w9432 = add16(w.w9432, 200);
-                x.h.seg13_2714(tr, cr, -50, -150, 1, -1);
+                attitude_change(w, attitude_out(x), tr, cr, -50, -150, 1, -1);  // seg13:0x2714
                 // seg13:0x2e60(j, cr, 4) in declaration order [BYTES seg8:0x6827 seg13:0x2f2c]
-                // (M4 s4 fixer, C024).
+                // (M4 s4 fixer, C024); seg13:0x2688 and seg13:0x2e60 are relations.h's (M5 s3).
                 for (int j = 0; j < w.last_ship; ++j)
-                    if (x.h.seg13_2688(j, tr) > 0) x.h.seg13_2e60(j, cr, 4);
+                    if (relation(w, j, tr) > 0) grudge_note(w, j, cr, 4);
             }
-            if (tp == ships) x.h.seg4_7636(tr, cp, cr, kill);  // [BYTES seg8:0x684b]
+            if (tp == ships) ship_killed(x, tr, cp, cr, kill);  // seg4:0x7636 [BYTES seg8:0x684b]
             ship_at(w, g.player).due156.set(g.now - 1u);       // [BYTES seg8:0x6853-0x686a]
         }
     }

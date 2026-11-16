@@ -126,7 +126,7 @@ RosterPlacement roster_placement(World& w, const fmt::MasterShp& ships, const fm
 // (formats.md "Names" seg17:0x8e60) [BYTES seg9:0x5bee-0x5bfd seg9:0x5ca6-0x5cbb]. DGROUP:0x380c
 // holds at most 11 characters (INI ThePlayer, 12 bytes, shell.md "Player name"); the port stops
 // at the field's 13th byte [DESIGN]. Another ship's name (seg9:0x5c00-0x5ca4, its team's name
-// cut at " S" plus its index) is M5 (M4 s4 fixer B: save.md DIFFERENT 8).
+// cut at ' ' or a final 'S', plus its index) is roster_build.h roster_name (M5 s3).
 void roster_pilot_name(RosterRecord& r, const std::string& pilot);
 
 // seg14:0x1430(i) after its seg14:0x1b84 (the design): the per-placement resets and, for a ship
@@ -134,9 +134,12 @@ void roster_pilot_name(RosterRecord& r, const std::string& pilot);
 // sign-extended from +0x38 ... +0x3b, fuel = 40 x +0x1c (unsigned `mul`, raised to 2/3 of the
 // tank for a ship other than DGROUP:0x9646, capped at the tank with +0x1c rewritten, no refill),
 // the wings, +0x24, +0x0a, credit, resources, +0x82, the wave counters +0x77 ... +0x79 and ship
-// word +0x00, the relation words +0x62 + 2j. Without a record, seg14:0x1a5d-0x1b78 (computer
-// ships, M5). Writes no +0x18, +0xe0 or +0xe1 (claim 9). `shp` is the record seg14:0x1430's s
-// names. [BYTES seg14:0x14ad-0x1b78]
+// word +0x00, the relation words +0x62 + 2j, the relation memory +0xee / +0x72 + 2j from the
+// five-entry table and DGROUP:0x4eec. Without a record, seg14:0x1a5d-0x1b78 (computer ships,
+// the Terminator's +0x52 = 0x17 goal). The activity words +0x52 ... +0x58 of the Patrol class and
+// of a duel wave. Writes no +0x18, +0xe0 or +0xe1 (claim 9). `shp` is the record seg14:0x1430's s
+// names; the team word (seg14:0x14ca) and the design (seg14:0x1b84) come first (roster_build.h
+// ship_place). [BYTES seg14:0x14ad-0x1b78]
 void ship_from_roster(World& w, int i, const fmt::ShipRecord& shp);
 
 // seg14:0xd1a-0xd32: seg16:0x3784(i, 1) runs when the slot's fresh flag is set, DGROUP:0x91f8 =
@@ -202,12 +205,9 @@ void roster_ratings(World& w, const fmt::MasterShp& ships);
 
 // ---- M5: ships joining the roster
 
-// seg14:0xdd6(slot, shp, r0) (claim 36 as corrected, claim 37): with DGROUP:0x95b4 above
-// DGROUP:0x95b2 a record is added while DGROUP:0x931a <= 38, else the record 1 ... 39 with the
-// lowest signed +0x06 below 1000 that ships 0 ... slot - 1 do not hold is reused (none: a beep
-// and record 10), its index cleared from every directory list +0x1c0; the record is then
-// initialised (+0x06 = 15, +0x02 and +0x04 from rand()). Otherwise r0 is returned and the
-// known-ship path seg14:0x10d0 is [OPEN M5]. `beep` stands for MessageBeep(0).
+// seg14:0xdd6(slot, shp, r0) for one SHP record: roster_build.h roster_take with a host that
+// holds `shp` at `shp_index`, the caller's rand() and `beep` (MessageBeep(0)) and no team names
+// (the program's placement calls roster_take with its own host) (M5 s3).
 int roster_add(World& w, int slot, const fmt::ShipRecord& shp, int shp_index, int r0, shell::Rng& rng,
                const std::function<void()>& beep = {});
 

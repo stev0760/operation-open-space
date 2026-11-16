@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <string>
 
 #include "world/damage.h"
 #include "world/input.h"
@@ -113,6 +114,32 @@ void program_new_game_logo();
 // words, for the rescale's reload path [BYTES seg10:0x9fb3 seg10:0x9fbf-0x9fd7] (M4 s8 integrate).
 void program_icon_overlays();
 void program_icon_crack(int i);
+
+// ---- M5 s3 integrate: the computer pilots on the program's World
+// The HUD's calls the pilots (pilot_think.h PilotHost), the contact routines (collide.h
+// CollideHost) and the attitude change (relations.h AttitudeOut) make; src/hud/hooks.cpp fills
+// them, an empty slot does nothing (a visibility test reads 0, the marks -1).
+struct PilotLinks {
+    std::function<void(int ship, int pool, int rec)> set_target;  // seg3:0xf4
+    std::function<bool(int pool, int rec)> visible;              // seg3:0x0
+    std::function<void()> weapon_display;                        // seg11:0x2f8c
+    std::function<void()> manual_target;                         // DGROUP:0xa62 = 1
+    std::function<void()> info_paint;                            // PostMessage(DGROUP:0xa7c, WM_PAINT, 0, 0L)
+    // DGROUP:0x6e54 / 0x6e52: the left display's mark 0 (the player's target), which seg3:0xf4
+    // writes [BYTES seg3:0x122 seg3:0x128] and seg4:0x8626 compares [BYTES seg4:0x8b55-0x8b63].
+    std::function<void(std::int16_t& pool, std::int16_t& rec)> mark0;
+    // seg13:0x6890(i)'s display part: seg13:0x58dc(0, 2) when the left display's mark
+    // (DGROUP:0x6e18 / 0x6e16 + 0x1e·DGROUP:0xa76) is (ship pool, i) [BYTES seg13:0x68da-0x68f6];
+    // the IS_SMART row seg13:0x6450 and the right display seg13:0x50b0 need windows the port
+    // does not have (DGROUP:0x95fe, 0x95fc = 0).
+    std::function<void(int ship)> watch_ship;
+    // seg4:0x702e's text: LoadString(DGROUP:0x9212, id), the pilot name DGROUP:0x380c and the
+    // name +0x0a of MASTER.SHP record n (pilot_orders.h revenge_recall).
+    std::function<std::string(int id)> lang;
+    std::function<std::string()> pilot;
+    std::function<std::string(int n)> shp_name;
+};
+PilotLinks& pilot_links();
 
 // The flight role's state, for the other roles' hooks.
 WaveGlobals& flight_globals();

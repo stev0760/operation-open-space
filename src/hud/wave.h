@@ -28,6 +28,9 @@ void load_wave_resources();
 std::vector<std::pair<int, int>> wave_visible();
 // The player's design words the panels read (src/hud/hooks.cpp), re-read at each wave start.
 void refresh_player_design();
+// Inside seg14:0x0's per-ship loop on the program's RosterHost (wave_win32.cpp): the purchase
+// pass's seg14:0x11a8 is the host's own sheet build then (M5 s3 integrate).
+bool roster_building();
 }  // namespace is::hud
 namespace is::fmt {
 struct ShipRecord;

@@ -47,17 +47,14 @@ public:
     virtual std::string lang(int id) { return (void)id, std::string{}; }
     // W(w)+off, word DGROUP:0x2f54 + 0x50·w + off (the weapon table's owner); 0 by default.
     virtual std::int16_t weapon_word(int w, int off) { return (void)w, (void)off, 0; }
-    // The design word DGROUP:0x970a + 0xad·n, the team (ship_entry's design_kind).
+    // The design word DGROUP:0x970a + 0xad·n, the team (update.h CaptureForward forwards it to
+    // the flight host's design_kind; rating.h DesignRating::team holds it).
     virtual std::int16_t team(int design) { return (void)design, 0; }
-    // DGROUP:0x3854 + 2·team, the team table seg13:0x3008 divides by -100 [OPEN: its contents].
-    virtual std::int16_t team_3854(int team) { return (void)team, 0; }
-    // The computer pilots and the other movers' routines (M5, M6) [OPEN]; each names its address.
+    // seg13:0xb6f2, the crime report: stage 4's law (ruling R3); the program logs it once.
     virtual void seg13_b6f2(int ship, int code) { (void)ship, (void)code; }
-    virtual void seg13_2714(int a, int b, int c, int d, int e, int f) {
-        (void)a, (void)b, (void)c, (void)d, (void)e, (void)f;
-    }
-    virtual void seg4_5e8e(int a, int b, int c, int d) { (void)a, (void)b, (void)c, (void)d; }
     virtual std::int16_t seg4_8d3a() { return -1; }  // the race's leading ship [OPEN M6]
+    // seg13:0xadbe(ship, 3, 0x69), the rivals' call for Pirates (callin.h call_in_program); its AX
+    // word is not read here [BYTES seg13:0x32dd-0x32e9].
     virtual void seg13_adbe(int ship, int a, int b) { (void)ship, (void)a, (void)b; }
     // seg12:0xe5c(rec): the fuel tank's own dissolve step, ported by tank.h tank_dissolve
     // [BYTES seg12:0xe5c-0x129c]; the program's host (update.h CaptureForward) reaches it through

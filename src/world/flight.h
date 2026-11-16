@@ -64,10 +64,15 @@ std::int16_t direction16(std::int16_t num, std::int16_t den);
 // Names follow world.md and globals.md where they give one; the others are named by address.
 // [DESIGN] Until the wave's own globals (world.h) carry them, this struct is their home; the
 // hooks keep one instance per wave.
-struct BurstEntry {   // DGROUP:0x5b2c + 0x16 k, 40 entries; only the words the OverThruster
-    std::int16_t w0 = 0;  // resets are kept [OPEN] (world.md Open questions "Thrust table")
-    std::int16_t w2 = 0;
-    std::int16_t w8 = 0;
+// One particle of the OverThruster's burst, DGROUP:0x5b28 + 0x16·(4n + k): ten groups n of four
+// particles k (group stride 0x58) [BYTES seg7:0x3790 seg7:0x383d seg8:0x855-0x897].
+struct BurstEntry {
+    std::int16_t sx = 0, sy = 0;  // +0x00/+0x02 the screen point (seg8:0x83e)
+    std::int16_t ex = 0, ey = 0;  // +0x04/+0x06 the point to erase; -100 at the OverThruster
+    std::int16_t lx = 0, ly = 0;  // +0x08/+0x0a the last screen point
+    std::int16_t age = 0;         // +0x0c
+    std::int16_t vx = 0, vy = 0;  // +0x0e/+0x10 the world step
+    std::int16_t x = 0, y = 0;    // +0x12/+0x14 the world position
 };
 
 struct WaveGlobals {
@@ -114,10 +119,18 @@ struct WaveGlobals {
     std::int16_t burst_count = 50;   // DGROUP:0x9510, the particle burst's step
     std::int16_t burst_pool = 0;     // DGROUP:0x9512
     std::int16_t burst_rec = 0;      // DGROUP:0x9514
-    std::array<BurstEntry, 40> burst{};  // DGROUP:0x5b2c
+    std::array<BurstEntry, 40> burst{};  // DGROUP:0x5b28
     std::array<std::int16_t, 8> body_anim{};  // DGROUP:0x1c72 + 2i, the body-thrust counter
     std::uint32_t game_frames = 0;   // DGROUP:0x1e68, wave frames (the HUD clock)
     std::uint32_t frames = 0;        // DGROUP:0x5a8, wave frames
+};
+
+// A special place's ring as the computer speed cap reads it (world.h SpecialPlace): the radius
+// word +0x4 (DGROUP:0x4f30 + 0x10·k) and the centre +0xa / +0xc (the dword DGROUP:0x4f36 + 0x10·k),
+// in world units [BYTES seg11:0x5daa seg11:0x5db9].
+struct RingPlace {
+    std::int16_t radius = 0;
+    std::int16_t x = 0, y = 0;
 };
 
 // --- Calls out of the flight model -----------------------------------------------------------
@@ -131,8 +144,15 @@ public:
     virtual void flame_tail(int on, int ship) { (void)on, (void)ship; }
     // seg10:0x754a(id, pool, rec, arg): a sound (M7's engine; not wired in this stage).
     virtual void sound(int id, int pool, int rec, int arg) { (void)id, (void)pool, (void)rec, (void)arg; }
-    // The design record word +0x18 (DGROUP:0x970a + 0xad n) [OPEN].
+    // The design record word +0x38 (DGROUP:0x970a + 0xad n), the team: seg11:0x5ce2 compares it
+    // with 5 (SPEED DEMONS) for the computer speed cap, seg16:0x8e4 and seg7:0x1180 with 7
+    // [BYTES seg11:0x5ce2].
     virtual std::int16_t design_kind(int design) { return (void)design, 0; }
+    // DGROUP:0x9344, the special places in use, and place k (world.h World::places, w9344): the
+    // computer speed cap's ring scaling reads them at Detail > 1 [BYTES seg11:0x5d7e
+    // seg11:0x5daa seg11:0x5db9]. The defaults: none.
+    virtual std::int16_t special_places() { return 0; }
+    virtual RingPlace special_place(int k) { return (void)k, RingPlace{}; }
     // seg13:0x59e8(ship, 0x0e) [OPEN].
     virtual bool seg13_59e8(int ship) { return (void)ship, false; }
     // Command mode's "drifting" line (seg11:0x6550-0x65a2) [OPEN].
@@ -143,10 +163,11 @@ public:
     virtual void seg12_274a(int pool, int ship) { (void)pool, (void)ship; }
     virtual void seg4_277a() {}
     virtual void seg4_144c(int ship, int arg) { (void)ship, (void)arg; }
+    // seg4:0xbde(i), the computer ship's steer (pilot_steer.h steer), and seg4:0x78(i), its think
+    // (track THINK); seg13:0x0 calls them for every ship but the Action-mode player.
     virtual void seg4_bde(int ship) { (void)ship; }
     virtual void seg4_78(int ship) { (void)ship; }
     virtual void seg13_tail(int ship) { (void)ship; }   // seg13:0x6e5-0xcf9: the rest of the ship step
-    virtual void seg11_ai(int ship) { (void)ship; }     // seg11:0x5cd7-0x5f11, 0x62fc-0x63a8
     virtual void seg13_head_tail(int ship) { (void)ship; }  // seg13:0x3e3-0x533 [OPEN]
     // seg8:0x1e32(pool, rec): an owned object follows its owner (tether.h tether_follow).
     virtual void follow_owner(int pool, int rec) { (void)pool, (void)rec; }
@@ -202,7 +223,26 @@ void spin(FlightCtx& c, int ship);
 // seg11:0x592a: the player's turn keys [BYTES seg11:0x592a-0x5ab4].
 void turn_input(FlightCtx& c);
 // seg11:0x5ab6(mode, ship): go flag, brake, thrust, drift and drag [BYTES seg11:0x5ab6-0x63b0].
+// Every path but the early exits ends at the escort slow-down seg11:0x62ed (after the brake, the
+// thrust, the tumble's skip of the drift and the drift) [BYTES seg11:0x5faf seg11:0x5fe6
+// seg11:0x601e seg11:0x62ed].
 void thrust_step(FlightCtx& c, std::int16_t mode, int ship);
+// seg11:0x5cd7-0x5f11, the computer speed cap, for a ship that is not the Action-mode player
+// while the flag [bp-0x1e] holds (thrust_step decides that): +0xda = 120 for team 5 (SPEED
+// DEMONS), else 90; at Detail > 1 the first special place k < DGROUP:0x9344 within its radius
+// sar 3 + 100 cells scales it once, × 7/3 within ± 40 cells of the ring, else × 2/3; when |vx| +
+// |vy| (seg9:0x88ba each) exceeds it, × 5/4 (DGROUP:0x94e2 < 30), × 4/5 (70 < … < 100) or × 3/4
+// (>= 100), then × 3/4, × 4/5 at Size 2 or × 5/4 at Size 0, × 35 / (turn + 10) for a turn word
+// above 30; then with sp = seg8:0x35d0(vx, vy) a cap below sp makes `mode` 5 (the brake), unless
+// the heading is seg8:0x19b0(vx, vy) and cap > 3·sp/2, which sets `no_thrust` (reachable only
+// for sp >= 10923, where the 16-bit product wraps) (s3-tick-verify.md claims 41-43 and the
+// Omission on the ring scaling) [BYTES seg11:0x5cd7-0x5f11].
+void computer_cap(FlightCtx& c, int ship, std::int16_t& mode, bool& no_thrust);
+// seg11:0x62ed-0x63a4, the escort slow-down: for a ship that is not the Action-mode player with
+// +0x3a = 2, +0x38 = 3 and +0x52 0 or 2, within 400 cells of its goal object (seg8:0x285a),
+// vx = 3·vx / 4 and vy = 3·vy / 4, 16-bit, toward zero (s3-tick-verify.md claim 44)
+// [BYTES seg11:0x62ed-0x63a4].
+void escort_slowdown(FlightCtx& c, int ship);
 // seg11:0x63b4(mode, ship): the thrust [BYTES seg11:0x63b4-0x6871].
 void thrust(FlightCtx& c, std::int16_t mode, int ship);
 // seg11:0x6874(ship): the brake [BYTES seg11:0x6874-0x6aa6].

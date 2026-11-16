@@ -156,8 +156,15 @@ struct CellPlan {
     };
     SubCell subs[4];
     int frag_sx = 0, frag_size = 0;
-    // A pool other than 0 and 7 [OPEN: M4/M5].
+    // A pool other than 0, 7 and the ship pool [OPEN: M4/M5].
     bool other_pool = false;
+    // The ship pool (case 14 of seg13:0x5dac): `picture` from image slot +0x50 + 0x28
+    // (DGROUP:0x39e8 + 2·slot); for a cloaked ship (byte +0xe8 != 0, [bp-0x14] = 1) the cell is
+    // then PatBlt with the checkerboard brush DGROUP:0x5eaa and ROP 0x00A000C9 (D AND P)
+    // [BYTES seg13:0x5cdd-0x5cfa seg13:0x60f7-0x612c] (M5 s3 fixer, comparison D4).
+    bool ship = false;
+    bool cloak = false;
+    static constexpr std::uint32_t kCloakRop = 0x00A000C9;  // [BYTES seg13:0x611b]
 };
 
 struct CellInputs {
@@ -182,6 +189,12 @@ struct CellInputs {
         int index = -1, state = 1, parent = -1;
     };
     Fragment frags[4];
+    // The ship pool: ship word +0x50 (the sprite slot; image slot +0x50 + 0x28), byte +0xe8 (the
+    // cloak) and the object word +0x28 (the source cell column when DGROUP:0x131c != 0) [BYTES
+    // seg13:0x5c73-0x5c90 seg13:0x5cdd-0x5cf5].
+    int ship_slot = 0;
+    int cloaked = 0;
+    int obj_w28 = 0;
 };
 
 // seg13:0x5a6a(hdc, x, y, pool, rec, mark, flag, scale): `glint_counter` is the mark's +0x14

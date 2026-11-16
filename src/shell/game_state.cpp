@@ -64,6 +64,7 @@ void GameState::enter_game_over() {
         state_ = kGameOver;
         run(hooks_.enter[kGameOver]);
     }
+    run(hooks_.game_over);  // [BYTES seg9:0xdaf-0xdca], on both paths (M5 s3 integrate)
     suspended_ = true;
 }
 

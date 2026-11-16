@@ -33,6 +33,11 @@ struct DesignWordSet {
     // and seg10:0x1620 (r = +0x02) [BYTES seg14:0xc42-0xc54 seg10:0x147b seg10:0x163b]
     // (formats.md MASTER.BOD +0x19) (M4 s5 fixer).
     std::int16_t w00 = 0, w02 = 0;
+    // +0x04 (DGROUP:0x96d6): -sext(BOD +0x19), the flame anchor, stored by seg14:0x1b84 at
+    // seg14:0x1c7f-0x1c88, then "w04 < 0 -> 4 - w04 - side / 2" at seg14:0xc58-0xc68 (the
+    // placement), seg10:0xa01d (the rescale) and seg16:0x60ef (s3-owed-verify.md, Size-core)
+    // [BYTES seg14:0x1c7f-0x1c88 seg14:0xc58-0xc68] (M5 s3 ROSTER: roster_build.h).
+    std::int16_t w04 = 0;
 };
 
 // Design n's words; a zero set outside 0 ... 7 [DESIGN].

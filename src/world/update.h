@@ -112,7 +112,6 @@ public:
     template <typename F>
     bool with_shots(F f);
     virtual void effect(int k) { (void)k; }            // seg8:0x3fbe
-    virtual void burst() {}                            // seg7:0x375a, the particle burst
     // ---- the frame
     // ISPACE.DLL ordinal 41 as seg11:0x72b2 calls it: fills far DGROUP:0x1e4c and returns the
     // read's result, 0xa7 (JOYERR_UNPLUGGED) for no stick [BYTES seg11:0x72c9 seg11:0x72ce].
@@ -276,10 +275,9 @@ private:
         std::int16_t weapon_word(int w, int off) override { return u->weapon_word(w, off); }
         std::int16_t team(int design) override { return u->design_kind(design); }
         void seg13_b6f2(int ship, int code) override { u->collide_host().seg13_b6f2(ship, code); }
-        void seg13_2714(int a, int b, int c, int d, int e, int f) override {
-            u->collide_host().seg13_2714(a, b, c, d, e, f);
-        }
-        void seg4_5e8e(int a, int b, int c, int d) override { u->collide_host().seg4_5e8e(a, b, c, d); }
+        // The rivals' call for Pirates seg13:0xadbe(ship, 3, 0x69) (callin.h through the
+        // collision host) (M5 s3 integrate, CONTACT binding 4).
+        void seg13_adbe(int ship, int a, int b) override { (void)u->collide_host().seg13_adbe(ship, a, b); }
         // The touch's first dissolve step of a tank (seg13:0x1cd8) and of a pod or pool-6 record
         // (seg13:0x1f59) (M4 s3 FUEL).
         void seg12_e5c(int rec) override { u->tank_dissolve(rec); }
@@ -374,6 +372,12 @@ void move_pool8(UpdateCtx& c, World& w);
 // index, the moving gate, the posts through seg8:0xb76 from slot 1 (heat <= 2, SRCCOPY) or
 // slot 2 under DGROUP:0x3b74 (MERGECOPY), the beam (r1 only: the erase of the old position,
 // then PATCOPY with DGROUP:0x3b88[index]), the OUT sign flash, the collisions and the passage.
+// seg7:0x375a: the OverThruster's particle burst DGROUP:0x5b28 (flight.h BurstEntry), run at the
+// end of every wave frame's pass while DGROUP:0x9510 < 50: groups of four particles start at the
+// burst's ship (DGROUP:0x9512 / 0x9514) one per call, fly with turning steps for (Detail + 7)·4
+// calls and are PATCOPY'd 2 x 2 with the shot brushes DGROUP:0x3b4c [BYTES seg7:0x375a-0x3a41].
+void particle_burst(UpdateCtx& c);
+
 void move_gate(UpdateCtx& c, World& w, int p);
 // seg12:0x1f7a(p) [BYTES seg12:0x1f7a-0x2285]: the first listed object of `state` 0 whose square
 // (x, y, x + extent, y + extent) meets gate p's beam rectangle, not pool 7, mass not 0xdac, a

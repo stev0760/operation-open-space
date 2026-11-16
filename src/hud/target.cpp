@@ -203,6 +203,26 @@ CellPlan plan_cell(const CellInputs& in, int& glint_counter) {
         c.picture = true;
         return c;
     }
+    if (in.pool == in.ship_pool) {
+        // Case 14 of seg13:0x5dac [BYTES seg13:0x5cdd-0x5cfa]: slot +0x50 + 0x28, the cloak flag
+        // [bp-0x14]. The source x [bp-0x18] is the gap for the ship pool while DGROUP:0x131c = 0,
+        // else +0x28·(gap + size) + gap [BYTES seg13:0x5c5f-0x5c90]; y is +0x12 [BYTES
+        // seg13:0x5c58]. seg13:0x371c(14, rec) = 0 and seg13:0x5f1e-0x6092 lead every state to the
+        // draw at seg13:0x6096 for a pool other than 0.
+        c.ship = true;
+        c.cloak = in.cloaked != 0;
+        c.slot = w16(in.ship_slot + 0x28);
+        c.sx = in.dg_131c == 0 ? gap : w16(w16(in.obj_w28 * w16(gap + size)) + gap);
+        c.sy = in.obj.src_y;
+        c.sw = c.sh = size;
+        const int off = half(0x2b - a);  // seg13:0x6096-0x60e1
+        a = a >> s;
+        c.dx = w16(off + in.x) >> s;
+        c.dy = w16(off + in.y) >> s;
+        c.dw = c.dh = a;
+        c.picture = true;
+        return c;
+    }
     if (in.pool != 0) {
         c.other_pool = true;
         return c;

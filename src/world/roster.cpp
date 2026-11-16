@@ -11,6 +11,7 @@
 #include "shell/rng.h"
 #include "world/collide.h"
 #include "world/player_sheet.h"
+#include "world/roster_build.h"
 
 namespace is::world {
 
@@ -238,7 +239,9 @@ MainShipPick pick_main_ship(World& w, const fmt::MasterShp& ships, const fmt::Ma
             }
         }
     } else {
-        todo("seg14:0x31d0(0, buffer): the demo's ship name", "seg14:0x2427");
+        // seg14:0x31d0(0, buffer): the demo's random ship (roster_build.h demo_ship) (M5 s3)
+        // [BYTES seg14:0x2427-0x242f].
+        demo_ship(w, ships, bodies, rng, 0, p.name);
     }
     // The selection pass for kind 0, slot 0 = DGROUP:0x9646 (claims 30, 31 within their scope)
     // [BYTES seg14:0x2441-0x2520 seg14:0x3173 seg14:0x317c].
@@ -336,8 +339,12 @@ RosterPlacement roster_placement(World& w, const fmt::MasterShp& ships, const fm
         // the port replaces the block [DESIGN] [BYTES seg14:0x252-0x26c]. DGROUP:0x931a = 0.
         w.roster.assign(1, RosterRecord{});
         if (w.player_game != 0 && w.kind != 6 && w.kind != 7) w.opponents = 0;  // DGROUP:0x9338 [BYTES seg14:0x28d-0x2a2]
-        if (out.pick.index >= 0)
-            w.roster[0] = fresh_record(w, ships.records[static_cast<std::size_t>(out.pick.index)], out.pick.index);
+        if (out.pick.index >= 0) {
+            const fmt::ShipRecord& shp = ships.records[static_cast<std::size_t>(out.pick.index)];
+            w.roster[0] = fresh_record(w, shp, out.pick.index);
+            // DGROUP:0x970a (design 0's team word) = cbw(SHP +0x03) (M5 s3) [BYTES seg14:0x3e4-0x3e9].
+            set_design_team(w, 0, s8(shp.team));
+        }
         w.ba14d.fill(0);  // [BYTES seg14:0x3fc-0x410]
         w.ba157.fill(0);
         roster_pilot_name(w.roster[0], pilot);  // seg9:0x5be0(DGROUP:0x9646, 0) [BYTES seg14:0x418] (M4 s4 fixer B)
@@ -361,8 +368,9 @@ RosterPlacement roster_placement(World& w, const fmt::MasterShp& ships, const fm
         } else {
             s0.design_index = 0;     // the first wave after a restore [BYTES seg14:0x466]
         }
-        // The design team word DGROUP:0x970a + 0xad·n = cbw(roster +0x64): the port has no
-        // design table; seg14:0x1430 writes the same word [BYTES seg14:0x46c-0x47e].
+        // The design team word DGROUP:0x970a + 0xad·(ship 0 +0x4e) = cbw(roster +0x64) of
+        // DGROUP:0x931c (M5 s3) [BYTES seg14:0x46c-0x47e].
+        set_design_team(w, s0.design_index, w.roster[static_cast<std::size_t>(w.player_roster)].team);
     }
     // seg14:0x1430's s = roster +0x00, with `cmp; jge` against the SHP count - 1: the record and s
     // become 0 [BYTES seg14:0x1457 seg14:0x1471-0x148e].
@@ -432,9 +440,26 @@ void ship_from_roster(World& w, int i, const fmt::ShipRecord& shp) {
     S.type = 0;       // +0x10
     S.thrusting = 0;  // +0x02
     S.be8 = 0;        // +0xe8 `cloaked`
-    // +0x52 = 7 for the player with PlayMode != 0, else 0 [BYTES seg14:0x162e seg14:0x163b]; a
-    // team-7 design with +0x5e > 1 and the kind-7 block are M5 [OPEN M5] [BYTES seg14:0x1657-0x16bd].
+    // +0x52 = 7 for the player with PlayMode != 0, else 0 [BYTES seg14:0x162e seg14:0x163b].
     S.w52 = (i == w.player && w.play_mode != 0) ? 7 : 0;
+    // A team-7 design with signed +0x5e > 1 (the Patrol class): +0x52 = 0x14, +0x54 = DGROUP:0x9324,
+    // +0x56 = DGROUP:0x9646 (M5 s3) [BYTES seg14:0x163f-0x1667].
+    if (design_team(w, S.design_index) == 7 && sbyte_at(S, 0x5e) > 1) {
+        S.w52 = 0x14;
+        S.w54 = w.roles.ships;
+        S.w56 = w.player;
+    }
+    // A kind-7 wave (the duel): every ship but the player of a player game gets dword +0x52 =
+    // 0x000e0004, +0x56 = the player (1 for the player itself), seg3:0xf4(i, 14, that) and +0x58 =
+    // i [BYTES seg14:0x166b-0x16bd] (M6: the retarget is a logged stub, ruling R3).
+    if (w.kind == 7 && !(i == w.player && w.player_game != 0)) {
+        S.w52 = 4;
+        S.w54 = 14;
+        S.w56 = i == w.player ? std::int16_t{1} : w.player;
+        static bool once = false;
+        guard_todo(once, "seg14:0x16ae seg3:0xf4(i, 14, ...) in a duel wave (M6)", "seg14:0x16ae");
+        S.w58 = static_cast<std::int16_t>(i);
+    }
 
     if (!r) {
         // seg14:0x1a5d-0x1b78, the computer ships' path (M5): what the analysis read
@@ -444,8 +469,21 @@ void ship_from_roster(World& w, int i, const fmt::ShipRecord& shp) {
         S.weapon_count[1] = 1;                     // [BYTES seg14:0x1a6c]
         S.weapon[2] = shp.weapon;                  // [BYTES seg14:0x1a81]
         S.weapon_count[2] = 20;                    // [BYTES seg14:0x1a85]
-        if (sbyte_at(S, 0x5e) == 0)
-            todo("the no-roster ship's +0x52 = 0x17 target block (seg14:0x4520)", "seg14:0x1a91");  // [OPEN M5]
+        // The Terminator class (+0x5e = 0): +0x52 = 0x17, +0x54 = DGROUP:0x9324, +0x56 = the ship
+        // holding the warrant's roster index (seg14:0x4520(DGROUP:0x9346, DGROUP:0x9316)) with
+        // byte +0xcd its low byte, both the player when that byte is negative, then +0xed = 1
+        // (M5 s3) [BYTES seg14:0x1a8a-0x1ad0].
+        if (sbyte_at(S, 0x5e) == 0) {
+            S.w52 = 0x17;
+            S.w54 = w.roles.ships;
+            S.w56 = static_cast<std::int16_t>(ship_with_roster(w, w.w9346, w.last_ship));
+            set_byte_at(S, 0xcd, lo8(S.w56));
+            if (sbyte_at(S, 0xcd) < 0) {
+                S.w56 = w.player;
+                set_byte_at(S, 0xcd, lo8(w.player));
+            }
+            set_byte_at(S, 0xed, 1);
+        }
         for (int k = 0; k < 4; ++k) S.roster_word(k) = 100;  // [BYTES seg14:0x1ae4]
         for (int k = 0; k < 5; ++k) {                        // [BYTES seg14:0x1b00 seg14:0x1b0e]
             S.bee[static_cast<std::size_t>(k)] = 0;
@@ -479,13 +517,40 @@ void ship_from_roster(World& w, int i, const fmt::ShipRecord& shp) {
     // The systems, sign-extended (claim 3) [BYTES seg14:0x1775-0x179b].
     for (int k = 0; k < 4; ++k) S.roster_word(k) = r->systems[static_cast<std::size_t>(k)];
     // The relation tables: cleared for k = 0 ... DGROUP:0x9316, then filled from +0x08/+0x12/
-    // +0x17 and DGROUP:0x4eec's rivals [BYTES seg14:0x17ae seg14:0x17bc] [OPEN M5: the fill
-    // seg14:0x180f-0x18b0].
+    // +0x17 and DGROUP:0x4eec's rivals [BYTES seg14:0x17ae seg14:0x17bc].
     for (int k = 0; k <= w.last_ship && k < 8; ++k) {
         S.bee[static_cast<std::size_t>(k)] = 0;
         S.w72[static_cast<std::size_t>(k)] = 0;
     }
-    if (w.last_ship > 0) todo("seg14:0x1430's relation fill from roster +0x08/+0x12/+0x17", "seg14:0x180f");
+    // The five-entry memory back onto the ships present: for a = 0 ... 4 and every ship j != i
+    // with +0xd6 = sext(+0x17 + a) and word +0x08 + 2a > 1, +0xee + j = +0x12 + a and +0x72 + 2j
+    // = that word; then the killers of the team's members DGROUP:0x4eec + 2·(3·team + k), k < 3,
+    // give relation 4 with +15 while the word is below 15 (M5 s3) [BYTES seg14:0x17cc-0x18b5].
+    for (int a = 0; a < 5; ++a)
+        for (int j = 0; j <= w.last_ship && j < kShipCount; ++j) {
+            const auto aa = static_cast<std::size_t>(a);
+            if (s8(r->rel_r[aa]) != w.ship(j).roster_index || !(r->rel_w[aa] > 1) || j == i) continue;
+            S.bee[static_cast<std::size_t>(j)] = r->rel_a[aa];
+            S.w72[static_cast<std::size_t>(j)] = r->rel_w[aa];
+        }
+    {
+        const std::int16_t team = design_team(w, S.design_index);
+        for (int j = 0; j <= w.last_ship && j < kShipCount; ++j)
+            for (int k = 0; k < 3; ++k) {
+                const int x = 3 * team + k;
+                if (x < 0 || x >= static_cast<int>(w.w4eec.size())) {
+                    static bool once = false;
+                    guard_todo(once, "DGROUP:0x4eec + 2·(3·team + k) outside 8 x 3 reads -1", "seg14:0x1884");
+                    continue;
+                }
+                const std::int16_t rr = w.ship(j).roster_index;
+                if (w.w4eec[static_cast<std::size_t>(x)] != rr || rr < 0) continue;
+                std::int16_t& wj = S.w72[static_cast<std::size_t>(j)];
+                if (!(wj < 15)) continue;
+                S.bee[static_cast<std::size_t>(j)] = 4;
+                wj = add16(wj, 15);
+            }
+    }
     // Fuel (claim 4): 40 x roster +0x1c as an unsigned 8-bit `mul` (0 ... 10200); a ship other
     // than DGROUP:0x9646 gets at least (2 tank) / 3; then the cap at the tank, which rewrites
     // +0x1c. No refill [BYTES seg14:0x18c9-0x1931].
@@ -603,7 +668,7 @@ void roster_from_ship(World& w, int i, RosterUpdate& u) {
         r.count[static_cast<std::size_t>(k)] = S.weapon_count[static_cast<std::size_t>(k)];
     }
     r.slots = S.slots_cb();
-    todo("seg14:0x421c(i): the roster table +0x08/+0x12/+0x17", "seg9:0x2c5a");  // [OPEN]
+    relation_memory(w, i);  // seg14:0x421c(i) (roster_build.h, M5 s3) [BYTES seg9:0x2c5a]
     // Claim 18 [BYTES seg9:0x2c60-0x2cdb].
     r.w06 = S.w82;
     r.fuel40 = lo8(idiv16(S.fuel, 40));  // `cwd; idiv`, every time
@@ -686,70 +751,45 @@ void roster_ratings(World& w, const fmt::MasterShp& ships) {
 
 // ---------------------------------------------------------------- M5
 
+namespace {
+// roster_add's host: the one SHP record at its index, the caller's rand() and beep, no names
+// (the team names and the pilot are the program's) [DESIGN].
+class AddHost : public RosterHost {
+public:
+    AddHost(const fmt::ShipRecord& shp, int index, shell::Rng& rng, const std::function<void()>& beep)
+        : rng_(rng), beep_(beep) {
+        if (index >= 0) ships_.records.resize(static_cast<std::size_t>(index) + 1);
+        if (index >= 0) ships_.records[static_cast<std::size_t>(index)] = shp;
+    }
+    const fmt::MasterShp& ships() override { return ships_; }
+    const fmt::MasterBod& bodies() override { return bodies_; }
+    shell::Rng& rng() override { return rng_; }
+    std::string main_ship() override { return {}; }
+    std::string pilot() override { return {}; }
+    std::string team_name(int) override { return {}; }
+    void beep() override {
+        if (beep_) beep_();
+    }
+    SlotWords slot_words(int) override { return {}; }
+    void set_slot_words(int, const SlotWords&) override {}
+    void slot_free(int) override {}
+    void design_fill(World&, int, int) override {}
+    void purchases(World&, int) override {}
+    void ship_tail(World&, int) override {}
+    void todo(const std::string& what, const char* address) override { is::world::todo(what, address); }
+
+private:
+    fmt::MasterShp ships_;
+    fmt::MasterBod bodies_;
+    shell::Rng& rng_;
+    const std::function<void()>& beep_;
+};
+}  // namespace
+
 int roster_add(World& w, int slot, const fmt::ShipRecord& shp, int shp_index, int r0, shell::Rng& rng,
                const std::function<void()>& beep) {
-    if (!(w.w95b4 > w.w95b2)) {  // [BYTES seg14:0xde5-0xdec]
-        todo("seg14:0x10d0: a known ship's record into the directory list", "seg14:0x10d0");  // [OPEN M5]
-        return r0;
-    }
-    int r = -1;
-    if (roster_last(w) <= 38) {
-        // inc DGROUP:0x931a; GlobalReAlloc(h, (931a + 1)·0x7c, 0x42): the new record is zero
-        // [BYTES seg14:0xecd seg14:0xee1-0xeeb].
-        w.roster.push_back(RosterRecord{});
-        r = roster_last(w);
-    } else {
-        // The lowest signed +0x06 below 1000 among records 1 ... 39 that ships 0 ... slot - 1 do
-        // not hold [BYTES seg14:0xdf9-0xe67].
-        std::int16_t best = 1000;
-        for (int k = 1; k <= kRosterMaxIndex && k <= roster_last(w); ++k) {
-            bool held = false;
-            for (int j = 0; j < slot && j < kShipCount; ++j) held = held || w.ship(j).roster_index == k;
-            if (!held && w.roster[static_cast<std::size_t>(k)].w06 < best) {
-                best = w.roster[static_cast<std::size_t>(k)].w06;
-                r = k;
-            }
-        }
-        if (r < 0) {  // [BYTES seg14:0xe69-0xe76]
-            if (beep) beep();  // MessageBeep(0)
-            r = 10;
-        }
-        // Every directory list byte naming r, records 0 ... DGROUP:0x94a4 - 1, back to 0xff
-        // [BYTES seg14:0xe7b-0xec6].
-        for (DirRecord& d : w.records)
-            for (int j = 0; j < 8; ++j)
-                if (d.byte(0x1c0 + static_cast<std::size_t>(j)) == lo8(r)) d.set_byte(0x1c0 + static_cast<std::size_t>(j), 0xff);
-    }
-    // The initialisation from seg14:0xf03, for a new or a reused record (a reused one keeps its
-    // other bytes) [BYTES seg14:0xf10-0x10c5].
-    RosterRecord& n = w.roster[static_cast<std::size_t>(r)];
-    const RosterRecord f = fresh_record(w, shp, shp_index);
-    n.shp = f.shp;
-    n.relation.fill(0);
-    n.systems.fill(100);
-    n.rel_a = f.rel_a;  // the table cleared as in the fresh path [OPEN: the 0xff of +0x17]
-    n.rel_w = f.rel_w;
-    n.rel_r = f.rel_r;
-    n.slots = f.slots;
-    n.weapon[1] = f.weapon[1];
-    n.count[1] = f.count[1];
-    n.w06 = 15;  // [BYTES seg14:0x101b]
-    n.wing0 = n.wing1 = 1;
-    n.barrels = 1;
-    n.b75 = 1;
-    n.fuel40 = shp.fuel_tank;
-    // rand() % ((DGROUP:0x9334 + 1) 10) + 10, then rand() % ((DGROUP:0x9334 + 1) 50) + 150,
-    // signed `idiv` [BYTES seg14:0x106c-0x1083 seg14:0x1087-0x109f] (claim 37).
-    const std::int16_t m2 = mul16(add16(w.score_level, 1), 10);
-    const std::int16_t r2 = static_cast<std::int16_t>(rng.rand());
-    n.credit10 = add16(m2 == 0 ? std::int16_t{0} : static_cast<std::int16_t>(r2 % m2), 10);
-    const std::int16_t m4 = mul16(add16(w.score_level, 1), 50);
-    const std::int16_t r4 = static_cast<std::int16_t>(rng.rand());
-    n.resources = add16(m4 == 0 ? std::int16_t{0} : static_cast<std::int16_t>(r4 % m4), 150);
-    n.met = 0;  // [BYTES seg14:0x10a7]
-    n.team = f.team;
-    todo("seg9:0x5be0(slot, r): the roster name +0x65", "seg14:0x10c5");
-    return r;
+    AddHost h(shp, shp_index, rng, beep);
+    return roster_take(w, h, slot, shp_index, r0);
 }
 
 }  // namespace is::world
