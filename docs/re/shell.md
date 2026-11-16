@@ -346,7 +346,7 @@ DGROUP:0x90f4 is the screen state; its writers are listed in [globals.md](global
   - Phase 0 sets DGROUP:0x952c = 0 when DGROUP:0x93a6 = 0 and 1 otherwise. The descent's first call sets it again: seg15:0x374c(1) calls seg16:0x1f78, which calls seg16:0x27ea, and seg16:0x27ea stores seg16:0x619e()'s result in DGROUP:0x952c when DGROUP:0x93a6 = 0. seg16:0x619e returns 1 after it allocates the left monitor's record and sets DGROUP:0x958a = 1, and 0 when DGROUP:0x93a6 ≠ 0 or an allocation fails, so in every ordinary visit DGROUP:0x952c is 1 from the descent's first call on. seg16:0x27d6 only reads it: when it is non-zero, the end of the screen redraw seg16:0x2144 calls seg16:0x64fa, the left monitor. seg16:0x631c clears it at phase 64. So ESC and the message forwarding to seg16:0x614c do nothing until the descent starts ([core.md](core.md#the-visit-state-6-seg160xcfe), Messages). [BYTES seg16:0xd7c-0xd90 seg16:0x63af seg11:0x789a seg15:0x3788 seg15:0x3791 seg15:0x3859 seg16:0x2052 seg16:0x2056 seg16:0x2e26-0x2e31 seg16:0x61ac-0x61b3 seg16:0x61c8 seg16:0x61e8 seg16:0x630d-0x6310 seg16:0x27d6-0x27de seg16:0x637d]
 
 **State 8, Hall of Justice.**
-- seg16:0x6928 runs 11 phases on DGROUP:0x929c. It starts with the landing scene seg15:0x302e, then seg16:0x6afe's text (908 "THIS IS THE HALL OF JUSTICE, %s.", 909 arrest count, 914 "YOU ARE CHARGED WITH ", 915 "... FOUND GUILTY AS CHARGED", 725 fine, 1158 credit, 916 "STAY OUT OF TROUBLE"), the launch scene seg15:0x10be and a black screen. No digest shows it. [BYTES seg16:0x697f seg16:0x6994 seg16:0x6ba2 seg16:0x6bd9 seg16:0x6d60 seg16:0x6e8e seg16:0x700a seg16:0x709a seg16:0x70ef seg16:0x6a4f seg16:0x6a6b] [BYTES ENG_LANG.DLL STRING 57] ids 908–911 [BYTES ENG_LANG.DLL STRING 58] ids 914–916 [BYTES ENG_LANG.DLL STRING 46] id 725
+- seg16:0x6928 runs 11 phases on DGROUP:0x929c. It starts with the landing scene seg15:0x302e, then seg16:0x6afe's text (908 "THIS IS THE HALL OF JUSTICE, %s.", 909 arrest count, 914 "YOU ARE CHARGED WITH ", 915 "... FOUND GUILTY AS CHARGED", 725 fine, 1158 credit, 916 "STAY OUT OF TROUBLE"), the launch scene seg15:0x10be and a black screen. The phases, the two scenes (110 and 115), the text, the fine and the exit are in [law.md](law.md) ("The Hall of Justice"); [ORACLE ships-0003] and [ORACLE ships-0004] show it. [BYTES seg16:0x697f seg16:0x6994 seg16:0x6ba2 seg16:0x6bd9 seg16:0x6d60 seg16:0x6e8e seg16:0x700a seg16:0x709a seg16:0x70ef seg16:0x6a4f seg16:0x6a6b] [BYTES ENG_LANG.DLL STRING 57] ids 908–911 [BYTES ENG_LANG.DLL STRING 58] ids 914–916 [BYTES ENG_LANG.DLL STRING 46] id 725
 - State 8 is entered at seg7:0x659 (DGROUP:0x1e80 due, DGROUP:0x95bc = 0, DGROUP:0x93a4 ≠ 0) and seg9:0x6c62 (in seg9:0x6bc2, DGROUP:0x93a4 ≠ 0), both with DGROUP:0x929c = 0. DGROUP:0x93a4 = 1 is written only at seg12:0x2472 (with DGROUP:0x1e80 = DGROUP:0x1e50 + 1000) and seg12:0x24b1, both when the roster word DGROUP:0x970a + 0xad·n of the ship involved is 7. It is cleared at seg9:0x6111 and seg16:0x6acb. Phase 10 holds 2000 ms in a busy loop, then calls seg9:0x6cc4(1) (state 2) when DGROUP:0x95bc ≠ 0, or sets state 1 and clears DGROUP:0x93a4. State 8 has no input handler. [BYTES seg7:0x652 seg7:0x659 seg7:0x65f seg9:0x6c5b seg9:0x6c62 seg9:0x6c6a seg12:0x2410 seg12:0x246b seg12:0x2472 seg12:0x24aa seg12:0x24b1 seg9:0x6111 seg16:0x6a87 seg16:0x6a9b seg16:0x6ab4 seg16:0x6abd seg16:0x6ac5 seg16:0x6acb seg7:0x197]
 
 **State 9, completion ending.**
@@ -497,7 +497,7 @@ State 0 runs the intro. DGROUP:0x95b8 is the state-0 phase index. Its only write
 
   - While DGROUP:0x11aa = 0 (Standard), seg14:0x33a, seg14:0xfb7 and seg14:0x16e5 replace a weapon index w by byte [DGROUP:0x2f8a + 0x50w] when that word is not −1. w comes from the 0x41-byte ship record (DGROUP:0x6e20, +6) or, at seg14:0x16e5, the slot bytes at +0x28, and the result goes to the player record (DGROUP:0x6e24 + 0x29). seg16:0x3d66 draws w = rand() % 20 + 1 (seg5:0xdc) and in Standard rejects a weapon whose +0x36 is not −1, within at most 10 attempts; seg16:0x5169 skips such weapons in a 27-entry listing loop. [BYTES seg14:0x33a seg14:0x34d seg14:0x354 seg14:0x36b seg14:0xfb7 seg14:0xfca seg14:0x16e5 seg14:0x16ec seg14:0x16fd seg16:0x3d47 seg16:0x3d4a seg16:0x3d66 seg16:0x3d70 seg16:0x5169 seg16:0x5174]
   - seg14:0x455c (test at seg14:0x4567) returns 1 while DGROUP:0x11aa ≠ 0. Otherwise it returns 0 when the word at +0x21 of the 0x2c-byte record (DGROUP:0x6e1c) chosen by ship n's word +0x21 is one of 178, 310, 320, 400, 440, 450, 520, 550, 560, 590, 600, 604, 605, 710, 720, 730, 750, 890, 900, 930 or 950, the list of [Ship availability](#game-start-dialogs), and 1 otherwise. seg16:0x4c1a does not read the weapon table: unless DGROUP:0x11aa = 0 and DGROUP:0x920c = 3 it adds the item string 865 "NEW SHIP BODY" at price 600. [BYTES seg14:0x4567 seg14:0x4589 seg14:0x45f4 seg16:0x4c1a seg16:0x4c2d seg16:0x4c3f] [BYTES ENG_LANG.DLL STRING 55] id 865
-- **Cheat keys.** In the state-1 input handler seg11:0x6b64, WM_KEYDOWN (and private 0x99b and 0x99e) with code 0x2e reaches seg11:0x6ee7. While DGROUP:0x920c is 2 or −1 it toggles DGROUP:0x951c between 0 and 1; switching on plays sound 0x49, switching off clears DGROUP:0x104c, and both set DGROUP:0x5018 = 0xFFFFFFFF. With DGROUP:0x95bc = 0 only codes 0x6b, 0x6d, 0x57, 0xbd and 0xbb pass, so the toggle needs a player game. [BYTES seg11:0x7288 seg11:0x728b seg11:0x6e19 seg11:0x6e42 seg11:0x6e5e seg11:0x6ee7 seg11:0x6ef7 seg11:0x6f00 seg11:0x6f07 seg11:0x6f0e seg11:0x6f14]
+- **Cheat keys** (the per-key table is in [law.md](law.md)). In the state-1 input handler seg11:0x6b64, WM_KEYDOWN (and private 0x99b and 0x99e) with code 0x2e reaches seg11:0x6ee7. While DGROUP:0x920c is 2 or −1 it toggles DGROUP:0x951c between 0 and 1; switching on plays sound 0x49, switching off clears DGROUP:0x104c, and both set DGROUP:0x5018 = 0xFFFFFFFF. With DGROUP:0x95bc = 0 only codes 0x6b, 0x6d, 0x57, 0xbd and 0xbb pass, so the toggle needs a player game. [BYTES seg11:0x7288 seg11:0x728b seg11:0x6e19 seg11:0x6e42 seg11:0x6e5e seg11:0x6ee7 seg11:0x6ef7 seg11:0x6f00 seg11:0x6f07 seg11:0x6f0e seg11:0x6f14]
   - While DGROUP:0x951c ≠ 0 and DGROUP:0x95bc ≠ 0, WM_KEYUP of '1'–'9' (0x31–0x39) or F3–F9 (0x72–0x78) calls seg11:0x72e0(key), a switch (seg11:0x749e) of per-key actions; key 0x75, for example, sets DGROUP:0x104a = 1 and calls seg13:0xb6f2. The flag also recolours the counter drawn at seg11:0x535: PALETTERGB 0x02FFC800 when DGROUP:0x104c ≠ 0, else 0x02FFFFFF. Loading a save (seg6:0x98bb) clears it, and so does seg10:0x82a2 at seg10:0x8503–0x850b, together with DGROUP:0x104e and 0x104c, for every command except 5, 6 (and −100), 10 and 12 whose dialog result is non-zero. [BYTES seg11:0x6d19 seg11:0x6d42 seg11:0x6d58 seg11:0x6d66 seg11:0x72e0 seg11:0x749e seg11:0x535 seg11:0x543 seg11:0x54f seg6:0x98bb seg10:0x8503 seg10:0x850b]
 - **Lower texts.** Below the trial line the title draws, by TextOut: [BYTES seg15:0x70d0 seg15:0x70fb seg15:0x712a seg15:0x7145 seg15:0x7178 seg15:0x71e8 seg15:0x7250 seg15:0x72b4 seg15:0x72f7 seg15:0x734c] [BYTES ENG_LANG.DLL STRING 145] id 2310 [BYTES ENG_LANG.DLL STRING 147] id 2344 [BYTES ENG_LANG.DLL STRING 159] id 2542
   - 2310 " Press 'R' to order the full game package " (2344 when DGROUP:0x922a ≠ 0) in Arial 22, black on PALETTERGB(0xB4, 0x80, 0xE0) opaque, at (0, C + 150), whenever DGROUP:0x920c is not −1, 2 or 3 (after the 2341, the negative-day 2342 or the 2343 line);
@@ -1041,6 +1041,271 @@ INSPACE has two help paths: WinHelp for the manual and the IS_HELP Online Help w
 - Outside the wave, where DGROUP:0xa7c is 0, the Help menu's General, Scores, This Game, Target and Weapons items do nothing and F1 opens WinHelp at Contents. Inside the wave F1 opens IS_HELP with topic 4. [BYTES seg2:0x89b seg2:0x8a0 seg2:0x1552 seg2:0x1557 seg2:0x1559 seg2:0x1560]
 - **Closing the HUD.** seg11:0x2f0 destroys and zeroes DGROUP:0xa7a, DGROUP:0xa7c and DGROUP:0xa7e. Its callers are seg6:0x5da4 (state-5 entry), seg9:0xd81 (seg9:0xd6c, both the state-4 and the abort paths), seg9:0x6d5c (state-2 entry), seg10:0x259 (wave teardown), seg11:0x2e5, seg16:0xd96 (state-6 phase 0), seg16:0x697a (state-8 phase 0), seg16:0x7223 (state-9 phase 0) and seg18:0x3aa. [BYTES seg2:0x89b-0x8a9 seg11:0x2fa-0x336]
 
+## The ship watch windows
+
+Two windows show ships, and the task's "W watch window seg13:0x6450" mixes them: **W opens the
+Ship Watch, class IS_WATCH** (window DGROUP:0x95fc, procedure seg13:0x4f4e, painter
+seg13:0x50b0), the window of ships-0001 `g1/watch1.png` (picture, "TEAMMATE - ALLY +29", "I'M
+APPROACHING ROCK / THERE'S NOTHING BETTER TO DO."). **seg13:0x6450 draws the rows of the All
+Ships window, class IS_SMART** (DGROUP:0x95fe, procedure seg13:0x613a), a 50-pixel column of
+ship pictures with no text (Alt+R and the menu's All Ships, shell.md 0x9b4). pilots.md line 88
+calls DGROUP:0x95fc "the right display"; it is the IS_WATCH window (seg13:0x4f92 stores it on
+WM_CREATE), and its mark (DGROUP:0x6e90, 0x6e8e) is the watch mark, entry 2 of the mark table
+DGROUP:0x6e38. Both share the cell painter seg13:0x5a6a ([world.md](world.md#object-pictures-seg130x5a6a)) and the 5000 ms refresh of seg13:0x675e.
+
+### The keys: seg13:0x563c(ctrl, alt) [BYTES seg13:0x563c-0x57ab]
+cdecl, returns 1 when a watch is shown or refreshed, 0 otherwise. From seg11:0x712b (every W),
+seg7:0x1ee9 and seg13:0x5106 (the painter, when the watched object is gone).
+1. No window and no modifier: the mark = (DGROUP:0x9324, 0), DGROUP:0x6e8a = DGROUP:0x6e8c = 2
+   (the cell origin (2, 2)) [BYTES seg13:0x564b-0x5670].
+2. Ctrl without Alt and a window: seg13:0x5850() destroys it (DestroyWindow, DGROUP:0x95fc = 0),
+   return 0 [BYTES seg13:0x5673-0x568c].
+3. (p, r) = the player's target words +0x3e/+0x40; with Alt and p ≠ 2: the first defender k <
+   DGROUP:0x940a owned by (DGROUP:0x9324, P) in play gives (2, k) [BYTES seg13:0x568f-0x56f8].
+4. Plain W with the window up → f = 0. Otherwise (window absent, or Ctrl, or Alt): Ctrl+Alt makes
+   (p, r) = (DGROUP:0x9324, P) (watch yourself); then f = 0, and when p is the ship pool or 2 the
+   mark = (p, r) and f = 1 [BYTES seg13:0x56fc-0x574c].
+5. f = 0: seg3:0x45a(6), the next ship after the mark (or next defender when the mark is pool 2;
+   ); a mark that is then neither the ship pool nor 2 returns 0
+   [BYTES seg13:0x5751-0x576d].
+6. No window → PostMessage(main, 0x9a0, 0, 0) (seg2:0x4e1 → seg13:0x5878 creates it); a window →
+   PostMessage(it, WM_PAINT, 0, 0) and seg13:0x57ac() (its title); return 1 [BYTES seg13:0x5771-0x57a1].
+So: W opens the watch on the player's target ship (or the next ship) and each further W moves to
+the next ship; Ctrl+W closes an open watch (and opens one like W when none is open); Alt+W
+watches the player's first defender; Ctrl+Alt+W watches the player's own ship ("REALITY CHECK").
+
+### Creation and the window procedure
+- **seg13:0x5878** (the 0x9a0 handler) [BYTES seg13:0x5878-0x58da]: only with the IS_INFO
+  display DGROUP:0xa7c and no window: CreateWindow("IS_WATCH", "Ship - Pilot", 0x10CC0000
+  (WS_VISIBLE | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME), x = DGROUP:0x1ddc, y = DGROUP:0x1dde,
+  w = DGROUP:0x1de0 − DGROUP:0x1ddc, h = GetSystemMetrics(SM_CYCAPTION) + 0x36, parent DGROUP:0x16,
+  no menu, DGROUP:0x8e66, NULL); then SetActiveWindow(main) either way. DGROUP:0x1ddc …
+  0x1de2 is the INI WatchLeft/WatchTop/WatchRight rectangle (shell.md, DGROUP:0x8fea).
+- **seg13:0x4f4e** (IS_WATCH, `retf 0xa`) [BYTES seg13:0x4f4e-0x50ad]: WM_CREATE: DGROUP:0x95fc =
+  hwnd and seg13:0x57ac(); WM_MOVE: GetWindowRect, and when (left, top) differ from DGROUP:0x1ddc
+  /0x1dde, CopyRect into DGROUP:0x1ddc and DGROUP:0x8fea = 1 (save on exit); then
+  SetActiveWindow(main); WM_SETFOCUS: DGROUP:0x8f68 = 1; WM_GETMINMAXINFO: ptMinTrackSize = (0x36,
+  cyCaption + 0x36), ptMaxTrackSize.y = cyCaption + 0x36 (fixed height, minimum width 54);
+  WM_PAINT: InvalidateRect(hwnd, NULL, TRUE), GetClientRect, BeginPaint, PatBlt(0, 0, w, h,
+  BLACKNESS), both cached lines DGROUP:0x8694 and DGROUP:0x86d0 emptied (lstrcpy from the empty
+  DGROUP:0x1376/0x1377), seg13:0x50b0(hdc, 1), EndPaint; WM_CLOSE: DestroyWindow, DGROUP:0x95fc =
+  0; everything else DefWindowProc. Returns 0.
+- **seg13:0x57ac**, the title [BYTES seg13:0x57ac-0x584f]: seg3:0x1542(0, mark pool, mark rec,
+  buf, 0), seg11:0x3fd4(buf, 2); a ship mark appends " - " and seg17:0x8e60(rec, buf) (the
+  pilot's name), seg11:0x3fd4'd; SetWindowText(DGROUP:0x95fc, buf).
+
+[ORACLE ships-0005] shows the watch as a panel at the top left of the play area, with the ship's picture at (14, 40), the team and relation in blue and two yellow lines, and no title bar in its shots; how the CreateWindow call of the bytes (a caption and thick frame, style 0x10CC0000) appears there is [OPEN]. It opens within one 60 fps frame after W (a green circuit picture for two frames, then the panel) and closes within one frame after Ctrl-W [ORACLE ships-0005].
+
+### The painter seg13:0x50b0(hdc, mode) [BYTES seg13:0x50b0-0x545f]
+cdecl. Nothing without the window. (p, r) = the mark.
+1. Visible = (p, r) = (ship pool, P) or seg3:0x0(p, r); not visible: seg13:0x563c(0, 0) (move on)
+   and, when it returns 0, seg13:0x5850() (close) and return [BYTES seg13:0x50c7-0x5114].
+2. hdc 0 → GetDC(window) (released at the end); DGROUP:0x920e → SelectPalette(hdc, it, 0).
+3. **The cell**: seg13:0x5a6a(hdc, DGROUP:0x6e8a, DGROUP:0x6e8c, p, r, 2, mode, 0) [BYTES seg13:0x514b-0x515f].
+4. **The text** (every 500 ms, or when line 1 is empty) [BYTES seg13:0x5165-0x5220]: when dword
+   DGROUP:0x1c8a ≤ now or byte DGROUP:0x8694 = 0: keep the old lines; p = ship pool →
+   seg3:0x1d0a(a, r, 3) with a = 0x64 when r = P, else the player's index (`mov al, [0x9646];
+   cwde`); else seg3:0x304c(P, r, 3); "changed" when either line differs (lstrcmp). Then
+   DGROUP:0x1c8a ≤ now → DGROUP:0x1c8a = now + 500.
+5. **Changed** [BYTES seg13:0x5224-0x542a]: PatBlt(hdc, 0x30, 0, client right, 0x30, BLACKNESS);
+   SelectObject(DGROUP:0x90fe) (the HUD font); SetTextAlign(0); SetBkColor(0).
+   - Ship: v = seg13:0x2688(r, P) (r's view of the player); title = 2041 "REALITY CHECK" for r =
+     P, 2042 "TEAMMATE" for team(r) = team(P), else seg13:0x218a(team(r), buf) (the team name);
+     for r ≠ P: seg11:0x3f2e(v) (the attitude words into DGROUP:0x93e0, as the target display) and title += " - " + DGROUP:0x93e0. Colour: v > 80 → 0x02FFB900, v < −80 →
+     0x02006EFF, else 0x02AAAAAA.
+   - Defender: SetTextColor(0x00008000); title = seg10:0xa332(buf, 2531 "%D %D", 1, 2, r, 0, owner
+     pool, owner rec, 6) (owner = entry words +6/+8 of defender r).
+   - TextOut(hdc, 0x30, 0, title); SetTextColor(0x00FFFFFF when DGROUP:0x90ee = 1, else
+     0x0000FFFF); TextOut(hdc, 0x30, 0x10, DGROUP:0x8694); TextOut(hdc, 0x30, 0x1e,
+     DGROUP:0x86d0); restore the colours and the font.
+6. Restore the palette; release an own DC.
+
+### The All Ships window (IS_SMART)
+- **seg13:0x638a** (0x9b4 create) [BYTES seg13:0x638a-0x644e]: only with DGROUP:0xa7c and no
+  window. DGROUP:0x95fa = the ships k ≤ DGROUP:0x9316, k ≠ P, with seg3:0x0(DGROUP:0x9324, k) ≠ 0 (for a ship: object `state` 0 or ship byte +0x147 ≠ 0; not on-screen visibility) [BYTES seg13:0x649a-0x64e6 seg3:0x35-0x67]; 0 → no window. Mark
+  entries 11 … 18 (DGROUP:0x6e38 + 0x1e·(11 + k), fields +0x16 x = 2, +0x18 y = 46k + 2, +0x1a rec
+  = k, +0x1c pool = DGROUP:0x9324 at DGROUP:0x6f98/0x6f9a/0x6f9c/0x6f9e + 0x1e·k). CreateWindow(
+  "IS_SMART", "" (DGROUP:0x1396), 0x10CC0000, DGROUP:0x1dec, DGROUP:0x1dee, 50, 150, main, 0,
+  DGROUP:0x8e66, NULL), SetActiveWindow(main).
+- **seg13:0x613a** (`retf 0xa`) [BYTES seg13:0x613a-0x635e]: WM_CREATE: DGROUP:0x95fe = hwnd, the
+  system menu gets a separator and item 0xf0 "1/2x Scale" (DGROUP:0xb80) checked from
+  DGROUP:0x95f8 (seg7:0x63b6), DrawMenuBar; WM_SYSCOMMAND 0xf0: DGROUP:0x95f8 toggled, the check
+  redrawn, MoveWindow to the same rectangle (the min/max then resizes it), SetActiveWindow(main);
+  SC_CLOSE: SmWnd DGROUP:0x8f74 = 0, then DefWindowProc; WM_MOVE: as IS_WATCH's into
+  DGROUP:0x1dec with DGROUP:0x8ff0 = 1; WM_SETFOCUS: DGROUP:0x8f68 = 1; WM_GETMINMAXINFO: width
+  min = max = 50 >> DGROUP:0x95f8, height min = max = cyCaption + 46n + 6 (scale 0) or cyCaption +
+  23n + 3 (scale 1), n = DGROUP:0x95fa; WM_PAINT: BLACKNESS, seg13:0x6450(hdc, 1, −1); WM_CLOSE:
+  DestroyWindow, DGROUP:0x95fe = 0.
+- **seg13:0x6450(hdc, mode, i)** (cdecl; callers seg7:0x65e2, the paint, seg13:0x68b1 the
+  5000 ms refresh with (0, 2, i)) [BYTES seg13:0x6450-0x65f1]: rebuild the rows (entries 11 + n
+  get rec = ship j, x = 2, y = 46n + 2 for the visible ships j ≠ P in index order); when the count
+  changed: DGROUP:0x95fa = n and either seg13:0x6362() (n = 0, close) or MoveWindow to the same
+  rectangle (resize), and nothing is drawn this call; else i = −1 draws every row k with
+  seg13:0x5a6a(hdc, 0, 46k + 4, DGROUP:0x9324, entry rec, 11 + k, mode, DGROUP:0x95f8); else the
+  row k whose rec is i — or k = n when none matches (the loop exits with k = n and the draw
+  follows) — is drawn with rec = i.
+- **seg13:0x65f2(m)** [BYTES seg13:0x65f2-0x6715]: m = 0: post 0x9aa when IconWnd DGROUP:0x8f72 ≠
+  0 without an IS_ICON window, 0x9b4 when SmWnd DGROUP:0x8f74 ≠ 0 without an IS_SMART window
+  (returns 1 when it posted); 1: close all three (seg13:0x5850, seg7:0x63f2, seg13:0x6362); 2:
+  ShowWindow(SW_SHOW) on each and SetActiveWindow(main) if any; 3: ShowWindow(SW_HIDE) on each.
+  IS_WATCH has no INI key and is not reopened by m = 0.
+
+### Refresh
+seg13:0x675e ([pilots.md](pilots.md)) calls seg13:0x6890(i) for each ship due:
+seg13:0x6450(0, 2, i) with an IS_SMART window and i ≠ P; seg13:0x50b0(0, 2) when the IS_WATCH
+window exists and the watch mark is (ship pool, i); seg13:0x58dc(0, 2) for the left display. The painter's own 500 ms
+text throttle (DGROUP:0x1c8a) decides whether a 5000 ms call redraws text.
+
+### The activity text seg3:0x1d0a(a, s, mode) [BYTES seg3:0x1d0a-0x304b]
+cdecl; a is the viewer (the player's index, or 0x64 when the player watches itself; 0x64 also
+from the demo pilot's line), s the ship, mode the output of seg3:0x31d0. Callers: seg13:0x51c5
+(the watch, mode 3), seg13:0x2fb6 (the Strategy command line, mode 0/1), seg17:0x367f (the help
+page, mode 2), seg3:0x1cdc (in seg3:0x1b8a, which has no caller). 1522 instructions; the reading
+below is the structure with every string, from the Ghidra C checked at the branch points against
+the listing; the arithmetic of the duel commentary (step 4, order 2–4) is not checked [OPEN].
+1. **The name N** ([bp−0x34]): 456 "You." when the goal (+0x32, +0x34) = (14, a) and not (s = P
+   in Strategy in a player game); else seg3:0x1542(1, goal pool, goal rec, N, 5); a rock (pool 3)
+   is re-named with seg3:0x1542(1, 3, rec, N, 0) (no article). Prefix L0: 1082 "You Are " for s =
+   P in a player game without the help window (DGROUP:0x9460 = 0), else 1083 "I'm ". Line 1 = L0 +
+   the verb phrase V ([bp−0x98]); line 2 = the reason R ([bp−0x110]) from the string id e
+   ([bp−0xc], −1 none; ids above 10000 are formatted as id − 10000 with N).
+2. **The ambulance's ship** (s = DGROUP:0x952e, 0 ≤ DGROUP:0x9e49 < 9): 488 "Waiting For Help" +
+   1120 (a = 0x64) or 489 when Engine + +0x28 + +0x2a < 100; 1132 + 1133; 1090 + 1091 (byte
+   +0x147 ≠ 0); 1134 + 1135 (DGROUP:0x9e49 ≥ 6, or the pool-7 record in play with DGROUP:0x1e88 = 0).
+3. **Race waves** (DGROUP:0x9320 = 6, s not an Enforcer): 1086 (DGROUP:0x9eb4 = 0), 1088
+   (DGROUP:0x9eb5 ≠ 0), 1087 (object byte +0x51 ≠ 0); the player 1089 + the flag number (byte
+   +0x148); others 1083 + 1079/1080/1081 by the dword DGROUP:0x8e08 + 4s (1000000, −50000, 50000),
+   or the time gap with 1084 / 1085. Race Later stages.
+4. **By activity +0x38** (outside races):
+   - **1 attack**: V = 457 "Attacking %s" (N). R: **in the demo only** (DGROUP:0x95bc = 0), a goal
+     set 14000 … 19000 ms ago (dword +0xa4) → 1127; a goal older than 19000 ms (dword +0xa4 + 19000 < now) with +0x52 = 0, or with +0x98 passed and +0x52 ∉ {1, 4} (orders 1 and 4 hold after +0x98 expires), → 1128, and the text routine itself makes the
+     ship **give up**: outside duel waves (hunting a ship, +0x32 = 14) A(s, +0x34) is halved and the grudge byte +0xc2 + rec = 0xff; then dword
+     +0x94 = 0, +0x52 = −1, seg4:0x78(s); in a duel wave (DGROUP:0x9320 = 7) the ship is retargeted instead: +0x56 = the first k ≠ s, k ≠ the old +0x56 with object `state` 0, and +0xa4 = now, and it gives up only when no such k exists [BYTES seg3:0x217c-0x21fa seg3:0x21fe-0x2226]: a side effect of building the text, so it happens only when a caller builds it (the watch painter every 500 ms, seg13:0x2f30, seg3:0x1b8a, the briefing);
+     reaction byte +0x146 = 0x0d → 496 (goal rec = a) or 497;
+     orders 2–4 (not the player in a player game) or a duel: +0x58 ≠ s → 459 "As Requested By %D."
+     (14, +0x58, N, 5); else (not the watch on a duel with the player) +0x146 = 0x14 → 1733/1707,
+     0x15 → 1734/1708, else 458; the duel commentary 1735 … 1747 and 1710 … 1732 (the scores
+     DGROUP:0x8e00/0x8e04, 0x9680/0x9682) [OPEN]; order 1 → 460 "To Help %s." (N = the
+     helped ship, or 456); +0x146 = 1 → 1702; 2 → 1703 or 1077 (the helper found); goal pool 2 →
+     461; order 0x17 → 495; +0x146 = 10 → 1704, 0x0f → 1705, 0x10 → 1706; goal pool 0 → 1110
+     (`capturable` 2, virused), 1709 (a frozen icon and weapon 5), else 1111 ".I Hate " + the
+     icon's file name up to its '.' + "!"; pool 8 → 1115/1117/1116; pool 9 → 1112; other pools →
+     503 ".Target Practice." (502 for a RENEGADE); a ship goal with fight byte +0xee + rec 1 … 5 →
+     1122 … 1126; else 462 "Because I'm Mad At %?." with (rec = a, 463 "Him.", 456).
+   - **2 capture**: seg13:0x371c(goal) = 0: goal object byte +0x53 = 0 and (s ≠ P or PlayMode >
+     1) → V = 1700, R = 1701; else V = 478 "Capturing %s" (N with code 2); orders 9 and 0x0c → 479 (+0x58
+     = a) or 480; order 0x0e → 514 "Stealing From %D" (14, +0x56, 5); else pool 11 → 510 (PIRATE),
+     1092 (ENFORCER), 511; pool 6 with an ENFORCER → 512; pool 4 → 1131 (fuel < 300), 1130 (fuel <
+     tank − 15), 1129; pool 0 → 481. seg13:0x371c ≠ 0 (leaving by a gate): order ≠ 0x16 → V = 476
+     "Leaving The Wave", R = 1118 (an Interceptor holds s), 1119 / 1121 (a = 0x64, demo / game),
+     477; order 0x16 → V = 507 "Arresting You For " (+0x56 = a) or 508 "Arresting %D For ", R =
+     1098 + byte DGROUP:0xa163 (the crime name).
+   - **3 approach**: a non-ship goal (or the Strategy player not ordered 5): order 7 or the
+     player at (8, 0) → V = 470 "Just Wandering.", R = 471 (pool 0), 472 (+0x3c = 5), 473 (else);
+     with Engine < 50 (before 473) R = 501 "And Trying To Repair." (21 characters) is loaded into the line-2 buffer [bp−0x110] and **LoadString's
+     return value, 21, becomes e** (seg3:0x2cc7 `mov [bp−0xc], ax`), so the output step calls LoadString(21) into the same buffer (seg3:0x2fe4) [BYTES seg3:0x2cb3-0x2cc7 seg3:0x2fde-0x2ff3]. ENG_LANG.DLL has no string 21 (no id below 110 exists, so STRING block 2 is absent), so that LoadString returns 0; the line shows "And Trying To Repair." if Win16 LoadString leaves the buffer untouched for a missing block and is empty otherwise [OPEN]; else V =
+     474 "Approaching %s" (N), R = 475 "There's Nothing Better To Do.". A ship
+     goal: order 7 → 468 + 469; else V = 464 "Sticking Near %s" (N = 456 / 463 by goal rec = a);
+     order 5 → R = 466 (+0x58 = s) or 465; the player in a player game: Strategy → 1428
+     "Defending %s", Action → 295; order 0x14 → 498; order 0x16 → the arrest lines above; else
+     seg13:0x2688(s, rec) > 40·sbyte(+0x5d) + 50 → 499, grudge byte ≤ 0 → 500, else 467.
+   - **4 flee**: goal (14, a) → 482 + 483; else V = 484 "Fleeing From %D" (pool, rec, 5), R = 485.
+   - **5 hold**: 490 + 491. **Any other**: 486 + 487.
+5. **Output** [BYTES seg3:0x2a71-0x3048]: s = P in a player game without the help window → R =
+   "" (DGROUP:0x13cd); else R = LoadString(e) for e ≤ 10000 (e ≠ −1), or seg10:0xa332(R, e −
+   10000, 1, N). Line 1 = L0 + V. A line longer than 60 counts DGROUP:0x9498. seg3:0x31d0(mode,
+   line 1, R).
+
+**seg3:0x31d0(mode, l1, l2)** [BYTES seg3:0x31d0-0x332b]: l2 starting with '.' moves the dot to
+the end of l1 ("I'M ATTACKING ROCK." / "TARGET PRACTICE."); an empty l2 gives l1 a final '.' unless
+it ends in '.' or '!'. Mode 0: DGROUP:0x8630 = l1; 1: l1 + " " + l2 into DGROUP:0x8630; 2:
+DGROUP:0x8db0 = l1 + " " + l2, split by seg3:0x3498 into DGROUP:0x8768/0x87b8; 3: seg11:0x3fd4(l1,
+1), seg11:0x3fd4(l2, 1), DGROUP:0x8694 = l1, DGROUP:0x86d0 = l2 (the watch lines); other modes
+nothing.
+
+**seg3:0x304c(a, k, mode)**, a defender's text [BYTES seg3:0x304c-0x31cf]: T = the entry target
+(+0x0a, +0x0c) name (456 for (14, a)), O = the owner (+6, +8) name (seg3:0x1542 mode 0); state 10 →
+3041 "I'm Orbiting %s While Shooting At %s." (T, O); 15 with a non-gate target → 3040 "I'm
+Attacking %s %? %s." (T, pool = 2, 2539, 2217, O); 15 at a gate → 3039 (O); other → 2218 (O);
+formatted into DGROUP:0x8d38, split by seg3:0x3498 into two lines, then seg3:0x31d0(mode, …).
+
+**The articles of seg3:0x1542(caps, pool, rec, buf, mode)** [BYTES seg3:0x155c-0x1577 seg3:0x196d-0x1a1d seg3:0x1a31 seg3:0x1a62]: the article is string 2700 + v + g (mode 1, "THE "), 2720 + v + g (mode 2, "A "/"AN "/"SOME "), 2740 + v + g (mode 3, "THIS "/"THESE "), 2760 + v + g (mode 6, "FOR"), none for modes 0, 4, 5; caps ≠ 0 drops one trailing space and upper-cases a…z; the article is prepended last. The gender g comes from the name's code letter (^M 0, ^F 2, ^P 4, ^N or none 6, seg3:0x1ae6), for a ship from design byte DGROUP:0x96e8 & 0x20 (0 → 2, else 0); v = 1 when the name starts with A E I O U a e i o u. The mode rewrites:
+- mode 7 becomes mode 5 with gender 4 and the string id + 10000 (the plural);
+- mode 5 becomes mode 1 for every pool while DGROUP:0x967a ≠ 0 [BYTES seg3:0x155c-0x157d];
+- for a ship, 5 becomes 1; for the exit gate (any pool seg13:0x371c accepts, string 585 "Exit Gate"), 5 becomes 1;
+- pools 2, 3, 5, 8 and 9: both 1 and 5 become 2 (for 3, 8 and 9 only without the mode-7 offset);
+- pool 6: 1 or 5 becomes 2 only when its record names a weapon (word DGROUP:0x66e4 + 0x1c·rec > 0 and the weapon's DGROUP:0x2f54 word ≠ −1);
+- pool 0 (icons): 2 becomes 5, so no article;
+- pools 1, 4, 7 and 11: unchanged [BYTES seg3:0x15a1-0x15db seg3:0x16cb-0x172b seg3:0x1733-0x1762 seg3:0x184f-0x18b0 seg3:0x18f6-0x192a].
+
+## The briefing's pages for the other ships
+
+### The next ship, seg17:0x20fa(init, next, reset) at seg17:0x2260-0x22b9 [BYTES seg17:0x2260-0x230c]
+With init ≠ 0: DGROUP:0x91f8 += 1, seg9:0x6624() (the placement builds the coming wave's ships),
+DGROUP:0x91f8 −= 1. Then reset ≠ 0 → DGROUP:0x9462 = 0 and the ship stays DGROUP:0x9464; else
+next ≠ 0 → DGROUP:0x9464 += 1 and, when it is still ≤ DGROUP:0x9316, DGROUP:0x9462 = 0; else (init
+alone) DGROUP:0x9464 = 0. A ship index above DGROUP:0x9316 ends the phase: dword DGROUP:0x18c2 =
+now + 100, return 1. Otherwise the size class is the roster byte +0x7a of record +0xd6
+(DGROUP:0x6e24 + 0x7c·(+0xd6), sign-extended) or, for +0xd6 = −1, object word +0x22; object +0x1a
+= 1, seg11:0xb09c(DGROUP:0x9464, 1), object +0x1a = 0. So phase 11 shows one page per ship 0 …
+DGROUP:0x9316 in index order, the player's among them (shell.md Phase 11 for the drawing); the page order is one per ship in index order.
+
+### The text, seg17:0x33ee's other-ship branch [BYTES seg17:0x33ee-0x3745]
+For s = DGROUP:0x9464 ≠ P, appending (mode 0) to the page buffer far DGROUP:0x6078:
+1. team(s) = 7, or s's word +0xd6 < 0 (no roster record), or roster byte +0x77 (the encounters)
+   ≤ 1: 921 "THIS IS YOUR FIRST ENCOUNTER WITH %D." with (14, s, 3) — %D code 3 gives "THIS " +
+   the ship's name. Else 3034 "YOU HAVE MET %D %<%?%>%<%d TIMES%>." with (14, s, 3, c < 4, c = 2,
+   922 " TWICE", 923 " ONCE BEFORE", c > 3, c − 1), c = roster byte +0x77 (signed)
+   [BYTES seg17:0x34a0-0x3522].
+2. Same test passed (team ≠ 7, +0xd6 ≥ 0, c > 1): seg9:0x95ba(2046) "YOU INTERACTED WITH HIM IN
+   THE PAST" and ". " (DGROUP:0x9ee).
+3. The relation line: tf = 793 "IS ON" when team(s) = team(P) (value 90), else T(team(s),
+   team(P)) (DGROUP:0x3824 + 2(8·team(s) + team(P))) < −80 → 790 "DOESN'T LIKE", < 80 → 791 "IS
+   NEUTRAL TO", else 792 "LIKES"; v = seg13:0x2688(P, s) gives yf the same way (790/791/792);
+   same = (yf = tf) or (yf = 792 and tf = 793); seg10:0xa332(buf, 794 "HE %S YOUR TEAM %? HE %S
+   YOU.%N%N", 0, tf, same, 2048 "BUT", 795 "AND", yf) [BYTES seg17:0x3560-0x3655]. (Note the
+   player's view of s, seg13:0x2688(P, s), not s's of the player.)
+4. With the help window closed (DGROUP:0x9460 = 0, always in the briefing): seg17:0x4068(s, buf) (3023 "%<YOUR%>%<THIS%> SHIP IS %S." with the rank) is appended [BYTES seg17:0x371d-0x3739]. When DGROUP:0x9460 ≠ 0 the page instead takes the activity text seg3:0x1d0a(P, s, 2), split by seg3:0x3498, inside string 3038 with the ship's credit (+0xdc, via seg6:0xf54) and resources (+0xce, via seg6:0x1010) [BYTES seg17:0x365d-0x371b] [BYTES ENG_LANG.DLL STRING 190].
+The count text: 3034 takes (14, s, 3, [count < 4], [count = 2], 922, 923, [count ≥ 4], count − 1) [BYTES seg17:0x34c8-0x3518]; 2046 comes through seg9:0x95ba under the same condition, followed by ". " [BYTES seg17:0x353c-0x3578]; 794 takes the team word (793 for the same team, else 790/791/792 from T(ship team, player team) at ±80), a "same" flag, 2048/795 and the attitude word from seg13:0x2688(P, s) at ±80 [BYTES seg17:0x357d-0x3655].
+ships-0001 reads "YOU HAVE MET THIS GOLDEN VIPER ONCE BEFORE ... HE IS ON YOUR TEAM AND HE LIKES
+YOU. THIS SHIP IS A PUSHOVER." [ORACLE ships-0001], which is c = 2, a teammate, v ≥ 80.
+The labels (seg17:0x4354: "FRIENDLY SHIP (from your team)") and the lower-left relation lines
+(seg17:0x3ba6) are in shell.md already.
+
+
+#### Further facts: Watch windows
+- seg13:0x563c, with no window and no modifier, resets the watched pair DGROUP:0x6e90/0x6e8e to (DGROUP:0x9324, 0) and DGROUP:0x6e8a = 0x6e8c = 2 [BYTES seg13:0x564b-0x5670].
+  - W then watches the player's target when it is a ship or a defender. Otherwise seg3:0x45a(6) runs, and the window opens when the watched pool is the ship pool or 2.
+  - Opening posts message 0x9a0 to the main window; seg2:0x4e1 then calls seg13:0x5878.
+  - Refreshing posts WM_PAINT and calls seg13:0x57ac [BYTES seg13:0x5771-0x579e].
+- IS_WATCH window procedure [BYTES seg13:0x4f92-0x509e]:
+  - WM_CREATE stores the handle and calls seg13:0x57ac;
+  - WM_MOVE copies a changed window rect to DGROUP:0x1ddc and sets DGROUP:0x8fea = 1, then SetActiveWindow(main);
+  - WM_SETFOCUS sets DGROUP:0x8f68 = 1;
+  - WM_PAINT does a BLACKNESS PatBlt and calls the painter in mode 1;
+  - WM_CLOSE destroys the window and clears DGROUP:0x95fc.
+- Painter seg13:0x50b0:
+  - when the watched object is not the player and fails seg3:0x0, it calls seg13:0x563c(0, 0) and closes the window when that returns 0 [BYTES seg13:0x50c7-0x5114];
+  - on every call it draws the cell with seg13:0x5a6a(hdc, 2, 2, pool, rec, 2, mode, 0) [BYTES seg13:0x514b-0x5162];
+  - the ship text is seg3:0x1d0a(100 when the watched ship is P, else P, watched, 3); a defender's text is seg3:0x304c(P, rec, 3) [BYTES seg13:0x519c-0x51d5];
+  - a defender's title is string 2531 "%D %D", seg10:0xa332(buf, 2531, 1, pool, rec, 0, owner pool, owner rec, 6) with the owner words DGROUP:0x5304/0x5306 + 0x24·rec, in colour 0x00008000 [BYTES seg13:0x5369-0x539e];
+  - the title goes at (48, 0) over a BLACKNESS strip 48 pixels high starting at x = 48, with font DGROUP:0x90fe, background 0 and align 0 [BYTES seg13:0x522c-0x5277 seg13:0x53a1-0x53b5].
+- IS_SMART window procedure and painter:
+  - system-menu item 0xf0 "1/2x Scale" toggles DGROUP:0x95f8 and resizes the window;
+  - WM_MOVE saves the rect to DGROUP:0x1dec and sets DGROUP:0x8ff0 = 1 [BYTES seg13:0x6175-0x6285];
+  - when n changes, seg13:0x6450 resizes the window with MoveWindow and draws nothing on that call; n = 0 calls seg13:0x6362;
+  - its row table is DGROUP:0x6f98 + 0x1e·i (+0 = 2, +2 = 46i + 2, +4 = ship), and rows draw at y = 46i + 4 with slot i + 11 [BYTES seg13:0x64bf-0x652e seg13:0x6549-0x6571].
+
+#### Further facts: Briefing (seg17:0x33ee)
+- The player's own page (DGROUP:0x9464 = P) formats 3035 "WAVE %d%N%s%NSCORE ...". Its arguments are max(DGROUP:0x91f8, 1), the directory text DGROUP:0x38c8, the score dword DGROUP:0x1e58, P's words +0xd2 (captured) and +0xd0 (destroyed), each with 2515, and the credit and resources texts. When DGROUP:0x9460 = 0 it calls seg17:0x42ea(1) twice before seg17:0x4068 [BYTES seg17:0x33fd-0x349b].
+
+#### Further facts: Activity text (seg3:0x1d0a, seg3:0x31d0)
+- The give-up of claim 67 is a side effect of building the text, so it happens only when a caller builds it: the watch painter every 500 ms, seg13:0x2f30, seg3:0x1b8a, or the briefing [BYTES seg3:0x1d0a callers].
+- In the demo, with +0xa4 + 14000 < now < +0xa4 + 19000, line 2 is string 1127 [BYTES seg3:0x2111-0x2157].
+- A line-2 id > 10000 is formatted as id − 10000; −1 leaves line 2 alone. For the player in a player game with DGROUP:0x9460 = 0, line 2 is empty (DGROUP:0x13cd) [BYTES seg3:0x2a71-0x2a9b seg3:0x2fb9-0x2ff3].
+- Line 1 is [bp−0xd4] + [bp−0x98]. A line longer than 60 characters raises DGROUP:0x9498 [BYTES seg3:0x2ff8-0x3029].
+- seg3:0x31d0, modes 0 and 1: line 1 (mode 1 adds " " + line 2) goes to DGROUP:0x8630. Mode 2: line 1 + " " + line 2 goes to DGROUP:0x8db0, and seg3:0x3498 splits it into DGROUP:0x8768/0x87b8 [BYTES seg3:0x3270-0x32a7 seg3:0x32e4-0x330c].
+
 ## Open questions
 - What first runs seg2:0xa06 after start-up. DGROUP:0x8f68 is BSS, so the loop waits in GetMessage and runs no idle frame until the flag becomes 1. At start-up the only reachable setter is seg2:0xa06 (seg2:0xa66), which runs on WM_SETFOCUS while the window is not iconic and the flag is 0, or from the WM_TIMER resume branch. SC_RESTORE (seg2:0xea6) and the child windows (seg7:0x6298, seg13:0x4f9f, seg13:0x6250) also set it. Whether the WM_SETFOCUS from ShowWindow(SW_SHOW) at seg15:0x5840, or the 0x914 ShowWindow/SetActiveWindow at seg2:0x7df after the first WM_TIMER, first runs seg2:0xa06 needs an oracle trace. [OPEN] [BYTES seg2:0xc9 seg2:0xe3 seg2:0x7f6 seg2:0x80d seg2:0x132c seg2:0x1341 seg2:0xa66 seg2:0xea6 seg15:0x5840 seg2:0x7df]
 - The runtime content of the low-resource MessageBox text and caption, which follow uninitialised stack bytes. [OPEN] [BYTES seg6:0x141e seg6:0x1424 seg6:0x1431 seg6:0x1437 seg10:0xa37b seg10:0xa385 seg10:0xa3b6]
@@ -1056,7 +1321,7 @@ INSPACE has two help paths: WinHelp for the manual and the IS_HELP Online Help w
 - The port's single-instance mechanism under Win32, where hPrevInstance is always NULL (FindWindow on class "Inner Space" or a named mutex). The choice belongs in an ADR. [OPEN] [BYTES seg6:0x12c4]
 - What the player ship's word +0x52 = 10 and byte +0xed = 1 do, which the wave sets every pass once the demo limit DGROUP:0x5b4 has expired. [OPEN] [BYTES seg7:0x707 seg7:0x72e seg7:0x734 seg15:0x5a81]
 - Sender of private message 0xa04: no 0xa04 operand appears in the INSPACE.EXE, ISPACE.DLL or factory-1998a listings; another program or a computed message number may post it. [OPEN] [BYTES seg2:0x386 seg2:0x4cc]
-- What roster value 7 at DGROUP:0x970a + 0xad·n means in the arrest tests that set DGROUP:0x93a4, and which event seg12:0x1776 handles when it sets DGROUP:0x1e80 = now + 1000 at seg12:0x1e3b. [OPEN] [BYTES seg12:0x2410 seg12:0x24aa seg12:0x2472 seg12:0x24b1 seg12:0x1e28 seg12:0x1e3b]
+- Which event seg12:0x1776 handles when it sets DGROUP:0x1e80 = now + 1000 at seg12:0x1e3b. (Roster value 7 at DGROUP:0x970a + 0xad·n is the ENFORCERS' design team, [law.md](law.md).) [OPEN] [BYTES seg12:0x2410 seg12:0x24aa seg12:0x2472 seg12:0x24b1 seg12:0x1e28 seg12:0x1e3b]
 - What DGROUP:0x9530 stands for. The value 1, which the state-6 gate tests, is written only at seg16:0x6470 and seg16:0x685d (the left monitor's click and redraw) and at seg18:0x117 and seg18:0x3c8 (the Inner Demon entry and subgame). With DGROUP:0x920c = 0 a click in the monitor rectangle shows string 2322. [OPEN] [BYTES seg16:0x6470 seg16:0x685d seg18:0x117 seg18:0x3c8 seg16:0x6397 seg16:0x6419]
 - Whether the IS_HELP pass (seg17:0x60d8 → seg17:0x0) can reach briefing phase 18 and leave DGROUP:0x5ac set; nothing else clears DGROUP:0x5ac, so the next briefing would end at its first pass. [OPEN] [BYTES seg17:0x332 seg17:0x33e seg17:0x610b seg7:0x2df]
 - Which of the two player-death handlers sets the final death deadline (seg12:0x274a: +1500 ms; seg16:0x8e4: +8000 ms) and in what order they run for the player's ship. seg8:0x22f and seg8:0x244 (+2000/+1500) lie on the DGROUP:0x951a ≠ 0 path of seg8:0x0, whose role is not settled. [OPEN] [BYTES seg12:0x2ac1 seg12:0x2adf seg16:0xacd seg16:0xae6 seg8:0x29 seg8:0x22f seg8:0x244]

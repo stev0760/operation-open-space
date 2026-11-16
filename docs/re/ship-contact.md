@@ -136,7 +136,7 @@ if t == 7:                                                          // seg4:0x77
     if sbyte(ship + 0x5e) > 0:
         DGROUP:0x9346 = cr.wd6                                      // cr's roster index
         if cr == player: byte DGROUP:0xa14d += 1; dword DGROUP:0xa147 = frame#; DGROUP:0xa14b = DGROUP:0x91f8
-    else: bytes DGROUP:0xa157[0..9] = DGROUP:0xa14d[0..9]
+    else: bytes DGROUP:0xa157[0..9] = DGROUP:0xa14d[0..9]               // a team-7 killer returned above, and cp = 14 here (law.md)
 if (sbyte(ship + 0xee + cr) > 5 || ship.w38 == 4)                    // seg4:0x77a1-0x77b5
    && !(t == 3 && sbyte(ship + 0xcd) == cr) && DGROUP:0x9320 != 7:  // seg4:0x77bf-0x77e0
     revenge slot (below)

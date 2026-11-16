@@ -76,7 +76,7 @@ One row per binding. MAINACCEL and FACTACCEL are the accelerator tables in ENG_L
 | KEY-30 | Alt+X: exit the game (command 176) | [MANUAL QuickStart] [BYTES ENG_LANG.DLL STRING 76] id 1213 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [ORACLE smoke-0001] [BYTES seg2:0x1625] [BYTES seg2:0xe07] [BYTES seg2:0x14ea seg2:0xd78] | oracle | verified | done | demo |
 | KEY-31 | Alt+S: save the game (command 422) | [MANUAL High Scores] [BYTES ENG_LANG.DLL STRING 76] id 1214 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES ENG_LANG.DLL STRING 146] id 2324 [BYTES seg10:0x8568] [BYTES seg2:0x166c seg2:0x15b7 seg10:0x8568] [ORACLE wave-0001] [ORACLE core-0003] | oracle | verified | verified | registered |
 | KEY-32 | Alt+X then S: save on exit | [MANUAL High Scores] [BYTES ENG_LANG.DLL DIALOG 244] [BYTES seg2:0xe50 seg10:0x8568 seg6:0x99b6] [ORACLE core-0003] | oracle | verified | done | registered |
-| KEY-33 | Ctrl+Alt+X: self destruct | [BYTES ENG_LANG.DLL STRING 77] id 1216 [BYTES ENG_LANG.DLL STRING 83] id 1316 | strings | none | todo | unknown |
+| KEY-33 | Ctrl+Alt+X: self destruct | [BYTES ENG_LANG.DLL STRING 77] id 1216 [BYTES ENG_LANG.DLL STRING 83] id 1316 [BYTES seg11:0x6f3a] | strings | understood | todo | unknown |
 | KEY-34 | ESC while playing: abort to the intro, offering a save | [MANUAL High Scores] [BYTES seg2:0x55c seg10:0x8568] | manual | verified | verified | unknown |
 | KEY-35 | ESC on a race track: abort the race | [MANUAL Race Courses] | manual | none | todo | unknown |
 | KEY-36 | ESC in the black hole: return to Inner Space | [MANUAL Inner Demon] | manual | none | todo | registered |
@@ -88,28 +88,28 @@ One row per binding. MAINACCEL and FACTACCEL are the accelerator tables in ENG_L
 | KEY-42 | C during the intro: continue the most recent demo | [MANUAL QuickStart] | manual | none | wip | unknown |
 | KEY-43 | ESC during the demo: stop it and return to the intro | [MANUAL QuickStart] | manual | none | todo | unknown |
 | KEY-44 | R on the title screen: order the full game | [BYTES ENG_LANG.DLL STRING 145] id 2310 [BYTES ENG_LANG.DLL DIALOG 799] [ORACLE smoke-0001] | oracle | none | done | demo |
-| KEY-45 | W: open the Ship Watch; each press watches another ship | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 78] id 1237 [BYTES seg11:0x7127] | manual | understood | todo | unknown |
-| KEY-46 | Ctrl+W: open the Ship Watch, or close it when open | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 78] id 1246 | manual | none | todo | unknown |
-| KEY-47 | Alt+W: watch one of your defenders (command 481) | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 79] id 1255 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] | manual | none | todo | unknown |
-| KEY-48 | Ctrl+A: ask ships to attack my target | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 78] id 1242 | manual | none | todo | unknown |
-| KEY-49 | Ctrl+D: ask ships to defend my target | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 78] id 1243 | manual | none | todo | unknown |
-| KEY-50 | Ctrl+H: ask ships to help me | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 79] id 1248 [BYTES seg11:0x6f84] | manual | located | wip | unknown |
-| KEY-51 | Ctrl+F: challenge the targeted ship to a fight | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 79] id 1249 | manual | none | todo | unknown |
-| KEY-52 | Ctrl+E: ask ships to exit the wave | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 78] id 1247 | manual | none | todo | unknown |
-| KEY-53 | Ctrl+S: ask ships to self-preserve | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 78] id 1245 | manual | none | todo | unknown |
-| KEY-54 | Ctrl+C: ask ships to capture my target | [BYTES ENG_LANG.DLL STRING 78] id 1241 [BYTES ENG_LANG.DLL STRING 84] id 1332 [MANUAL Dealing With Other Ships] | strings | none | todo | unknown |
-| KEY-55 | Ctrl+G: ask ships to get a gas tank | [BYTES ENG_LANG.DLL STRING 78] id 1244 [BYTES ENG_LANG.DLL STRING 84] id 1335 | strings | none | todo | unknown |
-| KEY-56 | Strategy mode Q (manual) or C (key list): capture my target; which key is live is [OPEN] | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 78] id 1232 | manual | none | todo | unknown |
-| KEY-57 | Strategy mode A: attack my target | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 78] id 1233 | manual | none | todo | unknown |
-| KEY-58 | Strategy mode D: defend my target | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 78] id 1234 | manual | none | todo | unknown |
-| KEY-59 | Strategy mode G: refuel (get gas) | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 78] id 1235 | manual | none | todo | unknown |
-| KEY-60 | Strategy mode S: self-preserve | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 78] id 1236 | manual | none | todo | unknown |
-| KEY-61 | Strategy mode E: exit the wave | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 78] id 1238 | manual | none | todo | unknown |
-| KEY-62 | Strategy mode H: help me (key list); H also calls the ambulance [OPEN] | [BYTES ENG_LANG.DLL STRING 78] id 1239 [BYTES ENG_LANG.DLL STRING 84] id 1339 | strings | none | todo | unknown |
-| KEY-63 | Alt+A: defenders attack my target (command 441) | [MANUAL Icons] [BYTES ENG_LANG.DLL STRING 79] id 1251 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] | manual | none | todo | unknown |
-| KEY-64 | Alt+D: defenders defend my target; MAINACCEL has no Alt+D entry [OPEN] | [MANUAL Icons] [BYTES ENG_LANG.DLL STRING 79] id 1252 | manual | none | todo | unknown |
-| KEY-65 | Alt+E: defenders exit the wave (command 461) | [MANUAL Icons] [BYTES ENG_LANG.DLL STRING 79] id 1256 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] | manual | none | todo | unknown |
-| KEY-66 | Alt+H: defenders return and defend me (command 451) | [MANUAL Icons] [BYTES ENG_LANG.DLL STRING 79] id 1257 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES seg11:0x6f94] | manual | located | todo | unknown |
+| KEY-45 | W: open the Ship Watch; each press watches another ship | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 78] id 1237 [BYTES seg11:0x7127] [BYTES seg13:0x563c] | manual | verified | todo | unknown |
+| KEY-46 | Ctrl+W: open the Ship Watch, or close it when open | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 78] id 1246 [BYTES seg13:0x563c] | manual | verified | todo | unknown |
+| KEY-47 | Alt+W: watch one of your defenders (command 481) | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 79] id 1255 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES seg13:0x563c] | manual | verified | todo | unknown |
+| KEY-48 | Ctrl+A: ask ships to attack my target | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 78] id 1242 [BYTES seg13:0x8570] | manual | verified | todo | unknown |
+| KEY-49 | Ctrl+D: ask ships to defend my target | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 78] id 1243 [BYTES seg13:0x8e98] | manual | verified | todo | unknown |
+| KEY-50 | Ctrl+H: ask ships to help me | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 79] id 1248 [BYTES seg11:0x6f84] [BYTES seg13:0x81c2] | manual | verified | wip | unknown |
+| KEY-51 | Ctrl+F: challenge the targeted ship to a fight | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 79] id 1249 [BYTES seg13:0x915c] | manual | verified | todo | unknown |
+| KEY-52 | Ctrl+E: ask ships to exit the wave | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 78] id 1247 [BYTES seg13:0x9f3e] | manual | verified | todo | unknown |
+| KEY-53 | Ctrl+S: ask ships to self-preserve | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 78] id 1245 [BYTES seg13:0x9810] | manual | verified | todo | unknown |
+| KEY-54 | Ctrl+C: ask ships to capture my target | [BYTES ENG_LANG.DLL STRING 78] id 1241 [BYTES ENG_LANG.DLL STRING 84] id 1332 [MANUAL Dealing With Other Ships] [BYTES seg13:0x9ce0] | strings | verified | todo | unknown |
+| KEY-55 | Ctrl+G: ask ships to get a gas tank | [BYTES ENG_LANG.DLL STRING 78] id 1244 [BYTES ENG_LANG.DLL STRING 84] id 1335 [BYTES seg13:0xa01c] | strings | verified | todo | unknown |
+| KEY-56 | Strategy mode Q (manual) or C (key list): capture my target; which key is live is [OPEN] | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 78] id 1232 [BYTES seg13:0xa234] | manual | understood | todo | unknown |
+| KEY-57 | Strategy mode A: attack my target | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 78] id 1233 [BYTES seg13:0xa186] | manual | understood | todo | unknown |
+| KEY-58 | Strategy mode D: defend my target | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 78] id 1234 [BYTES seg13:0xa4f4] | manual | understood | todo | unknown |
+| KEY-59 | Strategy mode G: refuel (get gas) | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 78] id 1235 [BYTES seg13:0xa47c] | manual | understood | todo | unknown |
+| KEY-60 | Strategy mode S: self-preserve | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 78] id 1236 [BYTES seg13:0xa568] | manual | understood | todo | unknown |
+| KEY-61 | Strategy mode E: exit the wave | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 78] id 1238 [BYTES seg13:0xa3c8] | manual | understood | todo | unknown |
+| KEY-62 | Strategy mode H: help me (key list); H also calls the ambulance [OPEN] | [BYTES ENG_LANG.DLL STRING 78] id 1239 [BYTES ENG_LANG.DLL STRING 84] id 1339 [BYTES seg16:0xb4e] | strings | understood | todo | unknown |
+| KEY-63 | Alt+A: defenders attack my target (command 441) | [MANUAL Icons] [BYTES ENG_LANG.DLL STRING 79] id 1251 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES seg13:0x9a18] | manual | verified | todo | unknown |
+| KEY-64 | Alt+D: defenders defend my target; MAINACCEL has no Alt+D entry [OPEN] | [MANUAL Icons] [BYTES ENG_LANG.DLL STRING 79] id 1252 [BYTES seg13:0xa4f4] | manual | understood | todo | unknown |
+| KEY-65 | Alt+E: defenders exit the wave (command 461) | [MANUAL Icons] [BYTES ENG_LANG.DLL STRING 79] id 1256 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES seg11:0x70bb] | manual | verified | todo | unknown |
+| KEY-66 | Alt+H: defenders return and defend me (command 451) | [MANUAL Icons] [BYTES ENG_LANG.DLL STRING 79] id 1257 [BYTES ENG_LANG.DLL ACCELERATOR MAINACCEL] [BYTES seg11:0x6f94] [BYTES seg13:0x9ae8] | manual | verified | todo | unknown |
 | KEY-67 | Double-click mid-screen: toggle full screen and window | [MANUAL General] [BYTES INSTALL.EXE DIALOG 1774] [BYTES seg2:0x1152] | manual | understood | done | unknown |
 | KEY-68 | Double-click the score / target / radar / damage / weapon display: matching help page | [MANUAL General] [MANUAL High Scores] | manual | none | todo | unknown |
 | KEY-69 | Double-click a score in the score list: that game's description | [MANUAL High Scores] | manual | none | todo | unknown |
@@ -129,6 +129,7 @@ One row per binding. MAINACCEL and FACTACCEL are the accelerator tables in ENG_L
 | KEY-83 | Factory Alt+V (command 220); matches the Beha&vior.. button [OPEN] | [BYTES ENG_LANG.DLL ACCELERATOR FACTACCEL] [BYTES ENG_LANG.DLL STRING 145] id 2304 | strings | none | todo | registered |
 | KEY-84 | Factory Tab / Shift+Tab (commands 500/510) | [BYTES ENG_LANG.DLL ACCELERATOR FACTACCEL] | strings | none | todo | registered |
 | KEY-85 | Factory F1 (command 256) | [BYTES ENG_LANG.DLL ACCELERATOR FACTACCEL] | strings | none | todo | registered |
+| KEY-86 | Cheat keys: DELETE toggles them; while on, 1 to 9 and F3 to F9 call in ships, add fuel, resources and weapons, force a crime, toggle god mode and stop the defender launches | [BYTES seg11:0x6ee7] [BYTES seg11:0x72e0] [ORACLE ships-0003] | oracle | verified | todo | registered |
 
 ## WIN: Windows, dialogs and panels
 
@@ -171,13 +172,13 @@ One row per binding. MAINACCEL and FACTACCEL are the accelerator tables in ENG_L
 | WIN-35 | New Ship Body dialog (#011e): body and cost | [MANUAL Resource Management] [BYTES ENG_LANG.DLL DIALOG 286] [BYTES ISPACE.DLL seg10:0xf9c] [BYTES seg16:0x1365 seg10:0x82a2] | manual | located | todo | unknown |
 | WIN-36 | Ambulance landing scene: the corridor (scene 105 through ISPACE.DLL ordinal 32: the HIGH VOLTAGE plate, the "486" chip, the "Video Card" and "Sound Card" labels from the INI lookups of ISPACE.DLL seg8:0x5c86), the incoming jet seg15:0x3caa, "Incoming Jet", "Approaching Landing Pad..", the descent seg15:0x374c with its shadow, the monitors and panels with their sloped sides; the monitor faces' bezel (seg16:0x27ea) and the SKY TALON's blue flame are [OPEN] | [MANUAL Game Settings] [BYTES ENG_LANG.DLL STRING 134] id 2137 [BYTES ENG_LANG.DLL STRING 134] id 2138 [BYTES seg7:0x5ce] [BYTES seg16:0xcfe] [BYTES seg15:0x302e seg15:0x3caa seg15:0x374c seg16:0x2144] [BYTES ISPACE.DLL seg8:0x0 seg8:0x5c86] [ORACLE core-0003] [ORACLE core-0007] [ORACLE core-0008] | oracle | verified | done | unknown |
 | WIN-37 | Icon Watch window (IS_ICON): every icon in the wave | [MANUAL Icons] [BYTES DGROUP:0x52d] [BYTES seg11:0x6e94] [BYTES seg6:0x152b seg7:0x6184 seg13:0x66ca seg2:0x4f0 seg7:0x64ac seg13:0x5a6a] | manual | verified | done | unknown |
-| WIN-38 | Ship Watch window (IS_WATCH): position, direction, actions; race time gaps | [MANUAL Dealing With Other Ships] [MANUAL Race Courses] [BYTES DGROUP:0x51f] [BYTES seg11:0x7127] | manual | understood | todo | unknown |
-| WIN-39 | Watch menu: Icons, One Ship, All Ships | [BYTES ENG_LANG.DLL MENU 101] [BYTES seg2:0x15e0] [BYTES seg11:0x6ea0] | code | understood | todo | unknown |
-| WIN-40 | IS_SMART window; purpose [OPEN] | [BYTES DGROUP:0x53a] [BYTES seg11:0x6ea0] [BYTES seg2:0x513 seg13:0x638a seg13:0x66d4] | code | understood | todo | unknown |
+| WIN-38 | Ship Watch window (IS_WATCH): position, direction, actions; race time gaps | [MANUAL Dealing With Other Ships] [MANUAL Race Courses] [BYTES DGROUP:0x51f] [BYTES seg11:0x7127] [BYTES seg13:0x4f4e] [BYTES seg13:0x50b0] [BYTES seg13:0x563c] | manual | verified | todo | unknown |
+| WIN-39 | Watch menu: Icons, One Ship, All Ships | [BYTES ENG_LANG.DLL MENU 101] [BYTES seg2:0x15e0] [BYTES seg11:0x6ea0] [BYTES seg13:0x638a] [BYTES seg13:0x613a] [BYTES seg13:0x6450] | code | verified | todo | unknown |
+| WIN-40 | IS_SMART window; purpose [OPEN] | [BYTES DGROUP:0x53a] [BYTES seg11:0x6ea0] [BYTES seg2:0x513 seg13:0x638a seg13:0x66d4] [BYTES seg13:0x613a] [BYTES seg13:0x6450] | code | verified | todo | unknown |
 | WIN-41 | IS_INFO window: the two status panels of the wave HUD | [BYTES DGROUP:0x55c] [BYTES seg11:0xafe] [BYTES seg11:0xca2] [BYTES seg11:0xc5d seg11:0xc97] [BYTES seg11:0x7798] | code | verified | todo | unknown |
 | WIN-42 | Online help window (IS_HELP, "Inner Space Online Help"): Main Menus, Radar Display, Search, Prev, Next, OK, See Also | [MANUAL General] [BYTES ENG_LANG.DLL STRING 137] ids 2182–2190 | manual | none | todo | unknown |
 | WIN-43 | Dynamic help topics: SPACE SHIPS, USEFUL OBJECTS, HAZARDS, OTHER OBJECTS, TEAMS, KEYBOARD CMDS, HOW TO PLAY, RACING, GAMES, WEAPONS, LAWS | [MANUAL General] [BYTES ENG_LANG.DLL STRING 51] ids 800–809 [BYTES ENG_LANG.DLL STRING 75] id 1198 | manual | none | todo | unknown |
-| WIN-44 | Two dynamic help pages per ship: statistics, damage, behaviour, attitudes | [MANUAL General] | manual | none | todo | unknown |
+| WIN-44 | Two dynamic help pages per ship: statistics, damage, behaviour, attitudes | [MANUAL General] [BYTES seg17:0x33ee] | manual | understood | todo | unknown |
 | WIN-45 | Help Search dialog (#0194) | [BYTES ENG_LANG.DLL DIALOG 404] | strings | none | todo | unknown |
 | WIN-46 | High-score list "Champions of INNER SPACE": SHIP, SCORE, DATE, STATUS, GAME FILE | [MANUAL High Scores] [BYTES ENG_LANG.DLL STRING 58] id 925 [BYTES ENG_LANG.DLL STRING 129] ids 2062–2063 [BYTES ENG_LANG.DLL STRING 130] ids 2064–2066 [BYTES seg6:0x6576] [BYTES seg6:0x5de3] | manual | understood | done | unknown |
 | WIN-47 | Pre-wave mission briefing: "WAVE n MISSION BRIEFING", directory, icon count, program names | [MANUAL Game Settings] [ORACLE runtime-0001] [BYTES ENG_LANG.DLL STRING 159] id 2537 [BYTES seg9:0x5d19] [ORACLE start-0001] [BYTES seg17:0x33ee seg17:0x3417 seg17:0x3433] | oracle | verified | done | demo |
@@ -364,30 +365,30 @@ The nine crimes of the Laws of Inner Space topic, with the charge text the Hall 
 
 | ID | Feature | Evidence | Spec | RE | Port | Edition |
 |---|---|---|---|---|---|---|
-| LAW-01 | Crime: Stealing Doughnuts from an Enforcer (charge "Taking An Enforcer's Doughnut") | [MANUAL Laws of Inner Space] [BYTES ENG_LANG.DLL STRING 69] id 1102 [BYTES ENG_LANG.DLL STRING 61] id 961 | manual | none | todo | unknown |
-| LAW-02 | Crime: Destroying Doughnut Launchers ("Destroying Doughnut Dispensors") | [MANUAL Laws of Inner Space] [BYTES ENG_LANG.DLL STRING 70] id 1104 [BYTES ENG_LANG.DLL STRING 61] id 962 | manual | none | todo | unknown |
-| LAW-03 | Crime: Attacking a Fleeing Ship ("Attacking The Defenseless") | [MANUAL Laws of Inner Space] [BYTES ENG_LANG.DLL STRING 69] id 1101 [BYTES ENG_LANG.DLL STRING 60] id 950 | manual | none | todo | unknown |
-| LAW-04 | Crime: Taking a Dead Ship's Resource Pack ("Removing Evidence") | [MANUAL Laws of Inner Space] [BYTES ENG_LANG.DLL STRING 69] id 1100 [BYTES ENG_LANG.DLL STRING 36] id 572 | manual | none | todo | unknown |
-| LAW-05 | Crime: Destroying Good (Non-virused) Icons ("Destroying An Icon") | [MANUAL Laws of Inner Space] [BYTES ENG_LANG.DLL STRING 69] id 1099 [BYTES ENG_LANG.DLL STRING 36] id 570 | manual | none | todo | unknown |
-| LAW-06 | Crime: Unsportsmanlike Conduct ("Unsportsmanlike Race Conduct") | [MANUAL Laws of Inner Space] [BYTES ENG_LANG.DLL STRING 70] id 1106 [BYTES ENG_LANG.DLL STRING 61] id 963 | manual | none | todo | unknown |
-| LAW-07 | Crime: Resisting Arrest | [MANUAL Laws of Inner Space] [BYTES ENG_LANG.DLL STRING 70] id 1105 | manual | none | todo | unknown |
-| LAW-08 | Crime: Attacking An Enforcer ("Firing Upon An Officer", "Murdering An Enforcer") | [MANUAL Laws of Inner Space] [BYTES ENG_LANG.DLL STRING 69] id 1103 [BYTES ENG_LANG.DLL STRING 69] id 1098 | manual | none | todo | unknown |
-| LAW-09 | Crime: Reckless Thrusting ("Thrusting Recklessly") | [MANUAL Laws of Inner Space] [BYTES ENG_LANG.DLL STRING 69] id 1093 [BYTES ENG_LANG.DLL STRING 61] id 964 | manual | none | todo | unknown |
-| LAW-10 | Charge: "Using Excessive Force" | [BYTES ENG_LANG.DLL STRING 61] id 960 | strings | none | todo | unknown |
-| LAW-11 | Charge: "Being An Idiot" ("It's Been A Slow Day") | [BYTES ENG_LANG.DLL STRING 70] id 1107 [BYTES ENG_LANG.DLL STRING 70] id 1108 | strings | none | todo | unknown |
-| LAW-12 | Enforcers act only on crimes they witness | [MANUAL Laws of Inner Space] | manual | none | todo | unknown |
-| LAW-13 | Patrol Class (Patrolman, Constable): patrol, warn, call an Interceptor | [MANUAL Laws of Inner Space] [BYTES ENG_LANG.DLL STRING 46] id 730 | manual | none | todo | unknown |
-| LAW-14 | Intercept Class (Interceptor, Lethal Weapon): handcuff and escort out the gate | [MANUAL Laws of Inner Space] [BYTES ENG_LANG.DLL STRING 35] id 551 | manual | none | todo | unknown |
-| LAW-15 | Terminator Class (Terminator, Eliminator): destroy those who resist | [MANUAL Laws of Inner Space] [BYTES ENG_LANG.DLL STRING 37] id 576 | manual | none | todo | unknown |
-| LAW-16 | Enforcer warnings and lines | [BYTES ENG_LANG.DLL STRING 35] ids 550–558 [BYTES ENG_LANG.DLL STRING 54] ids 860–863 [BYTES seg13:0xa6bc] | strings | understood | wip | unknown |
-| LAW-17 | Arrest: handcuffed and escorted to the Hall of Justice; roughed up when resisting | [MANUAL Laws of Inner Space] [BYTES seg7:0x652] | manual | understood | todo | unknown |
-| LAW-18 | Outstanding arrest warrant brings another Enforcer later | [MANUAL Laws of Inner Space] [BYTES ENG_LANG.DLL STRING 19] id 291 [BYTES ENG_LANG.DLL STRING 122] id 1940 | manual | none | todo | unknown |
-| LAW-19 | Hall of Justice: charges, arrest event and punishment by prior arrests, severity and wealth | [MANUAL Laws of Inner Space] [BYTES ENG_LANG.DLL STRING 57] ids 908–911 [BYTES ENG_LANG.DLL STRING 58] ids 912–923 [BYTES ENG_LANG.DLL STRING 46] id 723 [BYTES seg16:0x697f] | manual | understood | todo | unknown |
-| LAW-20 | Punishments: fine in icons, confiscation, insults | [BYTES ENG_LANG.DLL STRING 46] id 725 [BYTES ENG_LANG.DLL STRING 46] id 726 [BYTES ENG_LANG.DLL STRING 40] ids 630–637 [BYTES seg16:0x697f] | code | understood | todo | unknown |
-| LAW-21 | Team lawfulness: Knights lawful, Pirates flout the law | [MANUAL Laws of Inner Space] | manual | none | todo | unknown |
-| LAW-22 | No Enforcers in duel directories | [MANUAL Duelling] | manual | none | todo | unknown |
-| LAW-23 | Taking race icons without winning is illegal | [MANUAL Race Courses] | manual | none | todo | unknown |
-| LAW-24 | Enforcers arrest computer ships too ("Arresting %D For") | [BYTES ENG_LANG.DLL STRING 32] id 508 | strings | none | todo | unknown |
+| LAW-01 | Crime: Stealing Doughnuts from an Enforcer (charge "Taking An Enforcer's Doughnut") | [MANUAL Laws of Inner Space] [BYTES ENG_LANG.DLL STRING 69] id 1102 [BYTES ENG_LANG.DLL STRING 61] id 961 [BYTES seg13:0x320e] | manual | verified | todo | unknown |
+| LAW-02 | Crime: Destroying Doughnut Launchers ("Destroying Doughnut Dispensors") | [MANUAL Laws of Inner Space] [BYTES ENG_LANG.DLL STRING 70] id 1104 [BYTES ENG_LANG.DLL STRING 61] id 962 [BYTES seg8:0x6559] [BYTES seg8:0x779b] | manual | verified | todo | unknown |
+| LAW-03 | Crime: Attacking a Fleeing Ship ("Attacking The Defenseless") | [MANUAL Laws of Inner Space] [BYTES ENG_LANG.DLL STRING 69] id 1101 [BYTES ENG_LANG.DLL STRING 60] id 950 [BYTES seg4:0x5fd8] [BYTES seg4:0x61ac] | manual | verified | todo | unknown |
+| LAW-04 | Crime: Taking a Dead Ship's Resource Pack ("Removing Evidence") | [MANUAL Laws of Inner Space] [BYTES ENG_LANG.DLL STRING 69] id 1100 [BYTES ENG_LANG.DLL STRING 36] id 572 [BYTES seg13:0x1f90] | manual | verified | todo | unknown |
+| LAW-05 | Crime: Destroying Good (Non-virused) Icons ("Destroying An Icon") | [MANUAL Laws of Inner Space] [BYTES ENG_LANG.DLL STRING 69] id 1099 [BYTES ENG_LANG.DLL STRING 36] id 570 [BYTES seg8:0x653b] [BYTES seg8:0x7761] [BYTES seg7:0x4b95] | manual | verified | todo | unknown |
+| LAW-06 | Crime: Unsportsmanlike Conduct ("Unsportsmanlike Race Conduct") | [MANUAL Laws of Inner Space] [BYTES ENG_LANG.DLL STRING 70] id 1106 [BYTES ENG_LANG.DLL STRING 61] id 963 [BYTES seg13:0x1879] | manual | verified | todo | unknown |
+| LAW-07 | Crime: Resisting Arrest | [MANUAL Laws of Inner Space] [BYTES ENG_LANG.DLL STRING 70] id 1105 [BYTES seg13:0xaa22] | manual | verified | todo | unknown |
+| LAW-08 | Crime: Attacking An Enforcer ("Firing Upon An Officer", "Murdering An Enforcer") | [MANUAL Laws of Inner Space] [BYTES ENG_LANG.DLL STRING 69] id 1103 [BYTES ENG_LANG.DLL STRING 69] id 1098 [BYTES seg4:0x7636] [BYTES seg4:0x6356] | manual | verified | todo | unknown |
+| LAW-09 | Crime: Reckless Thrusting ("Thrusting Recklessly") | [MANUAL Laws of Inner Space] [BYTES ENG_LANG.DLL STRING 69] id 1093 [BYTES ENG_LANG.DLL STRING 61] id 964 [BYTES seg8:0x5eeb] | manual | verified | todo | unknown |
+| LAW-10 | Charge: "Using Excessive Force" | [BYTES ENG_LANG.DLL STRING 61] id 960 [BYTES seg4:0x5fd8] [BYTES seg4:0x61ac] | strings | verified | todo | unknown |
+| LAW-11 | Charge: "Being An Idiot" ("It's Been A Slow Day") | [BYTES ENG_LANG.DLL STRING 70] id 1107 [BYTES ENG_LANG.DLL STRING 70] id 1108 [BYTES seg16:0x6d50] | strings | verified | todo | unknown |
+| LAW-12 | Enforcers act only on crimes they witness | [MANUAL Laws of Inner Space] [BYTES seg13:0xb80a] | manual | verified | todo | unknown |
+| LAW-13 | Patrol Class (Patrolman, Constable): patrol, warn, call an Interceptor | [MANUAL Laws of Inner Space] [BYTES ENG_LANG.DLL STRING 46] id 730 [BYTES seg13:0xa78e] | manual | verified | todo | unknown |
+| LAW-14 | Intercept Class (Interceptor, Lethal Weapon): handcuff and escort out the gate | [MANUAL Laws of Inner Space] [BYTES ENG_LANG.DLL STRING 35] id 551 [BYTES seg13:0xa98a] | manual | verified | todo | unknown |
+| LAW-15 | Terminator Class (Terminator, Eliminator): destroy those who resist | [MANUAL Laws of Inner Space] [BYTES ENG_LANG.DLL STRING 37] id 576 [BYTES seg13:0xac37] | manual | verified | todo | unknown |
+| LAW-16 | Enforcer warnings and lines | [BYTES ENG_LANG.DLL STRING 35] ids 550–558 [BYTES ENG_LANG.DLL STRING 54] ids 860–863 [BYTES seg13:0xa6bc] [BYTES seg3:0x6ec] | strings | verified | wip | unknown |
+| LAW-17 | Arrest: handcuffed and escorted to the Hall of Justice; roughed up when resisting | [MANUAL Laws of Inner Space] [BYTES seg7:0x652] [BYTES seg13:0xa98a] [BYTES seg12:0x23fd] | manual | verified | todo | unknown |
+| LAW-18 | Outstanding arrest warrant brings another Enforcer later | [MANUAL Laws of Inner Space] [BYTES ENG_LANG.DLL STRING 19] id 291 [BYTES ENG_LANG.DLL STRING 122] id 1940 [BYTES seg13:0xb93a] | manual | verified | todo | unknown |
+| LAW-19 | Hall of Justice: charges, arrest event and punishment by prior arrests, severity and wealth | [MANUAL Laws of Inner Space] [BYTES ENG_LANG.DLL STRING 57] ids 908–911 [BYTES ENG_LANG.DLL STRING 58] ids 912–923 [BYTES ENG_LANG.DLL STRING 46] id 723 [BYTES seg16:0x697f] [BYTES seg16:0x6afe] [BYTES seg16:0x6ebf] | manual | verified | todo | unknown |
+| LAW-20 | Punishments: fine in icons, confiscation, insults | [BYTES ENG_LANG.DLL STRING 46] id 725 [BYTES ENG_LANG.DLL STRING 46] id 726 [BYTES ENG_LANG.DLL STRING 40] ids 630–637 [BYTES seg16:0x697f] [BYTES seg16:0x6afe] [BYTES seg16:0x6ebf] | code | verified | todo | unknown |
+| LAW-21 | Team lawfulness: Knights lawful, Pirates flout the law | [MANUAL Laws of Inner Space] [BYTES seg4:0x5f7b] | manual | verified | todo | unknown |
+| LAW-22 | No Enforcers in duel directories | [MANUAL Duelling] [BYTES seg13:0xb705] | manual | verified | todo | unknown |
+| LAW-23 | Taking race icons without winning is illegal | [MANUAL Race Courses] [BYTES seg13:0xae7c] [BYTES seg13:0x1863] | manual | verified | todo | unknown |
+| LAW-24 | Enforcers arrest computer ships too ("Arresting %D For") | [BYTES ENG_LANG.DLL STRING 32] id 508 [BYTES seg3:0x2bc1] [BYTES seg13:0xaad2] | strings | verified | todo | unknown |
 
 ## ECO: Ambulance, credit and fuel
 
@@ -422,14 +423,14 @@ The nine crimes of the Laws of Inner Space topic, with the charge text the Hall 
 | ID | Feature | Evidence | Spec | RE | Port | Edition |
 |---|---|---|---|---|---|---|
 | AI-01 | Computer pilots capture, attack, defend, refuel and flee by team and attitude | [MANUAL Dealing With Other Ships] [BYTES seg4:0x78 seg4:0xbde] [ORACLE ships-0001] | manual | verified | done | unknown |
-| AI-02 | Commands are requests: friendly, idle ships comply; refusal replies | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 116] ids 1850–1855 [BYTES ENG_LANG.DLL STRING 117] ids 1856–1871 [BYTES ENG_LANG.DLL STRING 118] ids 1872–1874 [BYTES ENG_LANG.DLL STRING 121] ids 1920–1924 | manual | none | todo | unknown |
-| AI-03 | Activity reports on request ("Capturing ...", "Fleeing From ...") | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 29] ids 456–463 [BYTES ENG_LANG.DLL STRING 30] ids 464–479 [BYTES ENG_LANG.DLL STRING 31] ids 480–495 [BYTES ENG_LANG.DLL STRING 32] ids 496–511 [BYTES ENG_LANG.DLL STRING 33] ids 512–516 [BYTES ENG_LANG.DLL STRING 66] ids 1040–1048 | manual | none | todo | unknown |
-| AI-04 | Messages from ships: help requests, progress, challenges | [MANUAL General] [BYTES ENG_LANG.DLL STRING 88] ids 1404–1407 [BYTES ENG_LANG.DLL STRING 189] id 3020 [BYTES seg3:0x6ec] | manual | understood | wip | unknown |
-| AI-05 | Fight challenges accepted or declined | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 21] ids 332–335 [BYTES ENG_LANG.DLL STRING 22] ids 336–338 [BYTES ENG_LANG.DLL STRING 23] ids 354–358 | manual | none | todo | unknown |
-| AI-06 | Defenders: created by icons, more and fiercer at higher waves; attack attackers; hunt you when their icon dies | [MANUAL Icons] [BYTES ENG_LANG.DLL 5000 305] [BYTES ENG_LANG.DLL STRING 10] id 154 | manual | none | todo | unknown |
-| AI-07 | Captured icon's defenders orbit and defend the player and take Alt commands | [MANUAL Icons] [BYTES ENG_LANG.DLL 5000 305] [BYTES seg13:0x1b5e seg13:0x1ba4 seg13:0x1bba] [BYTES ENG_LANG.DLL STRING 36] id 575 | manual | verified | todo | unknown |
+| AI-02 | Commands are requests: friendly, idle ships comply; refusal replies | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 116] ids 1850–1855 [BYTES ENG_LANG.DLL STRING 117] ids 1856–1871 [BYTES ENG_LANG.DLL STRING 118] ids 1872–1874 [BYTES ENG_LANG.DLL STRING 121] ids 1920–1924 [BYTES seg13:0x81c2] [BYTES seg13:0x8570] | manual | verified | todo | unknown |
+| AI-03 | Activity reports on request ("Capturing ...", "Fleeing From ...") | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 29] ids 456–463 [BYTES ENG_LANG.DLL STRING 30] ids 464–479 [BYTES ENG_LANG.DLL STRING 31] ids 480–495 [BYTES ENG_LANG.DLL STRING 32] ids 496–511 [BYTES ENG_LANG.DLL STRING 33] ids 512–516 [BYTES ENG_LANG.DLL STRING 66] ids 1040–1048 [BYTES seg3:0x1d0a] | manual | understood | todo | unknown |
+| AI-04 | Messages from ships: help requests, progress, challenges | [MANUAL General] [BYTES ENG_LANG.DLL STRING 88] ids 1404–1407 [BYTES ENG_LANG.DLL STRING 189] id 3020 [BYTES seg3:0x6ec] [BYTES seg13:0x8570] | manual | understood | wip | unknown |
+| AI-05 | Fight challenges accepted or declined | [MANUAL Dealing With Other Ships] [BYTES ENG_LANG.DLL STRING 21] ids 332–335 [BYTES ENG_LANG.DLL STRING 22] ids 336–338 [BYTES ENG_LANG.DLL STRING 23] ids 354–358 [BYTES seg13:0x915c] | manual | verified | todo | unknown |
+| AI-06 | Defenders: created by icons, more and fiercer at higher waves; attack attackers; hunt you when their icon dies | [MANUAL Icons] [BYTES ENG_LANG.DLL 5000 305] [BYTES ENG_LANG.DLL STRING 10] id 154 [BYTES seg13:0x9a18] [BYTES seg13:0x9ae8] | manual | understood | todo | unknown |
+| AI-07 | Captured icon's defenders orbit and defend the player and take Alt commands | [MANUAL Icons] [BYTES ENG_LANG.DLL 5000 305] [BYTES seg13:0x1b5e seg13:0x1ba4 seg13:0x1bba] [BYTES ENG_LANG.DLL STRING 36] id 575 [BYTES seg11:0x70bb] | manual | verified | todo | unknown |
 | AI-08 | Mid-wave arrivals announced (Pirate, Knight, Patrolman) | [BYTES ENG_LANG.DLL STRING 44] ids 695–703 [BYTES ENG_LANG.DLL STRING 45] ids 704–707 [BYTES ENG_LANG.DLL STRING 46] id 730 [BYTES seg4:0x7e2a seg13:0xae68] | strings | verified | done | unknown |
-| AI-09 | All ships oppose viruses | [MANUAL Hazards] | manual | none | todo | unknown |
+| AI-09 | All ships oppose viruses | [MANUAL Hazards] [BYTES seg13:0x7ba2] | manual | understood | todo | unknown |
 | AI-10 | Pirates steal and loot | [MANUAL Pirates] [BYTES ENG_LANG.DLL STRING 190] id 3031 [BYTES ENG_LANG.DLL STRING 44] id 701 | manual | none | todo | unknown |
 | AI-11 | Faster ships' pilots think faster | [MANUAL Editing Ship Bitmaps] | manual | none | todo | unknown |
 | AI-12 | Death lines and duel taunts | [BYTES ENG_LANG.DLL STRING 66] ids 1050–1055 [BYTES ENG_LANG.DLL STRING 67] id 1056 [BYTES ENG_LANG.DLL STRING 107] ids 1710–1711 [BYTES ENG_LANG.DLL STRING 108] ids 1712–1727 [BYTES ENG_LANG.DLL STRING 109] ids 1728–1743 [BYTES ENG_LANG.DLL STRING 110] ids 1744–1747 [BYTES seg4:0x7636] | strings | understood | wip | unknown |

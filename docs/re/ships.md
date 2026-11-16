@@ -36,6 +36,24 @@ Design record field +0x38 ([structs.md](structs.md#design-records)) has exactly 
 - seg14:0x4520(r, last) returns the first ship j = 0 … last whose +0xd6 = r, or −1 [BYTES seg14:0x4520-0x455b]. DGROUP:0x9346 is the arrest warrant: seg9:0x2828 sets it to the player's +0xd6 when a live team-7 ship with +0x5e = 0 holds (+0x54, +0x56) = (14, player) at the wave end (world.md "Order" DGROUP:0x9346), so a Terminator placed by the next wave's seg14:0x0 hunts the ship that carries that roster index, the player after a perspective shift included.
 - Fields a call-in writes (seg13:0xae68, "Mid-wave arrivals"): +0x52 (activity), +0x54 = 14, +0x56 = the target ship, +0x32 = 14 and +0x34 = the target (`goal_pool`, `goal_rec`), dword +0x94 = now, byte +0xed = 1, +0x58 = the ship's own index, dword +0x98 = now + 5000, +0x38 = 3, byte +0xcd = the target's low byte [BYTES seg13:0xb1a0-0xb1e3 seg13:0xb5fd-0xb644 seg13:0xb6c1-0xb6d8]. [structs.md](structs.md#ship-records-8--0x15a-bytes-at-dgroup0x7090) lists +0x52 … +0x58, +0x98, +0xcd and +0xed as the pilot's order words ([pilots.md](pilots.md)); here they are only set.
 
+### The stores of seg14:0x1b84
+[BYTES seg14:0x20a9-0x22f2]: object (pool
+DGROUP:0x9324, record i) +0x44 = design +0x32, +0x42 = design +0x2e, +0x46 = design +0x2c, +0x2c =
+200, +0x48 = design +0x30, +0x1e = 0, far pointers +0x66 = seg16:0x8e4, +0x62 = seg11:0x37a0, +0x5e =
+seg8:0x45e0, byte +0x2e = 0, word +0x3c = 0, byte +0x54 = 0; ship +0xec = 1, +0x0c = design +0x3e,
++0x0e = design +0x40, +0x36 = 0, +0x1c = 1, dword +0x84 = GetCurrentTime(), byte +0xe3 = design byte
++0x44 AND 1, +0xe4 = design byte +0x46, +0xe6 = design byte +0xa2, +0xe7 = design byte +0x4a, +0xe9 =
+design byte +0xa7; +0x0a = 1 unless (wave DGROUP:0x91f8 ≠ 1 and i = DGROUP:0x9646); byte +0x5a = 1,
++0x5c = 0, words +0x54 = +0x52 = 0, byte +0xed = 0, words +0xa2 = +0xa0 = 0, byte +0x5f = 0; byte +0xe5
+= (design byte +0xa3 of the design argument [bp+8] ≠ 0); the turn +0x14 = lo16(seg5:0x110(1200·design
++0x20, t)) with t = ((sbyte roster +0x33 + 10)·10 (16-bit) · design +0x3e (`imul word`, 32-bit)) / 100
+for a ship with a roster record, else sext(design +0x3e); and (3·turn)/4 (toward zero) for the player
+in a player game. The lock-out +0x84 is GetCurrentTime() at seg14:0x21c3.
+
+The design-word block seg14:0x1b93-0x20a3 (about 40 stores to DGROUP:0x96d2 +
+0xad·n + {0x04, 0x08 … 0x16, 0x1e … 0x2e, 0x30 … 0x36, 0x42, 0x44, 0x48, 0x4e, 0xa3, 0xa9, 0xab} and
+the ship bytes +0xac / +0xad at seg14:0x1dfb-0x1dff).
+
 ## The wave's ships (seg14:0x0)
 Callers: the placement seg9:0x6624 with mode −1 (seg9:0x688a) and the call-in seg13:0xae68 with mode = the call-in kind or a team (seg13:0xb45c) [BYTES seg9:0x688a seg13:0xb457 seg13:0xb45c]. Both bracket it with seg14:0x3eda / seg14:0x4074 (MASTER.SHP and MASTER.BOD loaded, then freed) [BYTES seg9:0x6883 seg9:0x6890 seg13:0xb3fa seg13:0xb467]. Locals: n = [bp−0xe] the next slot, fresh[8] = [bp−0x54], same = word [bp−0x2a] (the dword is cleared, only the low word counts), c = [bp−0x32].
 

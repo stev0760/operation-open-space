@@ -70,6 +70,19 @@ The probe run's raw memory dumps confirm the generator and the seed source. Step
   - In the 270 sites of the first row, the moduli range from 1 to 26000. The most common are 3 (37 sites), 2 (28), 100 (18), 4 and 6 (14 each) and 10 (13). [BYTES seg4:0x1267]
   - `rand()` lies in 0–32767 and `cwd` sets DX to 0, so the signed `idiv` yields the plain remainder `r % n` for every positive n. [BYTES seg5:0x105]
 - The text formatter seg10:0xa332 draws one number for its `R` directive (0x52). `R` reads two arguments n and base, computes `rand() % n + base` and loads that string id from the language DLL (DGROUP:0x9212) with `LoadString`. So `R` picks one of n consecutive strings. Its callers include the "RESOURCE ALERT" message (seg7:0x62) and messages 0x5b, 0x5e and 0x70, whose strings 687, 692 and 1064 pick one of 688 … 691 ([core.md](core.md#rand-sites)). Which other strings use `R` is [OPEN]. [BYTES seg10:0xa406] [BYTES seg10:0xa7c4] [BYTES seg10:0xa7e2] [BYTES seg10:0xa7f3]
+- Draws of the law and the commands ([law.md](law.md), [pilots.md](pilots.md)):
+
+  | Site | Draws | Evidence |
+  |---|---|---|
+  | seg11:0x7341, the cheat key F6 | one `rand()` % 10 (a 16-bit signed `idiv`, so 0 … 9) for the crime, then the draws of seg13:0xb6f2's callees (seg13:0xae68's gate draw) | [BYTES seg11:0x733b-0x7359] |
+  | seg3:0xf61, the shared voice case of seg3:0x6ec | one `rand()` % 4 for codes 0x3b … 0x3f, 0x41 … 0x44, 0x57 and 0x58: 0 plays sound 0x3d, 1 0x3e, 2 0x3f, 3 none | [BYTES seg3:0xf61-0xf93] |
+  | seg4:0x5fbc, the attack reaction's crime 3 | one `rand()` % 4 (≤ 1 charges the crime) after the amount test | [BYTES seg4:0x5f7b-0x5fdd] |
+  | seg16:0x7139, the Hall of Justice | one `rand()` % 4 for the closing line 860 + r, only when the served sum is not 0; the Hall's only draw | [BYTES seg16:0x712e-0x7162] |
+  | seg13:0x81c2, "help me" | for a computer asker with no helper one `rand()` % 14 (16-bit signed); none for the player | [BYTES seg13:0x8503-0x8565] |
+  | seg13:0x8ad0, "attack my target" | one `rand()` per candidate ship, only on the path where the best refusal code is above 0x90 and the candidate's code below 0x9e (odd takes it) | [BYTES seg13:0x8abc-0x8ae2] |
+  | seg13:0x8166, the reactions | one `rand()` % 3 (virus ask), only on its path | [BYTES seg13:0x8151-0x81b5] |
+  | seg4:0x7128 and seg4:0x718c, the revenge taunt | one `rand()` % 3 for the name, `rand()` & 1 for "remember" (only when nothing is found) and `rand()` & 1 for "hey" | [BYTES seg4:0x7114-0x75aa] |
+  | seg4:0x79ae, cloak and shield | `rand()` % 3, % 5 or % 4 only in the branch whose own state test passes | [BYTES seg4:0x7b38-0x7c7f] |
 - Wave sites whose draws depend on game state ([world.md](world.md)):
 
   | Site | Draws | Evidence |

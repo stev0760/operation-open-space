@@ -224,7 +224,7 @@ seg6:0x8eea fills the header and seg6:0x930a reads it back. "Player ship" fields
 | +0x26, +0x28 | word | player ship bytes +0x5d and +0x5e, sign-extended; read back as bytes into ship record 0 | [BYTES seg6:0x8f48 seg6:0x8f57 seg6:0x962d seg6:0x9634] |
 | +0x2a | word | DGROUP:0x94a2: index of the current directory record | [BYTES seg6:0x8f65] |
 | +0x2c | word | DGROUP:0x931c: the player's roster index | [BYTES seg6:0x8f6c] |
-| +0x2e, +0x30 | word | DGROUP:0x9432, DGROUP:0x964a | [BYTES seg6:0x8f73 seg6:0x8f7a] |
+| +0x2e, +0x30 | word | DGROUP:0x9432, DGROUP:0x964a (the session crime level, [law.md](law.md)) | [BYTES seg6:0x8f73 seg6:0x8f7a] [ORACLE ships-0004] |
 | +0x32 | word | DGROUP:0x94a4: directory record count | [BYTES seg6:0x8f81] |
 | +0x34 | word | DGROUP:0x931a: highest roster index | [BYTES seg6:0x8f88] |
 | +0x36 | 64 words | the 8 × 8 word table DGROUP:0x3824 (see [ISPACE.DLL #5600 135](#ispacedll-5600-135)) | [BYTES seg6:0x91dd] |
@@ -244,11 +244,11 @@ seg6:0x8eea fills the header and seg6:0x930a reads it back. "Player ship" fields
 | +0x171 | byte | INI `Size` (DGROUP:0x9156). A loaded value that differs is written back to the INI | [BYTES seg6:0x8f38 seg6:0x95b8 seg6:0x95e8] |
 | +0x172 | byte | player ship word +0x18 (`weapon_slot`), read back into ship DGROUP:0x9646 | [BYTES seg6:0x902f seg6:0x9707-0x9713] |
 | +0x173 | byte | DGROUP:0x1318 | [BYTES seg6:0x92aa] |
-| +0x174, +0x17e | 10 bytes each | DGROUP:0xa14d, DGROUP:0xa157 | [BYTES seg6:0x9090 seg6:0x909c] |
+| +0x174, +0x17e | 10 bytes each | DGROUP:0xa14d (the player's crime counts by crime), DGROUP:0xa157 (the counts served, [law.md](law.md)) | [BYTES seg6:0x9090 seg6:0x909c] |
 | +0x188, +0x189 | byte | read into DGROUP:0xa161 and DGROUP:0xa162; the writer leaves them 0 | [BYTES seg6:0x96f7 seg6:0x96ff] |
 | +0x18a | byte | DGROUP:0x967c | [BYTES seg6:0x9079] |
 | +0x18b | dword | DGROUP:0x5a8, the play time in frames ([timing.md](timing.md)). Restore Game prints it / 36 as minutes and seconds (string 3000) and writes the quotient back into its header buffer | [BYTES seg6:0x8fb3] [BYTES seg10:0xa130 seg10:0xa13f] [BYTES ENG_LANG.DLL STRING 188] id 3000 |
-| +0x18f | byte | DGROUP:0x9346 | [BYTES seg6:0x9071] |
+| +0x18f | byte | DGROUP:0x9346 (the Terminator warrant, −1 for none, [law.md](law.md)) | [BYTES seg6:0x9071] |
 | +0x190, +0x191 | byte | DGROUP:0xa1cd / 128 toward zero (`cwd; and dx, 0x7f; add; sar 7`) and the idiv remainder; the reader rebuilds (int8)+0x190 << 7 plus (int8)+0x191, exact for −16511 … 16383 | [BYTES seg6:0x925d-0x9266 seg6:0x926e-0x9274 seg6:0x9809-0x981b] |
 | +0x192 | 4 bytes | DGROUP:0xa193–0xa196: both loops run i = 2 … 5 over header +0x190 + i and DGROUP:0xa191 + i | [BYTES seg6:0x9281-0x92a2 seg6:0x9828-0x984a] |
 | +0x196 | byte | DGROUP:0xa1cf | [BYTES seg6:0x927c] |

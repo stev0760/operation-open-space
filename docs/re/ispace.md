@@ -449,7 +449,7 @@ The ordinal-to-slot pairs come from the lookups at seg10:0x67e7–0x6ad3. The en
     | 100, the desk | seg15:0xd9b (state 0), seg15:0x3405 (state 9) | 1, 2, 3 | conditions only |
     | 105, the motherboard corridor | seg15:0x31fd (state 6) | 1, 2, 3 | patterns, bevel, vents, pins, texts, the plate, conditions; type 3's cross |
     | 110 | seg15:0x3284 (state 8) | 1, 3, 4, 5 | f21 = 7 and 253 on type 4 |
-    | 115 | seg15:0x903 | 1, 3, 4, 5 | f21 = 4 on type 4 |
+    | 115 | seg15:0x903, in seg15:0x760 (the state-8 scene, [law.md](law.md)) | 1, 3, 4, 5 | f21 = 4 on type 4 |
     | 120 | seg15:0x332b (state 9) | 1 | none |
 
     [BYTES IGRAPHIC.DLL 6600 100] [BYTES IGRAPHIC.DLL 6600 105] [BYTES IGRAPHIC.DLL 6600 110] [BYTES IGRAPHIC.DLL 6600 115] [BYTES IGRAPHIC.DLL 6600 120] [BYTES seg15:0x31fd seg15:0x3284 seg15:0x332b seg15:0x3405 seg15:0x903]

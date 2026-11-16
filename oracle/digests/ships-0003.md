@@ -21,16 +21,16 @@
 - **The state word DGROUP:0x90f4 goes 1 -> 8 at 13:13:47.982** (t0 + 29.21 s) and the screen is the Hall of Justice from `f6-49` (13:13:50.6 is the first shot of the pillars; the video holds the transition). [ORACLE ships-0003]
 
 ## The Hall of Justice (k1, shots `f6-49` … `f6-95`; k5 `r-3` … `r-60`)
-- Picture: a hall with two grey pillars, the stairs and a blue star-pattern disc, a monitor (green text, typewriter fill) over the player's ship (the ship has the sprite of its design, a blue rocket-like shape in `k1`) standing on the disc; in the first frames a camera dolly shows the pillars and the disc (`k5/r-3`, `r-5`). The text, upper case, a blank line between paragraphs, scrolling up when the screen is full (`<pilot>` for the pilot's name, 11/15/26 and 1:13PM are the Wine host's date and time in the form `H:MMPM M/D/YY`): [ORACLE ships-0003]
+- Picture: a hall with two grey pillars, the stairs and a blue star-pattern disc, a monitor (green text, typewriter fill) over the player's ship (the ship has the sprite of its design, a blue rocket-like shape in `k1`) standing on the disc; in the first frames a camera dolly shows the pillars and the disc (`k5/r-3`, `r-5`). The text, upper case, a blank line between paragraphs, scrolling up when the screen is full (`<pilot>` for the pilot's name, 11/15/126 and 1:13PM are the Wine host's date and time in the form `H:MMPM M/D/Y`, the year printed as years since 1900): [ORACLE ships-0003]
   1. `THIS IS THE HALL OF JUSTICE, <PILOT>.`
   2. `THOSE WHO BREAK THE LAWS OF INNER SPACE ARE BROUGHT HERE TO MEET THEIR FATE.`
-  3. `AFTER OBSERVING YOU REMOVING EVIDENCE, OFFICER 2171 (INTERCEPTOR) ARRESTED YOU AT 1:13PM 11/15/26.`
+  3. `AFTER OBSERVING YOU REMOVING EVIDENCE, OFFICER 2171 (INTERCEPTOR) ARRESTED YOU AT 1:13PM 11/15/126.`
   4. `YOU ARE CHARGED WITH 1 COUNT OF REMOVING EVIDENCE.`
   5. `AFTER DUE CONSIDERATION, YOU HAVE BEEN FOUND GUILTY AS CHARGED.`
   6. `CONSIDERING THE SERIOUSNESS OF YOUR CRIME AND THAT THIS IS YOUR 1ST OFFENSE, WE ARE ASSESSING YOU A FINE OF 1.50 ICONS.`
   7. `YOUR CREDIT IS NOW 0.0 ICONS.`
   8. `STAY OUT OF TROUBLE, <PILOT>.`
-- The officer number 2171 is the same in `k1` and `k5`. The typewriter prints about 1 character per 0.1 s: paragraph 1 is typed at 13:13:50.6 - 52, the last line is complete at about 13:14:17. After the last line the ship's thruster flame shows (`k1/f6-94`), the screen goes black (`f6-98`, 13:14:20) and the **debriefing** opens at 13:14:22.919 (state word 8 -> 2, 34.9 s after the Hall began). [ORACLE ships-0003]
+- The officer number 2171 is the same in `k1` and `k5`. The typewriter's pace by these times is about 25 characters per second: paragraph 1 is typed at 13:13:50.6 - 52, the last line is complete at about 13:14:17. After the last line the ship's thruster flame shows (`k1/f6-94`), the screen goes black (`f6-98`, 13:14:20) and the **debriefing** opens at 13:14:22.919 (state word 8 -> 2, 34.9 s after the Hall began). [ORACLE ships-0003]
 - **The fine:** the credit word (ship +0xdc, DGROUP:0x716c) goes 150 -> 0 at 13:13:50.275 (2.3 s after the Hall opens); 150 is the 1.50 ICONS of the line, the credit was 150 before. Resources (DGROUP:0x715e) stay 0 in `k1` and `k5`. The score is unchanged by the fine (1700 before and after in `k1`, 900 in `k5`). [ORACLE ships-0003]
 
 ## After the Hall: the debriefing, the Navigation window, files
@@ -40,7 +40,7 @@
 
 ## The pilot who leaves through the gate while cuffed (`k5`, F6 at 13:26:49.315)
 - Same sequence: the Interceptor at t0 + 0.02 s, the warning and the HANDCUFFS pair (14, 3) at **t0 + 10.07 s** (13:26:59.388), the player at the gate (20180, 19000) with v (0, −30) because this run never braked. The player's own drift crossed the gate line within 1.1 s: object state 1 at 13:27:00.509 at (19724, 16081), v (−24, −81); the arrest flag DGROUP:0x93a4 = 1 at 13:26:59.748 (t0 + 10.43 s); ship word +0x2e = 1 at 13:27:00.571; the state word 8 at 13:27:00.785 (t0 + 11.47 s); the credit 150 -> 0 at 13:27:05.864. [ORACLE ships-0003]
-- **The Hall's text differs in the charge only:** `AFTER OBSERVING YOU RESISTING ARREST, OFFICER 2171 (INTERCEPTOR) ARRESTED YOU AT 1:27PM 11/15/26.` and `YOU ARE CHARGED WITH 1 COUNT OF RESISTING ARREST.`; the rest of the text is the same, the fine 1.50 ICONS, the credit 0.0 ICONS, "STAY OUT OF TROUBLE, <PILOT>.". The debriefing opens at 13:27:41.79 (the Hall lasted 41 s). INSPACE.INI is unchanged. [ORACLE ships-0003]
+- **The Hall's text differs in the charge only:** `AFTER OBSERVING YOU RESISTING ARREST, OFFICER 2171 (INTERCEPTOR) ARRESTED YOU AT 1:27PM 11/15/126.` and `YOU ARE CHARGED WITH 1 COUNT OF RESISTING ARREST.`; the rest of the text is the same, the fine 1.50 ICONS, the credit 0.0 ICONS, "STAY OUT OF TROUBLE, <PILOT>.". The debriefing opens at 13:27:41.79 (the Hall lasted 41 s). INSPACE.INI is unchanged. [ORACLE ships-0003]
 - **Not obtained:** a pilot who thrusts against the tether while staying on the screen. In `k5` the player was drifting toward the gate and passed it before a thrust could be tried; `k4` (F6 at 13:23:50.7, a third computer ship present from the wave start, DGROUP:0x9316 = 3) lost the player to a ship at 13:24:01.9, 11 s after the key and before the HANDCUFFS; in `k3` F6 never took (see the first section) and the player was lost at 13:21:49 to a third ship. `k2` (F6 at 13:18:42.99) cuffed the player at 13:18:51.669 (t0 + 8.7 s) and the player left through the gate at 13:19:00.662, the same arrest as `k5`. [OPEN]
 
 ## Entries in new directories

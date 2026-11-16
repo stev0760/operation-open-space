@@ -471,6 +471,7 @@ seg13:0x33d6(i) rewrites ship word +0xd8 (DGROUP:0x7168), the `kill_value` of [s
 - **Hold behaviour.** Up and Down are tested with mask 0x8001, so a press shorter than the polling interval still acts once through the "pressed since the last call" bit. The turn keys use only 0x8000. [BYTES seg11:0x5f81 seg11:0x5fb9 seg11:0x5978 seg11:0x5a16]
 
 ### Key messages (seg11:0x6b64)
+The cheat keys, the command keys (Ctrl, Alt and Strategy) and the watch keys are in [law.md](law.md), [pilots.md](pilots.md) and [shell.md](shell.md).
 - **Gate.** seg11:0x6b64 returns without acting while the player's dword +0x84 > now or the player's `state` ≠ 0, except for WM_KEYUP 'P' and WM_KEYDOWN 'H'. On WM_KEYUP it first handles ESC, and 'R' when DGROUP:0x95bc = 0, as in [shell.md](shell.md#exit). While DGROUP:0x95bc = 0 (the demo) WM_KEYDOWN accepts only VK_ADD, VK_SUBTRACT, 'W', VK_OEM_MINUS and VK_OEM_PLUS. [BYTES seg11:0x6b64 seg11:0x6cde seg11:0x6cfd]
 - **WM_KEYUP decode** (seg11:0x6d19). It does nothing while DGROUP:0x95bc = 0 (the demo). Otherwise VK_F12 goes to seg11:0x6d6c, the `PlayMode` toggle, any key above it returns, and successive subtractions on AL send VK_RETURN (0x0d) and 'Z' (0x5a) to seg11:0x6e11, the weapon system ([core.md](core.md#two-fire-paths)), CapsLock to seg11:0x6dd6, the digits 1 … 9 and F3 … F9 to seg11:0x6d58 and 'P' to seg11:0x6dc4. The remap seg11:0xb306 leaves 'Z' and Enter alone: its list, string 2901 "NQADTGSCDVPBWGXSIEFSCM", holds neither. [BYTES seg11:0x6d19 seg11:0x6d1e seg11:0x6d25 seg11:0x6d28 seg11:0x6d2e seg11:0x6d30 seg11:0x6d34 seg11:0x6d3a seg11:0x6d40 seg11:0x6d44 seg11:0x6d48 seg11:0x6d4a] [BYTES ENG_LANG.DLL STRING 182] id 2901
   - The F12 case toggles `PlayMode`, copying DGROUP:0x1110 to DGROUP:0x8630 and calling seg13:0x2f30(player) on the way from 0 to 1, sets DGROUP:0x1038 = 1 and DGROUP:0x9378 = `PlayMode`, and posts 0x9a5 to the main window DGROUP:0x16; it writes no weapon slot. [BYTES seg11:0x6d6c seg11:0x6dae seg11:0x6dc1] The conditions under which it refuses the switch to 1 (a race, DGROUP:0x92e8, seg10:0xa96c) have an analyst's reading only (work/analysis/m4/s2-display.md §3). [OPEN]
@@ -608,6 +609,31 @@ The flame cell is f = (9 << `Size`) >> 1, or `Size`·6 + 3 while DGROUP:0x9130 �
    - With ship word +0x10 in 1 … 6 it pastes only h = object +0x28, into column 16 at x = 16·s + 17·g + ox, twice: at y = g + oy and y = s + 2g + oy. The heading's own column is not pasted. [BYTES seg11:0xb1ed seg11:0xb264 seg11:0xb2b9 seg11:0xb2d5]
 5. **Callers.** seg11:0x641f pastes on and sets ship +0x02 = 1 ([Thrust](#thrust)); seg11:0x6039 and seg11:0x68f3 paste off only when +0x02 ≠ 0 and clear it; seg13:0x3d6 passes +0x02 after stepping ship word +0x10; seg11:0x4c50 pastes on when +0x02 ≠ 0; seg9:0x2e69 pastes off for i = 0 … DGROUP:0x9316, on seg9:0x2828's path from seg9:0x2b1d behind DGROUP:0x91f8 > 0. The briefing's ship page (phase 11, [shell.md](shell.md#screen-states)) calls seg11:0xb09c(DGROUP:0x9464, 1) at seg17:0x22fb, (ship, 0) at seg17:0x25f2, (ship, 1) at seg17:0x2a32 and (DGROUP:0x9464, 1) at seg17:0x2b3e. These ten are all the call sites. [BYTES seg11:0x641f seg11:0x6039 seg11:0x68f3 seg13:0x3ca seg13:0x3d6 seg11:0x4c43 seg11:0x4c50 seg9:0x2b1d seg9:0x2e5c seg9:0x2e69 seg17:0x22fb seg17:0x25f2 seg17:0x2a32 seg17:0x2b3e]
 - **Oracle.** Between wave-0001's 05-wave and 06-fly-up, the 52 pixels that differ in the window x 500 … 539, y 330 … 369 all lie in the 9 × 9 box x 516 … 524, y 345 … 353 below the centred ship. [ORACLE wave-0001]
+
+### The OverThruster's particle burst (seg7:0x375a, seg8:0x83e)
+The entry table is DGROUP:0x5b28 + 0x16·(4n + k) (group stride
+0x58): +0x00/+0x02 the screen point, +0x04/+0x06 the erase point, +0x08/+0x0a the last point,
++0x0c age, +0x0e/+0x10 the step, +0x12/+0x14 the world position — flight.h's BurstEntry. Nothing
+while DGROUP:0x9510 ≥ 50; G = 2·DGROUP:0x9208 + 3, L = (DGROUP:0x9208 + 7)·4; group n = DGROUP:0x9510
+starts while G − 1 > DGROUP:0x9510: position = object (DGROUP:0x9512, DGROUP:0x9514) +0x04/+0x06
+plus (DGROUP:0x7ba0 / 0x7ba2 + 4·(64·design + frame)) << 3 with design = ship word +0x4e of record
+DGROUP:0x9514 (whatever the pool) and frame = object word +0x28 unmasked; step = −(DGROUP:0x1050 /
+0x1052 + 4·frame) << 2; age 0 [BYTES seg7:0x3801-0x38b2]. The muzzle entry is
+DGROUP:0x7ba0 + 4·(64·design + frame), that is entry 16 + frame of the table at DGROUP:0x7b60. Groups n ≤ DGROUP:0x9510 run while L + G + 1 >
+DGROUP:0x9510 [BYTES seg7:0x38b6-0x38c9]; a particle with 0 < age < L: seg8:0x83e(n, k) (Pascal
+`retf 4`, the caller's `push dword [bp−6]` gives [bp+8] = n, [bp+6] = k; index 4n + k; seg8:0x29ea
+of +0x12; erase point = last point; last point = new point); SelectObject(DGROUP:0x13dc,
+DGROUP:0x3b4c[(age sar 2) + 10·sbyte ship +0xe3]) (the ship DGROUP:0x9514), PatBlt 2 x 2 0x00F00021
+at the point, 0x00000042 at the erase point; then position += step, age += 1, and at age ≥ L − 1 a
+BLACKNESS PatBlt at the point [BYTES seg7:0x38ce-0x3994]. The turns: particle 0's age ≥ L / 3 (16-bit
+`idiv`) → (vx − vy, vy + vx), (vx − vy sar 1, vy + vx sar 1), (vx + vy sar 1, vy − vx sar 1), (vx +
+vy, vy − vx) for particles 0 … 3, each pair from the old vx; else sar 2, 3, 3, 2 [BYTES
+seg7:0x3790-0x37f0 seg7:0x399f-0x3a20]. DGROUP:0x9510 += 1 and DGROUP:0x9512 = −1 when it equals L + G
+[BYTES seg7:0x3a23-0x3a33]. The OverThruster's start runs only for an on-screen ship (object +0x1a ≠ 0,
+seg11:0x64b1): seg10:0x754a(0x29, DGROUP:0x9324, i, 1), ages 0 and erase points 0xff9cff9c for 10 x 4
+entries, DGROUP:0x9512 = DGROUP:0x9324, DGROUP:0x9514 = i, DGROUP:0x9510 = 0 [BYTES seg11:0x64ba-0x6516].
+With DGROUP:0x9208 ≥ 4, G ≥ 11 and groups 10 … G − 1 address
+entries past the 40 at DGROUP:0x5b28 (DGROUP:0x5ef8 and up); the original reads and writes there (ADR 0016 decision 2).
 
 ### Icon dissolve (seg7:0x3a42)
 - seg7:0x3a42(i) is the icon-dissolve step. It decrements record byte +0x51 by the low byte of DGROUP:0x8ffe, with a floor of 0 ([core.md](core.md#the-icon-after-capture)). [BYTES seg7:0x3a42 seg7:0x3a63 seg7:0x3a6a seg7:0x3a79]
@@ -982,6 +1008,7 @@ seg13:0x5a6a(hdc, x, y, pool, rec, d, flag, s) draws one 45-px cell of an object
   - **Icons.** For pool 0 with icon word DGROUP:0x57aa + 0x23·rec = 0, seg13:0x371c(pool, rec) = 0 and object +0x18 = 0, the source is slot 13 (DGROUP:0x39e8[13], the icon strip) at x = (`gap` + `size`)·rec + `gap`, y = +0x12, `size` square. With the icon word non-zero it is slot rec + 14 at x = (word/2 − 1)·(`size` + `gap`) + `gap`. The destination is ((43 − (`extent` >> 3))/2 + x) >> s and the same for y, (`extent` >> 3) >> s square, by StretchBlt SRCCOPY. [BYTES seg13:0x5d5f seg13:0x5d66 seg13:0x5d77 seg13:0x5d7c seg13:0x5d9b seg13:0x5f2c seg13:0x6096 seg13:0x60e1]
   - **Gate centres.** When seg13:0x371c(pool, rec) ≠ 0 it draws a 41 × 41 picture loaded by seg10:0x6c02(500, 0, −1). [BYTES seg13:0x5dd4 seg13:0x5e8f]
   - **Ships.** For the ship pool with DGROUP:0x131c = 0 it takes the source x from object +0x28. [BYTES seg13:0x5c5f seg13:0x5c73 seg13:0x5c90]
+  - **Ships, case 14 of seg13:0x5c22's switch** (the switch tests the literal pool 14, jump table seg13:0x5db1, not DGROUP:0x9324; the two agree whenever DGROUP:0x9324 = 14): a = extent +0x20 sar 3, size +0x22, gap +0x24, source y +0x12; source x = the gap when the pool is DGROUP:0x9324 and DGROUP:0x131c = 0, else lo16(+0x28·(gap + size)) + gap [BYTES seg13:0x5c30-0x5c90]; SetStretchBltMode(hdc, 3); rop dword [bp−0x12] = 0x00CC0020, the cloak flag [bp−0x14] = 0; the switch on the pool value: case 14 (the literal) sets the slot [bp−4] = ship +0x50 + 0x28 and the flag when +0xe8 ≠ 0 [BYTES seg13:0x5cdd-0x5cfa]; seg13:0x371c (14, rec) = 0 and pool ≠ 1, ≠ 0 lead to seg13:0x6096: off = (43 − a)/2 (`cwd; sub; sar`), a sar= Size [bp+0x12], x = (off + [bp+8]) sar Size, y = (off + [bp+0xa]) sar Size, StretchBlt(hdc, x, y, a, a, DGROUP:0x39e8[slot], sx, sy, size, size, SRCCOPY); flagged: SelectObject(hdc, DGROUP:0x5eaa), PatBlt(hdc, x, y, a, a, 0x00A000C9), the old brush back [BYTES seg13:0x6096-0x612c]. The switch tests the literal pool 14 (jump table seg13:0x5db1), not DGROUP:0x9324; the two agree whenever DGROUP:0x9324 = 14, which every wave has (pitfalls.md "A literal 14 and the ship pool word").
 - **The target's picture, seg13:0x58dc(hdc, flag).** It needs DGROUP:0xa7c ≠ 0 and the IS_INFO mode DGROUP:0xa76 to be 2 or 3, and returns in mode 2 of a kind-6 wave. It reads mark entry d = mode − 2 (pool and record DGROUP:0x6e54/0x6e52 + 0x1e·d). For a pool other than 7 or 12 that seg3:0x0 rejects, mode 3 falls back to 2 with WM_PAINT posted to DGROUP:0xa7c and mode 2 returns. Otherwise it draws seg13:0x5a6a(hdc, mark +0x16, mark +0x18, pool, rec, d, flag, 0). [BYTES seg13:0x58dc seg13:0x594c seg13:0x595b]
 
 ### Direction mark
@@ -1017,7 +1044,7 @@ The target display (d = 0) and two further displays (d = 1, 2) carry a mark that
 - **Help page MASS.** Where does the ship help page compute MASS (strings 254, 255 and 264)? [OPEN]
 - **Alternate move.** What does seg13:0x3b88 do for the player when DGROUP:0x913a or DGROUP:0x913c = 2, and who writes those words? [OPEN]
 - **Turn accumulator.** What value does ship word +0x16 (DGROUP:0x70a6) hold at wave start, given that its writers are seg13:0x135, seg13:0x654 and seg13:0x688? [OPEN]
-- **Thrust table.** What does the 10 × 4 table DGROUP:0x5b2c (stride 0x16), which the OverThruster resets, do? [OPEN]
+- **Thrust table.** The 10 × 4 table DGROUP:0x5b2c (stride 0x16) is the particle burst's entry table ([The OverThruster's particle burst](#the-overthrusters-particle-burst-seg70x375a-seg80x83e)).
 - **Pause.** Does the wave have a pause key, or does it pause only on active-window loss (the timer's GetActiveWindow test at seg2:0x12bf-0x1327) and SC_MINIMIZE (seg2:0xd9e → seg2:0x9c4)? WM_KEYUP 'P' is perspective shifting, not a pause ([ships.md](ships.md#perspective-shifting)). [OPEN]
 - **Mouse.** Do the WndProc mouse cases in seg2 feed flight or targeting? [OPEN]
 - **Status display at wave start.** Why does the real Windows 98 machine keep the full display at the wave start [ORACLE win98-0001]: does its USER send WM_QUERYNEWPALETTE to the reactivated main window at more than 8 bpp, and does a recorded run show the display on the wave's very first frame? Wine sends the message on every activation [REF Wine 11.0 dlls/win32u/input.c], the NT model only on palette displays [REF ReactOS win32ss/user/ntuser/focus.c]. An oracle run with `IconWnd` = 0, in which nothing reactivates main, would show whether the Wine oracle then keeps the display (seg13:0x66af, seg2:0x5cb). [OPEN]
