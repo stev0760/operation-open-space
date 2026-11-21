@@ -11,6 +11,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -339,7 +340,52 @@ struct ShipStats {
     // The class size (roster byte +0x7a, or object +0x22 without a roster record) and the cell
     // side and gap (object +0x22, +0x24) [BYTES seg17:0x22b9-0x22e3 seg17:0x24ca-0x24e2].
     int size = 33, cell = 33, gap = 5;
+    // M5 stage 4: the page of a ship other than the player's (seg17:0x33ee's other-ship branch,
+    // seg17:0x4354 and seg17:0x3ba6(0); shell.md "The briefing's pages for the other ships").
+    int index = 0;           // the ship index DGROUP:0x9464 of the page
+    bool is_player = true;   // DGROUP:0x9464 = DGROUP:0x9646
+    int team = 0;            // design word DGROUP:0x970a of the ship
+    int player_team = 0;     // and of the player
+    bool roster = false;     // word +0xd6 >= 0 (DGROUP:0x7166)
+    int met = 0;             // the signed roster byte +0x77 (DGROUP:0x6e24 + 0x7c·(+0xd6))
+    int team_view = 0;       // T(team, player team), the word DGROUP:0x3824 + 2·(8·team + player team)
+    int view = 0;            // seg13:0x2688(DGROUP:0x9646, ship): the player's view of the ship
+    // seg3:0x1542(0, 14, ship, buf, 3): the article 2740 + v + g ("THIS ") and the design name
+    // +0x70 (DGROUP:0x9742 + 0xad·n), uncased; %D (14, ship, 3) of strings 921 and 3034 gives the
+    // same text (code 3 is not one of %D's upper-case codes) [BYTES seg3:0x1582-0x15cb
+    // seg3:0x196d-0x1add seg10:0xa754].
+    std::string this_name;
 };
+// The ship pages' values for ship i from the ship records of the placement seg9:0x6624, as
+// src/briefing/hooks.cpp player_stats gives the player's: the 3035 words, the rating of
+// seg17:0x4068 (ship word +0x26 = 100 around seg13:0x33d6, restored), the relation bytes, the
+// sheet and cell, and the other-ship words above. `design_flags44(n)` is the design byte +0x44 of
+// the name's gender (body byte +9 bit 0x20 [BYTES seg14:0x1efd-0x1f09]; null: 0). `lang` loads
+// the article. Returns false for a ship the World does not hold.
+bool ship_page_stats(world::World& w, int i, ShipStats& st, const std::function<std::string(int)>& lang,
+                     const std::function<int(int)>& design_flags44 = {});
+// seg17:0x33ee's text for a ship other than the player's [BYTES seg17:0x349e-0x3745]: 921 "THIS
+// IS YOUR FIRST ENCOUNTER WITH %D." for an Enforcer (team 7), a ship without a roster record or
+// with roster byte +0x77 <= 1, else 3034 "YOU HAVE MET %D %<%?%>%<%d TIMES%>." with (%D, c < 4,
+// c = 2, 922, 923, c >= 4, c - 1); then, on the same test, string 2046 and ". "; then 794 "HE %S
+// YOUR TEAM %? HE %S YOU.%N%N" with the team word (793 for the same team, else 790 / 791 / 792 for
+// T below -80, below 80, above), the "same" flag, 2048, 795 and the player's view's word (790 /
+// 791 / 792), "same" being equal words or 792 with 793; then seg17:0x4068's sentence (the help
+// window closed, as in the briefing).
+std::string other_ship_text(Strings& s, const ShipStats& st, int rank);
+// seg17:0x4354's two label lines for a ship other than the player's: 2521 "%S SHIP" with 581
+// HOSTILE, 582 NEUTRAL or 583 FRIENDLY by seg13:0x2688(P, ship) below -80, below 80 or above, in
+// 0x020080FF, 0x02D2D2D2 or 0x02FFAA00, and 2522 "(%<this is you%>%<from %? team%>)" with the
+// first group off and 527 "another" / 528 "your" by the team (shell.md Phase 11, Labels).
+struct LabelLines {
+    std::string line1, line2;
+    Colour colour = 0;
+};
+LabelLines other_ship_labels(Strings& s, const ShipStats& st);
+// seg17:0x3ba6(0)'s first lower-left line for a ship other than the player's [BYTES
+// seg17:0x3d99-0x3e3d]: DGROUP:0xbb1 "", then string 327 "THIS TEAMMATE" for a ship of the
+// player's team or seg3:0x1542(0, 14, ship, buf, 3), then string 310 " IS ", at DGROUP:0x5002 + 0x90.
+std::string other_ship_line(Strings& s, const ShipStats& st);
 // seg6:0xf54 (dword) / seg6:0x1010 (word) with (v, 100, digits): "-" and the negation for a
 // negative v, v / 100 in decimal, ".", then v % 100 in decimal without leading zeros, cut to
 // `digits` characters: 150 -> "1.50", 0 -> "0.0", 105 -> "1.5" [BYTES seg6:0xf54-0x100f
@@ -383,6 +429,9 @@ struct Setup {
     // Phase 11's player ship, and whether the program gave it (else the ShipStats defaults).
     ShipStats player;
     bool ship_known = false;
+    // M5 stage 4: the pages of every ship 0 ... DGROUP:0x9316 in index order, the player's among
+    // them (seg17:0x20fa's next-ship step); empty: the player's page alone, as before.
+    std::vector<ShipStats> ships;
 };
 
 // The briefing: entry drawing, frame and repaint.
@@ -428,8 +477,10 @@ private:
     int slide_in(int init, int kind);           // seg17:0x1b3e
     int race(int init);                         // seg17:0x13ca
     int defenders(int init);                    // seg17:0x193c
-    int ship(int init);                         // seg17:0x20fa(init, 0, 0)
+    int ship(int init, int next = 0);           // seg17:0x20fa(init, next, 0)
     int ship_slot() const;                      // 0x28 + ship word +0x50
+    const ShipStats& page_ship() const;         // the ShipStats of DGROUP:0x9464
+    int last_ship() const;                      // DGROUP:0x9316
     void ship_setup();                          // seg17:0x22b0-0x23ee
     void ship_labels();                         // seg17:0x4354 and seg17:0x3ba6(0)
     void icon_label(int k, int x, int y);       // seg17:0xc2e
@@ -478,6 +529,7 @@ private:
         int h = 0;                  // the last drawn height
     } fl_;
     int ship_ = 0;  // DGROUP:0x9464
+    int slot_latch_ = kSlotShipBase;  // the slot seg17:0x20fa reads at its entry [BYTES seg17:0x2109-0x211a]
     // The phase routine's context: the phase DGROUP:0x93aa and its sub-step DGROUP:0x9462.
     int cur_phase_ = 0;
     shell::GameState* gs_ = nullptr;

@@ -54,7 +54,7 @@ endif()
 # window and the briefing. Each directory is a library of its *.cpp, so parallel work never
 # edits this file; src/app/app.h declares their hook points (install_*_hooks).
 set(IS_PART_LIBS)
-foreach(_part audio dialogs help briefing nav install desk world hud)
+foreach(_part audio dialogs help briefing nav install desk world hud hall)
   file(GLOB _part_sources CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${_part}/*.cpp)
   if(_part_sources AND TARGET isgfx)
     add_library(is${_part} STATIC ${_part_sources})
@@ -130,6 +130,19 @@ if(TARGET isbriefing AND TARGET isworld)
   # The world's hooks read the briefing's wave number DGROUP:0x91f8 (briefing::wave); CMake
   # repeats the static libraries of a cycle on the link line.
   target_link_libraries(isworld PUBLIC isbriefing)
+endif()
+# M5 stage 4: the Hall of Justice (src/hall) draws through the desk's canvas and reads the World
+# and the briefing's formatter; the HUD's hooks hand it the player's ship look (hall_gdi.h
+# ship_look_slot).
+if(TARGET ishall)
+  foreach(_dep isworld isdesk isbriefing)
+    if(TARGET ${_dep})
+      target_link_libraries(ishall PUBLIC ${_dep})
+    endif()
+  endforeach()
+  if(TARGET ishud)
+    target_link_libraries(ishud PUBLIC ishall)
+  endif()
 endif()
 if(WIN32)
   file(GLOB IS_APP_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/app/*.cpp)

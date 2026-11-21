@@ -214,8 +214,8 @@ TEST_CASE("hud messages: the head's filters, the end times and sender -1") {
     dispatch_message(s, h, 0, 2, 0, 82);
     CHECK(h.end == 15000u);
     CHECK(s.last_code == 82);
-    dispatch_message(s, h, 0, 7, 0, 5);  // a case the port does not carry
-    CHECK(h.todos == std::vector<int>{5});
+    dispatch_message(s, h, 0, 7, 0, 4);  // a case the port does not carry (seg3:0xbee; code 5 is M5 s4's)
+    CHECK(h.todos == std::vector<int>{4});
 }
 
 TEST_CASE("hud messages: the ship-credited codes 0x75, 0x76, 0x77 (M4 s4, C021)") {

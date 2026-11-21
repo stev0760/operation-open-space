@@ -73,8 +73,18 @@ bool message_code_ported(int code) {
     case 0x01: case 0x13: case 0x21: case 0x22: case 0x38: case 0x39: case 0x3e: case 0x47: case 0x4f:
     case 0x50: case 0x59: case 0x73: case 0x7f: case 0x80: case 0x81: case 0x83: case 0x88: case 0xaf:
     case 0xb0: case 0xb1: case 0xb2: case 0xb3:
+    // M5 s4 COMMANDS: the replies to the commands (world/commands.h)
+    case 0x02: case 0x34: case 0x05: case 0x06: case 0x0e: case 0x0f: case 0x10: case 0x11: case 0x12:
+    case 0x14: case 0x15: case 0x16: case 0x23: case 0x24: case 0x25: case 0x26: case 0x27: case 0x31:
+    case 0x32: case 0x35: case 0x36: case 0x40: case 0x4b: case 0x4c: case 0x4d: case 0x4e: case 0x5a:
+    case 0x64: case 0x74: case 0x82: case 0x8b: case 0xbc: case 0xbd:
+    // M5 s4 integrate: the arrest's and the warrant's lines (world/pilot_orders.cpp, law.cpp)
+    case 0x3d: case 0x57: case 0xae:
         return true;
-    default: return false;
+    default:
+        // seg3:0x128f and 0x8d's seg3:0x1255 (M5 s4 COMMANDS); code 0 and codes above 0xc0 miss the
+        // table (`dec ax; cmp ax, 0xbf; ja` seg3:0x14d6): the tail (M5 s4 integrate) [BYTES seg3:0x1346-0x134a].
+        return (code >= 0x8c && code <= 0xa3) || static_cast<std::uint16_t>(code - 1) > 0xbf;
     }
 }
 
@@ -290,8 +300,9 @@ void dispatch_message(MessageState& s, MessageHost& h, int recipient, int pool, 
     // The rivals' lines (world/capture.h rivals, seg13:0x3008).
     case 0x20: {  // seg3:0xdf1: 392 "I've Captured %D. Now To Other Business..", %D = ([bp-0x70],
         // [bp-0x72], 5): the sender's order words +0x54 / +0x56, which the head stores only for a
-        // pool-14 sender; another pool leaves the stack words, 0 here [DESIGN ADR 0016]
+        // pool-14 sender; another pool leaves the stack words, 0 here [DESIGN ADR 0016 decision 1]
         // [BYTES seg3:0xdf1-0xdfe seg3:0x73b-0x74f] [BYTES ENG_LANG.DLL STRING 25] id 392
+        if (pool != 0xe) h.guard("seg3:0x6ec code 0x20's [bp-0x70] / [bp-0x72] unwritten for a sender outside pool 14: 0", "seg3:0xdf1");
         const int op = pool == 0xe ? h.ship_word(rec, 0x54) : 0;
         const int orr = pool == 0xe ? h.ship_word(rec, 0x56) : 0;
         format2(0x188, {FArg(h.object_name(op, orr, 5)), FArg(orr), FArg(5)});
@@ -347,6 +358,10 @@ void dispatch_message(MessageState& s, MessageHost& h, int recipient, int pool, 
         format2(0x181, {});
         break;
     case 0x3c:  // seg3:0xf61, the Enforcers' shared case above: 551 "The Interceptor Will Make You Abide By The Law!!!"
+    // The arrest's lines (cases 60 and 86 of the table seg3:0x1356) [BYTES seg3:0x13ce seg3:0x1402]
+    // (M5 s4 integrate).
+    case 0x3d:  // 552 "Follow Me Out. And Don't Try Anything!"
+    case 0x57:  // 578 "You Will Pay For That Next Wave, Tough Guy!"
     case 0x3e:  // 553 "Alright Tough Guy, I'll Resort To Force."
     case 0x3f:  // 554 "I Must Pursue Someone Else. Try To Be A Better Citizen."
     case 0x58: {  // 579, no string in ENG_LANG.DLL: an empty line
@@ -395,6 +410,10 @@ void dispatch_message(MessageState& s, MessageHost& h, int recipient, int pool, 
     case 0xa4:  // seg3:0x1299: seg10:0x744c(0x30), 1427 "Are You Alright? You Seem To Have Lost Your Mind!"
         h.sound(0x30);
         format2(0x593, {});
+        break;
+    case 0xae:  // seg3:0x12cd: 1940 "Hey! I Have An Outstanding Warrant For Your Arrest!", the warrant
+        // (law.h warrant_check) [BYTES seg3:0x14b0 seg3:0x12cd-0x12d2] (M5 s4 integrate)
+        format2(0x794, {});
         break;
     case 0xb4:  // seg3:0x12d5: 1942 "The Key To Victory Is To BE The Demon."
         format2(0x796, {});
@@ -541,7 +560,150 @@ void dispatch_message(MessageState& s, MessageHost& h, int recipient, int pool, 
     case 0xb3:  // seg3:0x12bf: 1924 "I Need More %D Before I Can Help You." with %D = (4, 0, 0)
         format2(0x784, {FArg(h.object_name(4, 0, 0)), FArg(0), FArg(0)});
         break;
+    // ---- M5 s4 COMMANDS: the replies of the commands (world/commands.h) and their requests, read
+    // from the jump table seg3:0x1356 + 2·(code - 1) (s4-commands.md 1.10, s4-commands-verify.md;
+    // the listing for the argument pushes). [bp-0x74] / [bp-0x76] are the mark DGROUP:0x6e54 /
+    // 0x6e52 [BYTES seg3:0x752-0x75b]. Strings: [BYTES ENG_LANG.DLL STRING 19] ids 302, 303,
+    // [STRING 21] ids 328-338, [STRING 22] id 340, [STRING 23] ids 356, 358, [STRING 25] ids 388,
+    // 398, 400, 401, 404, 406, [STRING 27] ids 428-438, 442, [STRING 35] id 555, [STRING 42] ids
+    // 657-663, [STRING 43] id 685, [STRING 89] ids 1408, 1419, [STRING 116-118] ids 1850-1874,
+    // [STRING 122] id 1948, [STRING 126] id 2000, [STRING 189] ids 3019, 3020.
+    case 0x02:
+    case 0x34: {  // seg3:0x9ca [BYTES seg3:0x9ca-0xade]
+        h.set_request_end();  // DGROUP:0x870c = 0, DGROUP:0x9608 = 1
+        // o, p, r: the recipient's +0x52 / +0x54 / +0x56 (code 2) or the request record (0x34)
+        const int o = code == 2 ? h.ship_word(recipient, 0x52) : h.request_order();
+        const int p = code == 2 ? h.ship_word(recipient, 0x54) : h.request_pool();
+        const int r = code == 2 ? h.ship_word(recipient, 0x56) : h.request_rec();
+        switch (o) {  // o - 1 against 11, the table seg3:0xac8 [BYTES seg3:0xab8-0xade]
+        case 1:  // seg3:0xa85: seg10:0x744c(0x34), 3020 "Please help me %s. I'm in trouble!" with the pilot
+            h.sound(0x34);
+            format2(0xbcc, {FArg(h.pilot())});
+            break;
+        case 2: case 3: case 4: {  // seg3:0xa10 [BYTES seg3:0xa10-0xa6b]
+            // 0x34 when ship r hunts the sender (goal (14, sender), +0x38 = 1), else 0x40
+            const bool hunts = p == 0xe && h.ship_word(r, 0x32) == 0xe && h.ship_word(r, 0x34) == rec &&
+                               h.ship_word(r, 0x38) == 1;
+            h.sound(hunts ? 0x34 : 0x40);
+            if (h.ship_word(recipient, 0x54) == 9)  // the recipient's +0x54, for either code
+                format2(0xbcb, {});                // 3019
+            else                                    // 302 "Please Attack %D" with (p, r, 5)
+                format2(0x12e, {FArg(h.object_name(p, r, 5)), FArg(r), FArg(5)});
+            break;
+        }
+        case 5:  // seg3:0xa6e: seg10:0x744c(0x34), 303 with (p, r, 5)
+            h.sound(0x34);
+            format2(0x12f, {FArg(h.object_name(p, r, 5)), FArg(r), FArg(5)});
+            break;
+        case 9:  // seg3:0xa99: 388 with (p, r, 5)
+            format2(0x184, {FArg(h.object_name(p, r, 5)), FArg(r), FArg(5)});
+            break;
+        case 10: format2(0x1ac, {}); break;  // seg3:0xaa8: 428
+        case 12: format2(0x1ba, {}); break;  // seg3:0xab0: 442
+        default: break;                      // 6, 7, 8, 11 and the rest: the tail, the lines stay
+        }
+        break;
+    }
+    case 0x05:  // seg3:0xc19: 331 "No One Can Help %D." with (mark, 5)
+        format2(0x14b, {FArg(h.object_name(h.mark_pool(), h.mark_rec(), 5)), FArg(h.mark_rec()), FArg(5)});
+        break;
+    case 0x06: format2(0x149, {}); break;  // seg3:0xc29: 329 "You'll Have To Fend For Yourself"
+    case 0x0e:  // seg3:0xc31: 332 "Sorry, %s. I Will Not Fight You." with the far pilot name ds:0x380c
+        format2(0x14c, {FArg(h.pilot())});
+        break;
+    case 0x0f: format2(0x14e, {FArg(0x14e)}); break;  // seg3:0xc3d: 334 with an unused word 334
+    case 0x10:  // seg3:0xc64: seg10:0x744c(0x3c), 340 "Busy Now, I'll Get You Later..."
+        h.sound(0x3c);
+        format2(0x154, {});
+        break;
+    case 0x11:
+        // seg3:0xc74: 336 "Very Well, %s, I Accept Your Challenge!" with the one word 0x380c pushed:
+        // %s takes its segment from the next stack word, seg3:0x6ec's lowest local [bp-0x82],
+        // which only case 1 writes. The port reads the pilot name, the pointer's offset in DGROUP
+        // [DESIGN ADR 0016 decision 1] [BYTES seg3:0xc74-0xc7c seg3:0xc45-0xc4e seg3:0x6f6].
+        h.guard("seg3:0x6ec code 0x11's %s segment [bp-0x82] unwritten: the pilot name", "seg3:0xc74");
+        format2(0x150, {FArg(h.pilot())});
+        break;
+    case 0x12: format2(0x152, {}); break;  // seg3:0xc7e: 338 "I Love A Good Fight! Prepare To Die, Fool!"
+    case 0x14:  // seg3:0xc54: 334 (sic: not 354) with the unused (mark, 2)
+        format2(0x14e, {FArg(h.mark_pool()), FArg(h.mark_rec()), FArg(2)});
+        break;
+    case 0x15:  // seg3:0xc96: seg10:0x744c(0x3f), 358 "Look, Friend... Do You Want To Rumble?"
+        h.sound(0x3f);
+        format2(0x166, {});
+        break;
+    case 0x16:  // seg3:0xc86: seg10:0x744c(0x3f), 356 "I've Had Enough of You. Let's Fight It Out!"
+        h.sound(0x3f);
+        format2(0x164, {});
+        break;
+    case 0x23:  // seg3:0xe83: seg10:0x744c(0x3c), 398 "I Can't Capture %D Should I Attack It?" with (mark, 5)
+        h.sound(0x3c);
+        format2(0x18e, {FArg(h.object_name(h.mark_pool(), h.mark_rec(), 5)), FArg(h.mark_rec()), FArg(5)});
+        break;
+    case 0x24:  // seg3:0xe9b: seg10:0x744c(0x3c), 400 "What Use Have I Got For %D?" with (mark, 2)
+    case 0x25:  // seg3:0xeb3: seg10:0x744c(0x3c), 401 "Can't Capture That. %D Isn't Capturable." with (mark, 2)
+        h.sound(0x3c);
+        format2(code == 0x24 ? 0x190 : 0x191, {FArg(h.object_name(h.mark_pool(), h.mark_rec(), 2)), FArg(h.mark_rec()), FArg(2)});
+        break;
+    case 0x26:  // seg3:0xed3: seg10:0x744c(0x3c), 404
+        h.sound(0x3c);
+        format2(0x194, {});
+        break;
+    case 0x27: format2(0x196, {}); break;  // seg3:0xee3: 406
+    case 0x31: format2(0x1b0, {}); break;  // seg3:0xf21: 432
+    case 0x32: format2(0x1ae, {}); break;  // seg3:0xf19: 430 "You Do Not Have An Ally Willing To Leave."
+    case 0x35: format2(0x1b6, {}); break;  // seg3:0xf41: 438
+    case 0x36: format2(0x1b4, {}); break;  // seg3:0xf39: 436
+    case 0x40: format2(0x22b, {}); break;  // seg3:0xf59: 555 "We Don't Take Orders, We Enforce Order!"
+    case 0x4b: format2(0x291, {}); break;  // seg3:0x1009: 657
+    case 0x4c: format2(0x293, {}); break;  // seg3:0x1011: 659
+    case 0x4d: format2(0x295, {}); break;  // seg3:0x1019: 661
+    case 0x4e: format2(0x297, {}); break;  // seg3:0x1021: 663
+    case 0x5a:  // seg3:0x1068: seg10:0x744c(0x3c), 685 "Don't Worry! I'll Be Alright."
+        h.sound(0x3c);
+        format2(0x2ad, {});
+        break;
+    case 0x64:
+        // seg3:0xbfe: 328 "Sorry, Can't Attack %D" with the far pointer ds:0x380c pushed where %D's
+        // (pool, rec, code) belong; the port formats an empty name [DESIGN ADR 0016 decision 1]
+        // [BYTES seg3:0xbfe-0xc07].
+        h.guard("seg3:0x6ec code 0x64's %D arguments are a far pointer: an empty name", "seg3:0xbfe");
+        format2(0x148, {FArg(std::string{}), FArg(0), FArg(0)});
+        break;
+    case 0x74: format2(0x580, {}); break;  // seg3:0x11c8: 1408 "We Are Already In a Duel!"
+    case 0x82: format2(0x58b, {}); break;  // seg3:0x1235: 1419
+    case 0x8b:  // seg3:0x1281: 1850 "Sorry, But I Can't Help. I'm Too Low On %D." with (4, 0, 0)
+        format2(0x73a, {FArg(h.object_name(4, 0, 0)), FArg(0), FArg(0)});
+        break;
+    case 0x8d: {  // seg3:0x1255: seg10:0x744c(0x3c), 1852 with %d = lo16(seg5:0x2b4(sender's +0x98 - now, 1000))
+        h.sound(0x3c);
+        const std::uint32_t until = static_cast<std::uint32_t>(static_cast<std::uint16_t>(h.ship_word(rec, 0x98))) |
+                                    (static_cast<std::uint32_t>(static_cast<std::uint16_t>(h.ship_word(rec, 0x9a))) << 16);
+        const std::uint32_t q = (until - now) / 1000u;  // [BYTES seg3:0x1262-0x1278]
+        format2(0x73c, {FArg(static_cast<int>(static_cast<std::int16_t>(q & 0xffffu)))});
+        break;
+    }
+    case 0xbc:  // seg3:0x12ed: 1948 "You're Gonna Get It When I Get %D!" with (4, 0, 2)
+        format2(0x79c, {FArg(h.object_name(4, 0, 2)), FArg(0), FArg(2)});
+        break;
+    case 0xbd: {  // seg3:0x12fb: 2000 "I Don't Accept. I'm Here To Help %D." with ([bp-0x70], [bp-0x72], 5)
+        // The head's words [bp-0x70] / [bp-0x72], written for a pool-14 sender only; another pool
+        // leaves them unwritten, 0 here (only seg13:0x915c sends 0xbd, from pool 14)
+        // [DESIGN ADR 0016 decision 1] [BYTES seg3:0x12fb seg3:0x73b-0x74f].
+        if (pool != 0xe) h.guard("seg3:0x6ec code 0xbd's [bp-0x70] / [bp-0x72] unwritten for a sender outside pool 14: 0", "seg3:0x12fb");
+        const int op = pool == 0xe ? h.ship_word(rec, 0x54) : 0;
+        const int orr = pool == 0xe ? h.ship_word(rec, 0x56) : 0;
+        format2(0x7d0, {FArg(h.object_name(op, orr, 5)), FArg(orr), FArg(5)});
+        break;
+    }
     default:
+        if (code >= 0x8c && code <= 0xa3) {  // seg3:0x128f: string code + 0x6af, no argument [BYTES seg3:0x128f-0x1297 seg3:0x12bb]
+            format2(code + 0x6af, {});
+            break;
+        }
+        // Code 0 (seg13:0xb6f2's [bp-0xc] read as 0 for crime 7, ADR 0016 decision 1) and codes above 0xc0 miss
+        // the table: the tail, the lines stay [BYTES seg3:0x1346-0x134a] (M5 s4 integrate).
+        if (static_cast<std::uint16_t>(code - 1) > 0xbf) break;
         h.todo(code);
         break;
     }

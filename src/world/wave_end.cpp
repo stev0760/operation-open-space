@@ -1,6 +1,8 @@
 // The wave's end (wave_end.h). 16-bit arithmetic as the original's (ADR 0013 decision 7).
 #include "world/wave_end.h"
 
+#include "world/pilot.h"
+#include "world/relations.h"
 #include "world/roster.h"
 
 namespace is::world {
@@ -90,11 +92,29 @@ void wave_over(WaveEndCtx& c) {
     c.host.music(-1, 1);              // seg10:0x7480(-1, 1) [BYTES seg9:0x6bd4]
     c.s.deadlines().debrief_nav = 0;  // DGROUP:0x1e74 [BYTES seg9:0x6bdf]
     if (w.kind == 6) c.host.race_credit();  // [BYTES seg9:0x6be3] [OPEN M6]
-    if (w.w93a4 != 0) {
-        c.host.hall_of_justice();  // [BYTES seg9:0x6c5b seg9:0x6c62] [OPEN M6]
-        return;
+    if (w.w93a4 != 0) {  // [BYTES seg9:0x6c5b]
+        c.s.set(shell::kJustice);  // DGROUP:0x90f4 = 8 [BYTES seg9:0x6c62]
+        c.host.hall_of_justice();  // DGROUP:0x929c = 0, seg16:0x6928(0) [BYTES seg9:0x6c6a seg9:0x6c6e]
+        w.w9346 = -1;              // [BYTES seg9:0x6c74]
+        // Only a Terminator-class Enforcer (+0x5e = 0) ordered against the player is taken off;
+        // the escort (class 1) keeps `alive` [BYTES seg9:0x6c7a-0x6cb3] (verified claim 9).
+        for (int k = 0; k <= w.last_ship && ship_ok(k); ++k) {
+            ShipRecord& s = w.ships[static_cast<std::size_t>(k)];
+            if (ship_team(w, k) == 7 && ship_sb(s, 0x5e) == 0 && ship_w(s, 0x56) == w.player) s.bec = 0;
+        }
+        return;  // no seg9:0x6cc4 on this path [BYTES seg9:0x6cbc]
     }
     debrief_entry(c, 0);  // [BYTES seg9:0x6cb8]
+}
+
+std::function<void()>& hall_entry_slot() {
+    static std::function<void()> f;
+    return f;
+}
+
+std::function<void(shell::GameState&, int)>& debrief_entry_slot() {
+    static std::function<void(shell::GameState&, int)> f;
+    return f;
 }
 
 void debrief_entry(WaveEndCtx& c, int arg) {

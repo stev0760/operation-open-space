@@ -120,8 +120,6 @@ public:
     virtual void notice(std::uint32_t ids);
     // seg10:0x754a(id, pool, rec, mode), cdecl: a positional sound.
     virtual void sound(int id, int pool, int rec, int mode);
-    // seg13:0xa984-0xac36, seg13:0xa6bc's order 0x16 (the arrest): the law's, stage 4 (ruling R3).
-    virtual void arrest(int e);
     // seg13:0x69ad-0x69e0: the player's activity text DGROUP:0x8630 = seg10:0xa332(1421, mode 1,
     // the player's +0x58, ...), DGROUP:0x58c = 1, DGROUP:0x5c0 = now + 700 (Strategy mode, M8).
     virtual void order_text(int i);

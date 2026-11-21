@@ -110,8 +110,24 @@ public:
     virtual int attitude(int /*a*/, int /*b*/) const { return 0; }
     // DGROUP:0x8d38: the revenge taunt seg4:0x702e formats (world/pilot.h PilotGlobals::taunt).
     virtual std::string taunt() const { return {}; }
+    // ---- M5 s4 COMMANDS: the replies to the commands (world/commands.h)
+    // DGROUP:0x6e54 (pool) and DGROUP:0x6e52 (record), the words the head keeps in [bp-0x74] /
+    // [bp-0x76] [BYTES seg3:0x752-0x75b] (world/pilot_think.h PilotHost::mark_6e52).
+    virtual int mark_pool() const { return -1; }
+    virtual int mark_rec() const { return -1; }
+    // The request record of a computer ship to the Strategy player, DGROUP:0x964e (order),
+    // DGROUP:0x9650 (pool), DGROUP:0x9652 (record) (world/commands.h CommandWords), code 0x34's
+    // [BYTES seg3:0x9f8-0xa04].
+    virtual int request_order() const { return 0; }
+    virtual int request_pool() const { return 0; }
+    virtual int request_rec() const { return 0; }
+    // Codes 2 and 0x34: DGROUP:0x870c = 0 and DGROUP:0x9608 = 1, so the message stays up and the
+    // speed display's end repeats it [BYTES seg3:0x9ca-0x9d3].
+    virtual void set_request_end() {}
     // A case of the switch the port does not carry yet [OPEN].
     virtual void todo(int /*code*/) {}
+    // A site of ADR 0016 the dispatcher logs once (the address and what the port does).
+    virtual void guard(const char* /*what*/, const char* /*address*/) {}
 };
 
 // seg3:0x6ec(recipient, pool, rec, code), cdecl.

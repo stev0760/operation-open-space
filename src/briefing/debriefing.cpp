@@ -4,6 +4,9 @@
 
 #include <algorithm>
 
+#include "world/relations.h"
+#include "world/world.h"
+
 namespace is::briefing {
 
 namespace {
@@ -138,12 +141,11 @@ std::string debrief_text(const DebriefInputs& in, const LangLookup& lang, int ph
             // seg9:0x8838(i) when word DGROUP:0x7102 + 2(0xad·i + player) > 5 [OPEN: unread].
         }
     }
-    // 12. Two breaks, then the team paragraph: 789 when no team qualifies [BYTES seg9:0x8447
-    // seg9:0x844f seg9:0x862d seg9:0x87d2]; the paragraph for a team whose relation
-    // DGROUP:0x3824 moved from its wave-start copy DGROUP:0x9350 is [OPEN].
+    // 12. Two breaks, then the team paragraph [BYTES seg9:0x8447 seg9:0x844f seg9:0x8455-0x87d9]
+    // (relations_paragraph) (M5 s4 HALL).
     page += kPageBreak;
     page += kPageBreak;
-    append_id(page, kStrNoChange, lang);
+    page += relations_paragraph(in.relations, lang);
     // 13. Dodge City [BYTES seg9:0x87da-0x8826].
     if (in.dodge_city) {
         page += kPageBreak;
@@ -154,6 +156,78 @@ std::string debrief_text(const DebriefInputs& in, const LangLookup& lang, int ph
     // The block DGROUP:0x6078 holds 2000 bytes [BYTES seg17:0x310a].
     if (page.size() > 1999) page.resize(1999);
     return page;
+}
+
+std::string relations_paragraph(const DebriefRelations& r, const LangLookup& lang) {
+    using world::mul16;
+    using world::sub16;
+    const auto L = [&](int id) { return lang ? lang(id) : std::string(); };
+    const auto abs16 = [](std::int16_t x) { return x < 0 ? sub16(0, x) : x; };  // seg9:0x88ba
+    std::array<std::int16_t, 2> best_d{0, 0};  // [BYTES seg9:0x8455-0x8470]
+    std::array<int, 2> best_t{-1, -1};
+    std::array<std::int16_t, 2> vsel{0, 0};
+    int count = 0;  // [bp-0x1e]
+    for (std::size_t k = 0; k < 2; ++k) {          // [BYTES seg9:0x8619-0x8627]
+        for (int t = 0; t < 8; ++t) {
+            const std::size_t tu = static_cast<std::size_t>(t);
+            if (t == r.tp || !r.present[tu] || (k != 0 && t == best_t[0])) continue;  // [BYTES seg9:0x85ca-0x85e6]
+            const std::int16_t d = sub16(r.now[tu], r.start[tu]);                    // [BYTES seg9:0x85e8-0x8601]
+            const std::int16_t v = r.v[tu];
+            if (abs16(sub16(d, mul16(50, v))) > abs16(best_d[k]) || v != 0) {        // [BYTES seg9:0x857d-0x85be]
+                vsel[k] = v;
+                best_d[k] = d;
+                best_t[k] = t;
+                ++count;
+            }
+        }
+    }
+    if (count == 0) return L(kStrNoChange);  // [BYTES seg9:0x87d2]
+    const auto name = [&](int t) { return t >= 0 && t < 8 ? r.names[static_cast<std::size_t>(t)] : std::string(); };
+    const auto verb = [&](std::int16_t d, std::int16_t v) {  // [BYTES seg9:0x86d6-0x8727 seg9:0x8778-0x87c1]
+        if (v != 0) return L(917) + (v == 2 ? L(918) : v > 2 ? L(919) : std::string()) + L(884);
+        return L(798) + (d < 0 ? L(878) : L(799)) + L(248);
+    };
+    std::string page = L(2514) + name(best_t[0]);  // seg9:0x95ba(2514), seg13:0x218a
+    const bool both = count > 1 && ((best_d[0] < 0 && best_d[1] < 0) || (best_d[0] > 0 && best_d[1] > 0) ||
+                                    (vsel[0] != 0 && vsel[0] == vsel[1]));  // [BYTES seg9:0x865a-0x8689]
+    if (both) page += " " + L(795) + L(2514) + name(best_t[1]);  // DGROUP:0xa56 " "
+    page += verb(best_d[0], vsel[0]);
+    if (!both && count > 1) page += " " + L(795) + L(2514) + name(best_t[1]) + verb(best_d[1], vsel[1]);  // DGROUP:0xa58
+    page += ". ";
+    return page;
+}
+
+RelationsSnapshot& relations_snapshot() {
+    static RelationsSnapshot s;
+    return s;
+}
+
+void snapshot_relations(const world::World& w) {
+    const int tp = world::ship_team(w, w.player);
+    for (int t = 0; t < 8; ++t) relations_snapshot().w9350[static_cast<std::size_t>(t)] = world::team_word(t, tp);
+}
+
+DebriefRelations debrief_relations(const world::World& w, const std::function<std::string(int)>& team_name) {
+    DebriefRelations r;
+    r.tp = world::ship_team(w, w.player);
+    for (int j = 0; j <= w.last_ship && j < world::kShipCount; ++j) {  // [BYTES seg9:0x8472-0x84bb]
+        const int t = world::ship_team(w, j);
+        if (t >= 0 && t < 8) r.present[static_cast<std::size_t>(t)] = true;
+    }
+    const world::ContactWords& cw = world::contact_words();
+    for (int t = 0; t < 8; ++t) {
+        const std::size_t tu = static_cast<std::size_t>(t);
+        r.now[tu] = world::team_word(t, r.tp);
+        r.start[tu] = relations_snapshot().w9350[tu];
+        std::int16_t v = 0;
+        for (std::size_t j = 0; j < 3; ++j) {
+            const std::size_t i = 3 * tu + j;
+            if (w.w4eec[i] == w.player_roster && cw.w4fd0[i] == w.wave) ++v;
+        }
+        r.v[tu] = v;
+        if (team_name) r.names[tu] = team_name(t);
+    }
+    return r;
 }
 
 DebriefBox debrief_box(int W, int H, int wave, const LangLookup& lang) {

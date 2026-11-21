@@ -77,7 +77,9 @@ struct WaveEndLinks {
     std::function<void(int pool, int rec)> column_row;  // seg7:0x65aa
     std::function<void(int ship, int id)> message;      // seg3:0x6ec(ship, 7, 0, id)
     std::function<void(int rec, int arg)> icon_counted; // seg7:0x5ae8(rec, arg)
-    std::function<std::int16_t(int design)> design_type;  // DGROUP:0x970a + 0xad·design
+    // seg13:0x65f2(m), the three watch windows (src/hud/watch.h watch_windows), for the Hall of
+    // Justice's landing seg15:0x302e (m = 3) (M5 s4 integrate).
+    std::function<int(int m)> watch_windows;
     // seg6:0x885c(0, 0), LASTGAME at the wave end (src/dialogs program_save_lastgame) [BYTES
     // seg9:0x31f0 seg7:0x687] [DESIGN ADR 0014] (M4 s3 fixer).
     std::function<void()> save_lastgame;

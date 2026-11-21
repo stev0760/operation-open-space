@@ -20,8 +20,10 @@
 #include "hud/screens.h"
 #include "nav/nav.h"
 #include "settings/settings.h"
+#include "world/cheats.h"
 #include "world/flight_hooks.h"
 #include "world/hooks.h"
+#include "world/law.h"
 #include "world/relations.h"
 #include "world/roster.h"
 #include "world/roster_build.h"
@@ -196,6 +198,14 @@ struct ProgramCtx {
             sg.w6b10[k] = cw.w6b10[k];
         }
         for (std::size_t k = 0; k < 8; ++k) sg.w6b40[k] = cw.w6b10[24 + k];
+        // DGROUP:0xa162 (law.h LawWords) and the cheat words DGROUP:0x951c, 0x104e (cheats.h
+        // CheatState) and 0x104c (CollideGlobals::w104c): their one homes, staged here for the
+        // restore's load (header +0x189) and its step-9 clears [BYTES seg6:0x96ff-0x9704
+        // seg6:0x98bb-0x98c1] (M5 s4 integrate, LAW binding 3, KEYS binding 5).
+        sg.a162 = world::law_words().ba162;
+        sg.w951c = world::cheat_state().w951c;
+        sg.w104e = world::cheat_state().w104e;
+        sg.w104c = world::collide_globals().w104c;
         s.size = q.size;
         s.drive = q.drive;
         s.play_mode = g.play_mode;
@@ -218,6 +228,10 @@ struct ProgramCtx {
             cw.w6b10[k] = sg.w6b10[k];
         }
         for (std::size_t k = 0; k < 8; ++k) cw.w6b10[24 + k] = sg.w6b40[k];
+        world::law_words().ba162 = sg.a162;
+        world::cheat_state().w951c = sg.w951c;
+        world::cheat_state().w104e = sg.w104e;
+        world::collide_globals().w104c = sg.w104c;
         q.size = s.size;
         q.drive = s.drive;
         g.play_mode = s.play_mode;

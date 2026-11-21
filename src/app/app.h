@@ -146,6 +146,7 @@ void install_dialog_hooks(App& app);
 void install_help_hooks(App& app);
 void install_briefing_hooks(App& app);
 void install_desk_hooks(App& app);  // src/desk/hooks.cpp: the desk scene of phase 6
+void install_hall_hooks(App& app);  // src/hall/hooks.cpp: state 8, the Hall of Justice (M5 s4)
 
 // ---- access from outside src/app
 

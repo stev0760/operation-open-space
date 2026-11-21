@@ -9,7 +9,10 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <string>
+
+#include "world/cheats.h"
 
 namespace is::world {
 
@@ -133,6 +136,47 @@ struct KeyState {
     std::int32_t zoom = 120;  // DGROUP:0xa6c (dword), the radar zoom; the file holds 120
 };
 
+// The commands the letter keys of seg11:0x6b64 send to other parts of the port (docs/re/pilots.md
+// "Commands", work/analysis/m5/s4-commands.md section 0), each the routine of the table below. The
+// routine gets the player's index (DGROUP:0x9646); its return value is dropped by every key.
+enum class Command : std::uint8_t {
+    kCtrlA,      // seg13:0x8570(P), "attack my target"
+    kAltA,       // seg13:0x9a18(P, P's words +0x3e, +0x40): the defenders attack the player's target
+    kStrategyA,  // seg13:0xa186(), Strategy mode, Ctrl clear
+    kCtrlC,      // seg13:0x9ce0(P), "capture my target"
+    kStrategyC,  // seg13:0xa234()
+    kCtrlD,      // seg13:0x8e98(P), "defend my target"
+    kStrategyD,  // seg13:0xa4f4(): D without Ctrl, Alt or not
+    kCtrlE,      // seg13:0x9f3e(P), "exit the wave"
+    kAltE,       // the inline loop seg11:0x70bb-0x7113: the defenders leave
+    kStrategyE,  // seg13:0xa3c8()
+    kCtrlF,      // seg13:0x915c(P), "challenge to a fight"
+    kCtrlG,      // seg13:0xa01c(P), "get gas"
+    kStrategyG,  // seg13:0xa47c()
+    kCtrlH,      // seg13:0x81c2(P), "help me"
+    kAltH,       // seg13:0x9ae8(P), "defenders return"
+    kCtrlS,      // seg13:0x9810(P), "self-preserve"
+    kCtrlAltS,   // seg13:0x4ac4(P), the resource-pack drop (law.h crime 5)
+    kStrategyS,  // seg13:0xa568()
+    kSelfDestruct,  // seg16:0x8e4(DGROUP:0x9324, P): Ctrl+Alt+X
+};
+// The address of a command's routine, for the log of an unfilled slot.
+const char* command_address(Command c);
+
+// The routines the key switch calls beyond the HUD's KeyActions; the integrator fills the slots.
+// An empty slot logs once (KeyActions::unported) [DESIGN].
+struct KeyLinks {
+    // seg11:0x6ee7: the cheat gate (DELETE, WM_KEYDOWN, 0x99b, 0x99e).
+    std::function<void()> cheat_gate;
+    // seg11:0x72e0(vk): a cheat key's WM_KEYUP, called only while cheat_state().w951c is set.
+    std::function<void(std::uint16_t vk)> cheat_key;
+    // The commands (above); `player` is DGROUP:0x9646.
+    std::function<void(Command c, int player)> command;
+    // seg13:0x563c(ctrl, alt): the watch window key W (any modifier) [BYTES seg11:0x7127-0x712b].
+    std::function<void(bool ctrl, bool alt)> watch;
+};
+KeyLinks& key_links();
+
 // Messages the switch tests (Win16 and Win32 share the numbers).
 constexpr std::uint32_t kWmKeyDown = 0x100;
 constexpr std::uint32_t kWmKeyUp = 0x101;
@@ -156,6 +200,11 @@ KeyResult key_message(std::uint32_t msg, std::uint16_t key, const WaveGlobals& g
                       std::uint32_t player_lockout, std::int16_t player_state, bool ctrl_down,
                       bool alt_down, KeyState& ks, KeyActions& act);
 
+// WM_KEYUP (msg 0x101) takes only the cheat keys '1' ... '9' and F3 ... F9 (seg11:0x6d19-0x6d69):
+// every other key-up is kNotMine, so the router's other key-up routes still see it; a cheat key's
+// key-up passes the same gate, then nothing without a player game (DGROUP:0x95bc) and nothing
+// while cheat_state().w951c is 0.
+//
 // The zoom step of the plus and minus keys: zoom + 8 capped at 500, or zoom - 8 floored at 100,
 // as 32-bit compares [BYTES seg11:0x7215-0x7233 seg11:0x7268-0x7286].
 std::int32_t zoom_plus(std::int32_t zoom);

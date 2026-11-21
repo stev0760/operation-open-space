@@ -18,6 +18,10 @@
 #include "briefing/lang_format.h"
 #include "shell/game_state.h"
 
+namespace is::world {
+class World;
+}
+
 namespace is::briefing {
 
 // String ids of the page [BYTES ENG_LANG.DLL STRING 20] id 318 [BYTES ENG_LANG.DLL STRING 35]
@@ -45,6 +49,19 @@ struct DebriefShip {
     std::string team_name;        // seg13:0x218a(team)
 };
 
+// The relations paragraph's inputs (seg9:0x8455-0x87d9; s4-hall.md section 4 with
+// s4-hall-verify.md claims 53-59) (M5 s4 HALL).
+struct DebriefRelations {
+    int tp = 0;                           // the player's design team, DGROUP:0x970a + 0xad·(P +0x4e)
+    std::array<bool, 8> present{};        // a ship 0 ... DGROUP:0x9316 has design team t (no alive test)
+    std::array<std::int16_t, 8> now{};    // T(t, tp), word DGROUP:0x3824 + 2(8t + tp)
+    std::array<std::int16_t, 8> start{};  // DGROUP:0x9350 + 2t, the wave start's copy
+    // #{j < 3 : word DGROUP:0x4eec + 2(3t + j) = DGROUP:0x931c and word DGROUP:0x4fd0 + 2(3t + j) =
+    // DGROUP:0x91f8} [BYTES seg9:0x8540-0x857b].
+    std::array<std::int16_t, 8> v{};
+    std::array<std::string, 8> names{};   // seg13:0x218a(t), INI [Teams] Team<t + 1>
+};
+
 // The values seg9:0x6fee reads.
 struct DebriefInputs {
     int kind = 0;                 // DGROUP:0x9320 (6 race, 7 duel)
@@ -68,7 +85,31 @@ struct DebriefInputs {
     // Step 13: DGROUP:0x93b6 != -1 and the name seg3:0x1542(1, 14, seg14:0x4520(...)).
     bool dodge_city = false;
     std::string dodge_name;
+    // Step 12's team paragraph (relations_paragraph); the default holds no team, which gives 789.
+    DebriefRelations relations;
 };
+
+// seg9:0x8455-0x87d9 [BYTES seg9:0x8455-0x87d0]: two slots filled in two passes over the teams t
+// = 0 ... 7 other than the player's and present, the second skipping slot 0's team; a team is taken
+// when |d - 50v| > |best d of the slot| or v != 0 (16-bit, seg9:0x88ba abs), d = T(t, tp) -
+// DGROUP:0x9350[t]; no take gives 789, else " THE " + name, the second team joined by " AND THE "
+// before one verb (both d < 0, both d > 0, or the same v != 0) or after the first verb with its
+// own, and ". ". A verb: v != 0 917 [918 for v = 2, 919 for v > 2] 884, else 798 + (878 for d < 0,
+// else 799) + 248. The class [bp-0x32 + 2k] written per candidate has no reader.
+std::string relations_paragraph(const DebriefRelations& r, const LangLookup& lang);
+
+// The words DGROUP:0x9350 ... 0x935e, the wave start's copy of T(t, tp) for t = 0 ... 7 [BYTES
+// seg9:0x654c-0x6583]; their only reader is seg9:0x85fd (verified claim 54). DGROUP:0x9360 and
+// DGROUP:0x9374, written beside them, have no reader and no home [DESIGN].
+struct RelationsSnapshot {
+    std::array<std::int16_t, 8> w9350{};
+};
+RelationsSnapshot& relations_snapshot();
+// seg9:0x654c-0x6583 at the wave start, on the program's team table (roster_build.h
+// RosterWords::team_table) and the player's design team.
+void snapshot_relations(const world::World& w);
+// The paragraph's inputs from the World, the snapshot and the team names.
+DebriefRelations debrief_relations(const world::World& w, const std::function<std::string(int)>& team_name);
 
 // seg17:0x42ea(1): " \r\n" [BYTES seg17:0x42ea DGROUP:0xbb5 DGROUP:0xbb7].
 constexpr const char* kPageBreak = " \r\n";

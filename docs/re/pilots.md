@@ -471,7 +471,7 @@ in play, engine > 40, j ≠ a, which rewrites [bp+6] [BYTES seg4:0x6583-0x65f2 s
 seg3:0xf4(victim, 14, a), seg13:0x915c(victim); the grudge step on the rewritten [bp+6]
 [BYTES seg4:0x66d0-0x66f4].
 
-**The rel > 0 branch reads the allies byte +0x5d, not +0xed.** [BYTES seg4:0x64fa seg4:0x654e]: `mov al, byte ptr [bx + 0x70ed]` with bx = 0x15a·v, which is ship field +0x5d (the allies byte, DGROUP:0x70ed + 0x15a·v), not +0xed (`one_shot`, DGROUP:0x717d). lim = 4 + cnt − sbyte v +0x5d; lim ≥ sbyte g → (d ≠ 90) message 0x2a (g > 1) or 0x29, then cnt − g − sbyte v +0x5d = −5 with a the player → message 0x2b and seg10:0x754a(0x3e, 0, 0, 0); lim < g → the hand-over and the turn [BYTES seg4:0x64ed-0x6583].
+**The rel > 0 branch reads the allies byte +0x5d, not +0xed.** [BYTES seg4:0x64fa seg4:0x654e]: `mov al, byte ptr [bx + 0x70ed]` with bx = 0x15a·v, which is ship field +0x5d (the allies byte, DGROUP:0x70ed + 0x15a·v), not +0xed (`one_shot`, DGROUP:0x717d). lim = 4 + cnt − sbyte v +0x5d; lim ≥ sbyte g → (d ≠ 90) message 0x2a (g > 1) or 0x29, then cnt − g − sbyte v +0x5d = −5 with a the player → message 0x2b and seg10:0x754a(0x3e, 0, 0, 0); lim < g → the hand-over and the turn [BYTES seg4:0x64ed-0x6583]. Message 0x2b and its sound never come: on that branch lim ≥ g gives cnt − g − sbyte v +0x5d ≥ −4, so the test against −5 never holds [BYTES seg4:0x64ed-0x6560].
 
 ## The player's commands to ships
 
@@ -656,10 +656,10 @@ cdecl. t = c's +0x40. q = 0 ([bp−0x16], the acceptance), r = 0 ([bp−0x18], t
 1. c+0x9c = now + 5000 **first** [BYTES seg13:0x9183-0x9195]; tp ≠ 14 → msg(c, 7, 0, 0x14);
    team(t) = 7 → msg(c, 14, t, 0x40); t's fuel +0x1e < tank(t)/10 → msg(c, 14, t, 0xbc); t's
    +0x52 = 1 → msg(c, 14, t, 0xbd); each returns [BYTES seg13:0x9199-0x91ee].
-2. Unless c = P with (PlayMode = 0 or the demo): the cooldown test (always true, the store of
-   step 1 just made +0x9c = now + 5000) leads to: grudge sbyte c+0xc2 + t < 4 → return. So a
-   computer ship (or the Strategy player) challenges only a ship that has hurt it 4 times
-   [BYTES seg13:0x91f1-0x922b].
+2. Unless c = P with (PlayMode = 0 or a player game, DGROUP:0x95bc ≠ 0): the cooldown test
+   (always true, the store of step 1 just made +0x9c = now + 5000) leads to: grudge sbyte c+0xc2
+   + t < 4 → return. So a computer ship (or the player in the demo with DGROUP:0x9134 ≠ 0)
+   challenges only a ship that has hurt it 4 times [BYTES seg13:0x91f1-0x922b].
 3. s = seg4:0x5d9c(c, t) ([bp−0x14]). s > 500 or s < 20: when sbyte t+0x5e > 0 and t ≠ P: s > 500
    → msg(c, 14, t, 0x4c) and seg13:0x81c2(t) (t calls for help), return; s < 20 → msg(c, 14, t,
    0x4e), return. Otherwise r = 1 (s < 20) or 2 (s > 500) [BYTES seg13:0x922f-0x929e].
@@ -686,7 +686,8 @@ cdecl. t = c's +0x40. q = 0 ([bp−0x16], the acceptance), r = 0 ([bp−0x18], t
      +0x9c = now + 8000, +0x54 = 14, +0x56 = t, +0x58 = c, byte +0xed = 0, +0x38 = 1; c ≠ P:
      seg3:0xf4(c, 14, t); +0x32 = 14, +0x34 = t, +0xa4 as for t with c's byte; q = 1 and team(c) ∈
      {4, 0}: c's +0x52 = 3; seg4:0x8346(c, 14, t, 0x14); outside duels (DGROUP:0x9320 ≠ 7)
-     DGROUP:0x9682 = 0x9680 = 0x8e04 = 0x8e00 = 0 (the duel score words); fight bytes c+0x13e+t
+     DGROUP:0x9682 = 0x9680 = 0 and the low words of the dwords DGROUP:0x8e04 and 0x8e00 = 0
+     (the duel score words; `mov word ptr` [BYTES seg13:0x9700-0x970b]); fight bytes c+0x13e+t
      = t+0x13e+c = 0; c = P with PlayMode = 1: seg3:0x33b4(3); seg13:0x2714(t, c, −12, −55, 1, −1).
 8. The replies [BYTES seg13:0x975e-0x97ff]: r = 1: msg(t, 14, c, 0x4b), msg(c, 14, t, 0x4d);
    r = 2: msg(t, 14, c, 0x4d), msg(c, 14, t, 0x4b); else c's +0x52 = 3: msg(t, 14, c, 0x82),
@@ -766,7 +767,7 @@ no argument [BYTES seg3:0x128f-0x1297 seg3:0x12bb seg3:0x8d9].
 | Code | Case | String | Arguments |
 |---|---|---|---|
 | 1 | seg3:0x841 | by the **sender's** +0x52: 1 → 293 +snd 0x37; 2, 3 → +snd 0x6c, 296 "I'm Attacking %D%< (you)%>." (or, +0x54 = 9: 1402 when seg13:0x2688(sender, P) > −50, else 1403); 4 → +snd 0x6c, 297; 5 → +snd 0x6d, 295; 7 → 367; 9 → 389 (mode 1); 10 → +snd 0x36, 426; 12 → 444; 13 → 450 +snd 0x44 when +0x56 = sender, else 681; 6, 8, 11, other → lines unchanged. End time now + 9000 | (+0x54, +0x56, 5, (+0x54, +0x56) = (14, P)) |
-| 2, 0x34 | seg3:0x9ca | the request, by o = recipient's +0x52 (code 2) or DGROUP:0x964e (0x34): 1 → +snd 0x34, 3020 "Please help me %s. I'm in trouble!" (%s = pilot DGROUP:0x380c); 2–4 → +snd 0x34 when ship r hunts the sender, else 0x40; recipient's +0x54 = 9 → 3019, else 302 "Please Attack %D"; 5 → +snd 0x34, 303; 9 → 388; 10 → 428; 12 → 442; other → unchanged. End time 0 and DGROUP:0x9608 = 1 | p, r = recipient's +0x54/+0x56 (2) or DGROUP:0x9650/0x9652 (0x34); %D (p, r, 5) |
+| 2, 0x34 | seg3:0x9ca | the request, by o = recipient's +0x52 (code 2) or DGROUP:0x964e (0x34): 1 → +snd 0x34, 3020 "Please help me %s. I'm in trouble!" (%s = pilot DGROUP:0x380c); 2–4 → +snd 0x34 when ship r hunts the sender (p = 14 and ship r's goal (+0x32, +0x34) = (14, sender) with +0x38 = 1), else 0x40; the recipient's +0x54 = 9 (for both codes) → 3019, else 302 "Please Attack %D"; 5 → +snd 0x34, 303; 9 → 388; 10 → 428; 12 → 442; 6, 7, 8, 11 and above 12 → unchanged (the tail) [BYTES seg3:0x9ca-0xade]. End time 0 and DGROUP:0x9608 = 1 | p, r = recipient's +0x54/+0x56 (2) or DGROUP:0x9650/0x9652 (0x34); %D (p, r, 5) |
 | 3 | seg3:0xb80 | the bidding report (seg13:0x7b40 above) | — |
 | 5 | seg3:0xc19 | 331 "No One Can Help %D." | (DGROUP:0x6e54, 0x6e52, 5) |
 | 6 | seg3:0xc29 | 329 "You'll Have To Fend For Yourself" | — |
@@ -781,8 +782,8 @@ no argument [BYTES seg3:0x128f-0x1297 seg3:0x12bb seg3:0x8d9].
 | 0x16 | seg3:0xc86 | +snd 0x3f, 356 "I've Had Enough of You. Let's Fight It Out!" | — |
 | 0x1f | seg3:0xda1 | 385 "I Love A Good Duel!, Who Will Come Out Alive?" | — |
 | 0x23 | seg3:0xe83 | +snd 0x3c, 398 "I Can't Capture %D Should I Attack It?" | (0x6e54, 0x6e52, 5) |
-| 0x24 | seg3:0xe9b | +snd 0x3c, 400 "What Use Have I Got For %D?" | (…, 2) |
-| 0x25 | seg3:0xeb3 | +snd 0x3c, 401 "Can't Capture That. %D Isn't Capturable." | (…, 2) |
+| 0x24 | seg3:0xe9b | +snd 0x3c, 400 "What Use Have I Got For %D?" | (DGROUP:0x6e54, 0x6e52, 2) |
+| 0x25 | seg3:0xeb3 | +snd 0x3c, 401 "Can't Capture That. %D Isn't Capturable." | (DGROUP:0x6e54, 0x6e52, 2) |
 | 0x26 | seg3:0xed3 | +snd 0x3c, 404 "I'm Too Busy Right Now. You Go Ahead And Get It." | — |
 | 0x27 | seg3:0xee3 | 406 "It's Nice To Share, But No Teammates Are Around." | — |
 | 0x31 | seg3:0xf21 | 432 "I'm Staying. I've Got Some Business To Take Care Of." | — |
@@ -801,9 +802,9 @@ no argument [BYTES seg3:0x128f-0x1297 seg3:0x12bb seg3:0x8d9].
 | 0x74 | seg3:0x11c8 | 1408 "We Are Already In a Duel!" | — |
 | 0x82 | seg3:0x1235 | 1419 "I Don't Want Any More Duels. So I'll Kill You Now!!" | — |
 | 0x8b | seg3:0x1281 | 1850 "Sorry, But I Can't Help. I'm Too Low On %D." | (4, 0, 0) |
-| 0x8c … 0xa3 | seg3:0x128f | 1851 … 1874 (0x8d is seg3:0x1255: +snd 0x3c, 1852 with %d = (sender's dword +0x98 − now)/1000, seg5:0x2b4) | — |
+| 0x8c … 0xa3 | seg3:0x128f | 1851 … 1874 (0x8d is seg3:0x1255: +snd 0x3c, 1852 with %d = lo16 of the unsigned seg5:0x2b4((sender's dword +0x98) − now, 1000) [BYTES seg3:0x1255-0x127e]) | — |
 | 0xbc | seg3:0x12ed | 1948 "You're Gonna Get It When I Get %D!" | (4, 0, 2) |
-| 0xbd | seg3:0x12fb | 2000 "I Don't Accept. I'm Here To Help %D." | (sender's +0x54, +0x56, 5) |
+| 0xbd | seg3:0x12fb | 2000 "I Don't Accept. I'm Here To Help %D." | (sender's +0x54, +0x56, 5): the head's [bp−0x70] / [bp−0x72], written for a pool-14 sender only [BYTES seg3:0x73b-0x74f] |
 
 So the refusal table of (the attack command) reads: 0x8e 1853 "Already In A Battle", 0x8f 1854 "He Looks Too
 Difficult", 0x90 1855 "He Just Kicked My Butt", 0x91 1856 "I Happen To Like Him", 0x92 1857
@@ -834,8 +835,10 @@ Friend Of Mine", 0xa3 1874 "Try That Command When There's Someone Around".
   words are cleared. DGROUP:0x8858 holds a time (seg13:0xa64f stores now), so the 0x1f branch
   runs only when the answer came at now = 11 ms: the duel reply is practically dead, and the
   the comparison stays as written.
-- **Strategy keys** (PlayMode ≠ 0; F12 Command mode): A seg13:0xa186 (P's order 4 at the
-  player's target, pool 12 replaced by 8, +0x98 = now + 30000, seg4:0x8346(P, …, 12),
+- **Strategy keys** (PlayMode ≠ 0; F12 Command mode): A, C and D act on the mark DGROUP:0x6e54 /
+  0x6e52, not on the player's target words +0x3e/+0x40 [BYTES seg13:0xa1a5-0xa1af
+  seg13:0xa24c-0xa255 seg13:0xa508-0xa50e]. A seg13:0xa186 (P's order 4 at the
+  mark, pool 12 replaced by 8, +0x98 = now + 30000, seg4:0x8346(P, …, 12),
   seg13:0x2714(rec, P, −15, −60, 1, 1) for a ship); C seg13:0xa234 (order 9 at the target if pool
   0 or 11 and in play, else the nearest pool-0 or pool-11 record within 20000 cells, else msg(P,
   7, 0, 0x25)); E seg13:0xa3c8 (order 10 at the nearest even pool-12 record within 20000); G
@@ -978,8 +981,8 @@ Facts of the routines above that the sections leave out.
   - seg13:0xa568: 13, on (14, P).
 
   The recorded requests are 1, 4, 5 and 11, so a recorded defend request (5) can never be answered. The order-9 alternative at seg13:0xa601 never matches a recorded order. seg13:0xa568 does not call seg13:0xa5c2 [BYTES seg13:0xa19f seg13:0xa37c seg13:0xa426 seg13:0xa4ae seg13:0xa51f seg13:0xa57f].
-- seg13:0xa186 also calls seg4:0x8346(P, pool, rec, 12) and, for a ship target, seg13:0x2714(rec, P, −15, −60, 1, 1). Each Strategy routine sets +0x94 = now + 200, +0x98 = now + 30000 (25000 for capture), +0xed = 1 and +0x58 = P [BYTES seg13:0xa1c0-0xa225].
-- seg13:0xa234 uses the selected target when it is a pool-0 or pool-11 object in play. Otherwise it takes the nearest in-play pool-0 record (count DGROUP:0x91fa) or pool-11 record (count DGROUP:0x941c) by seg8:0x285a and targets it with seg3:0xf4; with none it sends 0x25 from (7, 0). seg13:0xa47c refuses with 0x38 from (7, 0) when DGROUP:0x940e < 1 [BYTES seg13:0xa24c-0xa374 seg13:0xa48d-0xa4a6].
+- seg13:0xa186 also calls seg4:0x8346(P, pool, rec, 12) with the mark's own pool, before the 12 → 8 mapping [BYTES seg13:0xa1f6-0xa1fc], and, for a ship target, seg13:0x2714(rec, P, −15, −60, 1, 1). Each Strategy routine sets +0x94 = now + 200, +0x98 = now + 30000 (25000 for capture), +0xed = 1 and +0x58 = P [BYTES seg13:0xa1c0-0xa225].
+- seg13:0xa234 uses the mark when it is a pool-0 or pool-11 object in play, and searches only otherwise. Otherwise it takes the nearest in-play pool-0 record (count DGROUP:0x91fa) or pool-11 record (count DGROUP:0x941c) by seg8:0x285a and targets it with seg3:0xf4; with none it sends 0x25 from (7, 0). seg13:0xa47c refuses with 0x38 from (7, 0) when DGROUP:0x940e < 1 [BYTES seg13:0xa24c-0xa374 seg13:0xa48d-0xa4a6].
 
 ##### seg13:0x8e98 (defend)
 - Message 0x13 goes to j's old +0x58 unconditionally, even when j had no order [BYTES seg13:0x8f44-0x8f4f].
@@ -1025,10 +1028,12 @@ Facts of the routines above that the sections leave out.
 - seg13:0x9a18 returns at once when the target record is negative, at least the pool count (DGROUP:0x9406 + 2p), or its object is not in state 0. It skips entries already in state 15 on the same target and entries whose pool-2 object is not in state 0, then plays seg10:0x754a(0x15, 2, last k, 1) [BYTES seg13:0x9a26-0x9ad7].
 - seg13:0x9ae8 also clears defender object word +0x1e and plays the same sound for the last k [BYTES seg13:0x9b7f seg13:0x9b98-0x9ba7].
 - Mover state 15 [BYTES seg8:0x8f5b-0x9000 seg8:0x83e9-0x83f8]:
-  - a target record at or above the pool count, or not in state 0, becomes (12, 1); the first case also raises DGROUP:0x9498;
-  - the steering runs only on frames with DGROUP:0x9452 = 1 and entry dword +0x24 ≤ now; on the other frames object word +0x28 steps 0..15 while entry dword +0x24 > now [BYTES seg8:0x844e-0x847e];
+  - a target record above the pool's allocated count DGROUP:0x92ec + 2·pool (`jge` passes a record equal to the count), or not in state 0, becomes (12, 1); the first case also raises DGROUP:0x9498 [BYTES seg8:0x8f68-0x8fb0];
+  - the steering runs only on frames with DGROUP:0x9452 ≠ 0 and entry dword +0x0e (DGROUP:0x530c) < now, strictly and unsigned; on the other frames object word +0x28 steps 0..15 while that dword > now [BYTES seg8:0x8fb4-0x8fd6 seg8:0x844e-0x847e];
   - a ship target with byte +0xe8 ≠ 0 is steered at ship words +0x14a/+0x14c instead of its object position;
-  - after the thrust, heading +0x28 = seg8:0x19b0(vx add, vy add).
+  - after the thrust, heading +0x28 = seg8:0x19b0(vx add, vy add): seg8:0x285a(&[bp−0x36], &[bp−0x38], defender, target) leaves the x and y offsets from the defender to the target in cells, and the Pascal seg8:0x19b0 takes the x add as its first push [BYTES seg8:0x8325-0x836f seg8:0x83e9-0x83f8].
+- The mover's head, once per call before its loop: DGROUP:0x9452 = 0; once dword DGROUP:0x186c < now (`jae` skips) it becomes now + sext(max((55 − DGROUP:0x91f8) << 2, 110)) (16-bit shift) and DGROUP:0x9452 = 1; DGROUP:0x1874 counts 0 … 4 (≥ 4 → 0, else + 1) [BYTES seg8:0x8277-0x82c0]. Its loop head runs for every entry k < DGROUP:0x940a, and an entry whose pool-2 object is not in `state` 0 goes to the next k before the state switch [BYTES seg8:0x8ecb-0x8f57].
+- seg8:0x9028(k, s, pool, rec), cdecl, orders defender k: it returns at once when the entry's owner pool +0x06 is 14 and either its state +0x00 is 15 or pool = 14 with rec = the owner's rec; when (pool, rec) is the owner; and when pool = 2 and entry rec's owner words equal entry k's. Then s = 5 sets word +0x02 (DGROUP:0x5300) = 0 and raises the state to 5 (`cmp 5; jg`); any other s raises the state to max(state, s) (`cmp ax, s; jge`); the target words +0x0a/+0x0c take (pool, rec), and s = 15 clears the homing word DGROUP:0x52f6. So Alt+E leaves a defender already in state 15 on its target [BYTES seg8:0x9028-0x90f8].
 
 ##### seg13:0x7ba2 (reactions), beyond claims 50 to 55
 - It returns when the ship holds order 1 or 5 with a zero grudge toward its +0x56, has +0x26 > 320 and no object attacker [BYTES seg13:0x7c0d-0x7c30 seg13:0x7d2e-0x7d45].

@@ -6,8 +6,10 @@
 // findings M1-M4 (work/world/m5s3/review.md).
 //
 // Widths are the original's (records.h helpers); the routines draw rand() in the order written
-// (ruling R1). The law's arrest branch seg13:0xa984-0xac36 is a host call (ruling R3), and the
-// Strategy player's activity text of seg13:0x69ad-0x69e0 is M8's.
+// (ruling R1). The law's arrest branch seg13:0xa98a-0xac34 (M5 stage 4 part B, track LAW) follows
+// docs/re/law.md "The Enforcer's executor" step 4 (work/analysis/m5/s4-crime.md section 4 with
+// s4-crime-verify.md claims 41-49); the Strategy player's activity text of seg13:0x69ad-0x69e0
+// is M8's.
 //
 // Portable, no Win32.
 #pragma once
@@ -57,9 +59,18 @@ std::int16_t revenge_recall(PilotCtx& c, int i);
 // capture; any other order is dropped (the Strategy player instead holds, order 7).
 void order_executor(PilotCtx& c, int i);
 
-// seg13:0xa6bc(e), Pascal (`retf 2`) [BYTES seg13:0xa6bc-0xadba]: +0x94 = now + 750; the
-// doughnut grab; order 0x14 the patrol, 0x15 the warning, 0x16 the arrest (host call, ruling
-// R3), anything else the terminate order 0x17.
+// seg13:0xa6bc(e), Pascal (`retf 2`) [BYTES seg13:0xa6bc-0xadba]: +0x94 = now + 750
+// [BYTES seg13:0xa6cb-0xa6e1]; the doughnut grab [BYTES seg13:0xa6e5-0xa78b]; order 0x14 the
+// patrol [BYTES seg13:0xa78e-0xa921], 0x15 the warning [BYTES seg13:0xa924-0xa987], 0x16 the
+// arrest [BYTES seg13:0xa98a-0xac34], anything else the terminate order 0x17 [BYTES
+// seg13:0xac37-0xadac]. The arrest: with t = +0x56 gone (object `state` in pool +0x54 != 0, or
+// dead) the estimate (12, 0); a prisoner attacking e after e's +0x98 with more than one of e's
+// hit stamps +0x44 ... +0x4c set resists (crime 7 for the player, DGROUP:0xa154 += 1; order
+// 0x17, +0xed 2 or 1, +0x98 = now + 20000, +0x94 = now); while +0xed > 0 e follows t and within
+// 250 cells says 552 (+0xed = 1: the arrest record DGROUP:0xa147, 0xa14b, 0xa161, 0xa162) or 578
+// (+0xed = -1), makes a computer prisoner fight (teams 3, 6, 1: order 2 on e) or leave (order
+// 10), and throws the HANDCUFFS (seg4:0x584c on the first weapon-15 slot); with +0xed <= 0 the
+// estimate (12, 0), the escort to gate 0; last, +0xed = 1 again unless the hook flies or holds t.
 void enforcer_orders(PilotCtx& c, int e);
 
 }  // namespace is::world

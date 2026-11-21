@@ -73,7 +73,9 @@ struct FrameGlobals {
     std::int16_t dg_58a = 0;            // DGROUP:0x58a
     std::int16_t dg_588 = 0;            // DGROUP:0x588
     std::int16_t dg_9148 = 0;           // DGROUP:0x9148
-    std::int16_t dg_1048 = 0;           // DGROUP:0x1048
+    // DGROUP:0x1048: 1 in the image, which gates the 10 s defender block of the pass; F9 stores 0
+    // for the rest of the session (cheats.h) [BYTES DGROUP:0x1048 seg11:0x73a9 seg7:0x886].
+    std::int16_t dg_1048 = 1;
     std::uint32_t dg_1e6c = 0;          // DGROUP:0x1e6c
     std::int16_t dg_92f0 = 0;           // DGROUP:0x92f0
     std::int16_t dg_914e = 0;           // DGROUP:0x914e
@@ -95,8 +97,10 @@ public:
     // seg11:0x4e0a(ship), the gun: the default runs shots.h fire on the frame World with
     // shots() and shot_host(); nothing without a World (M4 s2 fixer).
     virtual void fire(int ship);
-    virtual void seg8_9464() {}                        // [OPEN]
-    virtual void seg8_9564() {}                        // [OPEN]
+    // seg8:0x9464 and seg8:0x9564, the defenders' 10 s launch and its warning (the defenders'
+    // movers are out of M5 stage 4, ruling R3): the defaults log once [BYTES seg7:0x891 seg7:0x8bc].
+    virtual void seg8_9464();
+    virtual void seg8_9564();
     virtual void seg7_2128() {}  // seg7:0x2128, the violence decay (aggression.h; the program's host runs it)
     // seg8:0x3aec(j, i), slot j's sub-step i: the default runs shots.h shot_update on the frame
     // World, 0 without one (M4 s2 fixer).

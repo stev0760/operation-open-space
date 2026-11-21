@@ -199,6 +199,15 @@ Setup make_setup() {
     st.generated = generated_inputs(w);  // seg9:0x91b0's inputs (M4 s4 fixer B)
     if (g_canvas) g_canvas->set_icon_cells(icon_cells(st.icons, st.size_level));
     player_stats(st);
+    // The pages of ships 0 ... DGROUP:0x9316 for seg17:0x20fa's next-ship step (briefing.h
+    // ship_page_stats); a ship the World does not hold keeps a default page so that the indices
+    // stay in step (M5 s4 integrate, WATCH binding 10).
+    world::World& ww = world::current();
+    for (int k = 0; k <= ww.last_ship && k < world::kShipCount; ++k) {
+        ShipStats s;
+        (void)ship_page_stats(ww, k, s, [](int id) { return g_host ? g_host->lang(id) : std::string(); });
+        st.ships.push_back(s);
+    }
     return st;
 }
 
@@ -396,6 +405,11 @@ DebriefInputs debrief_inputs(const world::World& w) {
         in.ships.push_back(sh);
     }
     in.dodge_city = w.w93b6 != -1;  // the name of seg14:0x4520's ship is M5 [OPEN]
+    // Step 12's relations paragraph (seg9:0x8455-0x87d9) with seg13:0x218a's team names, INI
+    // [Teams] Team<t + 1>, 20 bytes [BYTES seg13:0x2197-0x21fa] (M5 s4 integrate, HALL binding 6).
+    in.relations = debrief_relations(w, [](int t) {
+        return g.ini ? g.ini->get_string("Teams", "Team" + std::to_string(t + 1), "", 20) : std::string();
+    });
     return in;
 }
 
@@ -500,13 +514,14 @@ void install_briefing_hooks(App& app) {
         if (prev_teardown) prev_teardown(s);
         g_handoff = false;
     };
-    // ESC in a player game posts 0x991 (seg11:0x6c54) once DGROUP:0x934e > 2. DGROUP:0x934e
-    // comes with the wave (M3); the port counts state-1 frames in its place [OPEN].
+    // ESC in a player game posts 0x991 (seg11:0x6c54) once DGROUP:0x934e > 2 (signed, `jle`):
+    // World::w934e, the wave's seconds that seg11:0x1f1e counts (src/hud panels.cpp) [BYTES
+    // seg11:0x6c40-0x6c54] (M5 s4 integrate, KEYS binding 7).
     auto prev_route = h.route_input;
     h.route_input = [prev_route](shell::GameState& s, const shell::Input& in) {
         if (s.state() == shell::kWave && in.msg == shell::kWmKeyUp &&
             in.wparam == shell::kVkEscape) {
-            if (g_wave_frames > 2) {
+            if (world::current().w934e > 2) {
                 log("state 1: ESC posts 0x991");
                 if (!post(kMsgAbort)) log("state 1: the 0x991 post failed");
             }

@@ -34,11 +34,16 @@
 #include "hud/scrollbar.h"
 #include "hud/target.h"
 #include "hud/visit_win32.h"
+#include "hud/watch.h"
 #include "hud/wave.h"
 #include "hud/weapons.h"
+#include "hall/hall_gdi.h"
 #include "shell/rng.h"
 #include "shell/window_keys.h"
 #include "world/ambulance.h"
+#include "world/callin.h"
+#include "world/cheats.h"
+#include "world/commands.h"
 #include "world/flight.h"
 #include "world/flight_hooks.h"
 #include "world/hooks.h"
@@ -328,6 +333,27 @@ public:
     }
     int attitude(int a, int b) const override { return world::relation(w(), a, b); }  // seg13:0x2688
     std::string taunt() const override { return w().pilot.taunt; }                  // DGROUP:0x8d38
+    // %D's seg3:0x1542(code in {0, 2, 4, 7}, pool, rec, buf, code) with its articles (activity.h
+    // object_name) [BYTES seg10:0xa754 seg10:0xa787 seg10:0xa7ba] (M5 s4 integrate, WATCH
+    // binding 11): ships-0005's "I'M DEFENDING THE SKY TALON (YOU)."
+    std::string object_name(int pool, int rec, int code) override {
+        const int up = code == 0 || code == 2 || code == 4 || code == 7 ? 1 : 0;
+        return program_object_name(up, pool, rec, code);
+    }
+    // ---- M5 s4 integrate: the commands' replies (COMMANDS binding B5)
+    int mark_pool() const override { return hud() ? hud()->info().mark(0).pool : -1; }  // DGROUP:0x6e54
+    int mark_rec() const override { return hud() ? hud()->info().mark(0).rec : -1; }    // DGROUP:0x6e52
+    int request_order() const override { return world::command_words().req_order; }   // DGROUP:0x964e
+    int request_pool() const override { return world::command_words().req_pool; }     // DGROUP:0x9650
+    int request_rec() const override { return world::command_words().req_rec; }       // DGROUP:0x9652
+    void set_request_end() override {
+        world::FrameGlobals& f = world::frame_globals();
+        f.speed_shown = 0;  // DGROUP:0x870c [BYTES seg3:0x9ca]
+        f.dg_9608 = 1;      // DGROUP:0x9608 [BYTES seg3:0x9d0]
+    }
+    void guard(const char* what, const char* address) override {  // ADR 0016 sites, once each
+        if (guarded_.insert(address).second) app::log_todo(what, address);
+    }
     void todo(int code) override {
         if (logged_.insert(code).second)
             app::log_todo("message code " + std::to_string(code) + " of seg3:0x1351", "seg3:0x1351");
@@ -341,6 +367,7 @@ private:
         return b;
     }
     std::set<int> logged_;
+    std::set<std::string> guarded_;
 };
 AppMessageHost g_msg_host;
 
@@ -490,8 +517,9 @@ public:
     std::string text_8768() const override { return call(links().text_8768, g_msg.line1); }
     std::string text_87b8() const override { return call(links().text_87b8, g_msg.line2); }
     // seg13:0x5a6a's record fields (Info::target_picture): the object record, the pool-0 icon
-    // record DGROUP:0x57a8 + 0x23·rec, seg13:0x371c, DGROUP:0x9324, DGROUP:0x9208. DGROUP:0x131c
-    // is not ported: 0 [OPEN]. The canvas's icon strip is the briefing entry's DGROUP:0x3a02.
+    // record DGROUP:0x57a8 + 0x23·rec, seg13:0x371c, DGROUP:0x9324, DGROUP:0x9208 and DGROUP:0x131c,
+    // INI ShipAnim (default 1) [BYTES seg6:0xd0a seg13:0x5c67], read as world/flight_hooks.cpp's
+    // ship_anim reads it. The canvas's icon strip is the briefing entry's DGROUP:0x3a02.
     bool cell(int p, int r, CellInputs& out) const override {
         if (links().cell) return links().cell(p, r, out);
         if (p < 0 || p >= world::kPoolCount || r < 0 || r >= w().pools.records(p)) return false;
@@ -500,6 +528,7 @@ public:
         out.kind = target_kind(p, r);
         out.ship_pool = w().roles.ships;
         out.detail = w().detail;
+        out.dg_131c = g.ini ? g.ini->get_int(settings::kGameSection, "ShipAnim", 1) : 1;
         out.obj.state = o.state;
         out.obj.extent = o.extent;
         out.obj.size = o.size;
@@ -687,7 +716,7 @@ public:
     void refresh_object(int p, int r) {
         if (p == 0) icon_column_row(r);  // seg7:0x64ac(0, 1, rec)
         else if (p == w().roles.ships && r != w().player)
-            log_once("seg13:0x6450, the watch window of ship " + std::to_string(r));
+            smart_row(r, 1);  // seg13:0x6450(0, 1, r) [BYTES seg7:0x65cb-0x65e2] (M5 s4 integrate, WATCH binding 5)
         Hud* h = hud();
         if (!h) return;
         const int m = info_mode();
@@ -930,7 +959,21 @@ void pictures_tick() {
 namespace {
 
 void post_message_now(int recipient, int pool, int rec, int code) {
+    const std::string before = g_msg.text;
     dispatch_message(g_msg, g_msg_host, recipient, pool, rec, code);
+    // The log's trace of seg3:0x6ec for the player, with the pilot's name masked [DESIGN: a
+    // diagnostic of the port] (M5 s4 integrate).
+    if (recipient != world::current().player) return;
+    std::string t = g_msg.text == before ? std::string("(no new text)") : g_msg.text;
+    const std::string p = g_msg_host.pilot();
+    if (!p.empty())
+        for (std::size_t k = t.find(p); k != std::string::npos; k = t.find(p, k + 7)) t.replace(k, p.size(), "<pilot>");
+    app::log("message seg3:0x6ec(" + std::to_string(recipient) + ", " + std::to_string(pool) + ", " +
+             std::to_string(rec) + ", 0x" + [code] {
+                 char b[8];
+                 std::snprintf(b, sizeof b, "%x", code & 0xffff);
+                 return std::string(b);
+             }() + "): " + g_msg.sender + " / " + t);
 }
 
 void info_mode_now(int mode) {
@@ -1070,6 +1113,7 @@ void bind_pilot_hud() {
     // 0x1e·DGROUP:0xa76 is (ship pool, i); seg13:0x58dc returns outside modes 2 and 3 [BYTES
     // seg13:0x68da-0x68f6].
     pl.watch_ship = [](int i) {
+        watch_ship(i);  // seg13:0x6890(i)'s IS_SMART and IS_WATCH parts (hud/watch.h) (M5 s4 integrate, WATCH binding 4)
         if (!g_hud) return;
         const int m = g_host.info_mode();
         if (m != kModeTarget && m != kModeMessage) return;
@@ -1351,7 +1395,7 @@ public:
         (void)x, (void)y;
         sx = sy = -1000;  // seg8:0x29ea: the next frame's view places the ship [OPEN]
     }
-    void watch_windows(int) override {}
+    void watch_windows(int m) override { ::is::hud::watch_windows(m); }  // seg13:0x65f2(m) (WATCH binding 7)
     void cursor_home() override { SetCursorPos(g.start_cursor.x, g.area.h); }
     void music_back() override { is::sound::music(1, 1); }  // [OPEN: DGROUP:0x9220 = 2 gives 2]
     void message(int ship, int code) override { post_message(ship, 7, 0, code); }
@@ -1446,6 +1490,9 @@ void install_visit(app::App& app) {
     // seg15:0x20ca's player ship, seg15:0x2a08's INI MainShip for a new body (20 bytes [BYTES
     // seg15:0x2a39-0x2a50]) and the play height DGROUP:0x90ec of seg15:0x482e (M4 s6 PAD, binding 6).
     g_visit_screen->ship_look = visit_ship_look;
+    // The Hall of Justice's jet is seg15:0x20ca's player ship too (hall/hall_gdi.h) (M5 s4
+    // integrate, HALL binding 4).
+    hall::ship_look_slot() = visit_ship_look;
     g_visit_screen->main_ship_art = []() -> std::optional<gfx::LaunchShipArt> {
         const std::string n =
             g.ini ? g.ini->get_string(settings::kGameSection, "MainShip", "EAGLE", 20) : std::string("EAGLE");
@@ -1552,6 +1599,40 @@ void install_hud_hooks(App& app) {
     install_wave(app);  // the wave's integration, src/hud/wave_win32.cpp (M3 s2 fixer)
     bind_pilot_hud();    // the computer ships' HUD calls (M5 s3 integrate)
     install_visit(app);  // state 6, the ambulance visit (M4 s3 VISIT)
+    // ---- M5 s4 integrate: the watch windows (hud/watch.h), the W key and the cheat words the
+    // HUD reads (work/world/m5s4/watch-report.md, keys-report.md)
+    // The 0x9b4 handler seg2:0x513 (Alt+R and seg13:0x65f2(0)'s post): IS_SMART (WATCH binding 2).
+    app::smart_watch() = app::WatchToggle{[] { return smart_exists(); }, [] { smart_create(); },
+                                          [] { smart_destroy(); }};
+    // seg11:0x7127: W with any modifier is seg13:0x563c(ctrl, alt) (KEYS binding 2, WATCH binding 3).
+    world::key_links().watch = [](bool ctrl, bool alt) {
+        const int r = watch_key(ctrl, alt);
+        app::log(std::string("watch key seg13:0x563c(") + (ctrl ? "1" : "0") + ", " + (alt ? "1" : "0") + ") -> " +
+                 std::to_string(r) + (watch_exists() ? ", the watch window exists" : ""));  // [DESIGN: a diagnostic]
+    };
+    world::PilotLinks& wl = world::pilot_links();  // WATCH binding 6
+    wl.watch_tail = [] { watch_tail(); };          // seg13:0x50b0(0, 0)
+    wl.smart_window = [] { return smart_exists(); };  // DGROUP:0x95fe != 0
+    wl.all_ships_notice = [](int n) { all_ships_notice(n); };
+    world::wave_links().watch_window = [] { return watch_exists(); };  // DGROUP:0x95fc != 0
+    world::wave_end_links().watch_windows = [](int m) { return watch_windows(m); };  // seg13:0x65f2(m)
+    // seg3:0x1d0a's demo give-up calls seg4:0x78(s) [BYTES seg3:0x2223-0x2226] (WATCH binding 9);
+    // the design byte +0x44 (body byte +9 bit 0x20) has no home in the port's design words, so
+    // design_flags44 stays unbound and reads 0 [OPEN: English articles do not depend on it].
+    watch_links().think = [](int s) { world::program_think(s); };
+    // The score panel's colours: DGROUP:0x951c (the cheat word) and DGROUP:0x104c (god mode),
+    // and the cheat keys' score redraw DGROUP:0x5018 = 0xffffffff [BYTES seg11:0x535 seg11:0x53c
+    // seg11:0x6f1a] (KEYS bindings 2, 4).
+    links().score_alt = [] { return world::cheat_state().w951c != 0; };
+    links().score_alt_hi = [] { return world::collide_globals().w104c != 0; };
+    // The call-in's seg11:0x238e(DGROUP:0xa7c, 0): the left display painted now [BYTES
+    // seg13:0xb440-0xb44b] (M5 s4 integrate).
+    world::callin_links().seg11_238e = [] {
+        if (g_hud) g_hud->info().paint(kInfoTarget);
+    };
+    world::cheat_links().score_redraw = [] {
+        if (Hud* h = ::is::hud::hud()) h->panels().state().score_shown = 0xffffffffu;
+    };
     // The palette message's InvalidateRect(main, NULL, TRUE) reaches the IS_INFO children too
     // (src/app/wndproc.cpp palette_message): both panels are due and paint after the next frame.
     app::children_invalidated() = [] {

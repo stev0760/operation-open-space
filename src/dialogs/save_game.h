@@ -43,7 +43,10 @@ struct SaveGlobals {
     std::array<std::int16_t, 24> w6b10{};  // DGROUP:0x6b10, 8 x 3 (header +0x116)
     std::array<std::int16_t, 8> w6b40{};   // DGROUP:0x6b40, 8 words (header +0x146; seg4:0x774a adds)
     // DGROUP:0xa14d / 0xa157 (header +0x174, +0x17e) and DGROUP:0xa161 (+0x188) are the World's
-    // (ba14d, ba157, ba161, M4 s3 ROSTER).
+    // (ba14d, ba157, ba161, M4 s3 ROSTER). DGROUP:0xa162 (+0x189) and the three cheat words
+    // below have their one homes in src/world (law.h LawWords::ba162, cheats.h CheatState,
+    // CollideGlobals::w104c); the program's glue (save_game_win32.cpp ProgramCtx) copies them in
+    // before and out after each call (M5 s4 integrate).
     std::uint8_t a162 = 0;                 // DGROUP:0xa162 (header +0x189)
     // DGROUP:0x92e2 lives in world/rescale.h (SizeSession::dg_92e2), its one home (M4 s8 fixer,
     // review L4).

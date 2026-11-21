@@ -52,7 +52,16 @@ public:
     virtual std::int16_t team(int design) { return (void)design, 0; }
     // seg13:0xb6f2, the crime report: stage 4's law (ruling R3); the program logs it once.
     virtual void seg13_b6f2(int ship, int code) { (void)ship, (void)code; }
-    virtual std::int16_t seg4_8d3a() { return -1; }  // the race's leading ship [OPEN M6]
+    // seg4:0x8d3a(), the race winner (law.md, The race winner): the alive, in-play ship with
+    // pool-14 byte +0x51 = 2 and the least finish dword DGROUP:0x9e60 + 4i. Races are out of the
+    // stage (ruling R3) and no port writer stores +0x51 = 2, so the scan finds no finished ship
+    // and returns its unwritten [bp-0xa], which reads 0, ship 0 [DESIGN ADR 0016 decision 1];
+    // logged once [BYTES seg4:0x8d47-0x8db0] (M6 ports the scan with the race).
+    virtual std::int16_t seg4_8d3a() {
+        static bool once = false;
+        guard_todo(once, "the race winner: no finished ship, [bp-0xa] reads 0 (races: M6)", "seg4:0x8d3a");
+        return 0;
+    }
     // seg13:0xadbe(ship, 3, 0x69), the rivals' call for Pirates (callin.h call_in_program); its AX
     // word is not read here [BYTES seg13:0x32dd-0x32e9].
     virtual void seg13_adbe(int ship, int a, int b) { (void)ship, (void)a, (void)b; }

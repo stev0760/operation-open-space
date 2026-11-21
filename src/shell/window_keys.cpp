@@ -38,7 +38,13 @@ BorderMenu read_border_menu(const settings::IniFile& ini) {
 void write_window_keys(settings::IniFile& ini, WindowKeys& k) {
     ini.set_int(kGameSection, "Full", k.full);  // seg6:0x37e
     ini.set_int(kGameSection, "Menu", k.menu);  // seg6:0x3a4
-    // RadarLeft/RadarTop, WatchLeft/WatchRight/WatchTop: their windows come with M3 and M8.
+    // RadarLeft/RadarTop: the radar window comes with M8.
+    if (k.watch_dirty) {  // DGROUP:0x8fea
+        ini.set_int(kGameSection, "WatchLeft", k.watch_left);    // seg6:0x424
+        ini.set_int(kGameSection, "WatchRight", k.watch_right);  // seg6:0x44a
+        ini.set_int(kGameSection, "WatchTop", k.watch_top);      // seg6:0x470
+    }
+    k.watch_dirty = false;
     ini.set_int(kGameSection, "IconWnd", k.icon_wnd);  // seg6:0x496
     ini.set_int(kGameSection, "VScale", k.vscale);     // seg6:0x4bc
     ini.set_int(kGameSection, "SmWnd", k.sm_wnd);      // seg6:0x4e2
@@ -48,7 +54,12 @@ void write_window_keys(settings::IniFile& ini, WindowKeys& k) {
         ini.set_int(kGameSection, "IconTop", k.icon_top);    // seg6:0x55b
     }
     k.icon_dirty = false;
-    // SmLeft/SmTop, HelpLeft/HelpTop: their windows come later.
+    if (k.sm_dirty) {  // DGROUP:0x8ff0
+        ini.set_int(kGameSection, "SmLeft", k.sm_left);  // seg6:0x588
+        ini.set_int(kGameSection, "SmTop", k.sm_top);    // seg6:0x5ae
+    }
+    k.sm_dirty = false;
+    // HelpLeft/HelpTop: the help window's keys come later.
     if (k.show_dirty) {
         ini.set_int(kGameSection, "ShowLeft", k.show.left);      // seg6:0x630
         ini.set_int(kGameSection, "ShowRight", k.show.right);    // seg6:0x656

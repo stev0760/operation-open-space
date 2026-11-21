@@ -613,9 +613,6 @@ public:
         World& w = current();
         ::is::world::icon_counted(w, rec, arg, w.roles.ships);
     }
-    std::int16_t design_type(int design) override {
-        return wave_end_links().design_type ? wave_end_links().design_type(design) : std::int16_t{0};
-    }
     void column_row(int pool, int rec) override {
         if (wave_end_links().column_row) return wave_end_links().column_row(pool, rec);
         todo_once("icon column row", "seg7:0x65aa");
@@ -691,7 +688,8 @@ public:
         log("history MessageBox seg16:0x68d6: " + text);
         MessageBoxA(g.main, text.c_str(), "Inner Space", MB_ICONEXCLAMATION);
     }
-    void hall_of_justice() override { todo_once("the Hall of Justice", "seg9:0x6c62"); }
+    // State 8: WaveEndHost's default calls hall_entry_slot(), which src/hall/hooks.cpp fills
+    // (M5 s4 integrate, HALL binding 2).
     void race_credit() override { todo_once("the race credit", "seg9:0x6be3"); }
     void race_refuel() override { refuel_all(g_world); }  // seg9:0x6db0 (roster.h) [BYTES seg9:0x6cf6]
     // seg7:0x5fa-0x608: state 6, DGROUP:0x914a = 0, seg16:0xcfe(1) (visit.h visit_links().enter,
@@ -804,6 +802,13 @@ void install_world_hooks(App& app) {
         briefing_entry();
         if (prev_brief) prev_brief(s);
         play_region(g_world);
+    };
+    // seg9:0x6cc4(arg) for the Hall of Justice's phase 10, seg9:0x6cc4(1) [BYTES seg16:0x6a57-0x6ad1]
+    // (wave_end.h debrief_entry_slot; M5 s4 integrate, HALL binding 3).
+    debrief_entry_slot() = [](shell::GameState& s, int arg) {
+        auto sh = make_host();
+        WaveEndCtx c{g_world, s, g_wave_end_host, sh.get()};
+        debrief_entry(c, arg);
     };
     // seg9:0xd6c's design clear (roster_build.h game_over_designs) [BYTES seg9:0xdb4-0xdca]
     // (M5 s3 integrate, ROSTER binding 3).

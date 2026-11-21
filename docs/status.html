@@ -47,17 +47,17 @@ ul{margin:0;padding-left:1.2em;max-width:65ch} li{margin:3px 0}
 </style>
 <main>
 <header>
-  <h1>Operation: Open Space, status on 16 November 2026</h1>
-  <p class="muted" style="margin-top:8px">The other ships are in the wave. From wave 2 on, computer ships enter by the gate, pick goals, capture, fire, die and drop pods, and the P key shifts to a teammate. The law is read and verified in the original, from each crime to the Hall of Justice's fines, and recorded in ten arrests; porting it comes next.</p>
+  <h1>Operation: Open Space, status on 21 November 2026</h1>
+  <p class="muted" style="margin-top:8px">The other ships are in the wave. From wave 2 on, computer ships enter by the gate, pick goals, capture, fire, die and drop pods, and the P key shifts to a teammate. The law is in the port: a crime is witnessed and warned, an Enforcer arrests with the handcuffs and escorts the ship to the Hall of Justice, which types the charges and takes the fine. The commands to other ships and the Ship Watch window work too.</p>
 </header>
 
 <section>
-  <h2>Feature checklist: 280 of 663 rows ported</h2>
+  <h2>Feature checklist: 329 of 663 rows ported</h2>
   <p class="sub">Each row is one behaviour of the original. "Verified" means compared against the original running under Wine.</p>
   <div class="bar big" id="total"></div>
   <div class="legend">
-    <span><b class="v"></b>Verified <strong>60</strong></span><span><b class="d"></b>Done <strong>220</strong></span>
-    <span><b class="w"></b>In progress <strong>62</strong></span><span><b class="t" style="outline:1px solid var(--line)"></b>Not started <strong>321</strong></span>
+    <span><b class="v"></b>Verified <strong>60</strong></span><span><b class="d"></b>Done <strong>269</strong></span>
+    <span><b class="w"></b>In progress <strong>67</strong></span><span><b class="t" style="outline:1px solid var(--line)"></b>Not started <strong>267</strong></span>
   </div>
 </section>
 
@@ -74,16 +74,16 @@ ul{margin:0;padding-left:1.2em;max-width:65ch} li{margin:3px 0}
 
 <section>
   <h2>Commits per working day</h2>
-  <p class="sub">94 commits since 23 October. Days without commits are left out.</p>
+  <p class="sub">95 commits since 23 October. Days without commits are left out.</p>
   <div class="cols" id="cols"></div><div class="xl" id="xl"></div>
 </section>
 
 <section>
   <h2>Size of the work</h2>
   <div class="facts">
-    <div><b>95,000</b><span>lines of port source</span></div>
-    <div><b>1,408</b><span>port test cases, all passing under Wine</span></div>
-    <div><b>1,912</b><span>fact tests pinning the original's bytes</span></div>
+    <div><b>101,500</b><span>lines of port source</span></div>
+    <div><b>1,612</b><span>port test cases, all passing under Wine</span></div>
+    <div><b>2,014</b><span>fact tests pinning the original's bytes</span></div>
     <div><b>33</b><span>recordings of the original (digests)</span></div>
     <div><b>17</b><span>design decision records</span></div>
   </div>
@@ -92,7 +92,7 @@ ul{margin:0;padding-left:1.2em;max-width:65ch} li{margin:3px 0}
 <section>
   <h2>What is next</h2>
   <ul>
-    <li><strong>M5 stage 4, the law:</strong> the reading is done; next the port of crimes, warnings, the handcuff arrest, the Hall of Justice, the commands to ships and the Ship Watch, compared against the recorded arrests. Teams in full and hazards follow.</li>
+    <li><strong>M5 stage 5:</strong> teams in full, the defenders and the hazards; the star disc behind the Hall of Justice's landing pad is still missing.</li>
     <li><strong>Flights of the original:</strong> recordings that need real flying (a ship destroyed, a ram, the fight with a Patrol officer) are flown by hand in a recorded session.</li>
     <li><strong>First run on real Windows:</strong> nothing has been run outside Wine yet.</li>
     <li><strong>Ship sets:</strong> the Military Vehicles and Nations of the World sets have arrived; reading them belongs to the Ship Factory milestone (M8).</li>
@@ -100,15 +100,15 @@ ul{margin:0;padding-left:1.2em;max-width:65ch} li{margin:3px 0}
 </section>
 </main>
 <script>
-const A=[["Key bindings and mouse",4,31,6,45],["Windows, dialogs and panels",11,28,1,19],["Navigation and waves",11,7,3,2],["Flight model",0,13,2,2],["Weapons",2,25,2,1],["Hazards",0,2,1,17],["Ship systems and powerups",3,12,3,4],["Teams and attitudes",0,6,2,10],["Laws and Enforcers",0,0,1,23],["Ambulance, credit and fuel",8,12,3,0],["Computer ships",0,2,2,8],["Races and duels",0,0,1,19],["Inner Demon and Noble Weapons",0,0,0,13],["Settings dialogs",0,2,0,31],["INI keys",11,53,28,51],["Sound and music",5,7,1,0],["Ship Factory",0,0,0,29],["Screen savers",0,0,0,15],["Modes, demo and sessions",3,7,4,14],["Install, protection and help",2,13,2,18]];
+const A=[["Key bindings and mouse",4,50,8,24],["Windows, dialogs and panels",11,32,1,15],["Navigation and waves",11,7,3,2],["Flight model",0,13,2,2],["Weapons",2,25,2,1],["Hazards",0,2,1,17],["Ship systems and powerups",3,12,3,4],["Teams and attitudes",0,6,2,10],["Laws and Enforcers",0,22,2,0],["Ambulance, credit and fuel",8,12,3,0],["Computer ships",0,6,4,2],["Races and duels",0,0,1,19],["Inner Demon and Noble Weapons",0,0,0,13],["Settings dialogs",0,2,0,31],["INI keys",11,53,28,51],["Sound and music",5,7,1,0],["Ship Factory",0,0,0,29],["Screen savers",0,0,0,15],["Modes, demo and sessions",3,7,4,14],["Install, protection and help",2,13,2,18]];
 const K=["v","d","w","t"],N=["verified","done","in progress","not started"];
 const bar=(c)=>c.map((n,i)=>n?`<i class="${K[i]}" style="flex:${n}" title="${n} ${N[i]}"></i>`:"").join("");
-document.getElementById("total").innerHTML=bar([60,220,62,321]);
+document.getElementById("total").innerHTML=bar([60,269,67,267]);
 document.getElementById("areas").innerHTML=A.map(([l,...c])=>{const t=c[0]+c[1]+c[2]+c[3];
   return `<div class="lab">${l}</div><div class="bar">${bar(c)}</div><div class="n">${c[0]+c[1]} / ${t}</div>`}).join("");
-const M=[["M1 Foundations: readers for every original file format","Done","ok"],["M2 Shell: window, intro, dialogs, installer","Done","ok"],["M3 World: Navigation, wave generation, flight, status display","In progress","part"],["M4 Core loop: capture, damage, weapons, ambulance, saved games","Done","ok"],["M5 Ships and AI: teams, Enforcers, laws, hazards","Other ships fly; the law is read, its port is next","part"],["M6 Specials: races, duels, Inner Demon","Not started",""],["M7 Audio: own mixer, MIDI through OPL3 or a SoundFont","Nearly done","part"],["M8 Extras: Ship Factory, screen savers","Not started",""],["M9 Release","Not started",""],["M10 Quality pass: the remaster","Not started",""]];
+const M=[["M1 Foundations: readers for every original file format","Done","ok"],["M2 Shell: window, intro, dialogs, installer","Done","ok"],["M3 World: Navigation, wave generation, flight, status display","In progress","part"],["M4 Core loop: capture, damage, weapons, ambulance, saved games","Done","ok"],["M5 Ships and AI: teams, Enforcers, laws, hazards","Other ships fly and the law works; teams in full and hazards remain","part"],["M6 Specials: races, duels, Inner Demon","Not started",""],["M7 Audio: own mixer, MIDI through OPL3 or a SoundFont","Nearly done","part"],["M8 Extras: Ship Factory, screen savers","Not started",""],["M9 Release","Not started",""],["M10 Quality pass: the remaster","Not started",""]];
 document.getElementById("ms").innerHTML=M.map(m=>`<tr><td>${m[0]}</td><td><span class="pill ${m[2]}">${m[1]}</span></td></tr>`).join("");
-const C=[["Oct 23",3],["24",23],["25",14],["26",7],["27",6],["28",4],["Nov 1",7],["2",4],["5",1],["6",4],["8",4],["9",3],["10",4],["11",6],["14",1],["15",2],["16",1]];
+const C=[["Oct 23",3],["24",23],["25",14],["26",7],["27",6],["28",4],["Nov 1",7],["2",4],["5",1],["6",4],["8",4],["9",3],["10",4],["11",6],["14",1],["15",2],["16",1],["21",1]];
 document.getElementById("cols").innerHTML=C.map(c=>`<div style="height:${c[1]/23*100}%" title="${c[0]}: ${c[1]} commits"><span>${c[1]}</span></div>`).join("");
 document.getElementById("xl").innerHTML=C.map(c=>`<span>${c[0]}</span>`).join("");
 </script>

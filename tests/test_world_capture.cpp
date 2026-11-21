@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <string>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 #include "doctest.h"
@@ -153,6 +154,39 @@ TEST_CASE("capture: core-0002's four captures [ORACLE core-0002]") {
         CHECK(r.cap.erases == 1);
         CHECK(r.w.icons_b == 7);
         CHECK(s.w82 == 35);  // seg13:0x4eec(ship, 35) from 0
+    }
+}
+
+TEST_CASE("capture: a race's winner seg4:0x8d3a reads ship 0 while races are out [DESIGN ADR 0016 decision 1]") {
+    // The scan finds no finished ship (no port writer stores +0x51 = 2), so [bp-0xa] reads 0:
+    // ship 0's capture is no crime, another ship's is crime 8 (review M2) [BYTES seg13:0x1863-0x18a5].
+    class RaceHost : public RecCaptureHost {
+    public:
+        std::vector<std::pair<int, int>> crimes;
+        void seg13_b6f2(int ship, int code) override { crimes.emplace_back(ship, code); }
+    };
+    CaptureHost base;
+    CHECK(base.seg4_8d3a() == 0);
+    {
+        Rig r;
+        r.g.wave_kind = 6;
+        RaceHost rh;
+        CaptureCtx c{r.x, r.f, rh};
+        touch(c, 0, pool_rec(kPoolIcons, 1));
+        CHECK(rh.crimes.empty());
+        CHECK(r.icon(1).race_status == 11);
+    }
+    {
+        Rig r;
+        r.g.wave_kind = 6;
+        r.w.pools.set_in_use(kPoolShips, 2);
+        r.w.ships[1].design_index = 1;
+        r.w.ships[1].bec = 1;
+        r.w.design_ratings[1].captures = 1;
+        RaceHost rh;
+        CaptureCtx c{r.x, r.f, rh};
+        touch(c, 1, pool_rec(kPoolIcons, 1));
+        CHECK(rh.crimes == std::vector<std::pair<int, int>>{{1, 8}});
     }
 }
 

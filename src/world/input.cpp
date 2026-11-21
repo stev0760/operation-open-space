@@ -96,9 +96,52 @@ bool fire_poll(const WaveGlobals& g, KeyLatch& keys, std::uint32_t player_lockou
            g.joy_fire != 0;                        // DGROUP:0x1042 [BYTES seg11:0x4df4-0x4df9]
 }
 
+KeyLinks& key_links() {
+    static KeyLinks l;
+    return l;
+}
+
+const char* command_address(Command c) {
+    switch (c) {
+    case Command::kCtrlA: return "seg13:0x8570";
+    case Command::kAltA: return "seg13:0x9a18";
+    case Command::kStrategyA: return "seg13:0xa186";
+    case Command::kCtrlC: return "seg13:0x9ce0";
+    case Command::kStrategyC: return "seg13:0xa234";
+    case Command::kCtrlD: return "seg13:0x8e98";
+    case Command::kStrategyD: return "seg13:0xa4f4";
+    case Command::kCtrlE: return "seg13:0x9f3e";
+    case Command::kAltE: return "seg11:0x70bb";
+    case Command::kStrategyE: return "seg13:0xa3c8";
+    case Command::kCtrlF: return "seg13:0x915c";
+    case Command::kCtrlG: return "seg13:0xa01c";
+    case Command::kStrategyG: return "seg13:0xa47c";
+    case Command::kCtrlH: return "seg13:0x81c2";
+    case Command::kAltH: return "seg13:0x9ae8";
+    case Command::kCtrlS: return "seg13:0x9810";
+    case Command::kCtrlAltS: return "seg13:0x4ac4";
+    case Command::kStrategyS: return "seg13:0xa568";
+    case Command::kSelfDestruct: return "seg16:0x8e4";
+    }
+    return "seg11:0x6b64";
+}
+
 KeyResult key_message(std::uint32_t msg, std::uint16_t key, const WaveGlobals& g,
                       std::uint32_t player_lockout, std::int16_t player_state, bool ctrl_down,
                       bool alt_down, KeyState& ks, KeyActions& act) {
+    // WM_KEYUP: only the cheat keys are this switch's here (seg11:0x6d19-0x6d69); every other
+    // key-up goes on to the router's other routes.
+    if (msg == kWmKeyUp) {
+        if (!is_cheat_vk(key)) return KeyResult::kNotMine;
+        if (player_lockout > g.now || player_state != 0) return KeyResult::kGated;  // [BYTES seg11:0x6c9b-0x6cd1]
+        if (g.demo == 0) return KeyResult::kHandled;            // [BYTES seg11:0x6d19-0x6d1e]
+        if (cheat_state().w951c == 0) return KeyResult::kHandled;   // [BYTES seg11:0x6d58-0x6d5d]
+        if (key_links().cheat_key)
+            key_links().cheat_key(key);  // seg11:0x72e0(vk)
+        else
+            act.unported(msg, key, "seg11:0x72e0");
+        return KeyResult::kHandled;
+    }
     // The gate [BYTES seg11:0x6c75-0x6cd1]
     const bool exempt = (msg == kWmKeyUp && key == 'P') || (msg == kWmKeyDown && key == 'H');
     if ((player_lockout > g.now || player_state != 0) && !exempt) return KeyResult::kGated;
@@ -109,7 +152,61 @@ KeyResult key_message(std::uint32_t msg, std::uint16_t key, const WaveGlobals& g
     if (g.demo == 0 && key != kVkAdd && key != kVkSubtract && key != 'W' && key != kVkOemMinus &&
         key != kVkOemPlus)
         return KeyResult::kHandled;  // the demo takes only these [BYTES seg11:0x6e19-0x6e3e]
+    const int p = g.player;
+    // A command key: the integrator's routine, else a logged call [DESIGN].
+    const auto command = [&](Command c) {
+        if (key_links().command)
+            key_links().command(c, p);
+        else
+            act.unported(msg, key, command_address(c));
+    };
     switch (key) {
+    case kVkDelete:  // seg11:0x6ee7 [BYTES seg11:0x6e5e seg11:0x6ee7-0x6f1d]
+        if (key_links().cheat_gate)
+            key_links().cheat_gate();
+        else
+            act.unported(msg, key, "seg11:0x6ee7");
+        return KeyResult::kHandled;
+    case 'A':  // seg11:0x7065: Ctrl, then Alt, then the Strategy call only without Ctrl [BYTES seg11:0x7065-0x70a2]
+        if (ctrl) command(Command::kCtrlA);
+        if (alt)
+            command(Command::kAltA);
+        else if (!ctrl)
+            command(Command::kStrategyA);
+        return KeyResult::kHandled;
+    case 'C':  // seg11:0x7019 [BYTES seg11:0x7019-0x7030]
+        command(ctrl ? Command::kCtrlC : Command::kStrategyC);
+        return KeyResult::kHandled;
+    case 'D':  // seg11:0x6f20: Alt+D falls to the Strategy call [BYTES seg11:0x6f20-0x6f37]
+        command(ctrl ? Command::kCtrlD : Command::kStrategyD);
+        return KeyResult::kHandled;
+    case 'E':  // seg11:0x70a5 [BYTES seg11:0x70a5-0x7124]
+        if (ctrl) command(Command::kCtrlE);
+        if (alt)
+            command(Command::kAltE);
+        else if (!ctrl)
+            command(Command::kStrategyE);
+        return KeyResult::kHandled;
+    case 'F':  // seg11:0x6feb: Ctrl only [BYTES seg11:0x6feb-0x6ffc]
+        if (ctrl) command(Command::kCtrlF);
+        return KeyResult::kHandled;
+    case 'G':  // seg11:0x6fff [BYTES seg11:0x6fff-0x7016]
+        command(ctrl ? Command::kCtrlG : Command::kStrategyG);
+        return KeyResult::kHandled;
+    case 'S':  // seg11:0x7033: Ctrl+Alt, Ctrl, else the Strategy call [BYTES seg11:0x7033-0x7062]
+        command(ctrl && alt ? Command::kCtrlAltS : ctrl ? Command::kCtrlS : Command::kStrategyS);
+        return KeyResult::kHandled;
+    case 'W':  // seg11:0x7127: seg13:0x563c(ctrl, alt) for every modifier [BYTES seg11:0x7127-0x7130]
+        if (key_links().watch)
+            key_links().watch(ctrl, alt);
+        else
+            act.unported(msg, key, "seg13:0x563c");
+        return KeyResult::kHandled;
+    case 'X':  // seg11:0x6f3a: Ctrl+Alt+X, the self destruct [BYTES seg11:0x6f3a-0x6f55]; X without
+        // both is consumed too, `je seg11:0x72a1` / `je seg11:0x6f70` -> 0x72a1 (review L6)
+        // [BYTES seg11:0x6f3e seg11:0x6f46 seg11:0x6f70].
+        if (ctrl && alt) command(Command::kSelfDestruct);
+        return KeyResult::kHandled;
     case kVkAdd:
     case kVkOemPlus:  // seg11:0x71ef
         if (alt) {
@@ -162,8 +259,17 @@ KeyResult key_message(std::uint32_t msg, std::uint16_t key, const WaveGlobals& g
     case 'B':  // seg11:0x71d4: the frame-rate display [BYTES seg11:0x6e6a] (M3 s2 fixer)
         act.show_frame_rate();
         return KeyResult::kHandled;
-    case 'H':  // seg11:0x6f7a: the ambulance (ambulance.h ambulance_key) [BYTES seg11:0x6f7a-0x6fe8] (M4 s3 fixer)
-        act.ambulance(ctrl, alt);
+    case 'H':  // seg11:0x6f7a [BYTES seg11:0x6f7a-0x6fe8]
+        // Ctrl: seg13:0x81c2; Alt: seg13:0x9ae8; neither: the ambulance (ambulance.h
+        // ambulance_key) in a player game. Without the command slot the ambulance's own Ctrl and
+        // Alt stubs answer (M4 s3 fixer).
+        if (!key_links().command) {
+            act.ambulance(ctrl, alt);
+            return KeyResult::kHandled;
+        }
+        if (ctrl) command(Command::kCtrlH);
+        if (alt) command(Command::kAltH);
+        if (!ctrl && !alt) act.ambulance(false, false);
         return KeyResult::kHandled;
     case 'M':  // seg11:0x71a9: the message display [BYTES seg11:0x6e9a] (M3 s2 fixer)
         act.show_messages();

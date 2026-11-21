@@ -94,6 +94,40 @@ TEST_CASE("window keys: defaults, reads and the write-back") {
           "SScale=0\r\nIconLeft=976\r\nIconTop=5\r\nShowLeft=102\r\nShowRight=921\r\nShowTop=77\r\nShowBottom=691\r\n");
 }
 
+TEST_CASE("window keys: the watch windows' keys in seg6:0x33e's order (M5 s4 integrate)") {
+    // WatchLeft, WatchRight, WatchTop after Menu while DGROUP:0x8fea is set, SmLeft, SmTop after
+    // IconTop while DGROUP:0x8ff0 is set [BYTES seg6:0x3fc-0x470 seg6:0x560-0x5ae].
+    const fs::path n = temp_ini("w0.ini", "");
+    fs::remove(n);
+    is::settings::IniFile none(n);
+    WindowKeys z = read_window_keys(none);
+    write_window_keys(none, z);  // neither flag: no Watch or Sm key
+    none.save();
+    CHECK(slurp(n).find("Watch") == std::string::npos);
+    CHECK(slurp(n).find("SmLeft") == std::string::npos);
+    const fs::path q = temp_ini("w.ini", "");
+    fs::remove(q);
+    is::settings::IniFile fresh(q);
+    WindowKeys d = read_window_keys(fresh);
+    d.watch_left = 30;
+    d.watch_top = 40;
+    d.watch_right = 310;
+    d.watch_dirty = true;
+    d.icon_left = 976;
+    d.icon_top = 5;
+    d.icon_dirty = true;
+    d.sm_left = 900;
+    d.sm_top = 300;
+    d.sm_dirty = true;
+    write_window_keys(fresh, d);
+    fresh.save();
+    CHECK_FALSE(d.watch_dirty);
+    CHECK_FALSE(d.sm_dirty);
+    CHECK(slurp(q) ==
+          "[Inner Space]\r\nFull=1\r\nMenu=0\r\nWatchLeft=30\r\nWatchRight=310\r\nWatchTop=40\r\nIconWnd=1\r\n"
+          "VScale=0\r\nSmWnd=0\r\nSScale=0\r\nIconLeft=976\r\nIconTop=5\r\nSmLeft=900\r\nSmTop=300\r\n");
+}
+
 TEST_CASE("window keys: Border and Menu defaults of seg6:0xb3e") {
     const fs::path p = temp_ini("c.ini", "[Inner Space]\r\n");
     is::settings::IniFile ini(p);

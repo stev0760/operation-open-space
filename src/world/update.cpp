@@ -50,6 +50,16 @@ World* g_frame_world = nullptr;
 
 void set_frame_world(World* w) { g_frame_world = w; }
 
+// seg8:0x9464 and seg8:0x9564: the defenders' own movers are out of M5 stage 4 (ruling R3).
+void UpdateHost::seg8_9464() {
+    static bool once = false;
+    guard_todo(once, "the defenders' 10 s launch (seg8:0x9464), a host call of M5 stage 4", "seg8:0x9464");
+}
+void UpdateHost::seg8_9564() {
+    static bool once = false;
+    guard_todo(once, "the defenders' launch warning (seg8:0x9564), a host call of M5 stage 4", "seg8:0x9564");
+}
+
 World* UpdateHost::frame_world(Pools& pools) {
     return g_frame_world && &g_frame_world->pools == &pools ? g_frame_world : nullptr;
 }
@@ -374,14 +384,19 @@ void wave_pass(UpdateCtx& c, bool max_rate) {
     if (player.state == 0 &&
         fire_poll(g, c.flight.keys, c.flight.ships[static_cast<std::size_t>(g.player)].lockout.get()))
         h.fire(g.player);
-    // [BYTES seg7:0x886-0x8d0] [OPEN]
+    // The 10 s defender block [BYTES seg7:0x886-0x8d0]: DGROUP:0x1e6c is the World's w1e6c and
+    // DGROUP:0x92f0 = DGROUP:0x92ec + 2·2, pool 2's allocated count (`cmp word [0x92f0], 0` at
+    // seg7:0x898), not its storage size, which is never 0 once the pool exists (records.h).
     if (f.dg_1048 != 0) {
-        if (!(g.now < f.dg_1e6c) && f.dg_92f0 != 0) {
-            f.dg_1e6c = g.now + 10000u;
+        World* fw = h.frame_world(c.flight.pools);
+        std::uint32_t& due = fw ? fw->w1e6c : f.dg_1e6c;
+        const bool defenders = fw ? fw->pools.allocated(2) != 0 : f.dg_92f0 != 0;
+        if (!(g.now < due) && defenders) {
+            due = g.now + 10000u;
             h.seg8_9464();
             f.dg_914e = 0;
         }
-        if (!(f.dg_1e6c - 500u > g.now) && f.dg_914e == 0) h.seg8_9564();
+        if (!(due - 500u > g.now) && f.dg_914e == 0) h.seg8_9564();
     }
     // [BYTES seg7:0x8d5-0x922]
     if (player.state == 0) {
@@ -423,9 +438,14 @@ void particle_burst(UpdateCtx& c) {
     if (out) create_wave_brushes(*out, wg);
     const std::int16_t groups = add16(add16(g.detail, g.detail), 3);  // [bp-0xe] [BYTES seg7:0x3772-0x377a]
     const std::int16_t life = shl16(add16(g.detail, 7), 2);          // [bp-0x10] [BYTES seg7:0x377d-0x3786]
+    // A group past the table (Detail 4 or more: 2·Detail + 3 groups of 4 in a 40-entry table) reads
+    // zero and drops its write [DESIGN ADR 0016 decision 2] [BYTES seg7:0x375a].
     const auto entry = [&g](int n, int k) -> BurstEntry* {
         const int ix = 4 * n + k;  // stride 0x16, group stride 0x58
-        return ix >= 0 && ix < static_cast<int>(g.burst.size()) ? &g.burst[static_cast<std::size_t>(ix)] : nullptr;
+        if (ix >= 0 && ix < static_cast<int>(g.burst.size())) return &g.burst[static_cast<std::size_t>(ix)];
+        static bool once = false;
+        guard_todo(once, "a particle burst group past the 40-entry table", "seg7:0x375a");
+        return nullptr;
     };
     const bool ship_ok = g.burst_rec >= 0 && g.burst_rec < kShipCount;
     for (std::int16_t n = 0; n < groups; n = add16(n, 1)) {  // [bp-4] [BYTES seg7:0x37f7-0x37fd]

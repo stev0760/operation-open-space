@@ -235,14 +235,15 @@ void attack_reaction(CollideCtx& x, int v, int a, int d_in, int kind) {
             }
         }
     } else if (rel > 0) {
-        // [BYTES seg4:0x64ed-0x65f2]
+        // [BYTES seg4:0x64ed-0x65f2]: the allies byte +0x5d (DGROUP:0x70ed) at seg4:0x64fa and
+        // seg4:0x654e: lim = cnt - sbyte +0x5d + 4 (`cwde; sub ax, [bp-0x10]; neg; add 4`)
         const ShipRecord& V = sh(w, v);
-        const std::int16_t lim = add16(sub16(cnt, ship_sb(V, pw::kOneShot)), 4);
+        const std::int16_t lim = add16(sub16(cnt, ship_sb(V, pw::kAllies)), 4);
         const std::int8_t gv = grudge(V, a);
         if (lim >= gv) {
             if (d != 90) {
                 x.h.message(a, kLiteralShips, v, gv > 1 ? 0x2a : 0x29);
-                if (sub16(sub16(cnt, grudge(V, a)), ship_sb(V, pw::kOneShot)) == -5 && a == g.player) {
+                if (sub16(sub16(cnt, grudge(V, a)), ship_sb(V, pw::kAllies)) == -5 && a == g.player) {  // [BYTES seg4:0x6542-0x6555]
                     x.h.message(a, kLiteralShips, v, 0x2b);
                     x.h.sound(0x3e, 0, 0, 0);  // [BYTES seg4:0x6573-0x657b]
                 }

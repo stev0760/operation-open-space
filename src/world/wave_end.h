@@ -13,6 +13,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 
 #include "shell/game_state.h"
 #include "world/ambulance.h"
@@ -20,6 +21,13 @@
 #include "world/world.h"
 
 namespace is::world {
+
+// The program's state-8 entry, filled by src/hall/hooks.cpp [DESIGN: the slot stands for the far
+// call from the world's library into the Hall's]; empty: nothing.
+std::function<void()>& hall_entry_slot();
+// seg9:0x6cc4(arg) on the program's World and WaveEndHost, for the Hall's phase 10 (arg 1);
+// src/world/hooks.cpp fills it [DESIGN: the slot stands for the far call]; empty: nothing.
+std::function<void(shell::GameState&, int arg)>& debrief_entry_slot();
 
 // The routines of other parts the wave end calls; the defaults do nothing.
 class WaveEndHost {
@@ -59,8 +67,13 @@ public:
     // caption "Inner Space", flags 0x30 (MB_ICONEXCLAMATION), the title "PAUSED.." while it is
     // up [BYTES seg7:0x6c8 seg7:0x6d2 seg16:0x68ed seg16:0x6904 seg16:0x691b] [ORACLE core-0001].
     virtual void history_box() {}
-    // State 8, the Hall of Justice: seg9:0x6c62's writes and seg16:0x6928(0) (M6) [OPEN].
-    virtual void hall_of_justice() {}
+    // State 8, the Hall of Justice: DGROUP:0x929c = 0 and seg16:0x6928(0), which runs phase 0
+    // at once [BYTES seg9:0x6c6a seg9:0x6c6e]; wave_over has set DGROUP:0x90f4 = 8 before it and
+    // writes DGROUP:0x9346 and the escorts' `alive` after it. The default calls hall_entry_slot()
+    // (src/hall/hooks.cpp fills it) (M5 s4 HALL).
+    virtual void hall_of_justice() {
+        if (hall_entry_slot()) hall_entry_slot()();
+    }
     // The race wave's credit loop of seg9:0x6bc2 (kind 6) [OPEN M6] [BYTES seg9:0x6be3-0x6c59].
     virtual void race_credit() {}
     // seg9:0x6db0 (kind 6): every ship's fuel to its tank [OPEN M6] [BYTES seg9:0x6dc5].
@@ -107,7 +120,11 @@ enum class DeadlineResult { kContinue, kEndPass };
 DeadlineResult wave_deadlines(WaveEndCtx& c);
 
 // seg9:0x6bc2 [BYTES seg9:0x6bc2-0x6cc0]: the music's hard pause, DGROUP:0x1e74 = 0, the race
-// credit (kind 6), then state 8 (DGROUP:0x93a4 != 0) or seg9:0x6cc4(0).
+// credit (kind 6), then state 8 (DGROUP:0x93a4 != 0) or seg9:0x6cc4(0). The state-8 path
+// [BYTES seg9:0x6c5b-0x6cbc] (s4-hall-verify.md claims 8, 9): DGROUP:0x90f4 = 8, the Hall's
+// entry (WaveEndHost::hall_of_justice), DGROUP:0x9346 = -1, and `alive` +0xec = 0 for every ship
+// k = 0 ... DGROUP:0x9316 of design team 7 with class byte +0x5e = 0 and word +0x56 = the player;
+// no seg9:0x6cc4 on that path.
 void wave_over(WaveEndCtx& c);
 
 // seg9:0x6cc4(arg) [BYTES seg9:0x6cc4-0x6dab], the 17 steps of s1-end.md 3: the sounds reset,

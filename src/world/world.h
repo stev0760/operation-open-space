@@ -542,7 +542,7 @@ public:
     std::vector<Star> stars;      // seg8:0x190e
     std::int16_t w913e = 0;       // DGROUP:0x913e
     std::int16_t w0a76 = 0;       // DGROUP:0xa76 target display mode, 2
-    std::int16_t w934e = 0;       // DGROUP:0x934e frames since the wave start (ESC needs > 2)
+    std::int16_t w934e = 0;       // DGROUP:0x934e the wave's seconds (seg11:0x1f1e: frame# / 36; ESC needs > 2)
 
     // ---- further set-up state (src/world/setup.cpp)
     std::int16_t strip_slots = 0;  // N of the strip seg10:0x5b30 created (the pool-0 in-use count)

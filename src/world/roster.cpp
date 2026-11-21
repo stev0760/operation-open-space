@@ -9,9 +9,11 @@
 
 #include "formats/ships.h"
 #include "shell/rng.h"
+#include "world/cheats.h"
 #include "world/collide.h"
 #include "world/player_sheet.h"
 #include "world/roster_build.h"
+#include "world/weapon_load.h"
 
 namespace is::world {
 
@@ -511,9 +513,9 @@ void ship_from_roster(World& w, int i, const fmt::ShipRecord& shp) {
         S.weapon[kk] = r->weapon[kk];
         S.weapon_count[kk] = r->count[kk];
     }
-    // DGROUP:0x104e != 0: seg12:0x6d64(i, 13) (world/weapon_load.h) [BYTES seg14:0x1758-0x1764];
-    // the port keeps no DGROUP:0x104e (the restore clears it, formats.md "Reading" step 9), so the
-    // call never runs here [OPEN: DGROUP:0x104e's other writers].
+    // DGROUP:0x104e != 0 (cheat key '7', cheats.h CheatState::w104e): seg12:0x6d64(i, 13)
+    // (world/weapon_load.h) [BYTES seg14:0x1758-0x1764] (M5 s4 integrate, KEYS binding 3).
+    if (cheat_state().w104e != 0) (void)load_weapon_program(w, i, 13);
     // The systems, sign-extended (claim 3) [BYTES seg14:0x1775-0x179b].
     for (int k = 0; k < 4; ++k) S.roster_word(k) = r->systems[static_cast<std::size_t>(k)];
     // The relation tables: cleared for k = 0 ... DGROUP:0x9316, then filled from +0x08/+0x12/

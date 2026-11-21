@@ -2,6 +2,8 @@
 // decision 7).
 #include "world/gate_exit.h"
 
+#include "world/relations.h"
+
 namespace is::world {
 
 namespace {
@@ -11,9 +13,17 @@ bool rec_ok(const Pools& p, int pool, int rec) {
 }
 bool ship_ok(int i) { return i >= 0 && i < kShipCount; }
 
+// The design team word DGROUP:0x970a + 0xad·(ship word +0x4e) (`imul ..., 0xad; cmp [... +
+// 0x970a], 7`) [BYTES seg12:0x240a-0x2410 seg12:0x249e-0x24aa], read in its one home (relations.h
+// design_team_of, World::design_ratings) (M5 s4 LAW). A ship index outside the table, which the
+// holder word +0x34 of step 8 can name, reads 0 [DESIGN ADR 0016 decision 2].
 std::int16_t team_of(GateExitCtx& c, int ship) {
-    if (!ship_ok(ship)) return 0;
-    return c.host.design_type(c.w.ships[static_cast<std::size_t>(ship)].design_index);
+    if (!ship_ok(ship)) {
+        static bool once = false;
+        guard_todo(once, "seg12:0x2288's team read for a ship index outside the table", "seg12:0x24a4");
+        return 0;
+    }
+    return design_team_of(c.w, c.w.ships[static_cast<std::size_t>(ship)].design_index);
 }
 
 }  // namespace
@@ -66,7 +76,11 @@ void gate_exit(GateExitCtx& c, int pool, int rec) {
         c.host.removed(pool, rec);
         c.host.sound(0x27, pool, rec, 1);
     }
-    // 7. A team-7 ship taking its prisoner through [BYTES seg12:0x23fd-0x2472].
+    // 7. A team-7 ship taking its prisoner through: its order object is the ship pool (+0x54 =
+    // DGROUP:0x9324) and its object holds that ship on the HANDCUFFS ((+0x36, +0x38) =
+    // (DGROUP:0x9324, +0x56)); the prisoner goes through with it, and for the player DGROUP:0x1e80 =
+    // now + 1000 and DGROUP:0x93a4 = 1, the two words the Hall's way in reads (wave_end.cpp
+    // wave_deadlines, then seg9:0x6bc2) [BYTES seg12:0x23fd-0x2472].
     if (pool == ship_pool && ship_ok(rec)) {
         const ShipRecord& s = w.ships[static_cast<std::size_t>(rec)];
         if (team_of(c, rec) == 7 && s.w54 == ship_pool) {
@@ -80,7 +94,9 @@ void gate_exit(GateExitCtx& c, int pool, int rec) {
             }
         }
     }
-    // 8. The player held by a team-7 ship [BYTES seg12:0x2478-0x24b1].
+    // 8. The player passing the gate held by a team-7 ship (its object `owner_pool` +0x32 =
+    // DGROUP:0x9324, `owner_rec` +0x34 an Enforcer): DGROUP:0x93a4 = 1; DGROUP:0x1e80 is the gate
+    // mover's for the player (seg12:0x1e3b, update.cpp) [BYTES seg12:0x2478-0x24b1].
     if (pool == ship_pool && rec == player) {
         const ObjectRecord& o = pools.rec(pool, rec);
         if (o.owner_pool == ship_pool && team_of(c, o.owner_rec) == 7) w.w93a4 = 1;

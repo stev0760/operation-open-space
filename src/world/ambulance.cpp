@@ -5,6 +5,7 @@
 #include <set>
 
 #include "world/collide.h"
+#include "world/commands.h"
 #include "world/missile.h"
 #include "world/update.h"
 
@@ -717,8 +718,11 @@ public:
         if (g_links.composite) return g_links.composite(den, num, o_rec, o_pool, s_rec, s_pool);
         once("the pick-up composite", "seg13:0x3d40");
     }
-    void ctrl_h(int) override { once("Ctrl+H", "seg13:0x81c2"); }
-    void alt_h(int) override { once("Alt+H", "seg13:0x9ae8"); }
+    // seg13:0x81c2(player) and seg13:0x9ae8(player) (commands.h); the key switch reaches them
+    // through key_links().command first (input.cpp), so these serve only the decode without that
+    // slot (M5 s4 integrate, COMMANDS binding B4).
+    void ctrl_h(int s) override { command_ctrl_h(s); }
+    void alt_h(int s) override { command_alt_h(s); }
     void todo(const std::string& what, const char* address) override { once(what, address); }
 };
 

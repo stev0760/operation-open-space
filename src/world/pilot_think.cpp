@@ -905,8 +905,8 @@ void think(PilotCtx& c, int i) {
                 P.order_by(static_cast<std::int16_t>(i));
                 P.replan_at(now);
                 P.goal_act(3);
-                // seg13:0x6900(i): for team 7 the arrest executor seg13:0xa6bc, a stage 4 host
-                // call (ruling R3) [BYTES seg4:0x80e-0x80f].
+                // seg13:0x6900(i): for team 7 the Enforcer's executor seg13:0xa6bc
+                // (pilot_orders.cpp) [BYTES seg4:0x80e-0x80f].
                 order_executor(c, i);
             }
         }

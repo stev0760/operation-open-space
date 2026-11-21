@@ -29,6 +29,7 @@
 #include "world/roster_build.h"
 #include "shell/edition.h"
 #include "shell/rng.h"
+#include "world/cheats.h"
 #include "world/flight_hooks.h"
 #include "world/hooks.h"
 #include "world/rescale.h"
@@ -341,7 +342,11 @@ int dialog(int cmd) {  // seg10:0x82a2
     }
     if (r != 0) {  // [BYTES seg10:0x845b-0x8534]
         g.hud_dirty = false;  // DGROUP:0x8f64
-        // DGROUP:0x104e, 0x104c and 0x951c belong to the wave (M3).
+        // DGROUP:0x104e, 0x104c and 0x951c = 0 on every accepted command (cheats.h CheatState,
+        // CollideGlobals::w104c) [BYTES seg10:0x8503-0x850b] (M5 s4 integrate, KEYS binding 6).
+        world::cheat_state().w104e = 0;
+        world::collide_globals().w104c = 0;
+        world::cheat_state().w951c = 0;
         g_session.demo_restore = 0;  // DGROUP:0x9516
         const std::string drive = ini_string("Drive", "C", 20);  // [BYTES seg10:0x851f]
         g_session.drive = drive.empty() ? 0 : drive[0] - 'C';  // DGROUP:0x94ac

@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "briefing/lang_format.h"
+#include "world/law.h"
 #include "world/relations.h"
 #include "world/world.h"
 
@@ -73,7 +74,7 @@ std::int16_t* killer_slot(PilotCtx& c, int t, int n) {
 // --- PilotHost defaults of the orders' calls out ----------------------------------------------------
 namespace {
 struct OnceHost {
-    bool defenders = false, cloak = false, shield = false, notice = false, sound = false, arrest = false;
+    bool defenders = false, cloak = false, shield = false, notice = false, sound = false;
     bool text = false, lang = false, pilot = false, shp = false;
 } g_once_host;
 }  // namespace
@@ -90,9 +91,6 @@ std::int16_t PilotHost::shield_toggle(int) {
 }
 void PilotHost::notice(std::uint32_t) { guard_todo(g_once_host.notice, "the player's notice", "seg3:0x332e"); }
 void PilotHost::sound(int, int, int, int) { guard_todo(g_once_host.sound, "a pilot's sound", "seg10:0x754a"); }
-void PilotHost::arrest(int) {
-    guard_todo(g_once_host.arrest, "the Enforcer's arrest order 0x16 (the law, stage 4)", "seg13:0xa984");
-}
 void PilotHost::order_text(int) {
     guard_todo(g_once_host.text, "the Strategy player's order text (M8)", "seg13:0x69ad");
 }
@@ -855,6 +853,118 @@ void order_executor(PilotCtx& c, int i) {
     P.order(0);
 }
 
+namespace {
+
+// --- seg13:0xa6bc's order 0x16, the arrest [BYTES seg13:0xa98a-0xac34] ------------------------------
+// (docs/re/law.md "The Enforcer's executor", step 4; work/analysis/m5/s4-crime.md section 4 with
+// s4-crime-verify.md claims 41-49.) t = +0x56, the order's ship; the order's object is read in
+// pool +0x54 (DGROUP:0x1df8) for the `state` test and in the literal pool 14 (DGROUP:0x1e30) for
+// the distance and the cuffs.
+void order_arrest(PilotCtx& c, int e) {
+    WaveGlobals& g = c.g;
+    const std::uint32_t now = g.now;
+    ShipRecord& S = c.s(e);
+    Pilot E(S);
+    const int t0 = E.order_rec();  // `mov ax, [+0x56]` [BYTES seg13:0xa998]
+    // [bp-8] = t only when t is in play and alive [BYTES seg13:0xa9c3]; the "t gone" path reads it
+    // unwritten in the tail at seg13:0xac1f: 0 [DESIGN ADR 0016 decision 1].
+    std::int16_t held = 0;
+    bool to_gate = false;  // seg13:0xabdc, the estimate (12, 0)
+    if (c.obj(E.order_pool(), t0).state != 0 || ship_or_zero(c, t0, "seg13:0xa9b9").bec == 0) {  // [BYTES seg13:0xa998-0xa9c0]
+        static bool once = false;
+        guard_todo(once, "seg13:0xa6bc's [bp-8] unwritten when the arrest's target is gone (0) [DESIGN ADR 0016 decision 1]",
+                   "seg13:0xac1f");
+        to_gate = true;
+    } else {
+        const int t = t0;
+        held = static_cast<std::int16_t>(t);
+        ShipRecord& TS = c.s(t);
+        Pilot T(TS);
+        // A. The prisoner resists: it attacks e (goal (14, e), +0x38 = 1), e's +0x98 has passed
+        // (32-bit unsigned `jb`) and more than one of e's five hit stamps +0x44 ... +0x4c (the
+        // player's hits, seg4:0x7d36) is set [BYTES seg13:0xa9c6-0xaa18].
+        if (T.goal_act() == 1 && T.goal_pool() == 14 && T.goal_rec() == e && E.order_until() < now) {
+            std::int16_t h = 0;  // [bp-0x16]
+            for (int j = 0; j < 5; ++j)
+                if (ship_w(S, pw::kHit0 + 2 * j) != 0) h = add16(h, 1);
+            if (h > 1) {  // [BYTES seg13:0xaa14-0xaa18]
+                // Crime 7 counted for the player: byte DGROUP:0xa154 = DGROUP:0xa14d + 7 [BYTES seg13:0xaa1a-0xaa22].
+                if (t == g.player) c.w.ba14d[7] = static_cast<std::uint8_t>(c.w.ba14d[7] + 1);
+                E.order(0x17);  // [BYTES seg13:0xaa2b]
+                const std::int8_t os = E.one_shot();
+                E.one_shot(static_cast<std::int8_t>(os == 2 || os == -1 ? 2 : 1));  // [BYTES seg13:0xaa31-0xaa50]
+                E.order_until(now + 20000u);  // `add ax, 0x4e20; adc dx, 0` [BYTES seg13:0xaa55-0xaa6b]
+                E.replan_at(now);             // seg13:0xa97f [BYTES seg13:0xaa6f-0xaa76]
+                return;
+            }
+        }
+        // B. Approach while +0xed > 0 (signed) [BYTES seg13:0xaa79-0xaa83].
+        if (E.one_shot() <= 0) {
+            to_gate = true;
+        } else {
+            E.est_pool(14);  // follow t [BYTES seg13:0xaa87-0xaa9a]
+            E.est_rec(static_cast<std::int16_t>(t));
+            E.est_app(2);
+            E.est_act(3);
+            // seg8:0x285a(&[bp-0xc], &[bp-0xe], e's point, t's point), pool 14 [BYTES seg13:0xaaa0-0xaac3]
+            const std::int16_t d = cells(c.obj(kPoolShips, e), c.obj(kPoolShips, t));
+            if (d < 0xfa) {  // signed `jge` past 250 cells [BYTES seg13:0xaac8-0xaace]
+                ContactWords& cw = contact_words();
+                if (E.one_shot() == 1) {  // B1 [BYTES seg13:0xaad2-0xab0a]
+                    c.host.message(t, kPoolShips, e, 0x3d);  // 552 "Follow Me Out. And Don't Try Anything!"
+                    E.one_shot(0);
+                    cw.da147 = g.game_frames;  // dword DGROUP:0xa147 = dword DGROUP:0x1e68 [BYTES seg13:0xaaf0-0xaaf4]
+                    cw.wa14b = c.w.wave;       // DGROUP:0xa14b = DGROUP:0x91f8 [BYTES seg13:0xaaf8-0xaafb]
+                    c.w.ba161 = cw.ba163;      // DGROUP:0xa161 = DGROUP:0xa163 [BYTES seg13:0xaafe-0xab01]
+                    law_words().ba162 = static_cast<std::uint8_t>(e & 0xff);  // DGROUP:0xa162 = lo8(e) [BYTES seg13:0xab07]
+                } else {  // +0xed 2 ... 127 [BYTES seg13:0xab0c-0xab23]
+                    c.host.message(t, kPoolShips, e, 0x57);  // 578 "You Will Pay For That Next Wave, Tough Guy!"
+                    E.one_shot(static_cast<std::int8_t>(-1));
+                }
+                // B3. The prisoner answers: not for a byte +0x5e <= 0 (signed), nor for the
+                // player in a player game (DGROUP:0x95bc != 0) [BYTES seg13:0xab28-0xab41].
+                if (T.cls() > 0 && !(t == g.player && g.demo != 0)) {
+                    const std::int16_t team = c.team(t);  // [bp-0x10] [BYTES seg13:0xab43-0xab52]
+                    if (team == 3 || team == 6 || team == 1) {  // PIRATES, RENEGADES, PREDATORS fight [BYTES seg13:0xab55-0xab60]
+                        T.order(2);    // dword +0x52 = 0x000e0002 [BYTES seg13:0xab85]
+                        T.order_pool(14);
+                        T.order_rec(static_cast<std::int16_t>(e));  // [BYTES seg13:0xab91]
+                        T.order_by(static_cast<std::int16_t>(t));   // [BYTES seg13:0xab98]
+                        ship_reaction(c, t, 14, e, 10);              // seg4:0x8346(t, 14, e, 10) [BYTES seg13:0xab9c-0xaba2]
+                    } else {  // the others leave [BYTES seg13:0xab62-0xab7a]
+                        T.order(10);
+                        T.order_until(now + 500u);  // `add eax, 0x1f4`
+                        T.order_by(static_cast<std::int16_t>(e));
+                    }
+                }
+                // B4. The HANDCUFFS: the first slot j = 0 ... sbyte +0xcb (inclusive, `cbw; cmp;
+                // jl`) holding weapon 15 [BYTES seg13:0xabaa-0xabda].
+                for (int j = 0; j <= static_cast<std::int8_t>(E.slots()); ++j) {
+                    if (static_cast<std::uint8_t>(sb_at(S, 0xb8 + j, "seg13:0xabc8")) != 15) continue;
+                    c.host.weapon_use(j, e, 0);  // seg4:0x584c(j, e, 0), Pascal [BYTES seg13:0xabcf-0xabd5]
+                    break;
+                }
+            }
+        }
+    }
+    if (to_gate) {  // C. Leave by gate 0: dword +0x06 = 12, +0x3a = +0x36 = 2 [BYTES seg13:0xabdc-0xabf1]
+        E.est_pool(12);
+        E.est_rec(0);
+        E.est_app(2);
+        E.est_act(2);
+    }
+    // D. While +0xed < 1: nothing while the hook flies (object +0x36 = 10) or the cuffs hold [bp-8]
+    // (object (+0x36, +0x38) = (14, [bp-8])); else +0xed = 1, the next re-plan throws again
+    // [BYTES seg13:0xabf5-0xac34].
+    if (E.one_shot() >= 1) return;
+    const ObjectRecord& O = c.obj(kPoolShips, e);
+    if (O.w36 == 10) return;
+    if (O.w36 == 14 && O.w38 == held) return;
+    E.one_shot(1);
+}
+
+}  // namespace
+
 // --- seg13:0xa6bc, the Enforcer's orders -----------------------------------------------------------
 void enforcer_orders(PilotCtx& c, int e) {
     if (!ship_ok(e)) return;
@@ -928,8 +1038,8 @@ void enforcer_orders(PilotCtx& c, int e) {
         E.replan_at(now + 2000u);
         return;
     }
-    if (order == 0x16) {  // 4. The arrest: the law's (ruling R3) [BYTES seg13:0xa98a-0xac34]
-        c.host.arrest(e);
+    if (order == 0x16) {  // 4. The arrest [BYTES seg13:0xa98a-0xac34]
+        order_arrest(c, e);
         return;
     }
     // 5. Anything else: terminate [BYTES seg13:0xac37-0xadac].

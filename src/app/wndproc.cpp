@@ -20,6 +20,7 @@
 #include "formats/bytes.h"
 #include "help/help.h"
 #include "hud/program.h"  // the HUD scrollbar (M3 stage 2, the HUD)
+#include "hud/watch.h"    // the Ship Watch window (M5 s4 integrate)
 #include "intro/intro.h"
 #include "nav/nav.h"
 #include "shell/command_table.h"
@@ -149,6 +150,15 @@ void teardown() {
     // seg6:0x6a7].
     SetCursor(LoadCursorW(nullptr, IDC_WAIT));
     try {
+        // The watch windows' rectangles and dirty flags DGROUP:0x8fea / 0x8ff0 (WATCH binding 8).
+        const hud::WatchKeys wk = hud::take_watch_keys();
+        g.keys.watch_dirty = wk.watch_dirty;
+        g.keys.watch_left = wk.watch_left;
+        g.keys.watch_top = wk.watch_top;
+        g.keys.watch_right = wk.watch_right;
+        g.keys.sm_dirty = wk.sm_dirty;
+        g.keys.sm_left = wk.sm_left;
+        g.keys.sm_top = wk.sm_top;
         shell::write_window_keys(*g.ini, g.keys);
         g.ini->save();
         log("INI written back");
@@ -630,7 +640,10 @@ LRESULT handle(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     case kMsgAbort:  // seg2:0x536 (src/dialogs/hooks.cpp)
         dialogs::abort_sequence();
         return 0;
-    case kMsgShipWatch: log_todo("Ship Watch window", "seg13:0x5878"); return 0;
+    case kMsgShipWatch:  // seg2:0x4e1 -> seg13:0x5878 (WATCH binding 1)
+        hud::watch_create();
+        log(std::string("0x9a0: seg13:0x5878, the watch window ") + (hud::watch_exists() ? "exists" : "not made"));
+        return 0;
     case kMsgMenuReload: reload_menu(); return 0;  // seg2:0x4e9
     case kMsgIconWatch:  // seg2:0x358 -> seg2:0x4f0
         toggle_watch(icon_watch(), g.keys.icon_wnd, "IS_ICON", "seg7:0x641a", "seg7:0x63f2");

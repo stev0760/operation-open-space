@@ -59,6 +59,9 @@ struct WaveLinks {
     // seg13:0x675e's HUD part at the ship mover's head (hud/wave.h pictures_tick) [BYTES
     // seg13:0x15] (M4 s2 fixer).
     std::function<void()> pictures;
+    // DGROUP:0x95fc != 0, the Ship Watch window (hud/watch.h watch_exists): the frame's
+    // FrameGlobals::dg_95fc, which gates seg13:0x24aa(2) [BYTES seg7:0xc52-0xc5b] (M5 s4 integrate).
+    std::function<bool()> watch_window;
 };
 WaveLinks& wave_links();
 // DGROUP:0xa6c's owner (the radar, src/hud/radar.h): the key switch reads the zoom through it,
@@ -138,8 +141,18 @@ struct PilotLinks {
     std::function<std::string(int id)> lang;
     std::function<std::string()> pilot;
     std::function<std::string(int n)> shp_name;
+    // ---- M5 s4 integrate: the watch windows (src/hud/watch.h, WATCH binding 6)
+    // seg13:0x50b0(0, 0) at seg13:0x675e's tail [BYTES seg13:0x67f2-0x67fa] (hud::watch_tail).
+    std::function<void()> watch_tail;
+    // DGROUP:0x95fe != 0, the IS_SMART window (hud::smart_exists).
+    std::function<bool()> smart_window;
+    // seg13:0x6870-0x6881: DGROUP:0x95fa = n and PostMessage(main, 0x9b4) (hud::all_ships_notice).
+    std::function<void(int n)> all_ships_notice;
 };
 PilotLinks& pilot_links();
+// seg4:0x78(ship), the think, on the program's PilotCtx (the demo give-up of seg3:0x1d0a calls
+// it from src/hud/activity.cpp through hud::watch_links().think) (M5 s4 integrate).
+void program_think(int ship);
 
 // The flight role's state, for the other roles' hooks.
 WaveGlobals& flight_globals();

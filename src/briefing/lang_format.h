@@ -61,4 +61,13 @@ std::string lang_format(const std::string& fmt, const std::vector<FArg>& args, c
 void lang_format_into(std::string& buf, int id, int mode, const std::vector<FArg>& args,
                       const LangLookup& lang, int phase = 0, const std::function<int()>& rand = {});
 
+
+// seg11:0x3fd4(text, mode) [BYTES seg11:0x3fd4-0x4106]: mode 0 lower-cases A ... Z, mode 1
+// upper-cases a ... z; modes 2 and 3 upper-case the first letter and lower-case the rest, a
+// letter after a space (mode 2), after " I " (modes 2 and 3: modes 0 and 1 force the flag at the
+// head of every iteration) and, in mode 3, the first letter after '.', '!', CR or LF and the
+// spaces that follow staying upper; the character after a '(' is left alone in every mode. The
+// Hall's charge text (seg16:0x7184) and the activity and watch texts call it.
+std::string case_3fd4(std::string s, int mode);
+
 }  // namespace is::briefing

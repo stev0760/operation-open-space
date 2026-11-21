@@ -21,6 +21,7 @@
 #include <cstdio>
 #include <string>
 
+#include "briefing/debriefing.h"
 #include "nav/tree.h"
 
 namespace is::world {
@@ -1995,6 +1996,10 @@ void start_wave(World& w, SetupHost& h) {
     w.w9372 = ship_word(me, 0xd0);
     w.w934e = 0;  // [BYTES seg9:0x6524]
     w.pilot.called_in = 0;  // DGROUP:0x964c [BYTES seg9:0x6527] (M5 s3 integrate)
+    // DGROUP:0x9350 ... 0x935e, the copy of T(t, tp) the debriefing's relations paragraph reads
+    // (briefing/debriefing.h snapshot_relations) [BYTES seg9:0x654c-0x6583] (M5 s4 integrate,
+    // HALL binding 5).
+    briefing::snapshot_relations(w);
     say(h, "world: wave start seg9:0x60bc wave " + std::to_string(w.wave) + ", player at (" +
                std::to_string(p.rec(kPoolShips, w.player).x) + ", " +
                std::to_string(p.rec(kPoolShips, w.player).y) + ") heading " +

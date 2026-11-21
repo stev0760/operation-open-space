@@ -30,7 +30,7 @@ public:
     std::int16_t str = 100;
     std::vector<Msg> msgs;
     std::vector<std::array<int, 3>> calls, defenders, targets;
-    std::vector<int> arrests, shields, cloaks, thrusts;
+    std::vector<int> shields, cloaks, thrusts;
     std::vector<std::uint32_t> notices;
     std::vector<std::array<int, 4>> sounds;
     std::int16_t toggle_result = 1;
@@ -63,7 +63,6 @@ public:
     }
     void notice(std::uint32_t ids) override { notices.push_back(ids); }
     void sound(int id, int p, int r, int m) override { sounds.push_back({id, p, r, m}); }
-    void arrest(int e) override { arrests.push_back(e); }
     std::string lang(int id) override {
         if (id == 3033)  // [BYTES ENG_LANG.DLL STRING 190] id 3033
             return "%<Hey! %>%s! %<I Remember That %>You %<%S%>%<Killed a %s %# Ago!%>";
@@ -447,7 +446,7 @@ TEST_CASE("seg13:0x6900: orders 9, 10, 0x0c and the default") {
     CHECK(P.order() == 0);
 }
 
-TEST_CASE("seg13:0xa6bc: +0x94, the patrol's next ship, the warning, the arrest call, the give-up") {
+TEST_CASE("seg13:0xa6bc: +0x94, the patrol's next ship, the warning, the escort, the give-up") {
     Rig r;
     r.host.team = {0, 7, 1, 0, 0, 0, 0, 0};
     Pilot E = r.p(1);
@@ -484,10 +483,13 @@ TEST_CASE("seg13:0xa6bc: +0x94, the patrol's next ship, the warning, the arrest 
     order_executor(r.c, 1);
     CHECK(E.order() == 0x14);
     CHECK(E.order_until() == 105000u);
-    // The arrest is the law's host call (ruling R3).
+    // The arrest (test_world_arrest.cpp has it in full): +0xed = 0 with ship 2 in play and not
+    // resisting (+0x98 not passed) is the escort to gate 0, and the tail re-arms +0xed = 1.
     E.order(0x16);
     order_executor(r.c, 1);
-    CHECK(r.host.arrests == std::vector<int>{1});
+    CHECK(E.est_pool() == 12);
+    CHECK(E.est_rec() == 0);
+    CHECK(E.one_shot() == 1);
     // Terminate with +0xed = 2: give up, leave by gate 0, a Terminator for the target.
     E.order(0x17);
     E.order_rec(2);

@@ -8,6 +8,16 @@ namespace {
 // seg6:0xf1a / seg6:0xeb8: signed decimal.
 std::string decimal(long v) { return std::to_string(v); }
 
+// seg11:0x3fd4's letter tests, signed bytes [BYTES seg11:0x3ffa-0x402b].
+bool is_upper_case_letter(char c) {
+    const auto v = static_cast<signed char>(c);
+    return v < 0x5b && v > 0x40;
+}
+bool is_lower_case_letter(char c) {
+    const auto v = static_cast<signed char>(c);
+    return v < 0x7b && v > 0x60;
+}
+
 }  // namespace
 
 std::string lang_format(const std::string& f, const std::vector<FArg>& args, const LangLookup& lang,
@@ -150,6 +160,39 @@ void lang_format_into(std::string& buf, int id, int mode, const std::vector<FArg
         buf += s;
     else
         buf = s;
+}
+
+// seg11:0x3fd4(text, mode) [BYTES seg11:0x3fd4-0x4106] (moved from hud/activity.cpp).
+std::string case_3fd4(std::string s, int mode) {
+    const auto len = [&] { return static_cast<int>(s.size()); };  // lstrlen
+    int flag = 1;                                                 // [bp-0xa] [BYTES seg11:0x3fe2]
+    int i = 0;                                                    // [bp-4]
+    while (i < len()) {                                           // seg11:0x40e0-0x40ec
+        if (mode == 0) flag = 0;                                  // seg11:0x40f3 -> 0x3fef
+        else if (mode == 1) flag = 1;                             // seg11:0x40f8 -> 0x4012
+        char& c = s[static_cast<std::size_t>(i)];
+        if (flag != 0) {
+            if (is_lower_case_letter(c)) c = static_cast<char>(c - 0x20);  // seg11:0x3ffa-0x400c
+        } else if (is_upper_case_letter(c)) {
+            c = static_cast<char>(c + 0x20);  // seg11:0x4019-0x402b
+        }
+        flag = 0;                                              // seg11:0x402f
+        if (mode == 2 && s[static_cast<std::size_t>(i)] == ' ') flag = 1;  // seg11:0x4034-0x4046
+        // " I " keeps the I upper [BYTES seg11:0x404b-0x4078].
+        if (len() - 3 > i && s[static_cast<std::size_t>(i)] == ' ' && s[static_cast<std::size_t>(i) + 1] == 'I' &&
+            s[static_cast<std::size_t>(i) + 2] == ' ')
+            flag = 1;
+        if (mode == 3) {  // seg11:0x407d-0x40cc
+            const char k = s[static_cast<std::size_t>(i)];
+            if (k == '.' || k == '!' || k == '\r' || k == '\n') {
+                flag = 1;
+                for (int j = i + 1; j < len() && s[static_cast<std::size_t>(j)] == ' '; ++j) ++i;
+            }
+        }
+        if (i < len() && s[static_cast<std::size_t>(i)] == '(') ++i;  // seg11:0x40ce-0x40da
+        ++i;                                                           // seg11:0x40dd
+    }
+    return s;
 }
 
 }  // namespace is::briefing

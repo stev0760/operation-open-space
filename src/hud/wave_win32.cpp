@@ -29,6 +29,7 @@
 #include "hud/program.h"
 #include "hud/radar.h"
 #include "hud/status.h"
+#include "hud/watch.h"
 #include "hud/wave.h"
 #include "hud/weapons.h"
 #include "shell/rng.h"
@@ -1280,11 +1281,10 @@ void install_wave(app::App& app) {
     world::set_entry_context([] { return entry_context(); });
     world::WaveEndLinks& e = world::wave_end_links();
     e.close_hud = [] { close(); };  // seg11:0x2f0
-    // seg13:0x65f2(1)'s seg7:0x63f2, the IS_ICON column [BYTES seg13:0x669b]; seg13:0x5850 and
-    // seg13:0x6362 (the watch and IS_SMART windows) have no port [OPEN].
-    e.close_watch_windows = [] {
-        if (icon_column_exists()) icon_column_destroy();
-    };
+    // seg13:0x65f2(1): seg13:0x5850, seg7:0x63f2 and seg13:0x6362, the watch window, the IS_ICON
+    // column and IS_SMART [BYTES seg13:0x669b] (hud/watch.h watch_windows; M5 s4 integrate, WATCH
+    // binding 7).
+    e.close_watch_windows = [] { (void)watch_windows(1); };
     e.message = [](int ship, int id) { post_message(ship, 7, 0, id); };  // seg3:0x6ec(ship, 7, 0, id)
     // seg7:0x65aa(pool, rec) of the vanish (seg7:0x18c5) and the other world callers (M4 s2
     // DISPLAY).
@@ -1497,10 +1497,11 @@ void install_wave(app::App& app) {
         // seg11:0x3e5f seg13:0x66af-0x66ca]. The column's creation reactivates main, whose erase
         // the port follows with a second repaint, so the full status display stands from the
         // first frame (icon_column_win32.cpp) [ORACLE win98-0001] [DESIGN ADR 0013 decision 3].
-        // The IS_SMART post 0x9b4 (SmWnd, seg13:0x66d4) is not ported [OPEN].
+        // seg13:0x65f2(0) also posts 0x9b4 for SmWnd without an IS_SMART window [BYTES
+        // seg13:0x66d4] (hud/watch.h watch_windows; M5 s4 integrate, WATCH binding 7).
         Hud* h = hud();
         const bool repainted = h && h->lamp_repaint(wd.player);
-        if (repainted) g.hud_dirty = icon_column_wave_start();
+        if (repainted) g.hud_dirty = watch_windows(0) != 0;
         app::log(std::string("hud: seg11:0x3cc2 at the wave start: ") +
                  (h ? (repainted ? "repaint, seg13:0x65f2(0)" : "DGROUP:0x951a set") : "no HUD"));
     });

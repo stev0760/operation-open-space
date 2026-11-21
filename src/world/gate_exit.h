@@ -17,7 +17,7 @@
 namespace is::world {
 
 // The routines seg12:0x2288 and the vanish's end call outside this file; the defaults do
-// nothing (and design_type() reads 0).
+// nothing.
 class GateExitHost {
 public:
     virtual ~GateExitHost() = default;
@@ -33,9 +33,6 @@ public:
     virtual void removed(int pool, int rec) { (void)pool, (void)rec; }
     // seg7:0x5ae8(rec, arg): the icon counters (core.md "Counters") [BYTES seg12:0x24e2].
     virtual void icon_counted(int rec, int arg) { (void)rec, (void)arg; }
-    // The design word DGROUP:0x970a + 0xad·design: the team (7 for the law) [OPEN: the design
-    // table is M5].
-    virtual std::int16_t design_type(int design) { return (void)design, 0; }
     // seg7:0x65aa(pool, rec): the icon column's row, or the target display (core.md "Icon column").
     virtual void column_row(int pool, int rec) { (void)pool, (void)rec; }
     // seg3:0x6ec(ship, 7, 0, id): a status message.
